@@ -1,0 +1,277 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+/* Nav */
+nav {
+  padding: 24px 48px;
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+nav a {
+  text-decoration: none;
+  font-size: 15px;
+  color: #aaa;
+  font-weight: 400;
+  transition: color 0.15s;
+}
+
+nav a:hover {
+  color: #1a1a1a;
+}
+
+nav a.active {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+/* Layout */
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 48px 120px;
+}
+
+/* Headings */
+h1 {
+  font-family: Georgia, "Times New Roman", Times, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1.1;
+  margin-bottom: 32px;
+  letter-spacing: -0.5px;
+}
+
+/* Home page */
+.profile-photo {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 32px;
+  display: block;
+}
+
+.profile-photo-placeholder {
+  width: 140px;
+  height: 140px;
+  border-radius: 8px;
+  background: #e8e8e8;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #999;
+}
+
+.bio p {
+  margin-bottom: 20px;
+  font-size: 15.5px;
+  color: #222;
+  max-width: 680px;
+}
+
+.bio-list {
+  list-style: none;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bio-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15.5px;
+  color: #222;
+}
+
+.bio-list li .icon {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+  color: #555;
+}
+
+/* About page */
+.about-photos {
+  position: relative;
+  height: 260px;
+  margin-bottom: 48px;
+  margin-left: -8px;
+}
+
+.photo-card {
+  position: absolute;
+  background: #fff;
+  padding: 6px 6px 28px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  text-align: center;
+}
+
+.photo-card img,
+.photo-card .photo-placeholder {
+  display: block;
+  width: 200px;
+  height: 155px;
+  object-fit: cover;
+}
+
+.photo-card .photo-placeholder {
+  background: #ddd;
+}
+
+.photo-card .caption {
+  font-family: "Comic Sans MS", "Chalkboard SE", cursive;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-top: 6px;
+  color: #111;
+  white-space: nowrap;
+}
+
+.photo-card:nth-child(1) {
+  left: 0;
+  top: 20px;
+  transform: rotate(-3deg);
+  z-index: 1;
+}
+
+.photo-card:nth-child(2) {
+  left: 170px;
+  top: 0;
+  transform: rotate(1.5deg);
+  z-index: 2;
+}
+
+.photo-card:nth-child(3) {
+  left: 360px;
+  top: 15px;
+  transform: rotate(-1deg);
+  z-index: 3;
+}
+
+.about-text p {
+  font-size: 15.5px;
+  color: #222;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+/* Work page */
+.work-intro {
+  font-size: 15.5px;
+  color: #222;
+  max-width: 680px;
+  margin-bottom: 48px;
+}
+
+.work-intro p {
+  margin-bottom: 20px;
+}
+
+.work-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.work-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: default;
+}
+
+.work-card-img {
+  width: 100%;
+  height: 160px;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.work-card-body {
+  padding: 16px 18px 20px;
+}
+
+.work-card-company {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+.work-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.work-card-desc {
+  font-size: 13.5px;
+  color: #666;
+  line-height: 1.55;
+}
+
+/* Footer */
+footer {
+  padding: 32px 48px;
+  font-size: 13px;
+  color: #bbb;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  nav {
+    padding: 20px 24px;
+    gap: 24px;
+  }
+
+  main {
+    padding: 32px 24px 80px;
+  }
+
+  h1 {
+    font-size: 36px;
+  }
+
+  .about-photos {
+    height: 380px;
+  }
+
+  .photo-card:nth-child(2) {
+    left: 140px;
+    top: 120px;
+  }
+
+  .photo-card:nth-child(3) {
+    left: 20px;
+    top: 230px;
+  }
+
+  .work-grid {
+    grid-template-columns: 1fr;
+  }
+}
