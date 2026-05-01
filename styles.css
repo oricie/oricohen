@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -46,7 +48,7 @@ main {
 
 /* Headings */
 h1 {
-  font-family: Georgia, "Times New Roman", Times, serif;
+  font-family: "Playfair Display", Georgia, serif;
   font-style: italic;
   font-weight: 700;
   font-size: 48px;
