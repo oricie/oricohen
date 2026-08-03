@@ -32,42 +32,46 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
 </style>
 <div class="wrap">
   <h1>TOKIO <b>NEON</b> — REALISM PROGRESS</h1>
-  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 16:24</div>
+  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 16:52</div>
   <div class="grid">
     <div class="card">
       <h2>Status</h2>
-      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 3 — Billboards + street life (running)</b></div>
+      <div class="k"><span>Current wave</span><b><span class="pulse"></span>3 waves shipped ✓ · checkpoint (deciding next)</b></div>
       <div class="k"><span>Method</span><b>builder subagent → fresh critic → integrate</b></div>
       <div class="k"><span>Model (subagents)</span><b>Sonnet (builders) · inline judging to save cost</b></div>
       <div class="k"><span>Live game link</span><b>artifact 74655282… (Wave 1 live) · PR #1</b></div>
     </div>
     <div class="card">
       <h2>Spend (running estimate)</h2>
-      <div class="k"><span>Subagent runs</span><b>3 builders (1 killed early)</b></div>
-      <div class="k"><span>Est. tokens used</span><b>~283k subagent tokens</b></div>
-      <div class="k"><span>Est. cost so far</span><b>~$2.5–3.5 (subagents)</b></div>
-      <div class="note">Judged each wave inline from frames instead of paid critic runs → saved ~200k+ tokens. Main Opus session (this chat) is the larger cost driver.</div>
+      <div class="k"><span>Subagent runs</span><b>4 builders (1 killed early)</b></div>
+      <div class="k"><span>Est. tokens used</span><b>~491k subagent tokens</b></div>
+      <div class="k"><span>Est. cost so far</span><b>~$4.5–6 (subagents)</b></div>
+      <div class="note">Inline judging (no paid critics) has saved ~300k+ tokens. Main Opus chat is the larger driver. Say stop to pause spend anytime.</div>
     </div>
     <div class="card">
       <h2>Realism sub-goals</h2>
       <div class="piece">
       <div class="pl"><b>P1</b> · Atmosphere & Light <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
-      <div class="pd">Fog depth, sky+moon halo, neon haze clouds, filmic two-tier bloom, split-tone grade.</div>
-      <div class="verdict">Shipped to the preview link — test it in motion.</div>
+      <div class="pd">Fog depth, sky+moon halo, filmic two-tier bloom, split-tone grade.</div>
+      <div class="verdict">Shipped.</div>
     </div><div class="piece">
-      <div class="pl"><b>P2</b> · Image-based lighting + PBR <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
-      <div class="pd">Procedural night-city environment map → real reflections & ambient on materials. Works in BOTH artifact and hosted. Big realism lever, no external assets.</div>
-      <div class="verdict">Shipped: env-map IBL + wet-asphalt reflections, glass/car clearcoat. Test low over an avenue.</div>
+      <div class="pl"><b>P2</b> · Image-based lighting + materials <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
+      <div class="pd">Env-map IBL; wet-asphalt reflections; glass/car clearcoat.</div>
+      <div class="verdict">Shipped — fly low for the wet streets.</div>
     </div><div class="piece">
-      <div class="pl"><b>P3</b> · Hosted build + real characters <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
-      <div class="pd">Serve from GitHub Pages; load a rigged zombie model + PBR skin (replaces box zombies). Needs Pages enabled.</div>
+      <div class="pl"><b>P3</b> · Billboards + street life <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
+      <div class="pd">Denser legible LED billboards, weathered 3D neon-sign cages, 220 pedestrians, storefront light-spill, denser traffic.</div>
+      <div class="verdict">Shipped — matches your Shibuya/top-down refs.</div>
+    </div><div class="piece">
+      <div class="pl"><b>P4</b> · Explosion / combat FX <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">Volumetric fireballs + thick smoke + debris + missile trails (your under-fire ref). Big combat-feel win.</div>
       
     </div><div class="piece">
-      <div class="pl"><b>P4</b> · Billboards + street life <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
-      <div class="pd">Bigger, denser, legible emissive LED billboards + animated screens; pedestrians on crossings; denser two-way traffic; warm shop-light spill.</div>
-      <div class="verdict">Builder running (matches your Shibuya/top-down refs).</div>
+      <div class="pl"><b>P5</b> · Hosted build + real zombie character <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">GitHub Pages + a rigged zombie model to replace box zombies. Needs Pages enabled + chosen asset.</div>
+      
     </div><div class="piece">
-      <div class="pl"><b>P5</b> · Cohesion pass <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pl"><b>P6</b> · Cohesion pass <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
       <div class="pd">Fresh agent across the whole game to reconcile separately-improved parts.</div>
       
     </div>
@@ -78,7 +82,7 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
     </div>
     <div class="card">
       <h2>Activity log</h2>
-      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li><li><time>16:10</time> Reference brief written from your target frames (photoreal night Tokyo) → drives all agents.</li><li><time>16:12</time> Wave 2 builder launched: image-based lighting + material realism (Sonnet, main tree).</li><li><time>16:22</time> Wave 2 (IBL + wet materials) judged inline — clear win, mood intact. Shipped to preview + PR #1.</li><li><time>16:24</time> Wave 3 launched: billboards + street life (pedestrians, denser traffic, LED screens).</li></ul>
+      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li><li><time>16:10</time> Reference brief written from your target frames (photoreal night Tokyo) → drives all agents.</li><li><time>16:12</time> Wave 2 builder launched: image-based lighting + material realism (Sonnet, main tree).</li><li><time>16:22</time> Wave 2 (IBL + wet materials) judged inline — clear win, mood intact. Shipped to preview + PR #1.</li><li><time>16:24</time> Wave 3 launched: billboards + street life (pedestrians, denser traffic, LED screens).</li><li><time>16:50</time> Wave 3 (billboards + street life) judged inline — clear win. Shipped to preview + PR #1.</li><li><time>16:52</time> Checkpoint: 3 waves shipped (~$4.5–6 subagents). Awaiting go on next: explosions/FX vs hosted+zombie.</li></ul>
     </div>
   </div>
 </div>
