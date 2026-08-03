@@ -89,26 +89,39 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.2;
+renderer.toneMappingExposure=1.08;
 const scene=new THREE.Scene();
-// night neon haze — deep purple
-scene.fog=new THREE.FogExp2(0x241c3a,0.0011);
+// night neon haze — deep indigo, layered with a low warm ground-haze band (see groundHaze below)
+scene.fog=new THREE.FogExp2(0x1c1732,0.00165);
 const cam=new THREE.PerspectiveCamera(66,W()/H(),0.1,4000);
 
 // ---------- POST-PROCESSING: manual bloom (no addons available, hand-rolled) ----------
+// two-tier mip-style bloom (tight + wide) for a soft, filmic, non-shimmery neon glow
 let bw=Math.floor(W()/3),bh=Math.floor(H()/3);
+let bw2=Math.max(2,Math.floor(bw/2)),bh2=Math.max(2,Math.floor(bh/2));
 const rtParams={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat};
 const sceneRT=new THREE.WebGLRenderTarget(W(),H(),rtParams);
 const brightRT=new THREE.WebGLRenderTarget(bw,bh,rtParams);
 const blurRT1=new THREE.WebGLRenderTarget(bw,bh,rtParams);
 const blurRT2=new THREE.WebGLRenderTarget(bw,bh,rtParams);
+const wideRT1=new THREE.WebGLRenderTarget(bw2,bh2,rtParams);
+const wideRT2=new THREE.WebGLRenderTarget(bw2,bh2,rtParams);
 const postScene=new THREE.Scene();
 const postCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 const brightMat=new THREE.ShaderMaterial({
-  uniforms:{tDiffuse:{value:null},threshold:{value:0.88}},
+  uniforms:{tDiffuse:{value:null},threshold:{value:0.72},knee:{value:0.5}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
-  fragmentShader:`uniform sampler2D tDiffuse;uniform float threshold;varying vec2 vUv;
-    void main(){vec4 c=texture2D(tDiffuse,vUv);float b=max(c.r,max(c.g,c.b));float f=smoothstep(threshold,threshold+0.25,b);gl_FragColor=vec4(c.rgb*f,1.0);}`
+  fragmentShader:`uniform sampler2D tDiffuse;uniform float threshold;uniform float knee;varying vec2 vUv;
+    void main(){
+      vec4 c=texture2D(tDiffuse,vUv);
+      float b=max(c.r,max(c.g,c.b));
+      // soft-knee threshold: smooth quadratic rolloff instead of a hard cutoff, avoids per-pixel flicker
+      float soft=clamp(b-threshold+knee,0.0,2.0*knee);
+      soft=soft*soft/(4.0*knee+0.0001);
+      float f=max(soft,b-threshold);
+      f=clamp(f/max(b,0.0001),0.0,1.0);
+      gl_FragColor=vec4(c.rgb*f,1.0);
+    }`
 });
 const blurMat=new THREE.ShaderMaterial({
   uniforms:{tDiffuse:{value:null},dir:{value:new THREE.Vector2(1,0)},res:{value:new THREE.Vector2(bw,bh)}},
@@ -129,23 +142,33 @@ const blurMat=new THREE.ShaderMaterial({
     }`
 });
 const compositeMat=new THREE.ShaderMaterial({
-  uniforms:{tScene:{value:null},tBloom:{value:null},bloomStrength:{value:0.35}},
+  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.42},bloomWideStrength:{value:0.30}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
-  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform float bloomStrength;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;varying vec2 vUv;
     void main(){
       vec2 cc=vUv-0.5;
-      vec2 off=cc*0.0006;
+      float r2=dot(cc,cc);
+      // restrained radial chromatic aberration, strongest toward the frame edges
+      vec2 off=cc*(0.0007+0.0016*r2);
       vec3 s;
       s.r=texture2D(tScene,vUv+off).r;
       s.g=texture2D(tScene,vUv).g;
       s.b=texture2D(tScene,vUv-off).b;
-      vec3 b=texture2D(tBloom,vUv).rgb;
-      vec3 c=s+b*bloomStrength;
+      vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+texture2D(tBloomWide,vUv).rgb*bloomWideStrength;
+      vec3 c=s+bloom;
       float l=dot(c,vec3(0.299,0.587,0.114));
-      c+=vec3(0.035,0.012,0.06)*(1.0-clamp(l,0.0,1.0));
-      c=(c-0.5)*1.07+0.5;
-      c=mix(vec3(l),c,1.18);
-      gl_FragColor=vec4(c,1.0);
+      // night grade: teal into shadows, magenta/warm into highlights (filmic split-tone)
+      vec3 shadowTint=vec3(-0.018,0.018,0.05);
+      vec3 highTint=vec3(0.055,-0.012,0.035);
+      c+=shadowTint*(1.0-smoothstep(0.0,0.45,l));
+      c+=highTint*smoothstep(0.5,1.0,l);
+      // filmic contrast + neon saturation punch
+      c=(c-0.5)*1.14+0.5;
+      c=mix(vec3(l),c,1.24);
+      // gentle vignette
+      float vig=1.0-smoothstep(0.28,0.92,sqrt(r2));
+      c*=mix(0.82,1.0,vig);
+      gl_FragColor=vec4(clamp(c,0.0,1.0),1.0);
     }`
 });
 const postQuad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),brightMat);
@@ -155,6 +178,7 @@ function renderPost(){
   postQuad.material=brightMat;brightMat.uniforms.tDiffuse.value=sceneRT.texture;
   renderer.setRenderTarget(brightRT);renderer.render(postScene,postCam);
   postQuad.material=blurMat;
+  blurMat.uniforms.res.value.set(bw,bh);
   blurMat.uniforms.tDiffuse.value=brightRT.texture;blurMat.uniforms.dir.value.set(1,0);
   renderer.setRenderTarget(blurRT1);renderer.render(postScene,postCam);
   blurMat.uniforms.tDiffuse.value=blurRT1.texture;blurMat.uniforms.dir.value.set(0,1);
@@ -163,17 +187,32 @@ function renderPost(){
   renderer.setRenderTarget(blurRT1);renderer.render(postScene,postCam);
   blurMat.uniforms.tDiffuse.value=blurRT1.texture;blurMat.uniforms.dir.value.set(0,1);
   renderer.setRenderTarget(blurRT2);renderer.render(postScene,postCam);
+  // wide tier: downsample the already-smoothed tight bloom (dir=0 => identity copy, weights sum to 1.0)
+  // then blur it again at half the resolution — a fixed-tap kernel over a smaller image reads as a much wider, softer halo
+  blurMat.uniforms.res.value.set(bw2,bh2);
+  blurMat.uniforms.tDiffuse.value=blurRT2.texture;blurMat.uniforms.dir.value.set(0,0);
+  renderer.setRenderTarget(wideRT1);renderer.render(postScene,postCam);
+  blurMat.uniforms.tDiffuse.value=wideRT1.texture;blurMat.uniforms.dir.value.set(1,0);
+  renderer.setRenderTarget(wideRT2);renderer.render(postScene,postCam);
+  blurMat.uniforms.tDiffuse.value=wideRT2.texture;blurMat.uniforms.dir.value.set(0,1);
+  renderer.setRenderTarget(wideRT1);renderer.render(postScene,postCam);
+  blurMat.uniforms.tDiffuse.value=wideRT1.texture;blurMat.uniforms.dir.value.set(1,0);
+  renderer.setRenderTarget(wideRT2);renderer.render(postScene,postCam);
+  blurMat.uniforms.tDiffuse.value=wideRT2.texture;blurMat.uniforms.dir.value.set(0,1);
+  renderer.setRenderTarget(wideRT1);renderer.render(postScene,postCam);
   postQuad.material=compositeMat;
   compositeMat.uniforms.tScene.value=sceneRT.texture;
   compositeMat.uniforms.tBloom.value=blurRT2.texture;
+  compositeMat.uniforms.tBloomWide.value=wideRT1.texture;
   renderer.setRenderTarget(null);renderer.render(postScene,postCam);
 }
 
 // ---------- SKY: Shinjuku night gradient ----------
 const skyTex=(()=>{const cv=document.createElement('canvas');cv.width=512;cv.height=1024;
 const g=cv.getContext('2d');const gr=g.createLinearGradient(0,0,0,1024);
-gr.addColorStop(0,'#07061a');gr.addColorStop(.32,'#140f34');gr.addColorStop(.55,'#2c1f4e');
-gr.addColorStop(.72,'#5a3468');gr.addColorStop(.85,'#9a4f72');gr.addColorStop(1,'#c96f7a');
+gr.addColorStop(0,'#030309');gr.addColorStop(.26,'#0c0a28');gr.addColorStop(.48,'#1e1640');
+gr.addColorStop(.66,'#3c2258');gr.addColorStop(.80,'#7a3a68');gr.addColorStop(.90,'#c1567a');
+gr.addColorStop(.96,'#e3835f');gr.addColorStop(1,'#f0a468');
 g.fillStyle=gr;g.fillRect(0,0,512,1024);
 // stars — denser near zenith, fading toward horizon glow
 for(let i=0;i<700;i++){
@@ -191,26 +230,41 @@ for(let i=0;i<5;i++){
   bg.addColorStop(0,'rgba(180,120,200,0)');bg.addColorStop(.5,'rgba(180,120,200,.05)');bg.addColorStop(1,'rgba(180,120,200,0)');
   g.fillStyle=bg;g.fillRect(0,y-20,512,40);
 }
-// city glow at horizon
-const hg=g.createLinearGradient(0,830,0,1024);
-hg.addColorStop(0,'rgba(255,150,170,0)');hg.addColorStop(1,'rgba(255,170,180,.28)');
-g.fillStyle=hg;g.fillRect(0,830,512,194);
+// city glow at horizon — richer, wider light-pollution dome (warm core, cooler bleed above)
+const hg=g.createLinearGradient(0,760,0,1024);
+hg.addColorStop(0,'rgba(255,140,120,0)');hg.addColorStop(.55,'rgba(255,150,140,.16)');hg.addColorStop(1,'rgba(255,190,150,.4)');
+g.fillStyle=hg;g.fillRect(0,760,512,264);
+const hg2=g.createLinearGradient(0,880,0,1024);
+hg2.addColorStop(0,'rgba(255,90,150,0)');hg2.addColorStop(1,'rgba(255,120,150,.22)');
+g.fillStyle=hg2;g.fillRect(0,880,512,144);
 return new THREE.CanvasTexture(cv);})();
 const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,16,16),new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,fog:false}));
 scene.add(sky);
-// moon
+// moon — soft photoreal disc with a wide atmospheric corona (cheap stand-in for a moonlight "shaft")
 const moonTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(235,240,255,1)');
-  gr.addColorStop(0.35,'rgba(215,222,255,.95)');
-  gr.addColorStop(0.65,'rgba(190,200,255,.4)');
-  gr.addColorStop(1,'rgba(190,200,255,0)');
+  gr.addColorStop(0,'rgba(240,244,255,1)');
+  gr.addColorStop(0.32,'rgba(220,228,255,.97)');
+  gr.addColorStop(0.6,'rgba(195,205,255,.55)');
+  gr.addColorStop(0.82,'rgba(180,190,240,.14)');
+  gr.addColorStop(1,'rgba(180,190,240,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(160,170,210,.25)';
+  g.fillStyle='rgba(160,170,210,.22)';
   for(let i=0;i<6;i++){g.beginPath();g.arc(w*0.28+Math.random()*w*0.4,h*0.28+Math.random()*h*0.4,4+Math.random()*7,0,7);g.fill();}
 },128,128);
+const moonHaloTex=tex((g,w,h)=>{
+  const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
+  gr.addColorStop(0,'rgba(210,220,255,.22)');
+  gr.addColorStop(.4,'rgba(190,200,250,.10)');
+  gr.addColorStop(1,'rgba(190,200,250,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+},128,128);
+const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:moonHaloTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+moonHalo.scale.set(620,620,1);
+moonHalo.position.set(-600,500,-1200);
+scene.add(moonHalo);
 const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:moonTex,transparent:true,depthWrite:false,fog:false}));
-moonSprite.scale.set(170,170,1);
+moonSprite.scale.set(175,175,1);
 moonSprite.position.set(-600,500,-1200);
 scene.add(moonSprite);
 
@@ -240,13 +294,13 @@ const clouds=[];
 function makeCloudTex(){
   const cv=document.createElement('canvas');cv.width=256;cv.height=160;
   const g=cv.getContext('2d');
-  const col=Math.random()<.5?'200,140,225':'150,190,225';
+  const col=Math.random()<.5?'235,70,195':'70,190,255';
   const cx=128+Math.random()*20-10,cy=90;
   for(let i=0;i<9;i++){
     const bx=cx+(Math.random()-.5)*160,by=cy+(Math.random()-.5)*50;
     const br=30+Math.random()*40;
     const gr=g.createRadialGradient(bx,by,2,bx,by,br);
-    gr.addColorStop(0,`rgba(${col},.55)`);gr.addColorStop(.55,`rgba(${col},.28)`);gr.addColorStop(1,`rgba(${col},0)`);
+    gr.addColorStop(0,`rgba(${col},.4)`);gr.addColorStop(.55,`rgba(${col},.2)`);gr.addColorStop(1,`rgba(${col},0)`);
     g.fillStyle=gr;g.fillRect(bx-br,by-br,br*2,br*2);
   }
   return new THREE.CanvasTexture(cv);
@@ -255,21 +309,44 @@ const cloudTexVariants=[makeCloudTex(),makeCloudTex(),makeCloudTex(),makeCloudTe
 for(let i=0;i<20;i++){
   const ct=cloudTexVariants[Math.floor(Math.random()*cloudTexVariants.length)];
   const m=new THREE.Mesh(new THREE.PlaneGeometry(300+Math.random()*340,110+Math.random()*90),
-    new THREE.MeshBasicMaterial({map:ct,transparent:true,opacity:.4+Math.random()*.3,depthWrite:false,fog:false}));
+    new THREE.MeshBasicMaterial({map:ct,transparent:true,opacity:.3+Math.random()*.22,depthWrite:false,fog:false}));
   m.position.set((Math.random()-.5)*2400,190+Math.random()*240,(Math.random()-.5)*2400);
   scene.add(m);clouds.push(m);
 }
+// low ground-hugging haze band — layered aerial perspective so distant blocks recede into a warm/cool
+// light-pollution mist near roof height, giving the skyline real scale and depth (subject to scene fog too)
+const groundHaze=[];
+function makeGroundHazeTex(){
+  const cv=document.createElement('canvas');cv.width=256;cv.height=140;
+  const g=cv.getContext('2d');
+  const col=Math.random()<.6?'255,140,150':'180,150,235';
+  for(let i=0;i<7;i++){
+    const bx=128+(Math.random()-.5)*180,by=70+(Math.random()-.5)*44,br=42+Math.random()*54;
+    const gr=g.createRadialGradient(bx,by,2,bx,by,br);
+    gr.addColorStop(0,`rgba(${col},.4)`);gr.addColorStop(.55,`rgba(${col},.2)`);gr.addColorStop(1,`rgba(${col},0)`);
+    g.fillStyle=gr;g.fillRect(bx-br,by-br,br*2,br*2);
+  }
+  return new THREE.CanvasTexture(cv);
+}
+const hazeTexVariants=[makeGroundHazeTex(),makeGroundHazeTex(),makeGroundHazeTex()];
+for(let i=0;i<28;i++){
+  const ht=hazeTexVariants[Math.floor(Math.random()*hazeTexVariants.length)];
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(440+Math.random()*400,150+Math.random()*110),
+    new THREE.MeshBasicMaterial({map:ht,transparent:true,opacity:.16+Math.random()*.14,depthWrite:false}));
+  m.position.set((Math.random()-.5)*2600,16+Math.random()*58,(Math.random()-.5)*2600);
+  scene.add(m);groundHaze.push(m);
+}
 
 // ---------- LIGHTS ----------
-scene.add(new THREE.HemisphereLight(0x4a3a8e,0x2a2038,0.65));
-const sun=new THREE.DirectionalLight(0x9a6aff,0.55);
+scene.add(new THREE.HemisphereLight(0x4a3a8e,0x201a30,0.55));
+const sun=new THREE.DirectionalLight(0x9a6aff,0.62);
 sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.left=-260;sun.shadow.camera.right=260;
 sun.shadow.camera.top=260;sun.shadow.camera.bottom=-260;
 sun.shadow.camera.far=1000;sun.shadow.bias=-0.0004;
 scene.add(sun);
-const rim=new THREE.DirectionalLight(0xff5fa8,0.5);
+const rim=new THREE.DirectionalLight(0xff5fa8,0.55);
 rim.position.set(-200,120,260);scene.add(rim);
 
 // ---------- AUDIO ----------
@@ -2674,6 +2751,7 @@ function loop(now){
       hostage.beam.material.opacity=0.1+0.08*Math.sin(now/260);
     }
     clouds.forEach(cl=>{cl.position.x+=2*dt;if(cl.position.x>1400)cl.position.x=-1400;cl.lookAt(cam.position);});
+    groundHaze.forEach(gh=>{gh.position.x+=1.1*dt;if(gh.position.x>1400)gh.position.x=-1400;gh.lookAt(cam.position);});
     // rain fall + wrap
     const rp=rainGeo.attributes.position.array;
     for(let i=0;i<rainCount;i++){
@@ -2870,6 +2948,7 @@ function loop(now){
     sky.position.copy(cam.position);
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
     moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
+    moonHalo.position.copy(moonSprite.position);
     if(!cockpitMode && Math.floor(now/200)%5===0){
       heli.visible=false;
       cubeCam.position.copy(heli.position);
@@ -2904,7 +2983,9 @@ function loop(now){
     sky.position.copy(cam.position);
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
     moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
+    moonHalo.position.copy(moonSprite.position);
     clouds.forEach(cl=>cl.lookAt(cam.position));
+    groundHaze.forEach(gh=>gh.lookAt(cam.position));
     pulseSigns.forEach(s=>{
       s.ph+=dt*(s.fast?14:3);
       const v=s.fast?(Math.random()<0.06?0.2:1):(0.75+0.25*Math.sin(s.ph));
@@ -2921,8 +3002,10 @@ onresize=()=>{
   renderer.setSize(W(),H());cam.aspect=W()/H();cam.updateProjectionMatrix();
   sizeHUD();
   bw=Math.floor(W()/3);bh=Math.floor(H()/3);
+  bw2=Math.max(2,Math.floor(bw/2));bh2=Math.max(2,Math.floor(bh/2));
   sceneRT.setSize(W(),H());
   brightRT.setSize(bw,bh);blurRT1.setSize(bw,bh);blurRT2.setSize(bw,bh);
+  wideRT1.setSize(bw2,bh2);wideRT2.setSize(bw2,bh2);
   blurMat.uniforms.res.value.set(bw,bh);
 };
 </script>
