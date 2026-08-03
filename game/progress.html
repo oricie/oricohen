@@ -32,11 +32,11 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
 </style>
 <div class="wrap">
   <h1>TOKIO <b>NEON</b> — REALISM PROGRESS</h1>
-  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 16:05</div>
+  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 16:12</div>
   <div class="grid">
     <div class="card">
       <h2>Status</h2>
-      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 1 DONE ✓ · pivoting to hosted build + real assets</b></div>
+      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 2 — Image-based lighting + materials (running)</b></div>
       <div class="k"><span>Method</span><b>builder subagent → fresh critic → integrate</b></div>
       <div class="k"><span>Model (subagents)</span><b>Sonnet (builders) · inline judging to save cost</b></div>
       <div class="k"><span>Live game link</span><b>artifact 74655282… (Wave 1 live) · PR #1</b></div>
@@ -55,9 +55,9 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
       <div class="pd">Fog depth, sky+moon halo, neon haze clouds, filmic two-tier bloom, split-tone grade.</div>
       <div class="verdict">Shipped to the preview link — test it in motion.</div>
     </div><div class="piece">
-      <div class="pl"><b>P2</b> · Image-based lighting + PBR <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pl"><b>P2</b> · Image-based lighting + PBR <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
       <div class="pd">Procedural night-city environment map → real reflections & ambient on materials. Works in BOTH artifact and hosted. Big realism lever, no external assets.</div>
-      
+      <div class="verdict">Builder running: procedural night env map → IBL; wet asphalt + glass/car reflections.</div>
     </div><div class="piece">
       <div class="pl"><b>P3</b> · Hosted build + real characters <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
       <div class="pd">Serve from GitHub Pages; load a rigged zombie model + PBR skin (replaces box zombies). Needs Pages enabled.</div>
@@ -78,7 +78,7 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
     </div>
     <div class="card">
       <h2>Activity log</h2>
-      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li></ul>
+      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li><li><time>16:10</time> Reference brief written from your target frames (photoreal night Tokyo) → drives all agents.</li><li><time>16:12</time> Wave 2 builder launched: image-based lighting + material realism (Sonnet, main tree).</li></ul>
     </div>
   </div>
 </div>

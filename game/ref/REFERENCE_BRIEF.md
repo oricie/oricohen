@@ -68,3 +68,17 @@ comparison against it.
   sidewalks and crossings, street trees, rooftop AC/vents/catwalks everywhere.
 - **Grade**: refined desaturated purple night; asphalt is wet and mirrors neon;
   warm shop light spills onto sidewalks. Cohesive, filmic, not oversaturated.
+
+---
+## Street-feeling ref (Shibuya scramble at night) — user "really likes" this
+- **WET reflective asphalt is the hero**: the whole road is a dark mirror; white
+  crossing stripes and billboard light smear down into it. Our low-altitude
+  avenues must read this wet at street level.
+- **Big BRANDED LED billboards** high on glass towers (Coca-Cola-red glow, video
+  screens, shop logos): large, legible, emissive with gentle bloom — landmarks
+  that light the street below. Denser & bigger than ours.
+- **Moody, DESATURATED, realistic exposure**: near-black sky, restrained
+  saturation — realism over candy-neon. Warm shop-light vs cool screen-light.
+- **Human scale + emptiness**: a lone pedestrian on the crossing sells scale and
+  a lonely, cinematic mood. Tiny pedestrians + sparse motion read as real.
+- Applies to our LOW/chase passes (street level), complementing the top-down bar.
