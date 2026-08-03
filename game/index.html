@@ -349,6 +349,66 @@ scene.add(sun);
 const rim=new THREE.DirectionalLight(0xff5fa8,0.55);
 rim.position.set(-200,120,260);scene.add(rim);
 
+// ---------- IBL: procedural night-city environment map (PMREM, once at init) ----------
+// A DARK, neon-tinted equirect so PBR materials get believable ambient + reflections
+// without brightening the scene — the sky sphere/background stays untouched.
+(function(){
+  const w=512,h=256;
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+  const g=cv.getContext('2d');
+  // base: dark desaturated purple-indigo sky -> dark ground, matches scene mood
+  const gr=g.createLinearGradient(0,0,0,h);
+  gr.addColorStop(0,'#020207');
+  gr.addColorStop(0.30,'#0a0818');
+  gr.addColorStop(0.50,'#130f24');
+  gr.addColorStop(0.63,'#1c1330');
+  gr.addColorStop(0.72,'#241428');   // warm-ish horizon band starts
+  gr.addColorStop(0.80,'#160e18');   // ground / rooftop silhouette line
+  gr.addColorStop(1.0,'#08060a');    // nadir — dark wet street
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+  // warm horizon light-pollution band (low-pollution glow, kept dim)
+  const hy=h*0.755;
+  const hg=g.createLinearGradient(0,hy-18,0,hy+18);
+  hg.addColorStop(0,'rgba(255,140,110,0)');
+  hg.addColorStop(0.5,'rgba(255,130,110,.16)');
+  hg.addColorStop(1,'rgba(255,130,110,0)');
+  g.fillStyle=hg;g.fillRect(0,hy-18,w,36);
+  // scattered dim neon glow bands around the horizon (billboards/signage bleed)
+  const neon=['255,60,190','70,200,255','255,200,90','190,80,255','255,90,90'];
+  for(let i=0;i<40;i++){
+    const x=Math.random()*w,y=hy-24+Math.random()*46;
+    const r=3+Math.random()*7;
+    const col=neon[Math.floor(Math.random()*neon.length)];
+    const rg=g.createRadialGradient(x,y,0,x,y,r);
+    rg.addColorStop(0,`rgba(${col},.38)`);rg.addColorStop(1,`rgba(${col},0)`);
+    g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);
+  }
+  // a few brighter neon smears — the bits that actually punch through as reflections
+  for(let i=0;i<8;i++){
+    const x=Math.random()*w,y=hy-14+Math.random()*28;
+    const col=neon[Math.floor(Math.random()*neon.length)];
+    const rg=g.createRadialGradient(x,y,0,x,y,10);
+    rg.addColorStop(0,`rgba(${col},.7)`);rg.addColorStop(0.35,`rgba(${col},.3)`);rg.addColorStop(1,`rgba(${col},0)`);
+    g.fillStyle=rg;g.fillRect(x-10,y-10,20,20);
+  }
+  // faint stars near zenith
+  for(let i=0;i<160;i++){
+    const y=Math.pow(Math.random(),2.2)*h*0.4;
+    const x=Math.random()*w;
+    g.fillStyle=`rgba(210,215,255,${0.1+Math.random()*0.22})`;
+    g.fillRect(x,y,1,1);
+  }
+  const envTex=new THREE.CanvasTexture(cv);
+  envTex.mapping=THREE.EquirectangularReflectionMapping;
+  envTex.encoding=THREE.sRGBEncoding;
+  const pmremGen=new THREE.PMREMGenerator(renderer);
+  pmremGen.compileEquirectangularShader();
+  const envRT=pmremGen.fromEquirectangular(envTex);
+  scene.environment=envRT.texture; // ambient IBL + reflections; scene.background left alone
+  envTex.dispose();
+  pmremGen.dispose();
+})();
+
 // ---------- AUDIO ----------
 let AC=null;
 function startAudio(){
@@ -611,7 +671,27 @@ const groundTex=tex((g,w,h)=>{
 },512,512,true);
 groundTex.wrapS=groundTex.wrapT=THREE.RepeatWrapping;
 groundTex.repeat.set(38,38);
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshPhongMaterial({map:groundTex,shininess:35,specular:0x443a55}));
+// wet-street roughness map: bright=dry/rough, dark streaks+puddles=wet/smooth so neon
+// reflects in long streaks (roughnessMap channel multiplies material.roughness)
+function makeWetRoughTex(){return tex((g,w,h)=>{
+  g.fillStyle='#c9c9c9';g.fillRect(0,0,w,h);
+  for(let i=0;i<7;i++){
+    const x=Math.random()*w,sw=4+Math.random()*14;
+    const gr=g.createLinearGradient(x-sw,0,x+sw,0);
+    gr.addColorStop(0,'rgba(15,15,15,0)');gr.addColorStop(.5,'rgba(15,15,15,.92)');gr.addColorStop(1,'rgba(15,15,15,0)');
+    g.fillStyle=gr;g.fillRect(x-sw,0,sw*2,h);
+  }
+  for(let i=0;i<6;i++){
+    const x=Math.random()*w,y=Math.random()*h,r=6+Math.random()*18;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);
+    gr.addColorStop(0,'rgba(10,10,10,.85)');gr.addColorStop(1,'rgba(10,10,10,0)');
+    g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);
+  }
+},128,128,true);}
+const wetRoughTex=makeWetRoughTex();
+wetRoughTex.wrapS=wetRoughTex.wrapT=THREE.RepeatWrapping;
+wetRoughTex.repeat.set(6,60);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.62,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:0.9}));
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
 // asphalt textures per road class
@@ -671,7 +751,7 @@ const plainAsphaltTex=tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
   for(let i=0;i<400;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.035})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
 },128,128,true);
-const plainAsphaltMat=new THREE.MeshLambertMaterial({map:plainAsphaltTex,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const plainAsphaltMat=new THREE.MeshStandardMaterial({map:plainAsphaltTex,roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
 const sidewalkTex=tex((g,w,h)=>{
   g.fillStyle='#4a453c';g.fillRect(0,0,w,h);
@@ -707,8 +787,15 @@ function roadTexFor(r){
   t.repeat.set(1,Math.round(CITY*2/(r.major?26:14)));
   return t;
 }
+// wet-look roughness map matched to a road strip's UV tiling — long vertical (along-road) streaks
+function roadWetRoughFor(r){
+  const t=wetRoughTex.clone();t.needsUpdate=true;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.repeat.set(r.major?2:1,Math.round(CITY*2/(r.major?26:14)));
+  return t;
+}
 function addRoad(axis,r){
-  const mat=new THREE.MeshLambertMaterial({map:roadTexFor(r),polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:0.42,roughnessMap:roadWetRoughFor(r),metalness:0.05,envMapIntensity:1.25,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -777,7 +864,7 @@ window.__waterTex=waterTex;
 {
   const rw=RIVER.x1-RIVER.x0,rcx=(RIVER.x0+RIVER.x1)/2;
   const water=new THREE.Mesh(new THREE.PlaneGeometry(rw,CITY*2),
-    new THREE.MeshStandardMaterial({map:waterTex,roughness:0.15,metalness:0.45}));
+    new THREE.MeshStandardMaterial({map:waterTex,roughness:0.15,metalness:0.45,envMapIntensity:1.3}));
   water.rotation.x=-Math.PI/2;water.position.set(rcx,-1.9,0);
   scene.add(water);
   const wallMat=new THREE.MeshLambertMaterial({color:0x4a4550});
@@ -1122,14 +1209,14 @@ function spawnBuilding(cx,cz,bw,bd,style){
   let bh,mat;
   if(style==='glass'){
     bh=80+Math.random()*95;
-    mat=new THREE.MeshLambertMaterial({map:glassT});
+    mat=new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.14,metalness:0.2,envMapIntensity:1.7,clearcoat:0.4,clearcoatRoughness:0.2});
   }else if(style==='res'){
     bh=6+Math.random()*4;
     if(Math.random()<0.25)bh=16+Math.random()*10;
     mat=new THREE.MeshLambertMaterial({map:resFacades[Math.floor(Math.random()*3)]});
   }else{
     bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48);
-    mat=new THREE.MeshStandardMaterial({map:facades[Math.floor(Math.random()*facades.length)],normalMap:facadeNormalMap,normalScale:new THREE.Vector2(1,1),roughness:0.86,metalness:0.04});
+    mat=new THREE.MeshStandardMaterial({map:facades[Math.floor(Math.random()*facades.length)],normalMap:facadeNormalMap,normalScale:new THREE.Vector2(1,1),roughness:0.86,metalness:0.04,envMapIntensity:0.4});
     mat.color.setHSL((268+Math.random()*30)/360,0.10+Math.random()*0.12,0.5+Math.random()*0.3);
   }
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,roofMat,roofMat,mat,mat]);
@@ -2861,9 +2948,9 @@ function loop(now){
         const car=new THREE.Group();
         const c=mcCols[i%mcCols.length];
         const gi=Math.floor(Math.random()*carGeos.length);
-        const bodyMesh=new THREE.Mesh(carGeos[gi],new THREE.MeshStandardMaterial({color:c,metalness:0.6,roughness:0.28}));
+        const bodyMesh=new THREE.Mesh(carGeos[gi],new THREE.MeshPhysicalMaterial({color:c,metalness:0.6,roughness:0.28,envMapIntensity:1.0,clearcoat:0.5,clearcoatRoughness:0.15}));
         bodyMesh.rotation.y=Math.PI/2;car.add(bodyMesh);
-        const glass=new THREE.Mesh(glassGeo,new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.1,transparent:true,opacity:.72}));
+        const glass=new THREE.Mesh(glassGeo,new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.1,envMapIntensity:1.3,transparent:true,opacity:.72}));
         glass.position.set(0,1.12,0.15);car.add(glass);
         [[-1.3,-0.85],[-1.3,0.85],[1.0,-0.85],[1.0,0.85]].forEach(([z,x])=>{
           const wh=new THREE.Mesh(mcWheelG,mcWheelM);wh.rotation.x=Math.PI/2;wh.position.set(x,0.46,z);car.add(wh);
