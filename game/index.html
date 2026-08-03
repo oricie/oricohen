@@ -80,6 +80,9 @@
 if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[k]?{value:this._m[k]}:null);},set(k,v){this._m[k]=v;return Promise.resolve();}};}
 </script>
 <script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="SkeletonUtils.js"></script>
+<script src="models-zombie.js"></script>
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
