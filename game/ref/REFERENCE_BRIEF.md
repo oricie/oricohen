@@ -122,3 +122,11 @@ comparison against it.
   sense of sitting INSIDE the airframe (coaming, side consoles, maybe a HUD
   combiner glass). Prefer real materials/geometry; consider an embedded cockpit
   model if a suitable CC0 one exists, otherwise a much richer procedural build.
+
+### E. Rescued survivors = real happy human characters
+- The people you rescue (the hostage/survivor at the beacon) currently look
+  like a crude stick/box figure. Make them REAL animated characters that read
+  as human: standing/waving for help, then JUMPING and celebrating (happy)
+  when you arrive. Reuse the embedded character pipeline (the model already has
+  Jump/Wave/Dance/ThumbsUp clips) — tint as a civilian, distinct from zombies;
+  or embed a distinct humanoid if a better fit is available. Critic-gated.
