@@ -32,21 +32,21 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
 </style>
 <div class="wrap">
   <h1>TOKIO <b>NEON</b> — REALISM PROGRESS</h1>
-  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 17:30</div>
+  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 17:40</div>
   <div class="grid">
     <div class="card">
       <h2>Status</h2>
-      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Pivot → real embedded 3D models + independent critic gate</b></div>
+      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 4 FX shipped ✓ · building real zombie next</b></div>
       <div class="k"><span>Method</span><b>builder subagent → fresh critic → integrate</b></div>
       <div class="k"><span>Model (subagents)</span><b>Sonnet builders + fresh CRITIC gate (reinstated)</b></div>
       <div class="k"><span>Live game link</span><b>artifact 74655282… (Wave 1 live) · PR #1</b></div>
     </div>
     <div class="card">
       <h2>Spend (running estimate)</h2>
-      <div class="k"><span>Subagent runs</span><b>5 builders (2 killed) + sourcing</b></div>
-      <div class="k"><span>Est. tokens used</span><b>~700k subagent tokens</b></div>
-      <div class="k"><span>Est. cost so far</span><b>~$6–8 (subagents)</b></div>
-      <div class="note">Procedural vehicles were a dead end (the bad truck). Pivoting to REAL embedded models. Critic gate reinstated so bad output is rejected, not shipped.</div>
+      <div class="k"><span>Subagent runs</span><b>6 builders (2 killed)</b></div>
+      <div class="k"><span>Est. tokens used</span><b>~850k subagent tokens</b></div>
+      <div class="k"><span>Est. cost so far</span><b>~$8–10 (subagents)</b></div>
+      <div class="note">Procedural-cars detour wasted ~$2–3 before I stopped it — that’s the cost of that mistake. Now on the real-models path. Judging vehicles/zombie via the critic gate.</div>
     </div>
     <div class="card">
       <h2>Realism sub-goals</h2>
@@ -63,9 +63,9 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
       <div class="pd">Denser signage, pedestrians.</div>
       <div class="verdict">Shipped.</div>
     </div><div class="piece">
-      <div class="pl"><b>P4</b> · Explosion / combat FX <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
+      <div class="pl"><b>P4</b> · Explosion / combat FX <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
       <div class="pd">Volumetric fire, smoke, debris, missile trails.</div>
-      <div class="verdict">Builder running (procedural is right for FX) → will pass through critic gate.</div>
+      <div class="verdict">Shipped — fire Hellfire/Napalm to see layered fireballs, smoke, debris, tracers.</div>
     </div><div class="piece">
       <div class="pl"><b>P5</b> · Embedded-GLTF pipeline <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
       <div class="pd">Vendor GLTFLoader, base64-embed models, load via parse. FOUNDATION — sourced: real truck (447KB) + animated character (464KB, CC0). Buggy car too big; sourcing a low-poly car.</div>
@@ -94,7 +94,7 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
     </div>
     <div class="card">
       <h2>Activity log</h2>
-      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li><li><time>16:10</time> Reference brief written from your target frames (photoreal night Tokyo) → drives all agents.</li><li><time>16:12</time> Wave 2 builder launched: image-based lighting + material realism (Sonnet, main tree).</li><li><time>16:22</time> Wave 2 (IBL + wet materials) judged inline — clear win, mood intact. Shipped to preview + PR #1.</li><li><time>16:24</time> Wave 3 launched: billboards + street life (pedestrians, denser traffic, LED screens).</li><li><time>16:50</time> Wave 3 (billboards + street life) judged inline — clear win. Shipped to preview + PR #1.</li><li><time>16:52</time> Checkpoint: 3 waves shipped (~$4.5–6 subagents). Awaiting go on next: explosions/FX vs hosted+zombie.</li><li><time>16:58</time> Wave 4 batch: launched Explosions (A) + Cars/Trucks (B) in PARALLEL isolated worktrees. Windows/lighting/anti-flicker (C) runs after they merge.</li><li><time>17:20</time> Stopped procedural cars builder — dead end (bad boxy truck, wrong orientation).</li><li><time>17:26</time> Reinstated independent CRITIC gate (the visual-QA agent) for all future waves.</li><li><time>17:30</time> Proved embedded-GLTF pipeline: fetched GLTFLoader + real truck + CC0 animated character from GitHub. Sourcing a low-poly car next.</li></ul>
+      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li><li><time>16:10</time> Reference brief written from your target frames (photoreal night Tokyo) → drives all agents.</li><li><time>16:12</time> Wave 2 builder launched: image-based lighting + material realism (Sonnet, main tree).</li><li><time>16:22</time> Wave 2 (IBL + wet materials) judged inline — clear win, mood intact. Shipped to preview + PR #1.</li><li><time>16:24</time> Wave 3 launched: billboards + street life (pedestrians, denser traffic, LED screens).</li><li><time>16:50</time> Wave 3 (billboards + street life) judged inline — clear win. Shipped to preview + PR #1.</li><li><time>16:52</time> Checkpoint: 3 waves shipped (~$4.5–6 subagents). Awaiting go on next: explosions/FX vs hosted+zombie.</li><li><time>16:58</time> Wave 4 batch: launched Explosions (A) + Cars/Trucks (B) in PARALLEL isolated worktrees. Windows/lighting/anti-flicker (C) runs after they merge.</li><li><time>17:20</time> Stopped procedural cars builder — dead end (bad boxy truck, wrong orientation).</li><li><time>17:26</time> Reinstated independent CRITIC gate (the visual-QA agent) for all future waves.</li><li><time>17:30</time> Proved embedded-GLTF pipeline: fetched GLTFLoader + real truck + CC0 animated character from GitHub. Sourcing a low-poly car next.</li><li><time>17:38</time> Explosions builder finished (layered fire/smoke/debris/lights, missile trails). Shipped to preview + PR #1.</li><li><time>17:40</time> Building embedded-GLTF: fetching humanoid model + SkeletonUtils to make the real animated zombie.</li></ul>
     </div>
   </div>
 </div>
