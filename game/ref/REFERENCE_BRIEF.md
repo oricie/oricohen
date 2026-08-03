@@ -82,3 +82,34 @@ comparison against it.
 - **Human scale + emptiness**: a lone pedestrian on the crossing sells scale and
   a lonely, cinematic mood. Tiny pedestrians + sparse motion read as real.
 - Applies to our LOW/chase passes (street level), complementing the top-down bar.
+
+---
+## Requested changes — round 2 (grouped into critic-gated waves)
+
+### A. Rendering & world scale
+- **Flicker, properly** — esp. from ZOOMED-OUT/high altitude: kill z-fighting
+  and temporal shimmer. Techniques: logarithmic depth buffer or raised camera
+  near-plane; texture mipmaps + anisotropy; LOD / distance-cull tiny bright
+  sprites & signs; damp additive-sprite shimmer.
+- **Helicopter visibility** — it's hard to see. Add nav/position lights + a
+  rim/key light (or subtle follow-spot) and a slightly lighter airframe. Game
+  is a touch too dark overall → modest lift WITHOUT washing out the neon mood.
+- **City size / boundary** — the city ends abruptly, feels wrong. Make it
+  BIGGER and add a distant skyline + haze boundary so it fades out instead of
+  hard-stopping. (Requires LOD/culling so perf holds.)
+
+### B. City content variety
+- **Street signs too repetitive** → far more variety: kanji, colours, shapes,
+  orientations, sizes, brands.
+- **Building windows** → more variance in SIZE, MATERIAL, and INNER LIGHT
+  (per-window & per-floor lit/dark, warm/cool, brightness).
+- **Roads** → surface-roughness variation + occasional WATER/puddles that
+  reflect neon (dynamic wet patches over time).
+- **More cars / traffic** generally (denser two-way flow).
+
+### C. Gameplay systems
+- **Weapon lock-on** — proper target-locking: acquire → lock → guided weapons
+  track the locked target; clear HUD lock indicator/box.
+- **Kill / "dead" count** — a prominent counter of zombies killed.
+- **Command radio VOICE** — actually HEAR command instructions on the heli
+  radio (speech synthesis w/ radio-filter FX), synced to the existing lines.
