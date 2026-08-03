@@ -32,28 +32,28 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
 </style>
 <div class="wrap">
   <h1>TOKIO <b>NEON</b> — REALISM PROGRESS</h1>
-  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 15:32</div>
+  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 15:44</div>
   <div class="grid">
     <div class="card">
       <h2>Status</h2>
       <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 1 — Atmosphere & Light</b></div>
       <div class="k"><span>Method</span><b>builder subagent → fresh critic → integrate</b></div>
       <div class="k"><span>Model (subagents)</span><b>Sonnet (cost-controlled)</b></div>
-      <div class="k"><span>Live game link</span><b>claude.ai/code/artifact/74655282…</b></div>
+      <div class="k"><span>Live game link</span><b>artifact 74655282… (preview) · PR #1</b></div>
     </div>
     <div class="card">
       <h2>Spend (running estimate)</h2>
-      <div class="k"><span>Subagent runs</span><b>0</b></div>
-      <div class="k"><span>Est. tokens used</span><b>~0</b></div>
-      <div class="k"><span>Est. cost so far</span><b>~$0</b></div>
-      <div class="note">Estimate. Each build+critic loop ≈ 2 Sonnet subagent runs w/ browser capture. Updated after each wave.</div>
+      <div class="k"><span>Subagent runs</span><b>1 partial (killed) + 1 running</b></div>
+      <div class="k"><span>Est. tokens used</span><b>~40–80k so far (est.)</b></div>
+      <div class="k"><span>Est. cost so far</span><b>~$0.3–0.7 (est.)</b></div>
+      <div class="note">First builder was mis-provisioned (worktree lacked game/); killed early & relaunched in the main tree. Real per-loop cost posted when the loop closes.</div>
     </div>
     <div class="card">
       <h2>Realism sub-goals</h2>
       <div class="piece">
       <div class="pl"><b>P1</b> · Atmosphere & Light <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
       <div class="pd">Aerial haze / depth cueing, sky, tone-mapping & exposure, bloom quality, colour grade — the biggest lever for 'real'.</div>
-      
+      <div class="verdict">Builder running in main tree; critic follows.</div>
     </div><div class="piece">
       <div class="pl"><b>P2</b> · Materials & Ground <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
       <div class="pd">Wet-road reflections, surface micro-detail, believable falloff at altitude.</div>
@@ -74,7 +74,7 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
     </div>
     <div class="card">
       <h2>Activity log</h2>
-      <ul class="log"><li><time>15:30</time> Baseline captured (chase / low / motion strip / cockpit), 0 errors.</li><li><time>15:31</time> Live progress page created.</li><li><time>15:32</time> Wave 1 starting: builder subagent on P1 (Atmosphere & Light) in an isolated worktree.</li></ul>
+      <ul class="log"><li><time>15:30</time> Baseline captured (chase / low / motion / cockpit), 0 errors.</li><li><time>15:31</time> Live progress page created.</li><li><time>15:39</time> First builder launched in an isolated worktree.</li><li><time>15:43</time> Caught it: worktree was branched from a pre-game commit (no game/ folder). Killed early to save tokens.</li><li><time>15:44</time> Relaunched builder in the main repo tree on the real game/index.html. Running.</li></ul>
     </div>
   </div>
 </div>
