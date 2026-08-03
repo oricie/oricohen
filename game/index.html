@@ -96,7 +96,7 @@ renderer.toneMappingExposure=1.08;
 const scene=new THREE.Scene();
 // night neon haze — deep indigo, layered with a low warm ground-haze band (see groundHaze below)
 scene.fog=new THREE.FogExp2(0x1c1732,0.00165);
-const cam=new THREE.PerspectiveCamera(66,W()/H(),0.1,4000);
+const cam=new THREE.PerspectiveCamera(66,W()/H(),0.1,4000);window.cam=cam; // TEMP DEBUG - remove before final
 
 // ---------- POST-PROCESSING: manual bloom (no addons available, hand-rolled) ----------
 // two-tier mip-style bloom (tight + wide) for a soft, filmic, non-shimmery neon glow
@@ -2221,12 +2221,44 @@ const CRUISE=30;
 // ---------- HOSTAGE / MISSION ----------
 let missionLevel=1,hostage=null,missionLine='MISSION 1 — RESCUE HOSTAGE';
 const hostageMat=new THREE.MeshLambertMaterial({color:0xff9933});
+// Build a survivor figure from the shared humanoid model: natural tint, idle pose,
+// one arm bone procedurally driven for a "waving for help" gesture (no Wave clip exists).
+function buildSurvivorFigure(){
+  if(!(humanoidModelReady&&humanoidTemplate))return null;
+  const model=THREE.SkeletonUtils.clone(humanoidTemplate);
+  applyHumanoidMaterialVariant(model,survivorMatVariants);
+  const scale=HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight;
+  model.scale.setScalar(scale);
+  model.rotation.y=HUMANOID_BASE_YAW;
+  let mixer=null;
+  if(survivorIdleClip){
+    mixer=new THREE.AnimationMixer(model);
+    mixer.clipAction(survivorIdleClip).setLoop(THREE.LoopRepeat,Infinity).play();
+    mixer.update(0); // settle into frame-0 idle pose before we snapshot bone rest quats
+  }
+  const waveBone=model.getObjectByName('mixamorigRightArm');
+  const leftArmBone=model.getObjectByName('mixamorigLeftArm');
+  return {
+    model,mixer,waveBone,leftArmBone,
+    waveBaseQuat:waveBone?waveBone.quaternion.clone():null,
+    leftArmBaseQuat:leftArmBone?leftArmBone.quaternion.clone():null,
+    celebrating:false,celebT:0
+  };
+}
 function spawnHostage(){
   const g=new THREE.Group();
-  const bodyM=new THREE.Mesh(new THREE.CylinderGeometry(.28,.32,1.2,8),hostageMat);bodyM.position.y=1.0;g.add(bodyM);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.28,8,8),new THREE.MeshLambertMaterial({color:0xd9a066}));head.position.y=1.75;g.add(head);
-  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.85,6),hostageMat);arm.position.set(.36,1.5,0);arm.rotation.z=-0.6;g.add(arm);
-  const arm2=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.75,6),hostageMat);arm2.position.set(-.32,1.35,0);arm2.rotation.z=0.3;g.add(arm2);
+  const survivor=buildSurvivorFigure();
+  let arm,arm2;
+  if(survivor){
+    g.add(survivor.model);
+    arm={rotation:{z:0}};arm2={rotation:{z:0}}; // kept for API compat with older 'pad' path
+  }else{
+    // fallback: old box-mannequin (used only if the model hasn't finished loading yet)
+    const bodyM=new THREE.Mesh(new THREE.CylinderGeometry(.28,.32,1.2,8),hostageMat);bodyM.position.y=1.0;g.add(bodyM);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.28,8,8),new THREE.MeshLambertMaterial({color:0xd9a066}));head.position.y=1.75;g.add(head);
+    arm=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.85,6),hostageMat);arm.position.set(.36,1.5,0);arm.rotation.z=-0.6;g.add(arm);
+    arm2=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.75,6),hostageMat);arm2.position.set(-.32,1.35,0);arm2.rotation.z=0.3;g.add(arm2);
+  }
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,60,10,1,true),new THREE.MeshBasicMaterial({color:0x33ff99,transparent:true,opacity:.22,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false}));
   beam.position.y=30;g.add(beam);
   const ring=new THREE.Mesh(new THREE.RingGeometry(3.2,4.2,32),new THREE.MeshBasicMaterial({color:0x33ff99,transparent:true,opacity:.85,side:THREE.DoubleSide}));
@@ -2265,7 +2297,7 @@ function spawnHostage(){
   }
   g.position.set(x,y,z);
   scene.add(g);
-  hostage={m:g,arm,arm2,ring,beam,marker,pos:g.position,state:'seek',rooftop};
+  hostage={m:g,arm,arm2,ring,beam,marker,pos:g.position,state:'seek',rooftop,survivor};
   {
     const sub=document.getElementById('radioSub');
     if(sub){
@@ -2327,7 +2359,15 @@ function spawnPad(){
 function rescueHostage(){
   if(!hostage)return;
   if(hostage.state==='seek'){
-    scene.remove(hostage.m);
+    const rescuedMesh=hostage.m,rescuedSurvivor=hostage.survivor;
+    if(rescuedSurvivor){
+      // purely visual: happy celebration (jump bounce + arms up), then remove shortly after.
+      // does not touch score/timer/spawnPad below, which fire at the same point as before.
+      rescuedSurvivor.celebrating=true;rescuedSurvivor.celebT=0;
+      setTimeout(()=>{scene.remove(rescuedMesh);},1050);
+    }else{
+      scene.remove(rescuedMesh);
+    }
     addScore(500);
     flashMsg('HOSTAGE ABOARD — GET TO THE HELIPAD!','#3ef');
     sfx(0.4,0.25,800,1000);
@@ -2353,18 +2393,119 @@ const zHeadG=new THREE.BoxGeometry(.8,.8,.8);
 const zArmG=new THREE.BoxGeometry(.3,1.3,.3);
 const zMat=new THREE.MeshLambertMaterial({map:zTex});
 const zEyeMat=new THREE.MeshBasicMaterial({color:0xff2200});
+
+// ---- shared rigged humanoid model (parsed ONCE, reused for zombies + survivor) ----
+let humanoidModelReady=false;
+let humanoidTemplate=null;     // THREE.Object3D template scene, original materials untouched
+let humanoidAnimClips=null;    // THREE.AnimationClip[]  -> Idle, Run, TPose, Walk
+let zombieWalkClip=null;       // "Walk", slowed for zombies
+let survivorIdleClip=null;     // "Idle", for the survivor
+let humanoidNaturalHeight=1;   // Box3-measured height of the raw template, for scaling
+const HUMANOID_TARGET_HEIGHT=2.4; // world units for a normal-height figure
+const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-direction math (verified by render: at yaw=0 the model faces -Z i.e. backward, so +PI flips it to face the group's forward/travel direction)
+// Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
+// used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
+const WAVE_AXIS=new THREE.Vector3(0,0,1);
+const WAVE_ARM_BASE_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
+const CELEBRATE_ARM_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
+const CELEBRATE_ARM_OFFSET_L=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,-2.6);
+
+let zombieMatVariants=null;    // Map<origMaterial, undead-tinted clone>
+let survivorMatVariants=null;  // Map<origMaterial, natural-tinted clone>
+
+// Build both tint variants ONCE from the template's original materials (shared across all
+// clones — cheap & consistent; clones from SkeletonUtils keep references to these originals).
+function buildHumanoidMaterialVariants(root){
+  zombieMatVariants=new Map();
+  survivorMatVariants=new Map();
+  const seen=new Set();
+  root.traverse(o=>{
+    if(!o.isMesh||!o.material)return;
+    const mats=Array.isArray(o.material)?o.material:[o.material];
+    mats.forEach(mat=>{
+      if(seen.has(mat))return;
+      seen.add(mat);
+      const isVisor=/visor/i.test(mat.name||'');
+      // zombie: desaturated sickly grey-green, roughened; visor gets a faint red undead glow
+      const zMat=mat.clone();
+      if(zMat.color)zMat.color.multiply(new THREE.Color(0.3,0.66,0.34));
+      if('roughness' in zMat)zMat.roughness=0.95;
+      if('metalness' in zMat)zMat.metalness=0.05;
+      if(!zMat.emissive)zMat.emissive=new THREE.Color(0,0,0);
+      zMat.emissive.setRGB(isVisor?0.5:0,isVisor?0.03:0,isVisor?0.03:0);
+      zMat.emissiveIntensity=isVisor?1.0:0;
+      zMat.needsUpdate=true;
+      zombieMatVariants.set(mat,zMat);
+      // survivor: keep the original texture/colors, just a hair warmer — reads as a normal person
+      const sMat=mat.clone();
+      if(sMat.color)sMat.color.multiply(new THREE.Color(1.0,0.98,0.95));
+      sMat.needsUpdate=true;
+      survivorMatVariants.set(mat,sMat);
+    });
+  });
+}
+function applyHumanoidMaterialVariant(root,variantMap){
+  root.traverse(o=>{
+    if(!o.isMesh||!o.material)return;
+    if(Array.isArray(o.material))o.material=o.material.map(m=>variantMap.get(m)||m);
+    else o.material=variantMap.get(o.material)||o.material;
+    o.castShadow=true;
+    o.receiveShadow=false;
+  });
+}
+
+function initHumanoidModel(){
+  try{
+    if(!window.__ZOMBIE_GLB||!THREE.GLTFLoader||!THREE.SkeletonUtils)return;
+    const b64=window.__ZOMBIE_GLB;
+    const bin=atob(b64);
+    const bytes=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    new THREE.GLTFLoader().parse(bytes.buffer,'',gltf=>{
+      humanoidTemplate=gltf.scene;
+      humanoidAnimClips=gltf.animations||[];
+      zombieWalkClip=humanoidAnimClips.find(c=>/^walk$/i.test(c.name))||humanoidAnimClips.find(c=>/walk/i.test(c.name))||null;
+      survivorIdleClip=humanoidAnimClips.find(c=>/idle/i.test(c.name))||null;
+      buildHumanoidMaterialVariants(humanoidTemplate);
+      const box=new THREE.Box3().setFromObject(humanoidTemplate);
+      humanoidNaturalHeight=Math.max(0.001,box.max.y-box.min.y);
+      humanoidModelReady=true;
+    },err=>{console.warn('humanoid GLB parse failed',err);});
+  }catch(e){console.warn('humanoid model init failed',e);}
+}
+initHumanoidModel();
+
 function spawnZombie(big){
   const g=new THREE.Group();
-  const b=new THREE.Mesh(zBodyG,zMat);b.position.y=1.5;b.castShadow=true;g.add(b);
-  const h=new THREE.Mesh(zHeadG,zMat);h.position.y=2.7;h.rotation.z=(Math.random()-.5)*.4;g.add(h);
-  [-0.35,0.35].forEach(x=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.16,.12,.1),zEyeMat);e.position.set(x*.6,2.75,-.45);g.add(e);});
-  [[-.8],[0.8]].forEach(([x])=>{const a=new THREE.Mesh(zArmG,zMat);a.position.set(x,1.9,-.5);a.rotation.x=-1.2;g.add(a);});
-  g.scale.setScalar(big?2.4:1+Math.random()*0.2);
+  let mixer=null,walkAction=null;
+  if(humanoidModelReady&&humanoidTemplate){
+    const model=THREE.SkeletonUtils.clone(humanoidTemplate);
+    applyHumanoidMaterialVariant(model,zombieMatVariants);
+    const scale=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?2:1+Math.random()*0.1);
+    model.scale.setScalar(scale);
+    model.rotation.y=HUMANOID_BASE_YAW;
+    g.add(model);
+    if(zombieWalkClip){
+      mixer=new THREE.AnimationMixer(model);
+      walkAction=mixer.clipAction(zombieWalkClip);
+      walkAction.setLoop(THREE.LoopRepeat,Infinity);
+      walkAction.timeScale=0.55+Math.random()*0.25;
+      walkAction.play();
+    }
+  }else{
+    // fallback: old box-primitive zombie (used if the model hasn't finished loading yet)
+    const b=new THREE.Mesh(zBodyG,zMat);b.position.y=1.5;b.castShadow=true;g.add(b);
+    const h=new THREE.Mesh(zHeadG,zMat);h.position.y=2.7;h.rotation.z=(Math.random()-.5)*.4;g.add(h);
+    [-0.35,0.35].forEach(x=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.16,.12,.1),zEyeMat);e.position.set(x*.6,2.75,-.45);g.add(e);});
+    [[-.8],[0.8]].forEach(([x])=>{const a=new THREE.Mesh(zArmG,zMat);a.position.set(x,1.9,-.5);a.rotation.x=-1.2;g.add(a);});
+    g.scale.setScalar(big?2.4:1+Math.random()*0.2);
+  }
   const a=Math.random()*Math.PI*2,r=150+Math.random()*180;
   g.position.set(heli.position.x+Math.cos(a)*r,0,heli.position.z+Math.sin(a)*r);
   scene.add(g);
-  zombies.push({m:g,hp:big?260:32,big,spd:(big?4:6)+Math.random()*3,ph:Math.random()*7,leap:0,vy:0});
+  zombies.push({m:g,hp:big?260:32,big,spd:(big?4:6)+Math.random()*3,ph:Math.random()*7,leap:0,vy:0,mixer,walkAction});
 }
+window.__zdbg=()=>({heli,zombies,hostage,rescueHostage,spawnZombie}); // TEMP DEBUG - remove before final
 function startWave(){
   const n=3+wave*2;
   for(let i=0;i<n;i++)setTimeout(()=>{if(!gameOver)spawnZombie(false);},i*600);
@@ -3039,6 +3180,7 @@ function loop(now){
     const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
     heli.position.add(fwd.clone().multiplyScalar(CRUISE*window.__throttle*dt));
     heli.position.y=Math.max(3,Math.min(180,heli.position.y+vSpeed*dt));
+    if(window.__forceLowAlt){heli.position.y=6;vSpeed=0;} // TEMP DEBUG - remove before final
     heli.position.x=Math.max(-620,Math.min(620,heli.position.x));
     heli.position.z=Math.max(-620,Math.min(620,heli.position.z));
     pitch=THREE.MathUtils.lerp(pitch,0.1-climb*0.12,3*dt);
@@ -3115,6 +3257,7 @@ function loop(now){
         addScore(z.big?500:100);
         continue;
       }
+      if(z.mixer)z.mixer.update(dt);
       const to=heli.position.clone().setY(0).sub(z.m.position.clone().setY(0));
       const d=to.length();to.normalize();
       z.ph+=dt*8;
@@ -3217,8 +3360,24 @@ function loop(now){
     if(screenT>0.5){bigScreens.forEach(bs=>bs.draw(now/1600));screenT=0;}
     if(window.__beacon)window.__beacon.visible=(now%1400)<800;
     if(hostage){
-      hostage.arm.rotation.z=-0.6+Math.sin(now/200)*0.35;
-      hostage.arm2.rotation.z=0.3+Math.sin(now/220+1)*0.2;
+      const sv=hostage.survivor;
+      if(sv){
+        if(sv.mixer)sv.mixer.update(dt);
+        if(sv.celebrating){
+          sv.celebT+=dt;
+          const hopDur=0.35,hops=3,totalDur=hopDur*hops;
+          const tt=Math.min(sv.celebT,totalDur);
+          sv.model.position.y=Math.max(0,Math.sin((tt/hopDur)*Math.PI))*0.55;
+          if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
+          if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
+        }else if(hostage.state==='seek'&&sv.waveBone&&sv.waveBaseQuat){
+          const wag=Math.sin(now/240)*0.3;
+          sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(WAVE_ARM_BASE_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,wag));
+        }
+      }else{
+        hostage.arm.rotation.z=-0.6+Math.sin(now/200)*0.35;
+        hostage.arm2.rotation.z=0.3+Math.sin(now/220+1)*0.2;
+      }
       const rs=1+Math.sin(now/300)*0.08;
       hostage.ring.scale.set(rs,rs,1);
       hostage.marker.position.y=4+Math.sin(now/300)*0.3;
