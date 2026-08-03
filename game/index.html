@@ -2356,6 +2356,7 @@ function spawnPad(){
   scene.add(g);
   hostage={m:g,arm:{rotation:{z:0}},arm2:{rotation:{z:0}},ring,beam,marker,pos:g.position,state:'pad'};
 }
+const celebratingSurvivors=[];
 function rescueHostage(){
   if(!hostage)return;
   if(hostage.state==='seek'){
@@ -2364,7 +2365,8 @@ function rescueHostage(){
       // purely visual: happy celebration (jump bounce + arms up), then remove shortly after.
       // does not touch score/timer/spawnPad below, which fire at the same point as before.
       rescuedSurvivor.celebrating=true;rescuedSurvivor.celebT=0;
-      setTimeout(()=>{scene.remove(rescuedMesh);},1050);
+      celebratingSurvivors.push(rescuedSurvivor); // update independently — spawnPad() below reassigns global `hostage`
+      setTimeout(()=>{scene.remove(rescuedMesh);},1500);
     }else{
       scene.remove(rescuedMesh);
     }
@@ -2428,12 +2430,13 @@ function buildHumanoidMaterialVariants(root){
       const isVisor=/visor/i.test(mat.name||'');
       // zombie: desaturated sickly grey-green, roughened; visor gets a faint red undead glow
       const zMat=mat.clone();
-      if(zMat.color)zMat.color.multiply(new THREE.Color(0.3,0.66,0.34));
-      if('roughness' in zMat)zMat.roughness=0.95;
+      if(zMat.color)zMat.color.setRGB(0.30,0.44,0.24); // visible sickly green (was multiplying dark camo → near-black)
+      if('roughness' in zMat)zMat.roughness=0.9;
       if('metalness' in zMat)zMat.metalness=0.05;
       if(!zMat.emissive)zMat.emissive=new THREE.Color(0,0,0);
-      zMat.emissive.setRGB(isVisor?0.5:0,isVisor?0.03:0,isVisor?0.03:0);
-      zMat.emissiveIntensity=isVisor?1.0:0;
+      // visor = red undead eyes; body = faint green self-glow so the zombie reads in the dark scene
+      zMat.emissive.setRGB(isVisor?0.6:0.06, isVisor?0.03:0.13, isVisor?0.03:0.05);
+      zMat.emissiveIntensity=isVisor?1.0:0.55;
       zMat.needsUpdate=true;
       zombieMatVariants.set(mat,zMat);
       // survivor: keep the original texture/colors, just a hair warmer — reads as a normal person
@@ -3359,6 +3362,17 @@ function loop(now){
     screenT+=dt;
     if(screenT>0.5){bigScreens.forEach(bs=>bs.draw(now/1600));screenT=0;}
     if(window.__beacon)window.__beacon.visible=(now%1400)<800;
+    // rescued survivors celebrate independently of `hostage` (spawnPad reassigns it to the LZ pad)
+    for(let ci=celebratingSurvivors.length-1;ci>=0;ci--){
+      const sv=celebratingSurvivors[ci];
+      if(sv.mixer)sv.mixer.update(dt);
+      sv.celebT+=dt;
+      const hopDur=0.35,hops=3,totalDur=hopDur*hops;
+      sv.model.position.y=Math.max(0,Math.sin((Math.min(sv.celebT,totalDur)/hopDur)*Math.PI))*0.55;
+      if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
+      if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
+      if(sv.celebT>totalDur+0.6)celebratingSurvivors.splice(ci,1);
+    }
     if(hostage){
       const sv=hostage.survivor;
       if(sv){
