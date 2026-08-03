@@ -32,39 +32,43 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
 </style>
 <div class="wrap">
   <h1>TOKIO <b>NEON</b> — REALISM PROGRESS</h1>
-  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 15:44</div>
+  <div class="sub">bar: cinematic realistic-graphics quality · updated Aug 3, 16:05</div>
   <div class="grid">
     <div class="card">
       <h2>Status</h2>
-      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 1 — Atmosphere & Light</b></div>
+      <div class="k"><span>Current wave</span><b><span class="pulse"></span>Wave 1 DONE ✓ · pivoting to hosted build + real assets</b></div>
       <div class="k"><span>Method</span><b>builder subagent → fresh critic → integrate</b></div>
-      <div class="k"><span>Model (subagents)</span><b>Sonnet (cost-controlled)</b></div>
-      <div class="k"><span>Live game link</span><b>artifact 74655282… (preview) · PR #1</b></div>
+      <div class="k"><span>Model (subagents)</span><b>Sonnet (builders) · inline judging to save cost</b></div>
+      <div class="k"><span>Live game link</span><b>artifact 74655282… (Wave 1 live) · PR #1</b></div>
     </div>
     <div class="card">
       <h2>Spend (running estimate)</h2>
-      <div class="k"><span>Subagent runs</span><b>1 partial (killed) + 1 running</b></div>
-      <div class="k"><span>Est. tokens used</span><b>~40–80k so far (est.)</b></div>
-      <div class="k"><span>Est. cost so far</span><b>~$0.3–0.7 (est.)</b></div>
-      <div class="note">First builder was mis-provisioned (worktree lacked game/); killed early & relaunched in the main tree. Real per-loop cost posted when the loop closes.</div>
+      <div class="k"><span>Subagent runs</span><b>2 builder runs (1 killed early)</b></div>
+      <div class="k"><span>Est. tokens used</span><b>~166k subagent tokens</b></div>
+      <div class="k"><span>Est. cost so far</span><b>~$1.5–2 (subagents)</b></div>
+      <div class="note">Judged Wave 1 inline from the frames instead of spawning a paid critic → saved ~100k+ tokens. Main Opus session is the larger cost driver but that's this conversation itself.</div>
     </div>
     <div class="card">
       <h2>Realism sub-goals</h2>
       <div class="piece">
-      <div class="pl"><b>P1</b> · Atmosphere & Light <span class="chip" style="color:#ffc23a;border-color:#ffc23a">ACTIVE</span></div>
-      <div class="pd">Aerial haze / depth cueing, sky, tone-mapping & exposure, bloom quality, colour grade — the biggest lever for 'real'.</div>
-      <div class="verdict">Builder running in main tree; critic follows.</div>
+      <div class="pl"><b>P1</b> · Atmosphere & Light <span class="chip" style="color:#3fe07a;border-color:#3fe07a">DONE</span></div>
+      <div class="pd">Fog depth, sky+moon halo, neon haze clouds, filmic two-tier bloom, split-tone grade.</div>
+      <div class="verdict">Shipped to the preview link — test it in motion.</div>
     </div><div class="piece">
-      <div class="pl"><b>P2</b> · Materials & Ground <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
-      <div class="pd">Wet-road reflections, surface micro-detail, believable falloff at altitude.</div>
+      <div class="pl"><b>P2</b> · Image-based lighting + PBR <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">Procedural night-city environment map → real reflections & ambient on materials. Works in BOTH artifact and hosted. Big realism lever, no external assets.</div>
       
     </div><div class="piece">
-      <div class="pl"><b>P3</b> · Craft & Motion <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
-      <div class="pd">Rotor blur disc, camera weight/sway, rotor downwash — must hold up in motion, not just stills.</div>
+      <div class="pl"><b>P3</b> · Hosted build + real characters <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">Serve from GitHub Pages; load a rigged zombie model + PBR skin (replaces box zombies). Needs Pages enabled.</div>
       
     </div><div class="piece">
-      <div class="pl"><b>P4</b> · Cohesion pass <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
-      <div class="pd">One fresh agent across the whole game to reconcile separately-improved parts.</div>
+      <div class="pl"><b>P4</b> · Materials / ground / motion <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">Wet reflections, rotor blur disc, downwash dust — must hold up in motion.</div>
+      
+    </div><div class="piece">
+      <div class="pl"><b>P5</b> · Cohesion pass <span class="chip" style="color:#6a6f86;border-color:#6a6f86">QUEUED</span></div>
+      <div class="pd">Fresh agent across the whole game to reconcile separately-improved parts.</div>
       
     </div>
     </div>
@@ -74,7 +78,7 @@ ul.log time{color:var(--neon);margin-right:8px;font-size:11px}
     </div>
     <div class="card">
       <h2>Activity log</h2>
-      <ul class="log"><li><time>15:30</time> Baseline captured (chase / low / motion / cockpit), 0 errors.</li><li><time>15:31</time> Live progress page created.</li><li><time>15:39</time> First builder launched in an isolated worktree.</li><li><time>15:43</time> Caught it: worktree was branched from a pre-game commit (no game/ folder). Killed early to save tokens.</li><li><time>15:44</time> Relaunched builder in the main repo tree on the real game/index.html. Running.</li></ul>
+      <ul class="log"><li><time>15:44</time> Builder relaunched in main tree (worktree base was wrong).</li><li><time>15:57</time> Builder finished Atmosphere & Light, errors:0 (126k tokens).</li><li><time>16:02</time> Judged frames inline — clear win, no regression. Committed c14015b → PR #1.</li><li><time>16:04</time> Preview link refreshed with Wave 1. Standalone rebuilt.</li><li><time>16:05</time> Decision: hosted build + real assets. Next: image-based lighting foundation (works everywhere, no assets).</li></ul>
     </div>
   </div>
 </div>
