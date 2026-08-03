@@ -113,3 +113,12 @@ comparison against it.
 - **Kill / "dead" count** — a prominent counter of zombies killed.
 - **Command radio VOICE** — actually HEAR command instructions on the heli
   radio (speech synthesis w/ radio-filter FX), synced to the existing lines.
+
+### D. Helicopter INTERIOR / cockpit view (press C) — needs a big jump
+- The first-person cockpit currently looks unrealistic (flat procedural dash).
+  Must jump many notches toward a real gunship cockpit: a proper instrument
+  panel with believable MFD screens, switches/labels, a realistic tinted canopy
+  with its frame/struts, night instrument glow reflecting on the glass, and a
+  sense of sitting INSIDE the airframe (coaming, side consoles, maybe a HUD
+  combiner glass). Prefer real materials/geometry; consider an embedded cockpit
+  model if a suitable CC0 one exists, otherwise a much richer procedural build.
