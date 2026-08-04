@@ -138,3 +138,11 @@ comparison against it.
 - **Streets too FLAT**: need real relief — raised sidewalks/curbs (kerb height), manholes, drains/gutters, road-seam cracks, painted markings wear, small props. The road plane must not read as a flat decal.
 - **Building windows**: vary size/material/inner-light AND SHOW INTERIORS — some lit rooms with a hint of furniture/silhouette/warm glow so it reads "someone's inside", not a flat lit rectangle.
 - **Neon signs — NO generic exceptions**: EVERY sign must look cared-for and real (weathered housing, believable kanji/branding, proper glow). Audit all sign generators; kill the plain/placeholder ones.
+
+---
+## Round 4 feedback (user likes the direction; push further)
+- **Survivor too STATIC**: stands frozen, doesn't move like a human. Needs lifelike idle — subtle weight-shift/sway, breathing, occasional look-around (head/spine), a natural continuous WAVE (arm + hand), small fidgets; livelier happy JUMP on rescue. Ensure the survivor reads as a CIVILIAN person (natural tint, bright enough) — NOT dark/green.
+- **Streets — kill the STRANGE STRIPE/BANDING pattern**: the asphalt shows an unnatural repeating stripe/seam pattern (likely the expansion-seam instances or texture tiling). Remove/randomize it. Give the road a realistic GRAINY WORN ASPHALT texture (fine grain, oil stains, patches, faint cracks) with NO obvious tiling. Keep crosswalks/lane lines but subtle & worn.
+- **Ground-level SHOPFRONTS / display windows are under-detailed**: rebuild them as real Tokyo shopfronts — lit interiors with shelves/products/mannequins/menu boards, glowing shop signage, varied per shop.
+- **Building window variance = great → push further**: more interior scenes (rooms, TV glow, silhouettes), more size/material/brightness variety.
+- **Signs at varied heights in small streets = loved** — keep and add a few more.
