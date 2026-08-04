@@ -654,6 +654,32 @@ function facadeTex(base,opts){return tex((g,w,h)=>{
         g.fillStyle='rgba(20,15,25,.4)';
         g.fillRect(px+ww*(0.2+Math.random()*0.5),py,ww*0.14,wh);
       }
+      if(lit&&Math.random()<0.24){
+        // ROUND-3 FEEDBACK: some lit windows show a hint of an actual INTERIOR — a person or
+        // furniture silhouette against the warm glow — so it reads "someone's inside", not a
+        // flat lit rectangle.
+        const kind=Math.random();
+        g.fillStyle='rgba(15,12,18,.6)';
+        if(kind<0.4){
+          // person silhouette standing near the glass
+          const sx=px+ww*(0.22+Math.random()*0.56),sy=py+wh*0.98;
+          const sh=wh*(0.5+Math.random()*0.32),sw2=Math.max(1.4,sh*0.32);
+          g.beginPath();g.arc(sx,sy-sh*0.86,sw2*0.42,0,7);g.fill();
+          g.beginPath();g.moveTo(sx-sw2*0.5,sy);g.lineTo(sx-sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.5,sy);g.closePath();g.fill();
+        }else if(kind<0.72){
+          // low furniture silhouette (sofa/table) with a warm lamp accent beside it
+          const fx=px+ww*0.12,fy=py+wh*0.6,fw=ww*0.62,fh=Math.max(1.2,wh*0.32);
+          g.fillRect(fx,fy,fw,fh);
+          if(Math.random()<0.55){
+            g.fillStyle='rgba(255,220,160,.55)';
+            g.beginPath();g.arc(fx+fw*0.86,fy-wh*0.05,Math.max(1,ww*0.055),0,7);g.fill();
+          }
+        }else{
+          // flicker of a TV/monitor glow mid-room — cool rectangle patch reads as a screen
+          g.fillStyle='rgba(140,200,255,.32)';
+          g.fillRect(px+ww*0.16,py+wh*0.32,ww*0.5,wh*0.26);
+        }
+      }
       g.fillStyle='rgba(255,190,255,.08)';
       g.beginPath();g.moveTo(px,py+wh);g.lineTo(px+ww*.35,py);g.lineTo(px+ww*.55,py);g.lineTo(px+ww*.2,py+wh);g.fill();
       if(Math.random()<.4){
@@ -771,8 +797,12 @@ const roadStripTex=tex((g,w,h)=>{
     gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.4)');gr.addColorStop(1,'rgba(10,10,12,0)');
     g.fillStyle=gr;g.fillRect(x-5,0,10,h);
   });
-  g.fillStyle='rgba(220,205,120,.75)';
-  for(let y=0;y<h;y+=16)g.fillRect(w/2-1.2,y,2.4,8);
+  // worn centre-line dashes: some missing/chipped so the paint reads weathered, not freshly laid
+  for(let y=0;y<h;y+=16){
+    if(Math.random()<0.14)continue;
+    const wear=0.32+Math.random()*0.5,dw=2.4*(0.55+Math.random()*0.55);
+    g.fillStyle=`rgba(220,205,120,${wear})`;g.fillRect(w/2-dw/2,y,dw,8);
+  }
   g.fillStyle='rgba(200,200,200,.4)';
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
   for(let i=0;i<4;i++){
@@ -796,8 +826,13 @@ const majorRoadTex=tex((g,w,h)=>{
     gr.addColorStop(0,'rgba(8,8,10,0)');gr.addColorStop(.5,'rgba(8,8,10,.45)');gr.addColorStop(1,'rgba(8,8,10,0)');
     g.fillStyle=gr;g.fillRect(x-7,0,14,h);
   });
-  g.fillStyle='rgba(232,232,238,.5)';
-  for(let y=0;y<h;y+=22){g.fillRect(w*0.25-1.4,y,2.8,11);g.fillRect(w*0.75-1.4,y,2.8,11);}
+  // worn lane dashes: patchy alpha + occasional dropped dash so the paint reads weathered
+  for(let y=0;y<h;y+=22){
+    if(Math.random()<0.1){continue;}
+    const wear=0.28+Math.random()*0.42;
+    g.fillStyle=`rgba(232,232,238,${wear})`;
+    g.fillRect(w*0.25-1.4,y,2.8,11);g.fillRect(w*0.75-1.4,y,2.8,11);
+  }
   g.fillStyle='rgba(232,232,238,.55)';
   g.fillRect(4,0,2.6,h);g.fillRect(w-6.6,0,2.6,h);
   g.fillStyle='rgba(240,208,90,.62)';
@@ -844,8 +879,27 @@ const sidewalkTex=tex((g,w,h)=>{
 },64,64,true);
 sidewalkTex.wrapS=sidewalkTex.wrapT=THREE.RepeatWrapping;
 sidewalkTex.repeat.set(1,180);
-const sidewalkMat=new THREE.MeshLambertMaterial({map:sidewalkTex,emissive:0xffffff,emissiveMap:sidewalkTex,emissiveIntensity:0.3,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
-const curbMat=new THREE.MeshLambertMaterial({color:0x1c1a16});
+const sidewalkMat=new THREE.MeshLambertMaterial({map:sidewalkTex,emissive:0xffffff,emissiveMap:sidewalkTex,emissiveIntensity:0.3});
+// raised kerb: real relief, not a flat decal — a textured vertical wall face (grime streaks,
+// expansion joints, a bright top chamfer that catches passing neon) so the sidewalk visibly
+// STEPS UP from the road instead of sitting flush with it.
+const CURB_H=0.2; // kerb step height (within 0.15-0.25m brief target)
+const curbFaceTex=tex((g,w,h)=>{
+  g.fillStyle='#4a463c';g.fillRect(0,0,w,h);
+  for(let i=0;i<220;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.2})`;g.fillRect(Math.random()*w,Math.random()*h,2,1);}
+  for(let x=8;x<w;x+=24){g.fillStyle='rgba(0,0,0,.42)';g.fillRect(x,0,1,h);} // expansion joints
+  for(let i=0;i<12;i++){ // grime drips hanging from the sidewalk edge
+    const x=Math.random()*w,len=h*(0.35+Math.random()*0.55);
+    const gr=g.createLinearGradient(0,0,0,len);
+    gr.addColorStop(0,'rgba(12,10,6,.55)');gr.addColorStop(1,'rgba(12,10,6,0)');
+    g.fillStyle=gr;g.fillRect(x,0,2+Math.random()*3,len);
+  }
+  g.fillStyle='rgba(255,255,255,.14)';g.fillRect(0,0,w,1); // top chamfer highlight catches neon
+},192,20,true);
+curbFaceTex.wrapS=THREE.RepeatWrapping;curbFaceTex.repeat.set(240,1);
+const curbFaceMat=new THREE.MeshStandardMaterial({map:curbFaceTex,color:0x8f8a7c,roughness:0.86,metalness:0.1,envMapIntensity:0.65});
+const curbBottomMat=new THREE.MeshStandardMaterial({color:0x14120e,roughness:0.9,metalness:0.02});
+const curbMat=curbFaceMat; // legacy alias
 
 // build road strips (geometry length axis = local +y pre-rotation; rotation.z spins in-plane for x-running roads)
 function roadTexFor(r){
@@ -877,19 +931,154 @@ function addRoad(axis,r){
   if(r.w<=10)return; // alleys: no sidewalks/curbs
   [-1,1].forEach(sd=>{
     const off=r.w/2+SW/2;
-    const sw2=new THREE.Mesh(new THREE.PlaneGeometry(SW,CITY*2),sidewalkMat);
-    sw2.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
-    if(axis==='x')sw2.position.set(r.p+sd*off,0.03,0);
-    else sw2.position.set(0,0.03,r.p+sd*off);
+    // sidewalk is now a single raised BOX (not a flat plane): the top face is the walkable
+    // texture, the vertical side faces are the weathered kerb wall — real relief/depth instead
+    // of a painted-flat decal, and one mesh instead of two (fewer draw calls than before).
+    const boxGeo=axis==='x'?new THREE.BoxGeometry(SW,CURB_H,CITY*2):new THREE.BoxGeometry(CITY*2,CURB_H,SW);
+    const sw2=new THREE.Mesh(boxGeo,[curbFaceMat,curbFaceMat,sidewalkMat,curbBottomMat,curbFaceMat,curbFaceMat]);
+    if(axis==='x')sw2.position.set(r.p+sd*off,CURB_H/2,0);
+    else sw2.position.set(0,CURB_H/2,r.p+sd*off);
+    sw2.receiveShadow=true;
     scene.add(sw2);
-    const curb=new THREE.Mesh(axis==='x'?new THREE.BoxGeometry(0.16,0.18,CITY*2):new THREE.BoxGeometry(CITY*2,0.18,0.16),curbMat);
-    if(axis==='x')curb.position.set(r.p+sd*(r.w/2+0.08),0.09,0);
-    else curb.position.set(0,0.09,r.p+sd*(r.w/2+0.08));
-    scene.add(curb);
   });
 }
 ROADS_X.forEach(r=>addRoad('x',r));
 ROADS_Z.forEach(r=>addRoad('z',r));
+
+// ---------- STREET-LEVEL RELIEF DETAIL: manholes, gutter drain grates, expansion-seam lines,
+// and sparse kerb props (bollards/cones/barrier) — everything here is a handful of shared
+// textures/materials driven through InstancedMesh, so hundreds of pieces cost only a few extra
+// draw calls total (same budget discipline as the puddle system below). ----------
+function scatterRoadPoints(count,minW){
+  const pts=[];let tries=0;
+  while(pts.length<count&&tries<count*4){
+    tries++;
+    const useX=Math.random()<0.5;
+    const list=(useX?ROADS_X:ROADS_Z).filter(r=>r.w>minW);
+    if(!list.length)continue;
+    const r=list[Math.floor(Math.random()*list.length)];
+    const along=(Math.random()-0.5)*CITY*1.9;
+    const wx=useX?r.p:along, wz=useX?along:r.p;
+    if(wx>RIVER.x0-8&&wx<RIVER.x1+8)continue; // skip the river band
+    pts.push({useX,r,along,wx,wz});
+  }
+  return pts;
+}
+function buildRoadInstancedProp(geo,mat,count,minW,opts){
+  opts=opts||{};
+  const inst=new THREE.InstancedMesh(geo,mat,count);
+  const dummy=new THREE.Object3D();
+  const pts=scatterRoadPoints(count,minW);
+  pts.forEach((p,i)=>{
+    const lat=opts.lat?opts.lat(p):0;
+    const wx=p.useX?p.r.p+lat:p.wx, wz=p.useX?p.wz:p.r.p+lat;
+    const y=opts.y?opts.y(p):0.05;
+    dummy.position.set(wx,y,wz);
+    dummy.rotation.set(0,0,0);
+    dummy.scale.set(1,1,1);
+    if(opts.rot)opts.rot(dummy,p);
+    if(opts.scale)opts.scale(dummy,p);
+    dummy.updateMatrix();
+    inst.setMatrixAt(i,dummy.matrix);
+  });
+  for(let i=pts.length;i<count;i++){dummy.position.set(0,-80,0);dummy.rotation.set(0,0,0);dummy.scale.set(0,0,0);dummy.updateMatrix();inst.setMatrixAt(i,dummy.matrix);}
+  inst.instanceMatrix.needsUpdate=true;
+  scene.add(inst);
+  return inst;
+}
+// manhole covers: weathered cast-iron disc, scattered across the roadway
+const manholeTex=tex((g,w,h)=>{
+  const cx=w/2,cy=h/2,r=w/2-1;
+  const gr=g.createRadialGradient(cx,cy,0,cx,cy,r);
+  gr.addColorStop(0,'#5c584f');gr.addColorStop(.7,'#3a3732');gr.addColorStop(1,'#201d1a');
+  g.fillStyle=gr;g.beginPath();g.arc(cx,cy,r,0,7);g.fill();
+  g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=2;g.beginPath();g.arc(cx,cy,r-2,0,7);g.stroke();
+  for(let rr=r*0.32;rr<r*0.92;rr+=r*0.17){g.strokeStyle='rgba(0,0,0,.32)';g.lineWidth=1;g.beginPath();g.arc(cx,cy,rr,0,7);g.stroke();}
+  for(let a=0;a<8;a++){
+    const ang=a/8*Math.PI*2;
+    g.strokeStyle='rgba(0,0,0,.3)';g.lineWidth=1.3;
+    g.beginPath();g.moveTo(cx+Math.cos(ang)*r*0.3,cy+Math.sin(ang)*r*0.3);
+    g.lineTo(cx+Math.cos(ang)*r*0.88,cy+Math.sin(ang)*r*0.88);g.stroke();
+  }
+  for(let i=0;i<44;i++){
+    const a2=Math.random()*Math.PI*2,rr2=Math.random()*r*0.9;
+    g.fillStyle=`rgba(120,60,20,${0.14+Math.random()*0.26})`;
+    g.fillRect(cx+Math.cos(a2)*rr2,cy+Math.sin(a2)*rr2,2,2);
+  }
+  g.fillStyle='rgba(255,255,255,.08)';g.beginPath();g.arc(cx-r*0.3,cy-r*0.3,r*0.18,0,7);g.fill();
+},64,64,true);
+const manholeMat=new THREE.MeshStandardMaterial({map:manholeTex,color:0xaaaaaa,roughness:0.5,metalness:0.6,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+buildRoadInstancedProp(new THREE.CircleGeometry(0.5,16),manholeMat,240,10,{
+  lat:p=>(Math.random()-0.5)*(p.r.w*0.66),
+  y:()=>0.052,
+  rot:(d)=>d.rotation.set(-Math.PI/2,0,Math.random()*Math.PI*2),
+  scale:(d)=>{const s=0.82+Math.random()*0.32;d.scale.set(s,s,1);}
+});
+// expansion-seam lines running the full width of the road at intervals, so the asphalt reads
+// as jointed real pavement rather than one continuous flat sheet
+const seamTex=tex((g,w,h)=>{
+  g.fillStyle='rgba(18,16,20,0.85)';g.fillRect(0,0,w,h);
+  g.fillStyle='rgba(95,95,102,0.5)';g.fillRect(0,0,w,h*0.3);
+  g.fillStyle='rgba(0,0,0,0.6)';g.fillRect(0,h*0.42,w,h*0.2);
+},64,8,true);
+const seamMat=new THREE.MeshStandardMaterial({map:seamTex,transparent:true,opacity:0.88,roughness:0.7,metalness:0.05,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5});
+buildRoadInstancedProp(new THREE.PlaneGeometry(1,1),seamMat,380,10,{
+  y:()=>0.046,
+  rot:(d,p)=>d.rotation.set(-Math.PI/2,0,p.useX?0:Math.PI/2),
+  scale:(d,p)=>d.scale.set(Math.max(0.6,p.r.w-0.7),0.1,1)
+});
+// drain/gutter grates right at the kerb line
+const drainTex=tex((g,w,h)=>{
+  g.fillStyle='#1c1a18';g.fillRect(0,0,w,h);
+  for(let x=6;x<w;x+=10){g.fillStyle='rgba(70,68,64,.85)';g.fillRect(x,3,4,h-6);}
+  g.strokeStyle='rgba(0,0,0,.7)';g.lineWidth=2;g.strokeRect(1,1,w-2,h-2);
+  for(let i=0;i<14;i++){g.fillStyle=`rgba(110,60,20,${0.1+Math.random()*0.25})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+},48,24,true);
+const drainMat=new THREE.MeshStandardMaterial({map:drainTex,color:0x8f8f8f,roughness:0.6,metalness:0.5,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+buildRoadInstancedProp(new THREE.PlaneGeometry(1,1),drainMat,200,10,{
+  lat:p=>(Math.random()<0.5?-1:1)*(p.r.w/2-0.3),
+  y:()=>0.05,
+  rot:(d,p)=>d.rotation.set(-Math.PI/2,0,p.useX?0:Math.PI/2),
+  scale:(d)=>d.scale.set(0.42,1.0,1)
+});
+// sparse kerb props: bollards (protect the sidewalk edge), and small cone/barrier construction
+// pockets — instanced, low counts, never on alleys
+const bollardTex=tex((g,w,h)=>{
+  g.fillStyle='#232323';g.fillRect(0,0,w,h);
+  g.fillStyle='#dcdcdc';g.fillRect(0,h*0.34,w,h*0.14);
+  g.fillStyle='rgba(255,80,60,.55)';g.fillRect(0,h*0.34,w,h*0.05);
+  for(let i=0;i<28;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.3})`;g.fillRect(Math.random()*w,Math.random()*h,2,3);}
+},16,64,true);
+const bollardMat=new THREE.MeshStandardMaterial({map:bollardTex,color:0x9a9a9a,roughness:0.5,metalness:0.55});
+buildRoadInstancedProp(new THREE.CylinderGeometry(0.085,0.1,0.62,7),bollardMat,150,10,{
+  lat:p=>(Math.random()<0.5?-1:1)*(p.r.w/2+0.35+Math.random()*0.3),
+  y:()=>CURB_H+0.31
+});
+const coneTex=tex((g,w,h)=>{
+  g.fillStyle='#e0601a';g.fillRect(0,0,w,h);
+  g.fillStyle='#f0f0f0';g.fillRect(0,h*0.35,w,h*0.18);
+  g.fillStyle='#f0f0f0';g.fillRect(0,h*0.62,w,h*0.12);
+},16,32,true);
+const coneMat=new THREE.MeshStandardMaterial({map:coneTex,roughness:0.55,metalness:0.05});
+buildRoadInstancedProp(new THREE.ConeGeometry(0.15,0.48,8),coneMat,54,10,{
+  lat:p=>(Math.random()<0.5?-1:1)*(p.r.w/2+0.5+Math.random()*1.2),
+  y:()=>CURB_H+0.24,
+  rot:(d)=>{d.rotation.y=Math.random()*Math.PI*2;}
+});
+const barrierTex=tex((g,w,h)=>{
+  g.fillStyle='#e8e4da';g.fillRect(0,0,w,h);
+  g.save();g.translate(w/2,h/2);g.rotate(-0.4);
+  for(let x=-w;x<w*2;x+=18){g.fillStyle='#c8281e';g.fillRect(x,-h,10,h*3);}
+  g.restore();
+  g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=3;g.strokeRect(2,2,w-4,h-4);
+  g.fillStyle='rgba(0,0,0,.4)';g.fillRect(0,0,w,4);g.fillRect(0,h-4,w,4);
+},128,48,true);
+const barrierMat=new THREE.MeshStandardMaterial({map:barrierTex,roughness:0.6,metalness:0.1});
+buildRoadInstancedProp(new THREE.BoxGeometry(1.4,0.85,0.12),barrierMat,14,10,{
+  lat:p=>(Math.random()<0.5?-1:1)*(p.r.w/2+1.0),
+  y:()=>CURB_H+0.425,
+  rot:(d,p)=>{d.rotation.y=p.useX?Math.PI/2:0;}
+});
 
 // ---------- WET PUDDLES: low-roughness reflective decal patches scattered on the roads, so
 // scene.environment (the neon-lit IBL) mirrors visibly in occasional wet spots — a single
@@ -1216,8 +1405,10 @@ function storefrontTex(){return tex((g,w,h)=>{
     g.fillStyle=gr;g.fillRect(x+4,h*.28,sw-8,h*.68);
     g.fillStyle=Math.random()<.5?'#a02060':'#204a80';
     g.fillRect(x+2,h*.18,sw-4,h*.12);
+    // glowing shop nameplate: a real character, not a blank glow bar
     g.shadowColor=col;g.shadowBlur=12;g.fillStyle=col;
-    g.fillRect(x+8,h*.04,sw-16,h*.1);
+    g.font=`bold ${Math.round(h*0.09)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText(kanji[Math.floor(Math.random()*kanji.length)].slice(0,1),x+sw/2,h*.09);
     g.shadowBlur=0;
     g.fillStyle='rgba(10,6,14,.85)';
     for(let i=0;i<3;i++)g.fillRect(x+8+Math.random()*(sw-20),h*.6+Math.random()*h*.3,6+Math.random()*10,8+Math.random()*14);
@@ -1231,6 +1422,9 @@ function idolPosterTex(){return tex((g,w,h)=>{
   const grad=g.createLinearGradient(0,0,0,h);
   grad.addColorStop(0,'#d8f0ff');grad.addColorStop(1,'#eef7ff');
   g.fillStyle=grad;g.fillRect(0,0,w,h);
+  const rg=g.createRadialGradient(w/2,h*0.3,0,w/2,h*0.3,w*0.55); // glow behind the figure: lit-panel feel
+  rg.addColorStop(0,'rgba(255,255,255,.5)');rg.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=rg;g.fillRect(0,0,w,h);
   g.fillStyle='#2fd9c8';
   g.beginPath();g.ellipse(w*0.27,h*0.56,w*0.11,h*0.33,0.35,0,7);g.fill();
   g.beginPath();g.ellipse(w*0.73,h*0.56,w*0.11,h*0.33,-0.35,0,7);g.fill();
@@ -1242,6 +1436,15 @@ function idolPosterTex(){return tex((g,w,h)=>{
   g.fillStyle='#ff9ac2';g.beginPath();g.arc(w*0.5,h*0.37,w*0.03,0,3.14);g.fill();
   g.fillStyle='#3a4250';g.fillRect(w*0.3,h*0.54,w*0.4,h*0.42);
   g.fillStyle='#2fd9c8';g.fillRect(w*0.3,h*0.54,w*0.4,h*0.05);
+  g.fillStyle='rgba(255,255,255,.85)'; // sparkle glints, so it reads as a finished ad
+  for(let i=0;i<5;i++){
+    const sx=w*(0.1+Math.random()*0.8),sy=h*(0.06+Math.random()*0.2),sr=1.4+Math.random()*1.6;
+    g.beginPath();g.moveTo(sx,sy-sr*2);g.lineTo(sx+sr*.5,sy-sr*.5);g.lineTo(sx+sr*2,sy);g.lineTo(sx+sr*.5,sy+sr*.5);
+    g.lineTo(sx,sy+sr*2);g.lineTo(sx-sr*.5,sy+sr*.5);g.lineTo(sx-sr*2,sy);g.lineTo(sx-sr*.5,sy-sr*.5);g.closePath();g.fill();
+  }
+  g.fillStyle='rgba(20,18,16,.8)';g.fillRect(w*0.28,h*0.9,w*0.44,h*0.06); // brand-tag plate
+  g.fillStyle='#2fd9c8';g.font=`bold ${Math.round(h*0.045)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
+  g.fillText('LIVE IDOL',w/2,h*0.93);
   ledScanlines(g,w,h,0.1);
   g.strokeStyle='rgba(0,0,0,.15)';g.strokeRect(2,2,w-4,h-4);
 },128,256,true);}
@@ -1252,21 +1455,36 @@ function ledScanlines(g,w,h,strength){
   g.fillStyle=`rgba(255,255,255,${strength*0.4})`;
   for(let y=1;y<h;y+=3)g.fillRect(0,y,w,0.6);
 }
+// branded LED ad panel: a hexagonal emblem + wordmark + tagline bar + weathered mount-screw
+// frame, so it reads as a real physical billboard (no generic circle-and-bars placeholder)
 function adTex(){return tex((g,w,h)=>{
   const hue=Math.random()*360;
   const gr=g.createLinearGradient(0,0,0,h);
-  gr.addColorStop(0,`hsl(${hue},55%,22%)`);gr.addColorStop(1,`hsl(${hue},60%,10%)`);
+  gr.addColorStop(0,`hsl(${hue},58%,20%)`);gr.addColorStop(1,`hsl(${hue},62%,8%)`);
   g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle=`hsl(${hue},80%,60%)`;
-  g.beginPath();g.arc(w*.5,h*.32,h*.22,0,7);g.fill();
-  g.fillStyle='rgba(10,10,14,.85)';
-  g.beginPath();g.arc(w*.5,h*.32,h*.13,0,7);g.fill();
+  const bx=w*0.24,by=h*0.36,br=h*0.24;
+  g.save();g.translate(bx,by);
+  g.fillStyle=`hsl(${hue},85%,62%)`;
+  g.beginPath();g.moveTo(br,0);for(let i=1;i<=6;i++){const a=i/6*Math.PI*2;g.lineTo(Math.cos(a)*br,Math.sin(a)*br);}g.closePath();g.fill();
+  g.fillStyle='rgba(10,10,14,.9)';
+  g.beginPath();g.moveTo(br*0.55,0);for(let i=1;i<=6;i++){const a=i/6*Math.PI*2;g.lineTo(Math.cos(a)*br*0.55,Math.sin(a)*br*0.55);}g.closePath();g.fill();
+  g.strokeStyle=`hsl(${hue},90%,74%)`;g.lineWidth=2.4;
+  g.beginPath();g.moveTo(-br*0.3,br*0.06);g.lineTo(0,-br*0.32);g.lineTo(br*0.3,br*0.06);g.stroke();
+  g.restore();
+  const word=kanji[Math.floor(Math.random()*kanji.length)];
+  g.textAlign='left';g.textBaseline='middle';
+  g.fillStyle='rgba(255,255,255,.95)';g.font=`bold ${Math.round(h*0.24)}px sans-serif`;
+  g.shadowColor=`hsl(${hue},90%,70%)`;g.shadowBlur=10;
+  g.fillText(word,w*0.44,h*0.34);
+  g.shadowBlur=0;
   g.fillStyle='rgba(255,255,255,.92)';
   g.fillRect(w*.14,h*.62,w*.72,h*.09);
   g.fillRect(w*.14,h*.76,w*.5,h*.07);
   ledScanlines(g,w,h,0.12);
   g.strokeStyle='rgba(255,255,255,.5)';g.lineWidth=3;
   g.strokeRect(4,4,w-8,h-8);
+  g.fillStyle='rgba(18,16,14,.85)'; // weathered corner mount screws
+  [[10,10],[w-10,10],[10,h-10],[w-10,h-10]].forEach(([sx,sy])=>{g.beginPath();g.arc(sx,sy,3.2,0,7);g.fill();});
 },256,128,true);}
 
 // big animated screens: word/ad screen + generic teal-haired "idol" screen (not any real IP)
@@ -1314,6 +1532,11 @@ function idolScreenTex(){
     g.shadowColor='#2fd9c8';g.shadowBlur=10;
     g.fillText('LIVE',96,246);
     g.shadowBlur=0;
+    g.fillStyle='rgba(255,255,255,.8)'; // a couple of sparkle glints so the screen feels finished
+    for(let i=0;i<3;i++){
+      const sx=40+((i*67+ph*30)%160),sy=30+((i*53)%50),sr=2+((i*7)%3);
+      g.beginPath();g.moveTo(sx,sy-sr*2);g.lineTo(sx+sr,sy);g.lineTo(sx,sy+sr*2);g.lineTo(sx-sr,sy);g.closePath();g.fill();
+    }
     ledScanlines(g,192,320,0.14);
     t.needsUpdate=true;
   }
@@ -1486,11 +1709,26 @@ function resTex(base){return tex((g,w,h)=>{
       const px=x*cw+cw*0.14,py=y*ch+ch*0.16,ww=cw*0.72,wh=ch*0.42;
       g.fillStyle='rgba(0,0,0,.5)';g.fillRect(px-2,py-2,ww+4,wh+4);
       const grd=g.createLinearGradient(px,py,px,py+wh);
-      if(lit){grd.addColorStop(0,'#ffe2b0');grd.addColorStop(1,'#d8995c');}
+      // warm/cool mix, not every lit unit the same tungsten tone
+      if(lit){
+        if(Math.random()<0.7){grd.addColorStop(0,'#ffe2b0');grd.addColorStop(1,'#d8995c');}
+        else{grd.addColorStop(0,'#dcecff');grd.addColorStop(1,'#9fb8d8');}
+      }
       else{grd.addColorStop(0,'#2a2438');grd.addColorStop(1,'#171224');}
       g.fillStyle=grd;g.fillRect(px,py,ww,wh);
       g.fillStyle='rgba(0,0,0,.4)';g.fillRect(px+ww/2-1,py,2,wh);
       if(lit&&Math.random()<0.5){g.fillStyle='rgba(30,20,30,.45)';g.fillRect(px+ww*0.55,py,ww*0.4,wh);}
+      if(lit&&Math.random()<0.28){
+        // hint of an interior: a small furniture/person silhouette so balcony units read lived-in
+        g.fillStyle='rgba(15,12,18,.55)';
+        if(Math.random()<0.5){
+          const sx=px+ww*(0.3+Math.random()*0.4),sy=py+wh*0.96,sh=wh*0.62,sw2=Math.max(1.2,sh*0.34);
+          g.beginPath();g.arc(sx,sy-sh*0.84,sw2*0.4,0,7);g.fill();
+          g.beginPath();g.moveTo(sx-sw2*0.48,sy);g.lineTo(sx-sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.48,sy);g.closePath();g.fill();
+        }else{
+          g.fillRect(px+ww*0.12,py+wh*0.6,ww*0.55,Math.max(1,wh*0.3));
+        }
+      }
     }
   }
   const gr=g.createLinearGradient(0,h,0,h*0.75);
