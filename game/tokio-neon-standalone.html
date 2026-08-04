@@ -4222,18 +4222,21 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 </script>
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
-const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,logarithmicDepthBuffer:true});
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.08;
+renderer.toneMappingExposure=1.15;
 const scene=new THREE.Scene();
 // night neon haze — deep indigo, layered with a low warm ground-haze band (see groundHaze below)
 scene.fog=new THREE.FogExp2(0x1c1732,0.00165);
-const cam=new THREE.PerspectiveCamera(66,W()/H(),0.1,4000);window.cam=cam; // TEMP DEBUG - remove before final
+// near raised from 0.1 and far cut from 4000 (biggest fixed scene radius is the sky sphere at 2000)
+// to compress the depth range and kill high-altitude z-fighting/shimmer; 0.5 still clears the closest
+// 3D cockpit dash geometry (~1.2 units from camera) so cockpit view (press C) is unaffected.
+const cam=new THREE.PerspectiveCamera(66,W()/H(),0.5,2600);window.cam=cam;
 
 // ---------- POST-PROCESSING: manual bloom (no addons available, hand-rolled) ----------
 // two-tier mip-style bloom (tight + wide) for a soft, filmic, non-shimmery neon glow
@@ -4478,7 +4481,7 @@ for(let i=0;i<28;i++){
 }
 
 // ---------- LIGHTS ----------
-scene.add(new THREE.HemisphereLight(0x4a3a8e,0x201a30,0.55));
+scene.add(new THREE.HemisphereLight(0x4a3a8e,0x201a30,0.64));
 const sun=new THREE.DirectionalLight(0x9a6aff,0.62);
 sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
@@ -5648,6 +5651,65 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   }
 })();
 
+// ---------- OUTER SKYLINE IMPOSTORS: cheap LOD blocks beyond the playable street grid, so the
+// city dissolves into haze/distance instead of stopping at a visible hard edge. Single InstancedMesh
+// (1 draw call) of unlit boxes with a baked lit-window texture — no collision, no gameplay effect
+// (never added to `buildings`), positioned in an annulus between the real block field (~560) and
+// the far skyline silhouette ring (1400), safely inside the ground plane (CITY=1150).
+(function buildOuterSkylineImpostors(){
+  const innerR=580,outerR=1060,count=340;
+  const impostorTexA=tex((g,w,h)=>{
+    g.fillStyle='#241d34';g.fillRect(0,0,w,h);
+    for(let y=6;y<h;y+=9){for(let x=4;x<w;x+=7){
+      if(Math.random()<0.4){
+        g.fillStyle=Math.random()<0.6?'rgba(255,205,150,.55)':(Math.random()<0.6?'rgba(160,210,255,.5)':'rgba(255,150,220,.45)');
+        g.fillRect(x,y,2,2.4);
+      }
+    }}
+  },48,128,true);
+  const impostorTexB=tex((g,w,h)=>{
+    g.fillStyle='#1e1a2c';g.fillRect(0,0,w,h);
+    for(let y=6;y<h;y+=8){for(let x=4;x<w;x+=6){
+      if(Math.random()<0.3){
+        g.fillStyle=Math.random()<0.5?'rgba(255,190,130,.5)':'rgba(150,220,255,.45)';
+        g.fillRect(x,y,1.6,2);
+      }
+    }}
+  },48,128,true);
+  const geo=new THREE.BoxGeometry(1,1,1);
+  const matA=new THREE.MeshBasicMaterial({map:impostorTexA});
+  const matB=new THREE.MeshBasicMaterial({map:impostorTexB});
+  const mA=new THREE.InstancedMesh(geo,matA,Math.ceil(count/2));
+  const mB=new THREE.InstancedMesh(geo,matB,Math.floor(count/2));
+  mA.frustumCulled=false;mB.frustumCulled=false;
+  const dummy=new THREE.Object3D();
+  let ia=0,ib=0,tries=0;
+  while(ia+ib<count&&tries<count*4){
+    tries++;
+    const ang=Math.random()*Math.PI*2;
+    const rad=innerR+Math.random()*(outerR-innerR);
+    const x=Math.cos(ang)*rad,z=Math.sin(ang)*rad;
+    if(x>RIVER.x0-30&&x<RIVER.x1+30)continue; // keep the river channel clear
+    const h=18+Math.random()*150,w=12+Math.random()*22,d=12+Math.random()*22;
+    dummy.position.set(x,h/2,z);dummy.rotation.y=Math.random()*Math.PI;dummy.scale.set(w,h,d);dummy.updateMatrix();
+    if(Math.random()<0.5&&ia<mA.count){mA.setMatrixAt(ia++,dummy.matrix);}
+    else if(ib<mB.count){mB.setMatrixAt(ib++,dummy.matrix);}
+    else if(ia<mA.count){mA.setMatrixAt(ia++,dummy.matrix);}
+  }
+  mA.count=ia;mB.count=ib;
+  mA.instanceMatrix.needsUpdate=true;mB.instanceMatrix.needsUpdate=true;
+  scene.add(mA,mB);
+  // a little extra light-pollution haze right at the transition band so blocks fade rather than cut off
+  for(let i=0;i<14;i++){
+    const ang=Math.random()*Math.PI*2,rad=520+Math.random()*420;
+    const ht=hazeTexVariants[Math.floor(Math.random()*hazeTexVariants.length)];
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(360+Math.random()*380,130+Math.random()*100),
+      new THREE.MeshBasicMaterial({map:ht,transparent:true,opacity:.14+Math.random()*.12,depthWrite:false}));
+    m.position.set(Math.cos(ang)*rad,14+Math.random()*54,Math.sin(ang)*rad);
+    scene.add(m);groundHaze.push(m);
+  }
+})();
+
 // ---------- TOKYO TOWER-style landmark (pink lit) ----------
 {
   const tw=new THREE.Group();
@@ -6096,12 +6158,23 @@ const skidGeo=new THREE.CylinderGeometry(.1,.1,6.5,6);
     t.rotation.x=Math.PI/2;t.position.set(x+(i%2?0.24:-0.24),-.4-.05,-0.5+(i<2?-0.5:0.5));heli.add(t);
   }
 });
-const navR=new THREE.Mesh(new THREE.SphereGeometry(.13,6,6),new THREE.MeshBasicMaterial({color:0xff2020}));
+const navR=new THREE.Mesh(new THREE.SphereGeometry(.17,8,8),new THREE.MeshBasicMaterial({color:0xff2020}));
 navR.position.set(-2.8,-.1,-0.5);heli.add(navR);
-const navG=new THREE.Mesh(new THREE.SphereGeometry(.13,6,6),new THREE.MeshBasicMaterial({color:0x20ff40}));
+const navRGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,color:0xff3030,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));
+navRGlow.scale.set(1.7,1.7,1);navRGlow.position.copy(navR.position);heli.add(navRGlow);
+const navG=new THREE.Mesh(new THREE.SphereGeometry(.17,8,8),new THREE.MeshBasicMaterial({color:0x20ff40}));
 navG.position.set(2.8,-.1,-0.5);heli.add(navG);
-const strobe=new THREE.Mesh(new THREE.SphereGeometry(.17,6,6),new THREE.MeshBasicMaterial({color:0xffffff}));
+const navGGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,color:0x40ff70,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));
+navGGlow.scale.set(1.7,1.7,1);navGGlow.position.copy(navG.position);heli.add(navGGlow);
+const strobe=new THREE.Mesh(new THREE.SphereGeometry(.22,8,8),new THREE.MeshBasicMaterial({color:0xffffff}));
 strobe.position.set(0,1.4,10.9);heli.add(strobe);
+const strobeGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,color:0xffffff,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+strobeGlow.scale.set(2.1,2.1,1);strobeGlow.position.copy(strobe.position);heli.add(strobeGlow);
+window.__navGlows={r:navRGlow,g:navGGlow,s:strobeGlow};
+// visibility: subtle key (cool) + rim (warm neon-bounce) lights riding on the airframe so the
+// heli's silhouette pops off the dark city instead of reading as a black cutout
+const heliKeyLight=new THREE.PointLight(0xbfe0ff,0.55,22,2);heliKeyLight.position.set(0,4.2,-2.0);heli.add(heliKeyLight);
+const heliRimLight=new THREE.PointLight(0xff6fc0,0.45,18,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
 const mast=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,1,8),darkMat);mast.position.y=1.35;heli.add(mast);
 const rotor=new THREE.Group();
 for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.5,.06,14.5),darkMat);bl.rotation.y=i*Math.PI/2;rotor.add(bl);}
@@ -6120,10 +6193,10 @@ const cubeCam=new THREE.CubeCamera(2,1200,cubeRT);
 scene.add(cubeCam);
 // ---------- APACHE-STYLE REBUILD (matched to reference images, now real PBR) ----------
 {
-  const keep=new Set([rotor,tailRotor,disc,navR,navG,strobe]);
+  const keep=new Set([rotor,tailRotor,disc,navR,navG,strobe,navRGlow,navGGlow,strobeGlow,heliKeyLight,heliRimLight]);
   [...heli.children].forEach(c=>{if(!keep.has(c))heli.remove(c);});
-  const gm=new THREE.MeshStandardMaterial({color:0x3a3f43,metalness:0.65,roughness:0.42,envMap:cubeRT.texture,envMapIntensity:1.1});
-  const gm2=new THREE.MeshStandardMaterial({color:0x2a2f33,metalness:0.6,roughness:0.5,envMap:cubeRT.texture,envMapIntensity:1.0});
+  const gm=new THREE.MeshStandardMaterial({color:0x4a5158,metalness:0.68,roughness:0.36,envMap:cubeRT.texture,envMapIntensity:1.3});
+  const gm2=new THREE.MeshStandardMaterial({color:0x363c42,metalness:0.62,roughness:0.44,envMap:cubeRT.texture,envMapIntensity:1.15});
   const dk=new THREE.MeshStandardMaterial({color:0x15181b,metalness:0.5,roughness:0.55,envMap:cubeRT.texture,envMapIntensity:0.9});
   const glz=new THREE.MeshPhysicalMaterial({color:0x1c2830,metalness:0.1,roughness:0.08,transparent:true,opacity:.82,envMap:cubeRT.texture,envMapIntensity:1.7,clearcoat:0.6});
   const add=m=>{m.castShadow=true;heli.add(m);return m;};
@@ -6186,6 +6259,7 @@ scene.add(cubeCam);
   tailRotor.position.set(0.55,1.9,10.4);
   navR.position.set(-3.6,0.45,0.3);navG.position.set(3.6,0.45,0.3);
   strobe.position.set(0,2.95,10.5);
+  navRGlow.position.copy(navR.position);navGGlow.position.copy(navG.position);strobeGlow.position.copy(strobe.position);
   disc.position.y=1.95;rotor.position.y=1.9;
 }
 
@@ -7323,6 +7397,9 @@ function loop(now){
     if(window.__forceLowAlt){heli.position.y=6;vSpeed=0;} // TEMP DEBUG - remove before final
     heli.position.x=Math.max(-620,Math.min(620,heli.position.x));
     heli.position.z=Math.max(-620,Math.min(620,heli.position.z));
+    // altitude-based fade for tiny bright emitters (neon-sign glow, warm sidewalk spill, billboard glow):
+    // full strength near the street, damped when zoomed out from height so they stop sub-pixel twinkling
+    const __altFade=THREE.MathUtils.clamp(1-(heli.position.y-55)/110,0.22,1);
     pitch=THREE.MathUtils.lerp(pitch,0.1-climb*0.12,3*dt);
     roll=THREE.MathUtils.lerp(roll,turn*0.35,3*dt);
     heli.rotation.set(0,yaw,0);heli.rotateX(pitch);heli.rotateZ(roll);
@@ -7494,8 +7571,10 @@ function loop(now){
     pulseSigns.forEach(s=>{
       s.ph+=dt*(s.fast?14:3);
       const v=s.fast?(Math.random()<0.06?0.2:1):(0.75+0.25*Math.sin(s.ph));
-      s.g.material.opacity=0.05*v;
+      s.g.material.opacity=0.05*v*__altFade;
     });
+    warmGlowMat.opacity=__altFade;
+    billboardGlowMat.opacity=0.07*__altFade;
     screenT+=dt;
     if(screenT>0.5){bigScreens.forEach(bs=>bs.draw(now/1600));screenT=0;}
     if(window.__beacon)window.__beacon.visible=(now%1400)<800;
@@ -7719,8 +7798,13 @@ function loop(now){
       if(c.pos>CITY)c.pos=-CITY;if(c.pos<-CITY)c.pos=CITY;
       c.m.position.set(c.pos,17.4,HWY_Z+c.lane);
     });
+    // pedestrians read as sub-pixel twinkling dots from high altitude — cull the whole instanced
+    // batch (2 draw calls) above a threshold, with hysteresis so it doesn't pop back and forth
+    if(window.__pedHidden===undefined)window.__pedHidden=false;
+    if(heli.position.y>140)window.__pedHidden=true;else if(heli.position.y<115)window.__pedHidden=false;
+    pedBodyMesh.visible=pedHeadMesh.visible=!window.__pedHidden;
     // pedestrians: sidewalk walkers + crossing walkers, animated via instance-matrix updates (cheap; 0 extra draw calls)
-    if(peds.length){
+    if(peds.length&&!window.__pedHidden){
       const pdum=window.__pedDummy||(window.__pedDummy=new THREE.Object3D());
       for(let i=0;i<peds.length;i++){
         const p=peds[i];
