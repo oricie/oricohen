@@ -2894,7 +2894,7 @@ let humanoidAnimClips=null;    // THREE.AnimationClip[]  -> Idle, Run, TPose, Wa
 let zombieWalkClip=null;       // "Walk", slowed for zombies
 let survivorIdleClip=null;     // "Idle", for the survivor
 let humanoidNaturalHeight=1;   // Box3-measured height of the raw template, for scaling
-const HUMANOID_TARGET_HEIGHT=2.4; // world units for a normal-height figure
+const HUMANOID_TARGET_HEIGHT=3.5; // world units — enlarged so figures read from flight altitude
 const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-direction math (verified by render: at yaw=0 the model faces -Z i.e. backward, so +PI flips it to face the group's forward/travel direction)
 // Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
 // used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
@@ -2921,13 +2921,13 @@ function buildHumanoidMaterialVariants(root){
       const isVisor=/visor/i.test(mat.name||'');
       // zombie: desaturated sickly grey-green, roughened; visor gets a faint red undead glow
       const zMat=mat.clone();
-      if(zMat.color)zMat.color.setRGB(0.30,0.44,0.24); // visible sickly green (was multiplying dark camo → near-black)
+      if(zMat.color)zMat.color.setRGB(0.36,0.56,0.30); // brighter sickly green so it reads in the dark from the air
       if('roughness' in zMat)zMat.roughness=0.9;
       if('metalness' in zMat)zMat.metalness=0.05;
       if(!zMat.emissive)zMat.emissive=new THREE.Color(0,0,0);
       // visor = red undead eyes; body = faint green self-glow so the zombie reads in the dark scene
-      zMat.emissive.setRGB(isVisor?0.6:0.06, isVisor?0.03:0.13, isVisor?0.03:0.05);
-      zMat.emissiveIntensity=isVisor?1.0:0.55;
+      zMat.emissive.setRGB(isVisor?0.9:0.12, isVisor?0.04:0.26, isVisor?0.04:0.10);
+      zMat.emissiveIntensity=isVisor?1.6:1.0;
       zMat.needsUpdate=true;
       zombieMatVariants.set(mat,zMat);
       // survivor: keep the original texture/colors, just a hair warmer — reads as a normal person

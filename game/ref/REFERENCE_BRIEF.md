@@ -130,3 +130,11 @@ comparison against it.
   when you arrive. Reuse the embedded character pipeline (the model already has
   Jump/Wave/Dance/ThumbsUp clips) — tint as a civilian, distinct from zombies;
   or embed a distinct humanoid if a better fit is available. Critic-gated.
+
+---
+## Round 3 feedback (post real-characters)
+- **Character visibility**: figures were too small/dark from altitude → enlarged + brighter emissive (done). Keep them readable.
+- **Radio VOICE not authentic**: flat TTS. Needs a real gunship-comms feel — bandpass/telephone filter, slight distortion/clipping, squelch open/close beeps, brief and punchy. Not a plain browser voice.
+- **Streets too FLAT**: need real relief — raised sidewalks/curbs (kerb height), manholes, drains/gutters, road-seam cracks, painted markings wear, small props. The road plane must not read as a flat decal.
+- **Building windows**: vary size/material/inner-light AND SHOW INTERIORS — some lit rooms with a hint of furniture/silhouette/warm glow so it reads "someone's inside", not a flat lit rectangle.
+- **Neon signs — NO generic exceptions**: EVERY sign must look cared-for and real (weathered housing, believable kanji/branding, proper glow). Audit all sign generators; kill the plain/placeholder ones.
