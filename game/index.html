@@ -417,10 +417,26 @@ rim.position.set(-200,120,260);scene.add(rim);
 
 // ---------- AUDIO ----------
 let AC=null;
+let rotorGainNode=null; // exposed ref to the rotor bed's gain so a transmission can duck it, then restore
 let radioSpeaking=false; // throttle flag: only one command line audible at a time, never overlapping
-// Short bandpass noise burst + click, reusing the same WebAudio synth style as the rest of the sfx —
-// gives spoken lines a "radio squelch" bookend without any new assets.
-function radioSquelch(){
+let radioHissSrc=null,radioHissGain=null; // active under-voice static bed nodes, torn down when the line ends
+// Tiny high-passed noise tick that mimics a PTT mic key/un-key ("kss") — bookends the squelch beeps.
+function radioMicKey(){
+  if(!AC)return;
+  try{
+    const t=AC.currentTime,dur=0.035;
+    const len=Math.max(1,Math.floor(dur*AC.sampleRate)),buf=AC.createBuffer(1,len,AC.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1);
+    const s=AC.createBufferSource();s.buffer=buf;
+    const hp=AC.createBiquadFilter();hp.type='highpass';hp.frequency.value=2600;
+    const g=AC.createGain();g.gain.setValueAtTime(0.045,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    s.connect(hp);hp.connect(g);g.connect(AC.destination);s.start(t);
+  }catch(e){}
+}
+// Squelch bookend: bandpass noise chirp + a rising (open) or falling (close) beep — reuses the same
+// WebAudio synth style as the rest of the sfx, no new assets. This is the part that actually reads as
+// "radio" since speechSynthesis output can't be routed through the WebAudio graph for filtering.
+function radioSquelch(open){
   if(!AC)return;
   try{
     const t=AC.currentTime,dur=0.09;
@@ -430,39 +446,100 @@ function radioSquelch(){
     const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=3;
     const g=AC.createGain();g.gain.setValueAtTime(0.05,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
     s.connect(bp);bp.connect(g);g.connect(AC.destination);s.start(t);
-    const click=AC.createOscillator();click.type='square';click.frequency.value=2200;
-    const cg=AC.createGain();cg.gain.setValueAtTime(0.025,t);cg.gain.exponentialRampToValueAtTime(0.001,t+0.05);
-    click.connect(cg);cg.connect(AC.destination);click.start(t);click.stop(t+0.06);
+    const click=AC.createOscillator();click.type='square';
+    if(open){click.frequency.setValueAtTime(900,t);click.frequency.exponentialRampToValueAtTime(1700,t+0.05);}
+    else{click.frequency.setValueAtTime(1700,t);click.frequency.exponentialRampToValueAtTime(650,t+0.05);}
+    const cg=AC.createGain();cg.gain.setValueAtTime(0.03,t);cg.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+    click.connect(cg);cg.connect(AC.destination);click.start(t);click.stop(t+0.07);
   }catch(e){}
 }
-// Speaks a COMMAND: line over Web Speech, with a lowered rate/pitch for a gruff radio-operator feel.
+// Low static/hiss bed that sits under the voice for the duration of the transmission — bandpass-filtered
+// noise, looped, at low volume. Started when the channel opens, faded out and stopped when it closes.
+function startRadioHiss(){
+  if(!AC)return;
+  try{
+    const t=AC.currentTime,len=2*AC.sampleRate;
+    const buf=AC.createBuffer(1,len,AC.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1);
+    const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
+    const hp=AC.createBiquadFilter();hp.type='highpass';hp.frequency.value=300;
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=3000;
+    const g=AC.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.026,t+0.06);
+    src.connect(hp);hp.connect(lp);lp.connect(g);g.connect(AC.destination);
+    src.start(t);
+    radioHissSrc=src;radioHissGain=g;
+  }catch(e){radioHissSrc=null;radioHissGain=null;}
+}
+function stopRadioHiss(){
+  if(!AC||!radioHissGain){radioHissSrc=null;radioHissGain=null;return;}
+  try{
+    const t=AC.currentTime;
+    radioHissGain.gain.cancelScheduledValues(t);
+    radioHissGain.gain.setValueAtTime(radioHissGain.gain.value,t);
+    radioHissGain.gain.linearRampToValueAtTime(0,t+0.1);
+    const src=radioHissSrc;
+    setTimeout(()=>{try{src.stop();}catch(e){}},180);
+  }catch(e){}
+  radioHissSrc=null;radioHissGain=null;
+}
+// Nudges the rotor/engine bed's volume down while a transmission plays, restores it after — a small
+// touch that makes the radio voice feel like it's cutting over the cockpit noise, like real comms.
+function duckRotor(down){
+  if(!AC||!rotorGainNode)return;
+  try{
+    const t=AC.currentTime;
+    rotorGainNode.gain.cancelScheduledValues(t);
+    rotorGainNode.gain.setValueAtTime(rotorGainNode.gain.value,t);
+    rotorGainNode.gain.linearRampToValueAtTime(down?0.045:0.10,t+0.15);
+  }catch(e){}
+}
+// Speaks a COMMAND: line over Web Speech, wrapped in a full radio FX chain: mic-key -> open squelch ->
+// low static bed under the voice -> close squelch -> mic-key, with the rotor bed ducked underneath.
 // Gated behind the same user-gesture audio unlock as the rest of the sfx (requires AC to exist);
-// throttled so lines never overlap; entirely fail-safe if speechSynthesis is unavailable/blocked.
+// throttled so lines never overlap. If speechSynthesis is unavailable/blocked, the FX chain still
+// plays (with the on-screen subtitle) so it reads as a transmission even with no voice.
 function speakRadio(text){
   if(!AC)return; // no gesture-unlocked audio yet — stay silent, consistent with the rest of the sfx gating
   if(radioSpeaking)return; // throttle: don't stack/overlap command lines
-  if(typeof window.speechSynthesis==='undefined'||typeof SpeechSynthesisUtterance==='undefined')return; // fail-safe
   try{
     radioSpeaking=true;
-    radioSquelch();
+    duckRotor(true);
+    radioMicKey();
+    radioSquelch(true);
+    startRadioHiss();
+    const clean=String(text).replace(/^COMMAND:\s*/i,'');
+    const finish=()=>{
+      if(!radioSpeaking)return; // already wrapped up (avoid double-firing the close FX)
+      radioSpeaking=false;
+      stopRadioHiss();
+      radioSquelch(false);
+      radioMicKey();
+      duckRotor(false);
+    };
+    const hasSpeech=typeof window.speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined';
+    if(!hasSpeech){
+      // fail-safe: no TTS available — the squelch+hiss FX plus the on-screen subtitle still sell it
+      setTimeout(finish,900+Math.min(1800,clean.length*45));
+      return;
+    }
     setTimeout(()=>{
       try{
-        const clean=String(text).replace(/^COMMAND:\s*/i,'');
         const u=new SpeechSynthesisUtterance(clean);
-        u.rate=0.82;u.pitch=0.55;u.volume=0.85; // lowered rate/pitch = gruff radio-operator tone
+        u.rate=0.92;u.pitch=0.7;u.volume=0.85; // lowered rate/pitch = gruff, rougher radio-operator tone
         try{
           const voices=window.speechSynthesis.getVoices();
-          const v=(voices||[]).find(x=>/en/i.test(x.lang)&&/male/i.test(x.name))||(voices||[]).find(x=>/en/i.test(x.lang));
+          const v=(voices||[]).find(x=>/en/i.test(x.lang)&&/male/i.test(x.name))
+                ||(voices||[]).find(x=>/en/i.test(x.lang)&&/(david|fred|daniel|alex|google uk english male|man)/i.test(x.name))
+                ||(voices||[]).find(x=>/en/i.test(x.lang));
           if(v)u.voice=v;
         }catch(e){}
-        const done=()=>{radioSpeaking=false;radioSquelch();};
-        u.onend=done;u.onerror=done;
+        u.onend=finish;u.onerror=finish;
         window.speechSynthesis.speak(u);
-        // belt-and-suspenders: if the browser never fires onend/onerror, don't stay throttled forever
-        setTimeout(()=>{if(radioSpeaking){radioSpeaking=false;}},9000);
-      }catch(e){radioSpeaking=false;}
-    },140); // let the pre-beep clear before the voice starts
-  }catch(e){radioSpeaking=false;}
+        // belt-and-suspenders: if the browser never fires onend/onerror, don't stay throttled/ducked forever
+        setTimeout(()=>{if(radioSpeaking)finish();},9000);
+      }catch(e){finish();}
+    },160); // let the mic-key + open squelch clear before the voice starts
+  }catch(e){radioSpeaking=false;stopRadioHiss();duckRotor(false);}
 }
 function startAudio(){
   if(AC)return;
@@ -473,6 +550,7 @@ function startAudio(){
     const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
     const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=130;
     const rotorGain=AC.createGain();rotorGain.gain.value=0.10;
+    rotorGainNode=rotorGain; // expose so radio transmissions can duck/restore the rotor bed
     const lfo=AC.createOscillator();lfo.frequency.value=12.5;
     const lfoG=AC.createGain();lfoG.gain.value=0.07;
     lfo.connect(lfoG);lfoG.connect(rotorGain.gain);
