@@ -2126,7 +2126,7 @@ scene.add(cubeCam);
   disc.position.y=1.95;rotor.position.y=1.9;
 }
 
-// ---------- 3D COCKPIT INTERIOR (real geometry, replaces flat CSS panel) ----------
+// ---------- 3D COCKPIT INTERIOR (rich gunship interior, real geometry) ----------
 scene.add(cam);
 const cockpitGroup=new THREE.Group();
 cam.add(cockpitGroup);
@@ -2137,51 +2137,194 @@ function shadedTex(fn,w=256,h=256){return tex((g,w2,h2)=>{
   vg.addColorStop(0,'rgba(255,255,255,.10)');vg.addColorStop(.5,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.35)');
   g.fillStyle=vg;g.fillRect(0,0,w2,h2);
 },w,h,true);}
+// brushed dark metal main-panel skin: plate seams, rivets, stencilled labels (replaces flat graph-paper grid)
 const panelTex=shadedTex((g,w,h)=>{
-  g.strokeStyle='rgba(255,255,255,.06)';g.lineWidth=1;
-  for(let x=0;x<w;x+=14){g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();}
-  for(let y=0;y<h;y+=14){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+  g.globalAlpha=0.55;
+  for(let i=0;i<260;i++){
+    const y=Math.random()*h;
+    g.strokeStyle=Math.random()<0.5?'rgba(255,255,255,.035)':'rgba(0,0,0,.05)';
+    g.beginPath();g.moveTo(0,y);g.lineTo(w,y+(Math.random()-.5)*2);g.stroke();
+  }
+  g.globalAlpha=1;
+  g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=2;
+  [w*0.22,w*0.5,w*0.78].forEach(x=>{g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();});
+  g.beginPath();g.moveTo(0,h*0.5);g.lineTo(w,h*0.5);g.stroke();
+  g.fillStyle='#3a3f46';
+  [w*0.02,w*0.22,w*0.5,w*0.78,w*0.98].forEach(x=>[h*0.06,h*0.94].forEach(y=>{
+    g.beginPath();g.arc(x,y,2.1,0,7);g.fill();
+    g.fillStyle='rgba(255,255,255,.25)';g.beginPath();g.arc(x-.5,y-.5,.7,0,7);g.fill();
+    g.fillStyle='#3a3f46';
+  }));
+  g.fillStyle='rgba(170,220,200,.4)';g.font='7px monospace';g.textAlign='left';
+  g.fillText('AH-9 GUNSHIP  //  MASTER PANEL',6,h-6);
+  g.textAlign='center';g.fillText('MASTER ARM',w*0.5,h*0.5-4);
   g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=3;g.strokeRect(4,4,w-8,h-8);
-});
+},512,176);
 const panelMat=new THREE.MeshBasicMaterial({map:panelTex});
-const strutMat=new THREE.MeshBasicMaterial({color:0x0d0e12});
+const strutMat=new THREE.MeshBasicMaterial({color:0x0b0c10});
 const gripMat=new THREE.MeshBasicMaterial({color:0x1c1c20});
+const glareTex=tex((g,w,h)=>{
+  const gr=g.createLinearGradient(0,0,w,h);
+  gr.addColorStop(0,'rgba(255,255,255,0)');
+  gr.addColorStop(0.45,'rgba(255,210,255,.08)');
+  gr.addColorStop(0.55,'rgba(255,210,255,.16)');
+  gr.addColorStop(0.65,'rgba(255,210,255,.08)');
+  gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+},256,256);
 
-const dashBody=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.22,0.5),panelMat);
-dashBody.position.set(0,-0.62,-1.3);dashBody.rotation.x=-0.22;cockpitGroup.add(dashBody);
-const dashFace=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.3,0.05),panelMat);
-dashFace.position.set(0,-0.5,-1.55);dashFace.rotation.x=-0.5;cockpitGroup.add(dashFace);
+// ---- glareshield / coaming (padded lip below the windscreen) ----
+const coamingTex=tex((g,w,h)=>{
+  g.fillStyle='#0f1013';g.fillRect(0,0,w,h);
+  g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;
+  for(let x=6;x<w;x+=9){g.beginPath();g.moveTo(x,3);g.lineTo(x,h-3);g.stroke();}
+  const vg=g.createLinearGradient(0,0,0,h);
+  vg.addColorStop(0,'rgba(255,255,255,.12)');vg.addColorStop(1,'rgba(0,0,0,.4)');
+  g.fillStyle=vg;g.fillRect(0,0,w,h);
+},160,40);
+const coamingMat=new THREE.MeshBasicMaterial({map:coamingTex});
+const coaming=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,2.85,12,1,true,Math.PI*0.05,Math.PI*0.55),coamingMat);
+coaming.rotation.z=Math.PI/2;
+coaming.position.set(0,-0.30,-1.62);
+cockpitGroup.add(coaming);
 
-function strutBar(x,fromY,toY,fromZ,toZ,width){
-  const dy=toY-fromY,dz=toZ-fromZ,len=Math.sqrt(dy*dy+dz*dz);
-  const m=new THREE.Mesh(new THREE.BoxGeometry(width,len,width),strutMat);
-  m.position.set(x,(fromY+toY)/2,(fromZ+toZ)/2);
-  m.rotation.x=Math.atan2(dz,dy);
-  cockpitGroup.add(m);
-}
-strutBar(-0.95,-0.3,0.55,-1.35,-2.05,0.045);
-strutBar(0.95,-0.3,0.55,-1.35,-2.05,0.045);
-const topBrace=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.045,0.045),strutMat);
-topBrace.position.set(0,0.58,-2.05);cockpitGroup.add(topBrace);
-const centerMullion=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.75,0.04),strutMat);
-centerMullion.position.set(0,0.15,-2.03);cockpitGroup.add(centerMullion);
+// ---- main instrument panel / dash ----
+const dashBody=new THREE.Mesh(new THREE.BoxGeometry(2.75,0.26,0.55),panelMat);
+dashBody.position.set(0,-0.62,-1.28);dashBody.rotation.x=-0.22;cockpitGroup.add(dashBody);
+const dashFace=new THREE.Mesh(new THREE.BoxGeometry(2.75,0.36,0.05),panelMat);
+dashFace.position.set(0,-0.47,-1.56);dashFace.rotation.x=-0.5;cockpitGroup.add(dashFace);
+const lowerConsole=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.3,0.4),panelMat);
+lowerConsole.position.set(0,-0.85,-1.05);lowerConsole.rotation.x=-0.15;cockpitGroup.add(lowerConsole);
 
+// ---- MFD screens: recessed bezel + glass sheen + soft glow + side button strips ----
 const radarCanvasEl=document.createElement('canvas');radarCanvasEl.width=radarCanvasEl.height=110;
 const horizonCanvasEl=document.createElement('canvas');horizonCanvasEl.width=horizonCanvasEl.height=110;
 const tacCanvasEl=document.getElementById('tacmap');
 const radarTexMFD=new THREE.CanvasTexture(radarCanvasEl);
 const horizonTexMFD=new THREE.CanvasTexture(horizonCanvasEl);
 const tacTexMFD=new THREE.CanvasTexture(tacCanvasEl);
-function mfd(txm,x,w,h){
-  const bez=new THREE.Mesh(new THREE.BoxGeometry(w+0.035,h+0.035,0.025),strutMat);
-  bez.position.set(x,-0.53,-1.42);bez.rotation.x=-0.48;cockpitGroup.add(bez);
-  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:txm,side:THREE.DoubleSide}));
-  scr.position.set(x,-0.527,-1.41);scr.rotation.x=-0.48;cockpitGroup.add(scr);
-}
-mfd(horizonTexMFD,-0.78,0.3,0.3);
-mfd(tacTexMFD,0,0.4,0.4);
-mfd(radarTexMFD,0.78,0.3,0.3);
+const engCanvasEl=document.createElement('canvas');engCanvasEl.width=engCanvasEl.height=100;
+const wpnCanvasEl=document.createElement('canvas');wpnCanvasEl.width=wpnCanvasEl.height=100;
+const engC=engCanvasEl.getContext('2d'),wpnC=wpnCanvasEl.getContext('2d');
+const engTexMFD=new THREE.CanvasTexture(engCanvasEl);
+const wpnTexMFD=new THREE.CanvasTexture(wpnCanvasEl);
 
+const mfdButtonsTex=tex((g,w,h)=>{
+  g.fillStyle='#0e0f12';g.fillRect(0,0,w,h);
+  const labels=['BRT','CON','MODE','RNG','SEL','MENU'];
+  const rh=h/labels.length;
+  labels.forEach((lb,i)=>{
+    const y=i*rh;
+    g.fillStyle='#22252a';g.fillRect(3,y+3,w-6,rh-6);
+    g.strokeStyle='rgba(120,255,220,.55)';g.lineWidth=1;g.strokeRect(3,y+3,w-6,rh-6);
+    g.fillStyle='#8fffde';g.font='7px monospace';g.textAlign='center';
+    g.fillText(lb,w/2,y+rh/2+2.5);
+  });
+},20,120);
+function mfdScreen(txm,x,y,z,rotX,w,h,glowColor){
+  const grp=new THREE.Group();grp.position.set(x,y,z);grp.rotation.x=rotX;cockpitGroup.add(grp);
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,color:glowColor,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false}));
+  glow.scale.set(w*2.4,h*2.4,1);glow.position.z=-0.002;grp.add(glow);
+  const bez=new THREE.Mesh(new THREE.BoxGeometry(w+0.065,h+0.065,0.03),strutMat);
+  bez.position.z=-0.012;grp.add(bez);
+  const rim=new THREE.Mesh(new THREE.BoxGeometry(w+0.02,h+0.02,0.014),new THREE.MeshBasicMaterial({color:0x000000}));
+  rim.position.z=0.006;grp.add(rim);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:txm,side:THREE.DoubleSide}));
+  scr.position.z=0.015;grp.add(scr);
+  const sheen=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:glareTex,transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false}));
+  sheen.position.z=0.017;sheen.rotation.z=0.4;grp.add(sheen);
+  const bl=new THREE.Mesh(new THREE.PlaneGeometry(0.05,h+0.04),new THREE.MeshBasicMaterial({map:mfdButtonsTex}));
+  bl.position.set(-(w/2+0.05),0,0.006);grp.add(bl);
+  const br=new THREE.Mesh(new THREE.PlaneGeometry(0.05,h+0.04),new THREE.MeshBasicMaterial({map:mfdButtonsTex}));
+  br.position.set(w/2+0.05,0,0.006);br.scale.x=-1;grp.add(br);
+  return grp;
+}
+mfdScreen(horizonTexMFD,-0.80,-0.50,-1.42,-0.48,0.30,0.30,0x60a8ff);
+mfdScreen(tacTexMFD,0,-0.50,-1.44,-0.48,0.42,0.42,0x50ffb0);
+mfdScreen(radarTexMFD,0.80,-0.50,-1.42,-0.48,0.30,0.30,0x40ff90);
+mfdScreen(engTexMFD,-0.42,-0.84,-1.06,-0.15,0.22,0.18,0xffb050);
+mfdScreen(wpnTexMFD,0.42,-0.84,-1.06,-0.15,0.22,0.18,0xff6050);
+
+// ---- switch panels / side consoles / annunciators ----
+function switchPanelTex(title,labels,accent){
+  return tex((g,w,h)=>{
+    g.fillStyle='#15171b';g.fillRect(0,0,w,h);
+    const vg=g.createLinearGradient(0,0,0,h);
+    vg.addColorStop(0,'rgba(255,255,255,.06)');vg.addColorStop(1,'rgba(0,0,0,.3)');
+    g.fillStyle=vg;g.fillRect(0,0,w,h);
+    g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=3;g.strokeRect(2,2,w-4,h-4);
+    g.fillStyle=accent;g.font='bold 9px monospace';g.textAlign='center';g.globalAlpha=.9;
+    g.fillText(title,w/2,14);g.globalAlpha=1;
+    const cols=3,rows=2,mx=16,my=26,cw=(w-mx*2)/cols,ch=(h-my-16)/rows;
+    let li=0;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const cx=mx+cw*c+cw/2,cy=my+ch*r+ch/2;
+      const guarded=(r===0&&c===cols-1);
+      g.fillStyle='#0c0d10';g.fillRect(cx-11,cy-9,22,20);
+      g.strokeStyle='#3a3f46';g.lineWidth=1;g.strokeRect(cx-11,cy-9,22,20);
+      if(guarded){
+        g.strokeStyle='#cc3344';g.lineWidth=1.4;
+        g.beginPath();g.moveTo(cx-10,cy-2);g.lineTo(cx-8,cy-13);g.lineTo(cx+8,cy-13);g.lineTo(cx+10,cy-2);g.stroke();
+      }
+      const on=((li*37+7)%5)<3;
+      g.strokeStyle=on?accent:'#666';g.lineWidth=2.4;
+      g.beginPath();g.moveTo(cx,cy+7);g.lineTo(cx+(on?4:-4),cy-6);g.stroke();
+      g.fillStyle=on?accent:'#555';g.beginPath();g.arc(cx+(on?4:-4),cy-6,1.6,0,7);g.fill();
+      g.fillStyle='rgba(190,230,220,.85)';g.font='6px monospace';g.textAlign='center';
+      g.fillText(labels[li]||'',cx,cy+15);
+      li++;
+    }
+    const ky=h-14;
+    [w*0.28,w*0.72].forEach((kx,i)=>{
+      g.strokeStyle='#4a4f56';g.lineWidth=1.4;g.beginPath();g.arc(kx,ky,8,0,7);g.stroke();
+      g.fillStyle='#22262b';g.beginPath();g.arc(kx,ky,8,0,7);g.fill();g.stroke();
+      const ang=-0.6+i*1.1;
+      g.strokeStyle=accent;g.lineWidth=1.6;g.beginPath();g.moveTo(kx,ky);g.lineTo(kx+Math.cos(ang)*7,ky+Math.sin(ang)*7);g.stroke();
+    });
+  },180,150);
+}
+const leftConsoleTex=switchPanelTex('NAV / SYS',['NAV','XPDR','PITOT','LIGHT','FUEL PMP','ARM'],'#7fffd4');
+const rightConsoleTex=switchPanelTex('WPN / DEF',['LASER','JAM','FLARE','G-SAFE','IGN','MSTR'],'#ffb060');
+const annunGeo=new THREE.PlaneGeometry(0.11,0.038);
+function annunciator(parentGrp,x,y,label,color){
+  const t=tex((g,w,h)=>{
+    g.fillStyle='#050505';g.fillRect(0,0,w,h);
+    g.fillStyle=color;g.globalAlpha=.92;g.fillRect(2,2,w-4,h-10);g.globalAlpha=1;
+    g.strokeStyle='#000';g.lineWidth=1;g.strokeRect(2,2,w-4,h-10);
+    g.fillStyle='#000';g.font='bold 7px monospace';g.textAlign='center';
+    g.fillText(label,w/2,h-9+8);
+  },78,28);
+  const m=new THREE.Mesh(annunGeo,new THREE.MeshBasicMaterial({map:t}));
+  m.position.set(x,y,0.024);
+  parentGrp.add(m);
+}
+function sideConsole(sx,texMap,annun){
+  const grp=new THREE.Group();
+  grp.position.set(sx,-0.72,-1.14);
+  grp.rotation.set(-0.25,sx<0?0.55:-0.55,0);
+  cockpitGroup.add(grp);
+  const housing=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.08),strutMat);
+  housing.position.z=-0.02;grp.add(housing);
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(0.55,0.46),new THREE.MeshBasicMaterial({map:texMap}));
+  face.position.z=0.021;grp.add(face);
+  annun.forEach((a,i)=>annunciator(grp,-0.18+i*0.19,0.27,a.l,a.c));
+  return grp;
+}
+sideConsole(-1.55,leftConsoleTex,[{l:'ENG',c:'#3ef27a'},{l:'XMSN',c:'#3ef27a'},{l:'HYD',c:'#ffcc33'}]);
+sideConsole(1.55,rightConsoleTex,[{l:'FUEL',c:'#ffcc33'},{l:'ICE',c:'#3ef27a'},{l:'GEN',c:'#3ef27a'}]);
+
+const cautionLabelTex=tex((g,w,h)=>{
+  g.fillStyle='#c7ccd2';g.font='bold 8px monospace';g.textAlign='center';
+  g.fillText('MASTER CAUTION',w/2,h/2+3);
+},140,20);
+const cautionLabel=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.024),new THREE.MeshBasicMaterial({map:cautionLabelTex,transparent:true}));
+cautionLabel.position.set(0,-0.395,-1.365);cautionLabel.rotation.x=-0.22;
+cockpitGroup.add(cautionLabel);
+const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.06,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
+cautionLight.position.set(0,-0.445,-1.365);cautionLight.rotation.x=-0.22;
+cockpitGroup.add(cautionLight);
+
+// ---- round gauges (mechanical backups) ----
 function gauge(x,y,z,label,getVal,range){
   const faceTex=shadedTex((g,w,h)=>{
     g.fillStyle='#101216';g.beginPath();g.arc(w/2,h/2,w/2-2,0,7);g.fill();
@@ -2205,38 +2348,113 @@ function gauge(x,y,z,label,getVal,range){
 }
 const gauges=[
   gauge(-1.18,-0.5,-1.4,'ALT',()=>heli.position.y,[0,180]),
-  gauge(1.18,-0.5,-1.4,'SPD',()=>CRUISE*3.6,[0,140])
+  gauge(1.18,-0.5,-1.4,'SPD',()=>CRUISE*3.6,[0,140]),
+  gauge(0,-1.0,-1.0,'RPM',()=>98+Math.sin(performance.now()/500)*1.5,[80,110])
 ];
 
+// ---- cyclic + collective ----
+const gripTexA=tex((g,w,h)=>{
+  g.fillStyle='#1a1a1e';g.fillRect(0,0,w,h);
+  g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=2;
+  for(let y=4;y<h;y+=6){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+},24,48);
+const gripMatTex=new THREE.MeshBasicMaterial({map:gripTexA});
+function handBlob(x,y,z,rotZ){
+  const hand=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,6),new THREE.MeshBasicMaterial({color:0x2b3324}));
+  hand.scale.set(1,0.8,1.3);
+  hand.position.set(x,y,z);hand.rotation.z=rotZ;
+  cockpitGroup.add(hand);
+}
 function cyclicStick(x){
   const g=new THREE.Group();
-  const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.018,0.24,8),gripMat);
-  rod.position.y=0.12;g.add(rod);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.024,0.09,8),gripMat);
-  grip.position.y=0.26;g.add(grip);
-  const btn=new THREE.Mesh(new THREE.SphereGeometry(0.012,6,6),new THREE.MeshBasicMaterial({color:0xcc2020}));
-  btn.position.y=0.31;g.add(btn);
+  const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.02,0.26,8),gripMat);
+  rod.position.y=0.13;g.add(rod);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.026,0.11,10),gripMatTex);
+  grip.position.y=0.29;g.add(grip);
+  const trigGuard=new THREE.Mesh(new THREE.TorusGeometry(0.03,0.006,6,10,Math.PI),strutMat);
+  trigGuard.position.y=0.22;trigGuard.rotation.x=Math.PI/2;g.add(trigGuard);
+  const btn=new THREE.Mesh(new THREE.SphereGeometry(0.013,6,6),new THREE.MeshBasicMaterial({color:0xcc2020}));
+  btn.position.set(0,0.345,0.015);g.add(btn);
+  const thumbBtn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.012,0.02),new THREE.MeshBasicMaterial({color:0x555a60}));
+  thumbBtn.position.set(0.02,0.33,-0.01);g.add(thumbBtn);
   g.position.set(x,-0.85,-0.85);g.rotation.z=x>0?-0.1:0.1;
   cockpitGroup.add(g);
+  handBlob(x+(x>0?-0.01:0.01),-0.55,-0.85,x>0?-0.15:0.15);
 }
 cyclicStick(-0.55);cyclicStick(0.55);
+function collective(){
+  const g=new THREE.Group();
+  const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.024,0.55,8),gripMat);
+  rod.position.set(0,0.27,0);rod.rotation.z=0.35;g.add(rod);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.16,10),gripMatTex);
+  grip.position.set(0.19,0.50,0);grip.rotation.z=1.0;g.add(grip);
+  const throttleRing=new THREE.Mesh(new THREE.TorusGeometry(0.032,0.008,6,12),strutMat);
+  throttleRing.position.set(0.24,0.55,0);throttleRing.rotation.y=Math.PI/2;g.add(throttleRing);
+  g.position.set(-1.15,-1.05,-0.6);
+  cockpitGroup.add(g);
+  handBlob(-0.97,-0.56,-0.6,-0.3);
+}
+collective();
 
-const glareTex=tex((g,w,h)=>{
-  const gr=g.createLinearGradient(0,0,w,h);
-  gr.addColorStop(0,'rgba(255,255,255,0)');
-  gr.addColorStop(0.45,'rgba(255,210,255,.08)');
-  gr.addColorStop(0.55,'rgba(255,210,255,.16)');
-  gr.addColorStop(0.65,'rgba(255,210,255,.08)');
-  gr.addColorStop(1,'rgba(255,255,255,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-},256,256);
-const glarePlane=new THREE.Mesh(new THREE.PlaneGeometry(3.6,2.4),
-  new THREE.MeshBasicMaterial({map:glareTex,transparent:true,opacity:.3,depthWrite:false}));
-glarePlane.position.set(0,0.1,-2.1);
+// ---- canopy / windscreen frame: segmented "greenhouse" mullions + tinted glass ----
+function bar3(p1,p2,width,mat){
+  const dir=new THREE.Vector3().subVectors(p2,p1);
+  const len=dir.length();
+  if(len<1e-4)return;
+  const mid=new THREE.Vector3().addVectors(p1,p2).multiplyScalar(0.5);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(width,width,len),mat);
+  m.position.copy(mid);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir.clone().normalize());
+  cockpitGroup.add(m);
+}
+function quadGeo(a,b,c,d){
+  const geo=new THREE.BufferGeometry();
+  const v=new Float32Array([
+    a.x,a.y,a.z, b.x,b.y,b.z, c.x,c.y,c.z,
+    a.x,a.y,a.z, c.x,c.y,c.z, d.x,d.y,d.z
+  ]);
+  geo.setAttribute('position',new THREE.BufferAttribute(v,3));
+  geo.computeVertexNormals();
+  return geo;
+}
+const canopyGlassMat=new THREE.MeshBasicMaterial({color:0x16233a,transparent:true,opacity:.26,side:THREE.DoubleSide,depthWrite:false});
+const NCOL=7,canopyCols=[];
+for(let i=0;i<NCOL;i++){
+  const t=i/(NCOL-1);
+  const x=-1.7+3.4*t;
+  const s=Math.cos((t-0.5)*Math.PI);
+  canopyCols.push({
+    top:new THREE.Vector3(x,0.48+0.09*s,-1.55-0.55*s),
+    bot:new THREE.Vector3(x,-0.03+0.05*s,-1.28-0.25*s)
+  });
+}
+canopyCols.forEach((col,i)=>{
+  bar3(col.bot,col.top,i===Math.floor(NCOL/2)?0.05:0.03,strutMat);
+  if(i>0){
+    const prev=canopyCols[i-1];
+    bar3(prev.top,col.top,0.03,strutMat);
+    bar3(prev.bot,col.bot,0.024,strutMat);
+    cockpitGroup.add(new THREE.Mesh(quadGeo(prev.top,col.top,col.bot,prev.bot),canopyGlassMat));
+  }
+});
+
+// ---- glow reflections on the canopy glass ----
+const glarePlane=new THREE.Mesh(new THREE.PlaneGeometry(3.3,2.0),
+  new THREE.MeshBasicMaterial({map:glareTex,transparent:true,opacity:.3,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+glarePlane.position.set(0,0.18,-1.92);
 cockpitGroup.add(glarePlane);
-const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.05,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
-cautionLight.position.set(0,-0.42,-1.36);cautionLight.rotation.x=-0.22;
-cockpitGroup.add(cautionLight);
+const reflTex=tex((g,w,h)=>{
+  const gr=g.createLinearGradient(0,h,0,0);
+  gr.addColorStop(0,'rgba(120,255,190,.22)');
+  gr.addColorStop(0.35,'rgba(120,255,190,.06)');
+  gr.addColorStop(1,'rgba(120,255,190,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+},64,128);
+const instrRefl=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.85),
+  new THREE.MeshBasicMaterial({map:reflTex,transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+instrRefl.position.set(0,0.05,-1.55);instrRefl.rotation.x=-0.35;
+cockpitGroup.add(instrRefl);
+
 cockpitGroup.visible=false;
 
 // ---------- INPUT ----------
@@ -2924,6 +3142,41 @@ function drawDashMFD(){
   horC.restore();
   horC.strokeStyle='#ff0';horC.lineWidth=2;
   horC.beginPath();horC.moveTo(30,55);horC.lineTo(48,55);horC.moveTo(62,55);horC.lineTo(80,55);horC.stroke();horC.lineWidth=1;
+
+  // ENG/SYS mini-MFD
+  engC.clearRect(0,0,100,100);
+  engC.fillStyle='#070a08';engC.fillRect(0,0,100,100);
+  engC.strokeStyle='#173028';engC.strokeRect(1,1,98,98);
+  engC.fillStyle='#7fffb0';engC.font='bold 9px monospace';engC.textAlign='left';
+  engC.fillText('ENG / SYS',6,12);
+  barGauge(engC,12,20,14,55,(96+Math.sin(performance.now()/500)*3)/110,'#3ef2a0','RPM');
+  barGauge(engC,38,20,14,55,hp/100,hp<30?'#ff5050':'#3ef2a0','HULL');
+  barGauge(engC,64,20,14,55,(window.__throttle!==undefined?window.__throttle:1),'#ffd24a','THR');
+  engC.fillStyle='#9be8c8';engC.font='7px monospace';engC.textAlign='left';
+  engC.fillText('OIL  OK',6,92);engC.fillText('HYD  OK',56,92);
+
+  // WPN status mini-MFD
+  wpnC.clearRect(0,0,100,100);
+  wpnC.fillStyle='#0a0705';wpnC.fillRect(0,0,100,100);
+  wpnC.strokeStyle='#3a2010';wpnC.strokeRect(1,1,98,98);
+  wpnC.fillStyle='#ffb060';wpnC.font='bold 9px monospace';wpnC.textAlign='left';
+  wpnC.fillText('WPN STATUS',6,12);
+  const wNames=['MINIGUN','HYDRA70','HLFIRE','NAPALM'];
+  wNames.forEach((nm,i)=>{
+    const y=26+i*17,sel=i===wpn;
+    wpnC.fillStyle=sel?'#ffd24a':'#8a8f96';wpnC.font=(sel?'bold ':'')+'8px monospace';wpnC.textAlign='left';
+    wpnC.fillText((sel?'> ':'  ')+nm,6,y);
+    const am=ammo[i]===Infinity?'INF':ammo[i];
+    wpnC.textAlign='right';wpnC.fillText(String(am),94,y);
+  });
+}
+function barGauge(ctx,x,y,w,h,frac,color,label){
+  ctx.strokeStyle='#3a3f46';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#0a0c0e';ctx.fillRect(x,y,w,h);
+  const fh=h*THREE.MathUtils.clamp(frac,0,1);
+  ctx.fillStyle=color;ctx.fillRect(x,y+h-fh,w,fh);
+  ctx.fillStyle='#8fffde';ctx.font='7px monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h+9);
 }
 
 // --- vertical measuring tape (airspeed / altitude) ---
@@ -3718,6 +3971,7 @@ function loop(now){
     else tp.textContent='SCANNING SECTOR FOR SURVIVORS...';
     drawHUD(now);
     radarTexMFD.needsUpdate=true;horizonTexMFD.needsUpdate=true;tacTexMFD.needsUpdate=true;
+    engTexMFD.needsUpdate=true;wpnTexMFD.needsUpdate=true;
     gauges.forEach(gg=>{
       const v=THREE.MathUtils.clamp(gg.getVal(),gg.range[0],gg.range[1]);
       const f=(v-gg.range[0])/(gg.range[1]-gg.range[0]);
