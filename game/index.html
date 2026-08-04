@@ -564,13 +564,16 @@ function sfxExplosion(big){
 
 // ---------- TEXTURES ----------
 function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);if(aniso)t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
-function facadeTex(base){return tex((g,w,h)=>{
+function facadeTex(base,opts){return tex((g,w,h)=>{
+  const cols=(opts&&opts.cols)||10,rows=(opts&&opts.rows)||16;
   g.fillStyle=base;g.fillRect(0,0,w,h);
   for(let i=0;i<2200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
-  const cols=10,rows=16,cw=w/cols,ch=h/rows;
-  // realistic per-floor lighting: some floors mostly lit (offices), some mostly dark
+  const cw=w/cols,ch=h/rows;
+  // realistic per-floor lighting: tiers span fully-dark -> mostly-dark -> mixed -> busy -> blazing
+  // so floors read distinctly different, not a uniform grid
+  const tiers=[0,0.1,0.32,0.65,0.95];
   const floorLit=[];
-  for(let y=0;y<rows;y++)floorLit.push(Math.random()<0.35?0.75:(Math.random()<0.5?0.3:0.08));
+  for(let y=0;y<rows;y++)floorLit.push(tiers[Math.floor(Math.random()*tiers.length)]);
   for(let y=0;y<rows;y++){
     g.fillStyle='rgba(255,220,255,.06)';g.fillRect(0,y*ch,w,2);
     g.fillStyle='rgba(0,0,0,.38)';g.fillRect(0,y*ch+2,w,3);
@@ -582,10 +585,17 @@ function facadeTex(base){return tex((g,w,h)=>{
       const lit=run&&Math.random()<floorLit[y]*2.2;
       const grad=g.createLinearGradient(px,py,px,py+wh);
       if(lit){
+        // per-window brightness jitter on top of the warm/cool/pink/blazing-white families
+        const jitter=0.72+Math.random()*0.55;
+        const mul=(c)=>Math.max(0,Math.min(255,Math.round(c*jitter)));
         const r=Math.random();
-        if(r<0.6){grad.addColorStop(0,'#ffe2a6');grad.addColorStop(1,'#e8a95c');}
-        else if(r<0.85){grad.addColorStop(0,'#cfeaff');grad.addColorStop(1,'#8db8d8');}
-        else{grad.addColorStop(0,'#ffb8e6');grad.addColorStop(1,'#d888c0');}
+        let c0,c1;
+        if(r<0.52){c0=[255,226,166];c1=[232,169,92];}       // warm tungsten
+        else if(r<0.8){c0=[207,234,255];c1=[141,184,216];}  // cool fluorescent
+        else if(r<0.93){c0=[255,184,230];c1=[216,136,192];} // pink/neon spill
+        else{c0=[255,250,236];c1=[244,236,208];}            // rare blazing near-white
+        grad.addColorStop(0,`rgb(${mul(c0[0])},${mul(c0[1])},${mul(c0[2])})`);
+        grad.addColorStop(1,`rgb(${mul(c1[0])},${mul(c1[1])},${mul(c1[2])})`);
       }else{
         grad.addColorStop(0,'#241c34');grad.addColorStop(1,'#120e1e');
       }
@@ -697,6 +707,9 @@ function makeWetRoughTex(){return tex((g,w,h)=>{
 const wetRoughTex=makeWetRoughTex();
 wetRoughTex.wrapS=wetRoughTex.wrapT=THREE.RepeatWrapping;
 wetRoughTex.repeat.set(6,60);
+// several independent wet-rough patterns (distinct streak/puddle placement) so roads don't all
+// share one repeating pattern — real ROUGHNESS VARIATION street to street
+const wetRoughVariants=[wetRoughTex,makeWetRoughTex(),makeWetRoughTex(),makeWetRoughTex()];
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.62,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:0.9}));
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
@@ -793,15 +806,20 @@ function roadTexFor(r){
   t.repeat.set(1,Math.round(CITY*2/(r.major?26:14)));
   return t;
 }
-// wet-look roughness map matched to a road strip's UV tiling — long vertical (along-road) streaks
+// wet-look roughness map matched to a road strip's UV tiling — long vertical (along-road) streaks;
+// each road strip gets a randomly-picked variant so the wet pattern differs street to street
 function roadWetRoughFor(r){
-  const t=wetRoughTex.clone();t.needsUpdate=true;
+  const src=wetRoughVariants[Math.floor(Math.random()*wetRoughVariants.length)];
+  const t=src.clone();t.needsUpdate=true;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
   t.repeat.set(r.major?2:1,Math.round(CITY*2/(r.major?26:14)));
   return t;
 }
 function addRoad(axis,r){
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:0.42,roughnessMap:roadWetRoughFor(r),metalness:0.05,envMapIntensity:1.25,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  // per-road base roughness jitter on top of the roughness MAP: some stretches read drier/rougher,
+  // others glossier/wetter, instead of every road sharing one flat roughness value
+  const baseRough=(r.major?0.30:0.34)+Math.random()*0.22;
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.05,envMapIntensity:1.25,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -823,6 +841,60 @@ function addRoad(axis,r){
 }
 ROADS_X.forEach(r=>addRoad('x',r));
 ROADS_Z.forEach(r=>addRoad('z',r));
+
+// ---------- WET PUDDLES: low-roughness reflective decal patches scattered on the roads, so
+// scene.environment (the neon-lit IBL) mirrors visibly in occasional wet spots — a single
+// InstancedMesh draw call no matter how many puddles are placed ----------
+const puddleAlphaTex=tex((g,w,h)=>{
+  g.clearRect(0,0,w,h);
+  g.save();g.translate(w/2,h/2);
+  g.beginPath();
+  const pts=16;
+  for(let i=0;i<=pts;i++){
+    const a=i/pts*Math.PI*2;
+    const rr=(0.30+Math.sin(a*3.1+i)*0.07+Math.random()*0.09)*w*0.5;
+    const x=Math.cos(a)*rr,y=Math.sin(a)*rr*0.6;
+    if(i===0)g.moveTo(x,y);else g.lineTo(x,y);
+  }
+  g.closePath();
+  const gr=g.createRadialGradient(0,0,0,0,0,w*0.5);
+  gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.72,'rgba(255,255,255,.82)');gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr;g.fill();
+  g.restore();
+},128,128,true);
+const puddleMat=new THREE.MeshStandardMaterial({color:0x0b0f16,roughness:0.05,metalness:0.08,transparent:true,alphaMap:puddleAlphaTex,envMapIntensity:2.0,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-7,polygonOffsetUnits:-7});
+const PUDDLE_COUNT=170;
+const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,PUDDLE_COUNT);
+{
+  const dummy=new THREE.Object3D();
+  let placed=0;
+  for(let i=0;i<PUDDLE_COUNT*2&&placed<PUDDLE_COUNT;i++){
+    const useX=Math.random()<0.5;
+    const list=(useX?ROADS_X:ROADS_Z).filter(r=>r.w>6);
+    if(!list.length)continue;
+    const r=list[Math.floor(Math.random()*list.length)];
+    const along=(Math.random()-0.5)*CITY*1.9;
+    const perp=(Math.random()-0.5)*(r.w-2.2);
+    const sx=(r.major?3.2+Math.random()*5.0:1.6+Math.random()*2.6);
+    const sz=sx*(0.5+Math.random()*0.55);
+    let wx,wz;
+    if(useX){wx=r.p+perp;wz=along;}else{wx=along;wz=r.p+perp;}
+    if(wx>RIVER.x0-6&&wx<RIVER.x1+6)continue; // skip the river band
+    dummy.position.set(wx,0.052,wz);
+    dummy.rotation.set(-Math.PI/2,0,Math.random()*Math.PI*2);
+    dummy.scale.set(sx,sz,1);
+    dummy.updateMatrix();
+    puddleInst.setMatrixAt(placed,dummy.matrix);
+    placed++;
+  }
+  // any unused instance slots: collapse to zero scale so they don't render as stray dots
+  for(;placed<PUDDLE_COUNT;placed++){
+    dummy.position.set(0,-50,0);dummy.scale.set(0,0,0);dummy.updateMatrix();
+    puddleInst.setMatrixAt(placed,dummy.matrix);
+  }
+  puddleInst.instanceMatrix.needsUpdate=true;
+}
+scene.add(puddleInst);
 
 // intersection patches: blank asphalt over crossing markings
 ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
@@ -918,34 +990,57 @@ const zTex=tex((g,w,h)=>{
 },128,128);
 
 // ---------- NEON SIGNS ----------
-const kanji=['ラーメン','居酒屋','カラオケ','寿司','ホテル','薬局','パチンコ','喫茶店','焼肉','銀行','本屋','電器','うどん','クラブ','ゲーム','ネオン','東京','夜市'];
-const neonCols=['#ff4fd0','#35e0ff','#ffe14d','#ff5533','#7dff6a','#c88aff','#ff9d2e','#ff2f8f','#2fffe0'];
-function neonTex(txt,col){
+// wide word pool: shop-type kanji/kana, single blazing kanji, and short romaji/alnum tokens
+// (Tokyo signage mixes all three) so text repeats far less often across the city
+const kanji=[
+  'ラーメン','居酒屋','カラオケ','寿司','ホテル','薬局','パチンコ','喫茶店','焼肉','銀行','本屋','電器','うどん','クラブ','ゲーム','ネオン','東京','夜市',
+  '定食','餃子','焼鳥','天ぷら','蕎麦','弁当','質屋','雀荘','スナック','バー','食堂','中華','カフェ','美容室','マッサージ','古着','両替','写真','宝石',
+  '夢','龍','虎','鬼','花','月','華','雅','極',
+  'BAR','CLUB','24H','KTV','SUSHI','RAMEN','HOTEL','GAME','SALE','OPEN'
+];
+const neonCols=['#ff4fd0','#35e0ff','#ffe14d','#ff5533','#7dff6a','#c88aff','#ff9d2e','#ff2f8f','#2fffe0','#3d6bff','#c6ff4d','#ff2222','#8fd9ff','#9d4dff','#ffcf4d','#4dffb8','#ff6fa8','#ff7a1a'];
+const signShapes=['tall','slim','wide','square'];
+const frameStyles=['steel','rust','black','chrome'];
+function neonTex(txt,col,shape,frameStyle){
+  shape=shape||'tall';frameStyle=frameStyle||'steel';
+  const landscape=shape==='wide';
+  const w=landscape?256:64, h=landscape?64:256;
   return tex((g,w,h)=>{
     g.fillStyle='#141118';g.fillRect(0,0,w,h);
-    const frameW=6;
-    const fg=g.createLinearGradient(0,0,w,0);
-    fg.addColorStop(0,'#3a3a3e');fg.addColorStop(.5,'#5a5a5e');fg.addColorStop(1,'#2a2a2e');
+    const frameW=frameStyle==='black'?4:(frameStyle==='chrome'?5:6+Math.floor(Math.random()*3));
+    let fg;
+    if(frameStyle==='rust'){fg=g.createLinearGradient(0,0,w,0);fg.addColorStop(0,'#5a3a22');fg.addColorStop(.5,'#7a4c28');fg.addColorStop(1,'#4a3018');}
+    else if(frameStyle==='black'){fg=g.createLinearGradient(0,0,w,0);fg.addColorStop(0,'#1c1c20');fg.addColorStop(.5,'#2c2c30');fg.addColorStop(1,'#151518');}
+    else if(frameStyle==='chrome'){fg=g.createLinearGradient(0,0,w,0);fg.addColorStop(0,'#c8c8d0');fg.addColorStop(.5,'#8a8a92');fg.addColorStop(1,'#e8e8ee');}
+    else{fg=g.createLinearGradient(0,0,w,0);fg.addColorStop(0,'#3a3a3e');fg.addColorStop(.5,'#5a5a5e');fg.addColorStop(1,'#2a2a2e');}
     g.fillStyle=fg;
     g.fillRect(0,0,w,frameW);g.fillRect(0,h-frameW,w,frameW);
     g.fillRect(0,0,frameW,h);g.fillRect(w-frameW,0,frameW,h);
-    for(let i=0;i<6;i++){
+    const grimeCol=frameStyle==='rust'?'160,80,20':'120,60,20';
+    for(let i=0;i<(frameStyle==='rust'?12:6);i++){
       const rx=Math.random()*w,ry=Math.random()*h*0.3;
-      g.fillStyle='rgba(120,60,20,.35)';
+      g.fillStyle=`rgba(${grimeCol},${.25+Math.random()*.3})`;
       g.fillRect(rx,ry,2,20+Math.random()*40);
     }
-    g.fillStyle='#6a6a6e';
+    g.fillStyle=frameStyle==='chrome'?'#f0f0f4':'#6a6a6e';
     [[frameW*1.5,frameW*1.5],[w-frameW*1.5,frameW*1.5],[frameW*1.5,h-frameW*1.5],[w-frameW*1.5,h-frameW*1.5]].forEach(([rx,ry])=>{
       g.beginPath();g.arc(rx,ry,2.5,0,7);g.fill();
     });
-    g.strokeStyle=col;g.lineWidth=3;g.strokeRect(frameW+2,frameW+2,w-frameW*2-4,h-frameW*2-4);
-    g.font='bold 42px sans-serif';g.textAlign='center';g.textBaseline='middle';
-    g.shadowColor=col;g.shadowBlur=18;g.fillStyle=col;
+    g.strokeStyle=col;g.lineWidth=landscape?4:3;g.strokeRect(frameW+2,frameW+2,w-frameW*2-4,h-frameW*2-4);
+    g.textAlign='center';g.textBaseline='middle';
+    g.shadowColor=col;g.shadowBlur=landscape?14:18;g.fillStyle=col;
     const chars=txt.split('');
-    const step=(h-40)/chars.length;
-    chars.forEach((c,i)=>{g.fillText(c,w/2,30+step*(i+.5));g.fillText(c,w/2,30+step*(i+.5));});
+    if(landscape){
+      g.font=`bold ${Math.round(h*0.5)}px sans-serif`;
+      const step=(w-40)/Math.max(1,chars.length);
+      chars.forEach((c,i)=>{g.fillText(c,20+step*(i+.5),h/2);g.fillText(c,20+step*(i+.5),h/2);});
+    }else{
+      g.font=`bold ${shape==='slim'?32:42}px sans-serif`;
+      const step=(h-40)/chars.length;
+      chars.forEach((c,i)=>{g.fillText(c,w/2,30+step*(i+.5));g.fillText(c,w/2,30+step*(i+.5));});
+    }
     g.shadowBlur=0;
-    if(Math.random()<0.5){
+    if(!landscape&&Math.random()<0.5){
       const pw=w*0.7,ph=14,px=(w-pw)/2,py=6;
       const pg=g.createLinearGradient(0,py,0,py+ph);
       pg.addColorStop(0,'#8a7a4a');pg.addColorStop(1,'#5a4e2e');
@@ -955,14 +1050,31 @@ function neonTex(txt,col){
       const letters=['D5','F','R4','A2','C1','B7'];
       g.fillText(letters[Math.floor(Math.random()*letters.length)],w/2,py+ph/2);
     }
-  },64,256);
+  },w,h);
 }
 const neonMats=[];
-for(let i=0;i<20;i++){
-  const col=neonCols[Math.floor(Math.random()*neonCols.length)];
-  neonMats.push({m:new THREE.MeshBasicMaterial({map:neonTex(kanji[Math.floor(Math.random()*kanji.length)],col)}),c:new THREE.Color(col)});
+const NEON_VARIANT_COUNT=72; // big pool so nearby buildings rarely draw the same sign twice
+for(let i=0;i<NEON_VARIANT_COUNT;i++){
+  const col=neonCols[i%neonCols.length]; // guarantee every colour is represented at least a few times
+  const shape=signShapes[Math.floor(Math.random()*signShapes.length)];
+  const frameStyle=frameStyles[Math.floor(Math.random()*frameStyles.length)];
+  const txt=kanji[Math.floor(Math.random()*kanji.length)];
+  neonMats.push({m:new THREE.MeshBasicMaterial({map:neonTex(txt,col,shape,frameStyle)}),c:new THREE.Color(col),shape});
 }
 const pulseSigns=[];
+// small ring-buffer of recently-picked sign variants so signs on neighbouring buildings
+// (processed back-to-back by the district loop) don't repeat the same texture
+const recentSignPicks=[];
+function pickSignVariant(){
+  for(let tries=0;tries<6;tries++){
+    const idx=Math.floor(Math.random()*neonMats.length);
+    if(recentSignPicks.indexOf(idx)===-1){
+      recentSignPicks.push(idx);if(recentSignPicks.length>10)recentSignPicks.shift();
+      return neonMats[idx];
+    }
+  }
+  return neonMats[Math.floor(Math.random()*neonMats.length)];
+}
 // weathered metal cage / junction-box / hanging-wire detail for neon signs — collected here and
 // built as a handful of InstancedMesh/LineSegments objects AFTER the district loop (perf: O(1) draw calls
 // no matter how many hundreds of signs exist across the city).
@@ -983,15 +1095,28 @@ const neonCageBarGeo=new THREE.BoxGeometry(1,0.045,0.045);
 const neonJunctionGeo=new THREE.BoxGeometry(0.34,0.22,0.2);
 const neonCageTubeXf=[],neonCageBarXf=[],neonJunctionXf=[],neonWirePts=[];
 function addNeonSigns(grp,bw,bd,bh,cx,cz){
-  const count=2+Math.floor(Math.random()*2);
+  const count=2+Math.floor(Math.random()*2); // 2-3 signs per building (unchanged draw-call budget)
   for(let i=0;i<count;i++){
-    const nm=neonMats[Math.floor(Math.random()*neonMats.length)];
-    const sh=Math.min(bh*0.55,10+Math.random()*16),sw=sh/4;
+    const nm=pickSignVariant();
+    let sh,sw;
+    if(nm.shape==='wide'){sh=Math.min(bh*0.3,2.6+Math.random()*3.2);sw=sh*(2.1+Math.random()*1.9);}
+    else if(nm.shape==='square'){sh=Math.min(bh*0.32,4+Math.random()*5);sw=sh*(0.82+Math.random()*0.3);}
+    else if(nm.shape==='slim'){sh=Math.min(bh*0.62,13+Math.random()*15);sw=sh*(0.09+Math.random()*0.08);}
+    else{sh=Math.min(bh*0.55,9+Math.random()*17);sw=sh*(0.18+Math.random()*0.16);}
     const sign=new THREE.Mesh(new THREE.BoxGeometry(0.5,sh,sw),[nm.m,nm.m,nm.m,nm.m,nm.m,nm.m]);
     const side=Math.random()<.5?1:-1;
-    const face=Math.random()<.5;
-    if(face)sign.position.set(side*(bw/2+0.3),3+sh/2+Math.random()*(bh-sh-6),bd*0.3*(Math.random()-.5)*2);
-    else{sign.rotation.y=Math.PI/2;sign.position.set(bw*0.3*(Math.random()-.5)*2,3+sh/2+Math.random()*(bh-sh-6),side*(bd/2+0.3));}
+    // ~28% of signs project on an arm perpendicular to the wall (Tokyo blade/cantilever signs),
+    // readable edge-on along the sidewalk and face-on from the cross street
+    const projecting=Math.random()<0.28;
+    if(projecting){
+      const arm=1.1+Math.random()*1.3;
+      sign.rotation.y=Math.PI/2;
+      sign.position.set(side*(bw/2+arm),3+sh/2+Math.random()*(bh-sh-6),bd*0.36*(Math.random()-.5)*2);
+    }else{
+      const face=Math.random()<.5;
+      if(face)sign.position.set(side*(bw/2+0.3),3+sh/2+Math.random()*(bh-sh-6),bd*0.3*(Math.random()-.5)*2);
+      else{sign.rotation.y=Math.PI/2;sign.position.set(bw*0.3*(Math.random()-.5)*2,3+sh/2+Math.random()*(bh-sh-6),side*(bd/2+0.3));}
+    }
     grp.add(sign);
     const glow=new THREE.Mesh(new THREE.PlaneGeometry(sw*1.3,sh*1.08),
       new THREE.MeshBasicMaterial({color:nm.c,transparent:true,opacity:.06,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
@@ -1173,11 +1298,12 @@ function heightToNormal(heightCanvas,strength){
   t.anisotropy=renderer.capabilities.getMaxAnisotropy();
   return t;
 }
-function makeFacadeHeightCanvas(){
+function makeFacadeHeightCanvas(cols,rows){
+  cols=cols||10;rows=rows||16;
   const cv=document.createElement('canvas');cv.width=512;cv.height=512;
   const g=cv.getContext('2d');
   g.fillStyle='#808080';g.fillRect(0,0,512,512);
-  const cols=10,rows=16,cw=512/cols,ch=512/rows;
+  const cw=512/cols,ch=512/rows;
   for(let y=0;y<rows;y++){
     g.fillStyle='#a0a0a0';g.fillRect(0,y*ch,512,2);
     g.fillStyle='#606060';g.fillRect(0,y*ch+2,512,2);
@@ -1194,8 +1320,24 @@ function makeFacadeHeightCanvas(){
   }
   return cv;
 }
-const facadeNormalMap=heightToNormal(makeFacadeHeightCanvas(),2.2);
-const facades=[facadeTex('#463a54'),facadeTex('#4e4256'),facadeTex('#3a3448'),facadeTex('#524058')];
+// facade grid presets vary the WINDOW SIZE across buildings (large loft panes -> tight high-rise
+// grid); each preset gets its own matching bump-normal map so lit windows + bevels stay aligned.
+const facadeGridPresets=[{cols:7,rows:10},{cols:10,rows:16},{cols:13,rows:20},{cols:16,rows:26}];
+const facadeNormalMaps=facadeGridPresets.map(p=>heightToNormal(makeFacadeHeightCanvas(p.cols,p.rows),2.2));
+const facadeNormalMap=facadeNormalMaps[1]; // kept for any external reference; standard-grid map
+const facadeBaseColors=['#463a54','#4e4256','#3a3448','#524058','#3c3a4a','#4a3d3d','#40465a','#523d4a','#463f36','#3a4442'];
+// each entry pairs a texture with its own material feel (roughness/metalness/env) so FACADE
+// MATERIAL varies building-to-building, not just the window pattern
+const facades=facadeBaseColors.map((base,i)=>{
+  const preset=facadeGridPresets[i%facadeGridPresets.length];
+  return {
+    map:facadeTex(base,preset),
+    normal:facadeNormalMaps[i%facadeGridPresets.length],
+    roughness:0.74+Math.random()*0.22,
+    metalness:0.02+Math.random()*0.09,
+    envMapIntensity:0.26+Math.random()*0.34
+  };
+});
 const glassT=glassTex();
 const roofMat=new THREE.MeshLambertMaterial({map:gravelTex});
 const parapetMat=new THREE.MeshLambertMaterial({color:0x3a3448});
@@ -1337,8 +1479,12 @@ function spawnBuilding(cx,cz,bw,bd,style){
     mat=new THREE.MeshLambertMaterial({map:resFacades[Math.floor(Math.random()*3)]});
   }else{
     bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48);
-    mat=new THREE.MeshStandardMaterial({map:facades[Math.floor(Math.random()*facades.length)],normalMap:facadeNormalMap,normalScale:new THREE.Vector2(1,1),roughness:0.86,metalness:0.04,envMapIntensity:0.4});
-    mat.color.setHSL((268+Math.random()*30)/360,0.10+Math.random()*0.12,0.5+Math.random()*0.3);
+    const fac=facades[Math.floor(Math.random()*facades.length)];
+    mat=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
+    // widened hue range (cool blue-grey concrete through the original violet-grey to magenta-grey)
+    // for facade MATERIAL variety, kept in the same desaturated cool/purple family so the
+    // neon-night mood stays intact (no drift into warm/green tones)
+    mat.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
   }
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,roofMat,roofMat,mat,mat]);
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
@@ -3836,7 +3982,7 @@ function loop(now){
       const mcWheelG=new THREE.CylinderGeometry(0.46,0.46,0.34,14);
       const mcWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
       const hubM=new THREE.MeshLambertMaterial({color:0x999aa2});
-      for(let i=0;i<52;i++){
+      for(let i=0;i<80;i++){ // denser two-way street traffic (was 52); shared geo/mats, same approach
         const car=new THREE.Group();
         const c=mcCols[i%mcCols.length];
         const gi=Math.floor(Math.random()*carGeos.length);
@@ -3900,7 +4046,7 @@ function loop(now){
         });
         return g;
       }
-      for(let i=0;i<15;i++){
+      for(let i=0;i<22;i++){ // denser expressway traffic (was 15)
         const kind=Math.random()<0.55?0:(Math.random()<0.7?1:2);
         const v=mkVehicle(kind);
         const lane=Math.random()<.5?-3.5:3.5;
