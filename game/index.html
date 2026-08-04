@@ -86,6 +86,7 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,logarithmicDepthBuffer:true});
+window.__dbgRenderer=renderer; // TEMP DEBUG - survivor test-capture camera framing hook, remove before final run
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
@@ -3027,7 +3028,9 @@ const LOCK_TIME=0.45; // seconds of steady acquisition before a target is confir
 let missionLevel=1,hostage=null,missionLine='MISSION 1 — RESCUE HOSTAGE';
 const hostageMat=new THREE.MeshLambertMaterial({color:0xff9933});
 // Build a survivor figure from the shared humanoid model: natural tint, idle pose,
-// one arm bone procedurally driven for a "waving for help" gesture (no Wave clip exists).
+// several bones procedurally driven on top of the Idle clip for continuous "alive" motion —
+// weight-shift sway (hips/spine), breathing bob, occasional look-around (neck/head), a real
+// arm+forearm wave for "over here!", and a livelier hop+spin celebration on rescue.
 function buildSurvivorFigure(){
   if(!(humanoidModelReady&&humanoidTemplate))return null;
   const model=THREE.SkeletonUtils.clone(humanoidTemplate);
@@ -3043,12 +3046,78 @@ function buildSurvivorFigure(){
   }
   const waveBone=model.getObjectByName('mixamorigRightArm');
   const leftArmBone=model.getObjectByName('mixamorigLeftArm');
+  const foreArmBone=model.getObjectByName('mixamorigRightForeArm');
+  const spineBone=model.getObjectByName('mixamorigSpine1')||model.getObjectByName('mixamorigSpine');
+  const hipsBone=model.getObjectByName('mixamorigHips');
+  const neckBone=model.getObjectByName('mixamorigNeck');
+  const headBone=model.getObjectByName('mixamorigHead');
+  // soft warm rim light riding along with the figure — keeps it reading as a bright civilian
+  // even while sitting inside the beacon's green ring glow (beacon/ring/beam left untouched).
+  const rim=new THREE.PointLight(0xffcf9e,1.4,9,2);
+  rim.position.set(0,1.55,0.7);
+  model.add(rim);
   return {
-    model,mixer,waveBone,leftArmBone,
+    model,mixer,waveBone,leftArmBone,foreArmBone,spineBone,hipsBone,neckBone,headBone,
     waveBaseQuat:waveBone?waveBone.quaternion.clone():null,
     leftArmBaseQuat:leftArmBone?leftArmBone.quaternion.clone():null,
-    celebrating:false,celebT:0
+    foreArmBaseQuat:foreArmBone?foreArmBone.quaternion.clone():null,
+    spineBaseQuat:spineBone?spineBone.quaternion.clone():null,
+    hipsBaseQuat:hipsBone?hipsBone.quaternion.clone():null,
+    neckBaseQuat:neckBone?neckBone.quaternion.clone():null,
+    headBaseQuat:headBone?headBone.quaternion.clone():null,
+    celebrating:false,celebT:0,
+    idleSeed:Math.random()*1000, // desyncs sway/breathing between multiple survivors
+    lookNextAt:1200+Math.random()*2200, // ms-timestamp (set relative to first update) of next look-around
+    lookElapsed:0,lookAngle:0,lookTarget:0
   };
+}
+// Procedural "alive" idle: weight-shift sway + breathing bob + occasional look-around.
+// Called every frame while the survivor is standing at the beacon, not yet rescued.
+function updateSurvivorIdle(sv,dt,tGlobal){
+  const t=tGlobal+sv.idleSeed;
+  // gentle continuous weight-shift: hips sway side-to-side + slight spine counter-lean
+  if(sv.hipsBone&&sv.hipsBaseQuat){
+    const sway=Math.sin(t*0.55)*0.05;
+    sv.hipsBone.quaternion.copy(sv.hipsBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,sway));
+  }
+  if(sv.spineBone&&sv.spineBaseQuat){
+    const lean=Math.sin(t*0.55+0.5)*0.035;
+    const twist=Math.sin(t*0.33)*0.025;
+    sv.spineBone.quaternion.copy(sv.spineBaseQuat)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,lean))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,twist));
+  }
+  // breathing bob: small vertical rise/fall of the whole figure
+  sv.model.position.y=Math.sin(t*1.7)*0.022;
+  // occasional look-around: head+neck ease toward a random yaw, hold, then ease back to center
+  sv.lookElapsed+=dt*1000;
+  if(sv.lookElapsed>=sv.lookNextAt){
+    sv.lookElapsed=0;
+    sv.lookNextAt=2600+Math.random()*3200;
+    sv.lookTarget=(Math.random()<0.5?-1:1)*(0.35+Math.random()*0.4);
+  }
+  // ease current look angle toward target while inside the look window, else ease back to 0
+  const lookActive=sv.lookElapsed<900;
+  const target=lookActive?sv.lookTarget:0;
+  sv.lookAngle=THREE.MathUtils.lerp(sv.lookAngle,target,Math.min(1,dt*3.2));
+  if(sv.neckBone&&sv.neckBaseQuat)sv.neckBone.quaternion.copy(sv.neckBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,sv.lookAngle*0.6));
+  if(sv.headBone&&sv.headBaseQuat)sv.headBone.quaternion.copy(sv.headBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,sv.lookAngle*0.7));
+}
+// Livelier rescue celebration: both arms up + waving hands, several energetic hops, a little
+// cheering spin/wiggle that settles once the hops finish. Returns true when the celebration
+// has fully played out (caller then stops driving / removes the survivor).
+function updateSurvivorCelebration(sv,dt){
+  sv.celebT+=dt;
+  const hopDur=0.3,hops=3,totalDur=hopDur*hops;
+  const tt=Math.min(sv.celebT,totalDur);
+  sv.model.position.y=Math.max(0,Math.sin((tt/hopDur)*Math.PI))*0.65;
+  const spinFade=Math.max(0,1-sv.celebT/(totalDur+0.3));
+  sv.model.rotation.y=HUMANOID_BASE_YAW+Math.sin(sv.celebT*7)*0.4*spinFade;
+  if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,Math.sin(sv.celebT*14)*0.25));
+  if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,-Math.sin(sv.celebT*14+0.4)*0.25));
+  if(sv.foreArmBone&&sv.foreArmBaseQuat)sv.foreArmBone.quaternion.copy(sv.foreArmBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,Math.sin(sv.celebT*16)*0.4));
+  if(sv.headBone&&sv.headBaseQuat)sv.headBone.quaternion.copy(sv.headBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(PITCH_AXIS,Math.sin(sv.celebT*10)*0.15));
+  return sv.celebT>totalDur+0.6;
 }
 function spawnHostage(){
   const g=new THREE.Group();
@@ -3215,6 +3284,8 @@ const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-dire
 // Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
 // used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
 const WAVE_AXIS=new THREE.Vector3(0,0,1);
+const YAW_AXIS=new THREE.Vector3(0,1,0);   // reused for hip/spine twist + head/neck look-around
+const PITCH_AXIS=new THREE.Vector3(1,0,0); // reused for the celebration head cheer-nod
 const WAVE_ARM_BASE_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
 const CELEBRATE_ARM_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
 const CELEBRATE_ARM_OFFSET_L=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,-2.6);
@@ -3246,9 +3317,14 @@ function buildHumanoidMaterialVariants(root){
       zMat.emissiveIntensity=isVisor?1.6:1.0;
       zMat.needsUpdate=true;
       zombieMatVariants.set(mat,zMat);
-      // survivor: keep the original texture/colors, just a hair warmer — reads as a normal person
+      // survivor: brightened, warm natural tint — must read as a civilian person, clearly
+      // NOT the dark/sickly-green zombie look, even inside the beacon's green ring glow.
       const sMat=mat.clone();
-      if(sMat.color)sMat.color.multiply(new THREE.Color(1.0,0.98,0.95));
+      if(sMat.color)sMat.color.multiply(new THREE.Color(1.32,1.22,1.08));
+      if('roughness' in sMat && sMat.roughness!==undefined)sMat.roughness=Math.max(0.35,sMat.roughness*0.8);
+      if(!sMat.emissive)sMat.emissive=new THREE.Color(0,0,0);
+      sMat.emissive.setRGB(isVisor?0.05:0.16,isVisor?0.05:0.11,isVisor?0.06:0.06); // faint warm self-glow, not the zombie's undead visor red
+      sMat.emissiveIntensity=0.55;
       sMat.needsUpdate=true;
       survivorMatVariants.set(mat,sMat);
     });
@@ -4263,27 +4339,26 @@ function loop(now){
     for(let ci=celebratingSurvivors.length-1;ci>=0;ci--){
       const sv=celebratingSurvivors[ci];
       if(sv.mixer)sv.mixer.update(dt);
-      sv.celebT+=dt;
-      const hopDur=0.35,hops=3,totalDur=hopDur*hops;
-      sv.model.position.y=Math.max(0,Math.sin((Math.min(sv.celebT,totalDur)/hopDur)*Math.PI))*0.55;
-      if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
-      if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
-      if(sv.celebT>totalDur+0.6)celebratingSurvivors.splice(ci,1);
+      const done=updateSurvivorCelebration(sv,dt);
+      if(done)celebratingSurvivors.splice(ci,1);
     }
     if(hostage){
       const sv=hostage.survivor;
       if(sv){
         if(sv.mixer)sv.mixer.update(dt);
         if(sv.celebrating){
-          sv.celebT+=dt;
-          const hopDur=0.35,hops=3,totalDur=hopDur*hops;
-          const tt=Math.min(sv.celebT,totalDur);
-          sv.model.position.y=Math.max(0,Math.sin((tt/hopDur)*Math.PI))*0.55;
-          if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
-          if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
-        }else if(hostage.state==='seek'&&sv.waveBone&&sv.waveBaseQuat){
-          const wag=Math.sin(now/240)*0.3;
-          sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(WAVE_ARM_BASE_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,wag));
+          updateSurvivorCelebration(sv,dt);
+        }else if(hostage.state==='seek'){
+          updateSurvivorIdle(sv,dt,now/1000);
+          if(sv.waveBone&&sv.waveBaseQuat){
+            // shoulder holds the "arm up, over here!" pose; forearm oscillates for a real hand wave
+            const shoulderWag=Math.sin(now/260)*0.14;
+            sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(WAVE_ARM_BASE_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,shoulderWag));
+          }
+          if(sv.foreArmBone&&sv.foreArmBaseQuat){
+            const waveSwing=Math.sin(now/150)*0.55+0.15;
+            sv.foreArmBone.quaternion.copy(sv.foreArmBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,waveSwing));
+          }
         }
       }else{
         hostage.arm.rotation.z=-0.6+Math.sin(now/200)*0.35;
