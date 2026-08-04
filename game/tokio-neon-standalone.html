@@ -4218,6 +4218,7 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,logarithmicDepthBuffer:true});
+window.__dbgRenderer=renderer; // TEMP DEBUG - survivor test-capture camera framing hook, remove before final run
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
@@ -4829,8 +4830,10 @@ function facadeTex(base,opts){return tex((g,w,h)=>{
   for(let i=0;i<2200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
   const cw=w/cols,ch=h/rows;
   // realistic per-floor lighting: tiers span fully-dark -> mostly-dark -> mixed -> busy -> blazing
-  // so floors read distinctly different, not a uniform grid
-  const tiers=[0,0.1,0.32,0.65,0.95];
+  // so floors read distinctly different, not a uniform grid. ROUND-4: pushed further — extra
+  // fully-dark AND near-total-blaze entries so both extremes show up more often, not just the mid
+  // tiers, per "more fully-dark vs blazing floors" feedback.
+  const tiers=[0,0,0.1,0.32,0.5,0.65,0.82,0.95,1.0];
   const floorLit=[];
   for(let y=0;y<rows;y++)floorLit.push(tiers[Math.floor(Math.random()*tiers.length)]);
   for(let y=0;y<rows;y++){
@@ -4847,12 +4850,17 @@ function facadeTex(base,opts){return tex((g,w,h)=>{
         // per-window brightness jitter on top of the warm/cool/pink/blazing-white families
         const jitter=0.72+Math.random()*0.55;
         const mul=(c)=>Math.max(0,Math.min(255,Math.round(c*jitter)));
+        // ROUND-4: broadened the warm/cool palette families for more MATERIAL/brightness variety
+        // window-to-window (added office-green fluorescent + amber accent on top of the original
+        // tungsten/cool/pink/blazing set)
         const r=Math.random();
         let c0,c1;
-        if(r<0.52){c0=[255,226,166];c1=[232,169,92];}       // warm tungsten
-        else if(r<0.8){c0=[207,234,255];c1=[141,184,216];}  // cool fluorescent
-        else if(r<0.93){c0=[255,184,230];c1=[216,136,192];} // pink/neon spill
-        else{c0=[255,250,236];c1=[244,236,208];}            // rare blazing near-white
+        if(r<0.42){c0=[255,226,166];c1=[232,169,92];}        // warm tungsten
+        else if(r<0.64){c0=[207,234,255];c1=[141,184,216];}  // cool fluorescent
+        else if(r<0.76){c0=[255,184,230];c1=[216,136,192];}  // pink/neon spill
+        else if(r<0.87){c0=[214,255,214];c1=[142,196,150];}  // office-green fluorescent
+        else if(r<0.95){c0=[255,196,120];c1=[224,120,60];}   // amber/orange accent lamp
+        else{c0=[255,250,236];c1=[244,236,208];}             // rare blazing near-white
         grad.addColorStop(0,`rgb(${mul(c0[0])},${mul(c0[1])},${mul(c0[2])})`);
         grad.addColorStop(1,`rgb(${mul(c1[0])},${mul(c1[1])},${mul(c1[2])})`);
       }else{
@@ -4864,19 +4872,19 @@ function facadeTex(base,opts){return tex((g,w,h)=>{
         g.fillStyle='rgba(20,15,25,.4)';
         g.fillRect(px+ww*(0.2+Math.random()*0.5),py,ww*0.14,wh);
       }
-      if(lit&&Math.random()<0.24){
-        // ROUND-3 FEEDBACK: some lit windows show a hint of an actual INTERIOR — a person or
-        // furniture silhouette against the warm glow — so it reads "someone's inside", not a
-        // flat lit rectangle.
+      if(lit&&Math.random()<0.36){
+        // ROUND-4: pushed interior-scene variance further (chance up from 0.24, plus a 4th scene
+        // kind) — a person, furniture, a TV glow, or a furnished-room hint (shelving + a hanging
+        // pendant lamp) against the warm glow, so more lit windows read as "someone's inside".
         const kind=Math.random();
         g.fillStyle='rgba(15,12,18,.6)';
-        if(kind<0.4){
+        if(kind<0.32){
           // person silhouette standing near the glass
           const sx=px+ww*(0.22+Math.random()*0.56),sy=py+wh*0.98;
           const sh=wh*(0.5+Math.random()*0.32),sw2=Math.max(1.4,sh*0.32);
           g.beginPath();g.arc(sx,sy-sh*0.86,sw2*0.42,0,7);g.fill();
           g.beginPath();g.moveTo(sx-sw2*0.5,sy);g.lineTo(sx-sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.5,sy);g.closePath();g.fill();
-        }else if(kind<0.72){
+        }else if(kind<0.58){
           // low furniture silhouette (sofa/table) with a warm lamp accent beside it
           const fx=px+ww*0.12,fy=py+wh*0.6,fw=ww*0.62,fh=Math.max(1.2,wh*0.32);
           g.fillRect(fx,fy,fw,fh);
@@ -4884,10 +4892,19 @@ function facadeTex(base,opts){return tex((g,w,h)=>{
             g.fillStyle='rgba(255,220,160,.55)';
             g.beginPath();g.arc(fx+fw*0.86,fy-wh*0.05,Math.max(1,ww*0.055),0,7);g.fill();
           }
-        }else{
+        }else if(kind<0.8){
           // flicker of a TV/monitor glow mid-room — cool rectangle patch reads as a screen
           g.fillStyle='rgba(140,200,255,.32)';
           g.fillRect(px+ww*0.16,py+wh*0.32,ww*0.5,wh*0.26);
+        }else{
+          // furnished-room hint: a shelving unit silhouette plus a warm hanging pendant lamp with
+          // a thin cord, so the room reads lived-in rather than just an empty lit box
+          const fx=px+ww*0.14,fy=py+wh*0.18,fw=ww*0.2,fh=wh*0.62;
+          g.fillRect(fx,fy,fw,fh);
+          for(let sh2=0;sh2<3;sh2++)g.fillRect(fx,fy+fh*(0.2+sh2*0.28),fw,1.2);
+          const lx=px+ww*(0.55+Math.random()*0.3);
+          g.fillStyle='rgba(20,16,14,.5)';g.fillRect(lx,py,1,wh*0.22);
+          g.fillStyle='rgba(255,214,150,.6)';g.beginPath();g.arc(lx,py+wh*0.26,Math.max(1.2,ww*0.06),0,7);g.fill();
         }
       }
       g.fillStyle='rgba(255,190,255,.08)';
@@ -4992,79 +5009,124 @@ function makeWetRoughTex(){return tex((g,w,h)=>{
 const wetRoughTex=makeWetRoughTex();
 wetRoughTex.wrapS=wetRoughTex.wrapT=THREE.RepeatWrapping;
 wetRoughTex.repeat.set(6,60);
-// several independent wet-rough patterns (distinct streak/puddle placement) so roads don't all
-// share one repeating pattern — real ROUGHNESS VARIATION street to street
-const wetRoughVariants=[wetRoughTex,makeWetRoughTex(),makeWetRoughTex(),makeWetRoughTex()];
+// NOTE: per-road wet-rough maps are generated fresh in roadWetRoughFor() below (own canvas each
+// time, not a clone of this one) so streets never repeat an identical wet-streak pattern.
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.62,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:0.9}));
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
 // asphalt textures per road class
-const roadStripTex=tex((g,w,h)=>{
-  g.fillStyle='#24262a';g.fillRect(0,0,w,h);
-  for(let i=0;i<500;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.04})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+// ---- shared realistic-asphalt detail painter -----------------------------------------------
+// Multi-scale grain + oil stains + tar/repair patches + faint hairline cracks, applied on top of
+// a flat base fill. Used by every road-surface texture generator below so real pavement reads as
+// GRAINY WORN ASPHALT (fine grain, stains, patches, cracks, subtle colour variance) rather than a
+// flat tinted rectangle. Each call is independently randomised (no shared/cloned canvas), and each
+// generator is now a FACTORY FUNCTION invoked fresh per road, so no two roads — even the same
+// class/width — ever bake the identical pattern. That, plus a much larger world-length represented
+// per tile (see roadTexFor), is what kills the old unnatural regular repeating stripe/banding.
+function paintAsphaltGrain(g,w,h){
+  // coarse mottling: a few large soft patches shift the base tone slightly (resurfacing / weather)
+  for(let i=0;i<5;i++){
+    const sx=Math.random()*w,sy=Math.random()*h,sr=w*(0.22+Math.random()*0.42);
+    const dark=Math.random()<0.55;
+    const gr=g.createRadialGradient(sx,sy,0,sx,sy,sr);
+    gr.addColorStop(0,dark?'rgba(0,0,0,.11)':'rgba(255,255,255,.05)');
+    gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;g.fillRect(sx-sr,sy-sr,sr*2,sr*2);
+  }
+  // fine multi-density speckle grain: three independent point-scales so it reads as continuous
+  // noise (which tiles far less noticeably than any large baked shape) instead of a pattern.
+  // Counts are capped (not proportional to full pixel area) — texture generation is synchronous
+  // at scene-init time and runs once per road, so this must stay cheap.
+  const area=w*h,cap=(f,mx)=>Math.min(mx,Math.round(area*f));
+  const n1=cap(0.045,2400),n2=cap(0.014,850),n3=cap(0.0035,240);
+  for(let i=0;i<n1;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.032})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
+  for(let i=0;i<n2;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.05})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  for(let i=0;i<n3;i++){const v=16+Math.random()*10;g.fillStyle=`rgba(${v},${v-2},${v-4},${0.05+Math.random()*0.09})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
+  // oil stains: soft dark irregular blobs, built from several overlapping offset gradients so the
+  // edge is organic, not a perfect circle
+  const oilCount=2+Math.floor(Math.random()*3);
+  for(let i=0;i<oilCount;i++){
+    const cx0=Math.random()*w,cy0=Math.random()*h,baseR=w*(0.028+Math.random()*0.05);
+    for(let k=0;k<3;k++){
+      const ox=cx0+(Math.random()-.5)*baseR*0.9,oy=cy0+(Math.random()-.5)*baseR*0.9,r=baseR*(0.55+Math.random()*0.6);
+      const gr=g.createRadialGradient(ox,oy,0,ox,oy,r);
+      gr.addColorStop(0,'rgba(6,5,4,.36)');gr.addColorStop(.6,'rgba(6,5,4,.15)');gr.addColorStop(1,'rgba(6,5,4,0)');
+      g.fillStyle=gr;g.fillRect(ox-r,oy-r,r*2,r*2);
+    }
+  }
+  // tar/repair patches: mid-grey uneven rectangles (several jittered overlapping rects, not one
+  // clean box) so a resurfaced patch looks hand-cut, not a decal
+  const patchCount=Math.random()<0.75?1+Math.floor(Math.random()*2):0;
+  for(let i=0;i<patchCount;i++){
+    const px=Math.random()*w*0.82,py=Math.random()*h,pw=w*(0.05+Math.random()*0.09),ph=pw*(0.5+Math.random()*0.75);
+    g.fillStyle='rgba(38,37,35,.46)';
+    for(let k=0;k<4;k++){
+      const jx=px+(Math.random()-.5)*pw*0.3,jy=py+(Math.random()-.5)*ph*0.3;
+      g.fillRect(jx,jy,pw*(0.7+Math.random()*0.3),ph*(0.7+Math.random()*0.3));
+    }
+    g.strokeStyle='rgba(10,9,8,.3)';g.lineWidth=1;g.strokeRect(px,py,pw,ph);
+  }
+  // faint hairline cracks: thin jagged strokes, low-contrast
+  const crackCount=Math.random()<0.65?1+Math.floor(Math.random()*2):0;
+  for(let i=0;i<crackCount;i++){
+    let x=Math.random()*w,y=Math.random()*h*0.2;
+    g.strokeStyle=`rgba(0,0,0,${0.1+Math.random()*0.12})`;g.lineWidth=1;
+    g.beginPath();g.moveTo(x,y);
+    const segs=6+Math.floor(Math.random()*6);
+    for(let s=0;s<segs;s++){x+=(Math.random()-.5)*w*0.1;y+=h/segs*(0.7+Math.random()*0.6);g.lineTo(x,y);}
+    g.stroke();
+  }
+}
+function makeRoadStripTex(){return tex((g,w,h)=>{
+  g.fillStyle='#25272b';g.fillRect(0,0,w,h);
+  paintAsphaltGrain(g,w,h);
   [[w*0.18],[w*0.38],[w*0.62],[w*0.82]].forEach(([x])=>{
     const gr=g.createLinearGradient(x-5,0,x+5,0);
-    gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.4)');gr.addColorStop(1,'rgba(10,10,12,0)');
+    gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.32)');gr.addColorStop(1,'rgba(10,10,12,0)');
     g.fillStyle=gr;g.fillRect(x-5,0,10,h);
   });
   // worn centre-line dashes: some missing/chipped so the paint reads weathered, not freshly laid
   for(let y=0;y<h;y+=16){
-    if(Math.random()<0.14)continue;
-    const wear=0.32+Math.random()*0.5,dw=2.4*(0.55+Math.random()*0.55);
-    g.fillStyle=`rgba(220,205,120,${wear})`;g.fillRect(w/2-dw/2,y,dw,8);
+    if(Math.random()<0.16)continue;
+    const wear=0.26+Math.random()*0.42,dw=2.4*(0.55+Math.random()*0.55);
+    g.fillStyle=`rgba(210,196,116,${wear})`;g.fillRect(w/2-dw/2,y,dw,8);
   }
-  g.fillStyle='rgba(200,200,200,.4)';
+  g.fillStyle='rgba(200,200,200,.3)';
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
-  for(let i=0;i<4;i++){
-    if(Math.random()<0.5)continue;
-    const px=Math.random()*w*0.7,py=Math.random()*h,pw=8+Math.random()*14,ph=6+Math.random()*10;
-    g.fillStyle='rgba(12,12,16,.5)';g.fillRect(px,py,pw,ph);
-    g.strokeStyle='rgba(0,0,0,.5)';g.strokeRect(px,py,pw,ph);
-  }
-  if(Math.random()<0.7){
-    const mx=w*(0.3+Math.random()*0.4),my=h*Math.random();
-    g.fillStyle='#17181c';g.beginPath();g.arc(mx,my,4.5,0,7);g.fill();
-    g.strokeStyle='rgba(120,120,130,.4)';g.beginPath();g.arc(mx,my,4.5,0,7);g.stroke();
-  }
-},128,128,true);
-const majorRoadTex=tex((g,w,h)=>{
+},176,352,true);}
+function makeMajorRoadTex(){return tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
-  for(let i=0;i<900;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.035})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  paintAsphaltGrain(g,w,h);
   [0.13,0.31,0.69,0.87].forEach(f=>{
     const x=f*w;
     const gr=g.createLinearGradient(x-7,0,x+7,0);
-    gr.addColorStop(0,'rgba(8,8,10,0)');gr.addColorStop(.5,'rgba(8,8,10,.45)');gr.addColorStop(1,'rgba(8,8,10,0)');
+    gr.addColorStop(0,'rgba(8,8,10,0)');gr.addColorStop(.5,'rgba(8,8,10,.36)');gr.addColorStop(1,'rgba(8,8,10,0)');
     g.fillStyle=gr;g.fillRect(x-7,0,14,h);
   });
   // worn lane dashes: patchy alpha + occasional dropped dash so the paint reads weathered
   for(let y=0;y<h;y+=22){
-    if(Math.random()<0.1){continue;}
-    const wear=0.28+Math.random()*0.42;
-    g.fillStyle=`rgba(232,232,238,${wear})`;
+    if(Math.random()<0.12){continue;}
+    const wear=0.22+Math.random()*0.36;
+    g.fillStyle=`rgba(222,222,228,${wear})`;
     g.fillRect(w*0.25-1.4,y,2.8,11);g.fillRect(w*0.75-1.4,y,2.8,11);
   }
-  g.fillStyle='rgba(232,232,238,.55)';
+  g.fillStyle='rgba(222,222,228,.42)';
   g.fillRect(4,0,2.6,h);g.fillRect(w-6.6,0,2.6,h);
-  g.fillStyle='rgba(240,208,90,.62)';
+  g.fillStyle='rgba(228,198,86,.5)';
   g.fillRect(w/2-4.2,0,2.4,h);g.fillRect(w/2+1.8,0,2.4,h);
-  for(let i=0;i<3;i++){
-    if(Math.random()<0.4)continue;
-    const px=Math.random()*w*0.8,py=Math.random()*h,pw=10+Math.random()*18,ph=8+Math.random()*12;
-    g.fillStyle='rgba(12,12,16,.45)';g.fillRect(px,py,pw,ph);
-  }
-},256,256,true);
-const alleyTex=tex((g,w,h)=>{
+},320,704,true);}
+function makeAlleyTex(){return tex((g,w,h)=>{
   g.fillStyle='#232128';g.fillRect(0,0,w,h);
-  for(let i=0;i<400;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.035})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-  g.fillStyle='rgba(0,0,0,.5)';g.fillRect(w/2-2.5,0,5,h);
-  g.strokeStyle='rgba(0,0,0,.3)';g.lineWidth=1;
+  paintAsphaltGrain(g,w,h);
+  g.fillStyle='rgba(0,0,0,.42)';g.fillRect(w/2-2.5,0,5,h);
+  g.strokeStyle='rgba(0,0,0,.24)';g.lineWidth=1;
   for(let y=0;y<h;y+=18){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
-},128,128,true);
-const plainAsphaltTex=tex((g,w,h)=>{
+},96,352,true);}
+function makePlainAsphaltTex(){return tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
-  for(let i=0;i<400;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.035})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-},128,128,true);
-const plainAsphaltMat=new THREE.MeshStandardMaterial({map:plainAsphaltTex,roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+  paintAsphaltGrain(g,w,h);
+},256,256,true);}
+const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
 const sidewalkTex=tex((g,w,h)=>{
   g.fillStyle='#4a453c';g.fillRect(0,0,w,h);
@@ -5112,20 +5174,40 @@ const curbBottomMat=new THREE.MeshStandardMaterial({color:0x14120e,roughness:0.9
 const curbMat=curbFaceMat; // legacy alias
 
 // build road strips (geometry length axis = local +y pre-rotation; rotation.z spins in-plane for x-running roads)
+// ROUND-4 FIX for the "unnatural repeating stripe/banding": the old code shared ONE baked canvas
+// per road class (major/strip/alley), CLONED across every road of that class (Texture.clone() only
+// copies the reference to the same canvas image) and repeated it ~90-160 times down each road's
+// length — so every avenue showed the identical dash/manhole/pothole pattern on a perfectly regular
+// beat. Fix, kept cheap (small pools generated ONCE at init, not one fresh canvas per road — that
+// was tried and cost ~9s of extra synchronous init time, so it's a bounded pool instead):
+//  1. a POOL of independently-drawn variants per road class (no shared canvas within a pool)
+//  2. each road draws a random pool member, so neighbouring roads of the same class rarely match
+//  3. a much larger world-length represented per tile (+ per-road jitter + random offset), so even
+//     a repeated variant tiles far less often and out of phase with any other road using it
+//  4. the recognisable baked shapes that made repeats obvious (manhole, pothole blobs) were removed
+//     from the tileable texture entirely — grain/oil/cracks read as continuous noise, not a pattern
+const ROAD_POOL_MAJOR=[0,1,2].map(()=>makeMajorRoadTex());
+const ROAD_POOL_STRIP=[0,1,2].map(()=>makeRoadStripTex());
+const ROAD_POOL_ALLEY=[0,1].map(()=>makeAlleyTex());
+const WETROUGH_POOL=[0,1,2,3].map(()=>makeWetRoughTex());
+function pickPool(pool){return pool[Math.floor(Math.random()*pool.length)];}
 function roadTexFor(r){
-  const base=r.major?majorRoadTex:(r.w>10?roadStripTex:alleyTex);
-  const t=base.clone();t.needsUpdate=true;
+  const pool=r.major?ROAD_POOL_MAJOR:(r.w>10?ROAD_POOL_STRIP:ROAD_POOL_ALLEY);
+  const t=pickPool(pool).clone();t.needsUpdate=true;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
-  t.repeat.set(1,Math.round(CITY*2/(r.major?26:14)));
+  const unitsPerTile=(r.major?72:40)*(0.82+Math.random()*0.36);
+  t.repeat.set(1,CITY*2/unitsPerTile);
+  t.offset.y=Math.random();
   return t;
 }
 // wet-look roughness map matched to a road strip's UV tiling — long vertical (along-road) streaks;
-// each road strip gets a randomly-picked variant so the wet pattern differs street to street
+// picked from its own pool so the wet pattern doesn't repeat identically between roads
 function roadWetRoughFor(r){
-  const src=wetRoughVariants[Math.floor(Math.random()*wetRoughVariants.length)];
-  const t=src.clone();t.needsUpdate=true;
+  const t=pickPool(WETROUGH_POOL).clone();t.needsUpdate=true;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
-  t.repeat.set(r.major?2:1,Math.round(CITY*2/(r.major?26:14)));
+  const unitsPerTile=(r.major?72:40)*(0.82+Math.random()*0.36);
+  t.repeat.set(r.major?2:1,CITY*2/unitsPerTile);
+  t.offset.y=Math.random();
   return t;
 }
 function addRoad(axis,r){
@@ -5224,18 +5306,30 @@ buildRoadInstancedProp(new THREE.CircleGeometry(0.5,16),manholeMat,240,10,{
   rot:(d)=>d.rotation.set(-Math.PI/2,0,Math.random()*Math.PI*2),
   scale:(d)=>{const s=0.82+Math.random()*0.32;d.scale.set(s,s,1);}
 });
-// expansion-seam lines running the full width of the road at intervals, so the asphalt reads
-// as jointed real pavement rather than one continuous flat sheet
+// expansion-seam / pavement-joint lines — ROUND-4 FIX: the old version baked a high-contrast
+// two-tone bar at a HARD-CODED full-road-width and scattered 380 of them, which — combined with
+// the identical-clone road texture bug above — read as an unnatural regular painted stripe/ladder
+// pattern down every avenue. Now: far fewer instances, a soft noisy hairline joint texture (no
+// clean gradient band), random partial-width coverage + lateral offset (so joints look staggered/
+// broken, not a uniform ruler-straight bar spanning the whole road every time), and a few degrees
+// of rotation jitter so they're never perfectly perpendicular repeats of each other.
 const seamTex=tex((g,w,h)=>{
-  g.fillStyle='rgba(18,16,20,0.85)';g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(95,95,102,0.5)';g.fillRect(0,0,w,h*0.3);
-  g.fillStyle='rgba(0,0,0,0.6)';g.fillRect(0,h*0.42,w,h*0.2);
-},64,8,true);
-const seamMat=new THREE.MeshStandardMaterial({map:seamTex,transparent:true,opacity:0.88,roughness:0.7,metalness:0.05,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5});
-buildRoadInstancedProp(new THREE.PlaneGeometry(1,1),seamMat,380,10,{
+  g.clearRect(0,0,w,h);
+  for(let x=0;x<w;x++){
+    const yc=h*0.5+(Math.random()-0.5)*1.6;
+    const a=0.1+Math.random()*0.2;
+    g.fillStyle=`rgba(8,7,6,${a})`;
+    g.fillRect(x,yc-1,1,2.2+Math.random()*1.4);
+  }
+  g.fillStyle='rgba(140,140,146,.06)';
+  g.fillRect(0,h*0.5-3,w,1);
+},96,12,true);
+const seamMat=new THREE.MeshStandardMaterial({map:seamTex,transparent:true,opacity:0.5,roughness:0.78,metalness:0.04,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5});
+buildRoadInstancedProp(new THREE.PlaneGeometry(1,1),seamMat,110,10,{
+  lat:p=>(Math.random()-0.5)*(p.r.w*0.35),
   y:()=>0.046,
-  rot:(d,p)=>d.rotation.set(-Math.PI/2,0,p.useX?0:Math.PI/2),
-  scale:(d,p)=>d.scale.set(Math.max(0.6,p.r.w-0.7),0.1,1)
+  rot:(d,p)=>d.rotation.set(-Math.PI/2,0,(p.useX?0:Math.PI/2)+(Math.random()-0.5)*0.06),
+  scale:(d,p)=>{const cover=0.5+Math.random()*0.42;d.scale.set(Math.max(0.45,(p.r.w-0.7)*cover),0.06+Math.random()*0.05,1);}
 });
 // drain/gutter grates right at the kerb line
 const drainTex=tex((g,w,h)=>{
@@ -5351,9 +5445,16 @@ ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
   scene.add(patch);
 });});
 
-// zebra crossings at avenue intersections
+// zebra crossings at avenue intersections — kept, but WORN: patchy alpha, chipped ends, occasional
+// faded stripe, grime specks, so it reads as old repainted road paint, not a crisp fresh decal
 const zebraTex=tex((g,w,h)=>{
-  for(let x=6;x<w;x+=20){g.fillStyle='rgba(236,236,242,.78)';g.fillRect(x,3,10,h-6);}
+  for(let x=6;x<w;x+=20){
+    const wear=0.4+Math.random()*0.38;
+    g.fillStyle=`rgba(228,226,220,${wear})`;
+    const chip=Math.random()*3;
+    g.fillRect(x,3+chip,10,h-6-chip*1.6);
+  }
+  for(let i=0;i<180;i++){g.fillStyle=`rgba(20,18,16,${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
 },512,64,true);
 const zebraMat=new THREE.MeshBasicMaterial({map:zebraTex,transparent:true,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
 ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
@@ -5543,7 +5644,9 @@ const neonCageBarGeo=new THREE.BoxGeometry(1,0.045,0.045);
 const neonJunctionGeo=new THREE.BoxGeometry(0.34,0.22,0.2);
 const neonCageTubeXf=[],neonCageBarXf=[],neonJunctionXf=[],neonWirePts=[];
 function addNeonSigns(grp,bw,bd,bh,cx,cz){
-  const count=2+Math.floor(Math.random()*2); // 2-3 signs per building (unchanged draw-call budget)
+  // 2-3 signs per building, occasionally a 4th (ROUND-4: "loved, add a few more" — kept rare so
+  // draw calls stay in the same ballpark as before)
+  const count=2+Math.floor(Math.random()*2)+(Math.random()<0.22?1:0);
   for(let i=0;i<count;i++){
     const nm=pickSignVariant();
     let sh,sw;
@@ -5604,28 +5707,95 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
     }
   }
 }
+// Ground-level shopfront strip — ROUND-4 REBUILD: was a flat gradient-panel decal with a single
+// glowing character; now each bay is a believable lit Tokyo shop seen through glass — shelving
+// with product-colour blocks, a counter, an occasional mannequin silhouette, a hanging menu/price
+// board, under its own backlit nameplate sign in a dark frame box — with warm/cool tint and
+// brightness varied per bay so a row of shops reads as distinct businesses, plus an occasional
+// shuttered/closed bay for variety. Higher-resolution canvas + a bigger pool of baked variants
+// (8, up from 3) keeps repetition across the city far less noticeable.
+function drawShopBay(g,x0,y0,sw,h){
+  const shut=Math.random()<0.12; // closed shutter bay
+  const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.62;
+  if(shut){
+    g.fillStyle='#232227';g.fillRect(bx,by,bw2,bh2);
+    for(let sx=bx;sx<bx+bw2;sx+=6){g.fillStyle='rgba(0,0,0,.22)';g.fillRect(sx,by,1.4,bh2);}
+    g.fillStyle='rgba(255,255,255,.05)';g.fillRect(bx,by,bw2,2);
+    g.fillStyle='#111';g.beginPath();g.arc(bx+bw2*0.5,by+bh2*0.5,2.4,0,7);g.fill();
+    g.fillStyle='rgba(6,4,4,.9)';g.fillRect(x0,y0,3,h);
+    return;
+  }
+  const warm=Math.random()<0.62,bright=0.55+Math.random()*0.75;
+  const tintA=warm?[255,214,158]:[196,222,255],tintB=warm?[214,150,84]:[128,168,214];
+  const mul=(c,f)=>Math.max(6,Math.min(255,Math.round(c*f)));
+  // interior back-wall glow (the room's ambient light)
+  const grd=g.createLinearGradient(0,by,0,by+bh2);
+  grd.addColorStop(0,`rgb(${mul(tintA[0],bright)},${mul(tintA[1],bright)},${mul(tintA[2],bright)})`);
+  grd.addColorStop(1,`rgb(${mul(tintB[0],bright*0.65)},${mul(tintB[1],bright*0.65)},${mul(tintB[2],bright*0.65)})`);
+  g.fillStyle=grd;g.fillRect(bx,by,bw2,bh2);
+  // shelving: rows of small product-colour blocks against the back wall
+  const rows=2+Math.floor(Math.random()*2),cols=Math.max(2,Math.floor(bw2/9));
+  const shelfH=bh2*0.5/rows;
+  for(let r=0;r<rows;r++){
+    const sy=by+bh2*0.12+r*shelfH;
+    g.fillStyle='rgba(15,10,8,.42)';g.fillRect(bx,sy+shelfH*0.82,bw2,1.4);
+    for(let c=0;c<cols;c++){
+      if(Math.random()<0.22)continue;
+      const pw=bw2/cols;
+      g.fillStyle=neonCols[Math.floor(Math.random()*neonCols.length)];
+      g.globalAlpha=0.5+Math.random()*0.35;
+      g.fillRect(bx+c*pw+1,sy+shelfH*0.18,Math.max(1,pw-2),shelfH*0.55);
+      g.globalAlpha=1;
+    }
+  }
+  // counter across the bottom of the window
+  g.fillStyle='rgba(20,14,10,.6)';g.fillRect(bx,by+bh2*0.8,bw2,bh2*0.2);
+  g.fillStyle='rgba(255,255,255,.1)';g.fillRect(bx,by+bh2*0.8,bw2,1.2);
+  // mannequin silhouette (some bays)
+  if(Math.random()<0.3){
+    const mx=bx+bw2*(0.2+Math.random()*0.6),mbase=by+bh2*0.82,mh=bh2*0.62,mw=Math.max(2,mh*0.24);
+    g.fillStyle='rgba(8,6,10,.68)';
+    g.beginPath();g.arc(mx,mbase-mh*0.92,mw*0.34,0,7);g.fill();
+    g.beginPath();g.moveTo(mx-mw*0.42,mbase);g.lineTo(mx-mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.42,mbase);g.closePath();g.fill();
+    if(Math.random()<0.5){g.fillStyle=neonCols[Math.floor(Math.random()*neonCols.length)];g.globalAlpha=0.38;g.fillRect(mx-mw*0.42,mbase-mh*0.5,mw*0.84,mh*0.28);g.globalAlpha=1;}
+  }
+  // hanging menu / price board (some bays)
+  if(Math.random()<0.34){
+    const px=bx+bw2*(0.08+Math.random()*0.55),py=by+bh2*0.08,pw=bw2*(0.24+Math.random()*0.2),ph=bh2*0.28;
+    g.fillStyle='rgba(12,10,8,.7)';g.fillRect(px,py,pw,ph);
+    g.strokeStyle='rgba(255,210,140,.5)';g.lineWidth=1;g.strokeRect(px,py,pw,ph);
+    g.fillStyle='rgba(255,220,170,.68)';
+    for(let li=0;li<3;li++)g.fillRect(px+pw*0.12,py+ph*(0.22+li*0.28),pw*0.7,1.3);
+  }
+  // window frame mullion between bays
+  g.fillStyle='rgba(6,4,4,.9)';g.fillRect(x0,y0,3,h);
+  // glowing nameplate signage bar above the window, in its own dark frame box (a real sign, not a
+  // blank glow) — text kept short so it reads at distance
+  const signY=y0,signH=h*0.16,col=neonCols[Math.floor(Math.random()*neonCols.length)];
+  g.fillStyle='#0c0a10';g.fillRect(bx-1,signY,bw2+2,signH);
+  g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=1;g.strokeRect(bx-1,signY,bw2+2,signH);
+  g.shadowColor=col;g.shadowBlur=Math.round(h*0.05);g.fillStyle=col;
+  g.font=`bold ${Math.round(signH*0.72)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
+  g.fillText(kanji[Math.floor(Math.random()*kanji.length)].slice(0,2),bx+bw2/2,signY+signH*0.55);
+  g.shadowBlur=0;
+  // warm/cool floor-light hint right under the window (interior spill toward the glass base)
+  g.fillStyle=`rgba(${mul(tintA[0],bright*0.4)},${mul(tintA[1],bright*0.4)},${mul(tintA[2],bright*0.4)},.4)`;
+  g.fillRect(bx,by+bh2+1,bw2,Math.max(1,h*0.06));
+}
 function storefrontTex(){return tex((g,w,h)=>{
-  g.fillStyle='#110d1a';g.fillRect(0,0,w,h);
+  g.fillStyle='#0a0810';g.fillRect(0,0,w,h);
   let x=0;
   while(x<w){
-    const sw=40+Math.random()*70;
-    const col=neonCols[Math.floor(Math.random()*neonCols.length)];
-    const gr=g.createLinearGradient(0,h*.25,0,h);
-    gr.addColorStop(0,col);gr.addColorStop(.15,'#fff6e0');gr.addColorStop(1,'#c89a58');
-    g.fillStyle=gr;g.fillRect(x+4,h*.28,sw-8,h*.68);
-    g.fillStyle=Math.random()<.5?'#a02060':'#204a80';
-    g.fillRect(x+2,h*.18,sw-4,h*.12);
-    // glowing shop nameplate: a real character, not a blank glow bar
-    g.shadowColor=col;g.shadowBlur=12;g.fillStyle=col;
-    g.font=`bold ${Math.round(h*0.09)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
-    g.fillText(kanji[Math.floor(Math.random()*kanji.length)].slice(0,1),x+sw/2,h*.09);
-    g.shadowBlur=0;
-    g.fillStyle='rgba(10,6,14,.85)';
-    for(let i=0;i<3;i++)g.fillRect(x+8+Math.random()*(sw-20),h*.6+Math.random()*h*.3,6+Math.random()*10,8+Math.random()*14);
+    const sw=Math.min(w-x,70+Math.random()*110);
+    drawShopBay(g,x,0,sw,h);
     x+=sw;
   }
-},1024,128,true);}
-const storefrontMats=[new THREE.MeshBasicMaterial({map:storefrontTex()}),new THREE.MeshBasicMaterial({map:storefrontTex()}),new THREE.MeshBasicMaterial({map:storefrontTex()})];
+  // faint diagonal glass-reflection streak across the whole strip
+  g.fillStyle='rgba(255,255,255,.05)';
+  g.beginPath();g.moveTo(0,h);g.lineTo(w*0.4,0);g.lineTo(w*0.48,0);g.lineTo(w*0.08,h);g.closePath();g.fill();
+},1536,192,true);}
+const STOREFRONT_VARIANT_COUNT=6; // pooled variants (was 3) so shop rows repeat far less across the city
+const storefrontMats=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>new THREE.MeshBasicMaterial({map:storefrontTex()}));
 
 // generic original "idol" billboard (NOT a copy of any copyrighted character)
 function idolPosterTex(){return tex((g,w,h)=>{
@@ -5804,7 +5974,9 @@ function makeFacadeHeightCanvas(cols,rows){
 }
 // facade grid presets vary the WINDOW SIZE across buildings (large loft panes -> tight high-rise
 // grid); each preset gets its own matching bump-normal map so lit windows + bevels stay aligned.
-const facadeGridPresets=[{cols:7,rows:10},{cols:10,rows:16},{cols:13,rows:20},{cols:16,rows:26}];
+// ROUND-4: pushed window-SIZE variance further — a very large loft-pane preset added on top of
+// the original four
+const facadeGridPresets=[{cols:5,rows:7},{cols:7,rows:10},{cols:10,rows:16},{cols:13,rows:20},{cols:16,rows:26}];
 const facadeNormalMaps=facadeGridPresets.map(p=>heightToNormal(makeFacadeHeightCanvas(p.cols,p.rows),2.2));
 const facadeNormalMap=facadeNormalMaps[1]; // kept for any external reference; standard-grid map
 const facadeBaseColors=['#463a54','#4e4256','#3a3448','#524058','#3c3a4a','#4a3d3d','#40465a','#523d4a','#463f36','#3a4442'];
@@ -5907,6 +6079,10 @@ function resTex(base){return tex((g,w,h)=>{
   g.fillStyle=base;g.fillRect(0,0,w,h);
   for(let i=0;i<1500;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.09})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
   const rows=9,ch=h/rows;
+  // ROUND-4: per-floor lit-ratio tiers (some floors read almost fully dark, others nearly all lit)
+  // instead of a flat 30% chance on every unit of every floor — more fully-dark vs blazing floors
+  const tiers=[0,0.08,0.28,0.5,0.82];
+  const floorLit=[];for(let y=0;y<rows;y++)floorLit.push(tiers[Math.floor(Math.random()*tiers.length)]);
   for(let y=0;y<rows;y++){
     g.fillStyle='rgba(255,255,255,.10)';g.fillRect(0,y*ch,w,3);
     g.fillStyle='rgba(0,0,0,.42)';g.fillRect(0,y*ch+3,w,5);
@@ -5915,28 +6091,35 @@ function resTex(base){return tex((g,w,h)=>{
     g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,y*ch+ch*0.55,w,2);
     const units=5,cw=w/units;
     for(let x=0;x<units;x++){
-      const lit=Math.random()<0.3;
+      const lit=Math.random()<floorLit[y];
       const px=x*cw+cw*0.14,py=y*ch+ch*0.16,ww=cw*0.72,wh=ch*0.42;
       g.fillStyle='rgba(0,0,0,.5)';g.fillRect(px-2,py-2,ww+4,wh+4);
       const grd=g.createLinearGradient(px,py,px,py+wh);
-      // warm/cool mix, not every lit unit the same tungsten tone
+      // warm/cool/green mix, not every lit unit the same tungsten tone
       if(lit){
-        if(Math.random()<0.7){grd.addColorStop(0,'#ffe2b0');grd.addColorStop(1,'#d8995c');}
-        else{grd.addColorStop(0,'#dcecff');grd.addColorStop(1,'#9fb8d8');}
+        const r=Math.random();
+        if(r<0.56){grd.addColorStop(0,'#ffe2b0');grd.addColorStop(1,'#d8995c');}
+        else if(r<0.84){grd.addColorStop(0,'#dcecff');grd.addColorStop(1,'#9fb8d8');}
+        else{grd.addColorStop(0,'#dcffe0');grd.addColorStop(1,'#96c89e');} // kitchen fluorescent green
       }
       else{grd.addColorStop(0,'#2a2438');grd.addColorStop(1,'#171224');}
       g.fillStyle=grd;g.fillRect(px,py,ww,wh);
       g.fillStyle='rgba(0,0,0,.4)';g.fillRect(px+ww/2-1,py,2,wh);
       if(lit&&Math.random()<0.5){g.fillStyle='rgba(30,20,30,.45)';g.fillRect(px+ww*0.55,py,ww*0.4,wh);}
-      if(lit&&Math.random()<0.28){
-        // hint of an interior: a small furniture/person silhouette so balcony units read lived-in
+      if(lit&&Math.random()<0.36){
+        // hint of an interior: furniture/person silhouette or a TV glow, so balcony units read
+        // lived-in — ROUND-4: chance raised (was 0.28) + TV-glow option added
+        const kind=Math.random();
         g.fillStyle='rgba(15,12,18,.55)';
-        if(Math.random()<0.5){
+        if(kind<0.42){
           const sx=px+ww*(0.3+Math.random()*0.4),sy=py+wh*0.96,sh=wh*0.62,sw2=Math.max(1.2,sh*0.34);
           g.beginPath();g.arc(sx,sy-sh*0.84,sw2*0.4,0,7);g.fill();
           g.beginPath();g.moveTo(sx-sw2*0.48,sy);g.lineTo(sx-sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.48,sy);g.closePath();g.fill();
-        }else{
+        }else if(kind<0.78){
           g.fillRect(px+ww*0.12,py+wh*0.6,ww*0.55,Math.max(1,wh*0.3));
+        }else{
+          g.fillStyle='rgba(140,200,255,.32)';
+          g.fillRect(px+ww*0.22,py+wh*0.26,ww*0.5,wh*0.26);
         }
       }
     }
@@ -5945,7 +6128,7 @@ function resTex(base){return tex((g,w,h)=>{
   gr.addColorStop(0,'rgba(6,4,12,.55)');gr.addColorStop(1,'rgba(6,4,12,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },512,512,true);}
-const resFacades=[resTex('#5c5348'),resTex('#4e4a52'),resTex('#5a4e46')];
+const resFacades=[resTex('#5c5348'),resTex('#4e4a52'),resTex('#5a4e46'),resTex('#544a5c')];
 const grassTex=tex((g,w,h)=>{
   g.fillStyle='#1c2b1a';g.fillRect(0,0,w,h);
   for(let i=0;i<2600;i++){g.fillStyle=`rgba(${20+Math.random()*30},${50+Math.random()*40},${20+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
@@ -5973,7 +6156,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
   }else if(style==='res'){
     bh=6+Math.random()*4;
     if(Math.random()<0.25)bh=16+Math.random()*10;
-    mat=new THREE.MeshLambertMaterial({map:resFacades[Math.floor(Math.random()*3)]});
+    mat=new THREE.MeshLambertMaterial({map:resFacades[Math.floor(Math.random()*resFacades.length)]});
   }else{
     bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48);
     const fac=facades[Math.floor(Math.random()*facades.length)];
@@ -6001,7 +6184,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
     bl.position.y=topY+14.5;grp.add(bl);
   }
   if(style==='neon'||style==='mixed'){
-    const sf=storefrontMats[Math.floor(Math.random()*3)];
+    const sf=storefrontMats[Math.floor(Math.random()*STOREFRONT_VARIANT_COUNT)];
     [[bd/2+0.15,0],[-bd/2-0.15,Math.PI]].forEach(o=>{
       const pl=new THREE.Mesh(new THREE.PlaneGeometry(bw,5),sf);
       pl.position.set(0,2.5,o[0]);pl.rotation.y=o[1];grp.add(pl);
@@ -6319,7 +6502,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 // ---------- ELEVATED EXPRESSWAY (over the southern avenue) ----------
 {
   const hy=16,hw=15;
-  const deckT=roadStripTex.clone();deckT.needsUpdate=true;deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,60);
+  const deckT=makeRoadStripTex();deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,18);
   const deckMat=new THREE.MeshLambertMaterial({map:deckT});
   const deck=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.6,hw),deckMat);
   deck.position.set(0,hy,HWY_Z);deck.castShadow=true;deck.receiveShadow=true;scene.add(deck);
@@ -7159,7 +7342,9 @@ const LOCK_TIME=0.45; // seconds of steady acquisition before a target is confir
 let missionLevel=1,hostage=null,missionLine='MISSION 1 — RESCUE HOSTAGE';
 const hostageMat=new THREE.MeshLambertMaterial({color:0xff9933});
 // Build a survivor figure from the shared humanoid model: natural tint, idle pose,
-// one arm bone procedurally driven for a "waving for help" gesture (no Wave clip exists).
+// several bones procedurally driven on top of the Idle clip for continuous "alive" motion —
+// weight-shift sway (hips/spine), breathing bob, occasional look-around (neck/head), a real
+// arm+forearm wave for "over here!", and a livelier hop+spin celebration on rescue.
 function buildSurvivorFigure(){
   if(!(humanoidModelReady&&humanoidTemplate))return null;
   const model=THREE.SkeletonUtils.clone(humanoidTemplate);
@@ -7175,12 +7360,78 @@ function buildSurvivorFigure(){
   }
   const waveBone=model.getObjectByName('mixamorigRightArm');
   const leftArmBone=model.getObjectByName('mixamorigLeftArm');
+  const foreArmBone=model.getObjectByName('mixamorigRightForeArm');
+  const spineBone=model.getObjectByName('mixamorigSpine1')||model.getObjectByName('mixamorigSpine');
+  const hipsBone=model.getObjectByName('mixamorigHips');
+  const neckBone=model.getObjectByName('mixamorigNeck');
+  const headBone=model.getObjectByName('mixamorigHead');
+  // soft warm rim light riding along with the figure — keeps it reading as a bright civilian
+  // even while sitting inside the beacon's green ring glow (beacon/ring/beam left untouched).
+  const rim=new THREE.PointLight(0xffcf9e,1.4,9,2);
+  rim.position.set(0,1.55,0.7);
+  model.add(rim);
   return {
-    model,mixer,waveBone,leftArmBone,
+    model,mixer,waveBone,leftArmBone,foreArmBone,spineBone,hipsBone,neckBone,headBone,
     waveBaseQuat:waveBone?waveBone.quaternion.clone():null,
     leftArmBaseQuat:leftArmBone?leftArmBone.quaternion.clone():null,
-    celebrating:false,celebT:0
+    foreArmBaseQuat:foreArmBone?foreArmBone.quaternion.clone():null,
+    spineBaseQuat:spineBone?spineBone.quaternion.clone():null,
+    hipsBaseQuat:hipsBone?hipsBone.quaternion.clone():null,
+    neckBaseQuat:neckBone?neckBone.quaternion.clone():null,
+    headBaseQuat:headBone?headBone.quaternion.clone():null,
+    celebrating:false,celebT:0,
+    idleSeed:Math.random()*1000, // desyncs sway/breathing between multiple survivors
+    lookNextAt:1200+Math.random()*2200, // ms-timestamp (set relative to first update) of next look-around
+    lookElapsed:0,lookAngle:0,lookTarget:0
   };
+}
+// Procedural "alive" idle: weight-shift sway + breathing bob + occasional look-around.
+// Called every frame while the survivor is standing at the beacon, not yet rescued.
+function updateSurvivorIdle(sv,dt,tGlobal){
+  const t=tGlobal+sv.idleSeed;
+  // gentle continuous weight-shift: hips sway side-to-side + slight spine counter-lean
+  if(sv.hipsBone&&sv.hipsBaseQuat){
+    const sway=Math.sin(t*0.55)*0.05;
+    sv.hipsBone.quaternion.copy(sv.hipsBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,sway));
+  }
+  if(sv.spineBone&&sv.spineBaseQuat){
+    const lean=Math.sin(t*0.55+0.5)*0.035;
+    const twist=Math.sin(t*0.33)*0.025;
+    sv.spineBone.quaternion.copy(sv.spineBaseQuat)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,lean))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,twist));
+  }
+  // breathing bob: small vertical rise/fall of the whole figure
+  sv.model.position.y=Math.sin(t*1.7)*0.022;
+  // occasional look-around: head+neck ease toward a random yaw, hold, then ease back to center
+  sv.lookElapsed+=dt*1000;
+  if(sv.lookElapsed>=sv.lookNextAt){
+    sv.lookElapsed=0;
+    sv.lookNextAt=2600+Math.random()*3200;
+    sv.lookTarget=(Math.random()<0.5?-1:1)*(0.35+Math.random()*0.4);
+  }
+  // ease current look angle toward target while inside the look window, else ease back to 0
+  const lookActive=sv.lookElapsed<900;
+  const target=lookActive?sv.lookTarget:0;
+  sv.lookAngle=THREE.MathUtils.lerp(sv.lookAngle,target,Math.min(1,dt*3.2));
+  if(sv.neckBone&&sv.neckBaseQuat)sv.neckBone.quaternion.copy(sv.neckBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,sv.lookAngle*0.6));
+  if(sv.headBone&&sv.headBaseQuat)sv.headBone.quaternion.copy(sv.headBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(YAW_AXIS,sv.lookAngle*0.7));
+}
+// Livelier rescue celebration: both arms up + waving hands, several energetic hops, a little
+// cheering spin/wiggle that settles once the hops finish. Returns true when the celebration
+// has fully played out (caller then stops driving / removes the survivor).
+function updateSurvivorCelebration(sv,dt){
+  sv.celebT+=dt;
+  const hopDur=0.3,hops=3,totalDur=hopDur*hops;
+  const tt=Math.min(sv.celebT,totalDur);
+  sv.model.position.y=Math.max(0,Math.sin((tt/hopDur)*Math.PI))*0.65;
+  const spinFade=Math.max(0,1-sv.celebT/(totalDur+0.3));
+  sv.model.rotation.y=HUMANOID_BASE_YAW+Math.sin(sv.celebT*7)*0.4*spinFade;
+  if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,Math.sin(sv.celebT*14)*0.25));
+  if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,-Math.sin(sv.celebT*14+0.4)*0.25));
+  if(sv.foreArmBone&&sv.foreArmBaseQuat)sv.foreArmBone.quaternion.copy(sv.foreArmBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,Math.sin(sv.celebT*16)*0.4));
+  if(sv.headBone&&sv.headBaseQuat)sv.headBone.quaternion.copy(sv.headBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(PITCH_AXIS,Math.sin(sv.celebT*10)*0.15));
+  return sv.celebT>totalDur+0.6;
 }
 function spawnHostage(){
   const g=new THREE.Group();
@@ -7347,6 +7598,8 @@ const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-dire
 // Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
 // used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
 const WAVE_AXIS=new THREE.Vector3(0,0,1);
+const YAW_AXIS=new THREE.Vector3(0,1,0);   // reused for hip/spine twist + head/neck look-around
+const PITCH_AXIS=new THREE.Vector3(1,0,0); // reused for the celebration head cheer-nod
 const WAVE_ARM_BASE_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
 const CELEBRATE_ARM_OFFSET=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,2.6);
 const CELEBRATE_ARM_OFFSET_L=new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,-2.6);
@@ -7378,9 +7631,14 @@ function buildHumanoidMaterialVariants(root){
       zMat.emissiveIntensity=isVisor?1.6:1.0;
       zMat.needsUpdate=true;
       zombieMatVariants.set(mat,zMat);
-      // survivor: keep the original texture/colors, just a hair warmer — reads as a normal person
+      // survivor: brightened, warm natural tint — must read as a civilian person, clearly
+      // NOT the dark/sickly-green zombie look, even inside the beacon's green ring glow.
       const sMat=mat.clone();
-      if(sMat.color)sMat.color.multiply(new THREE.Color(1.0,0.98,0.95));
+      if(sMat.color)sMat.color.multiply(new THREE.Color(1.32,1.22,1.08));
+      if('roughness' in sMat && sMat.roughness!==undefined)sMat.roughness=Math.max(0.35,sMat.roughness*0.8);
+      if(!sMat.emissive)sMat.emissive=new THREE.Color(0,0,0);
+      sMat.emissive.setRGB(isVisor?0.05:0.16,isVisor?0.05:0.11,isVisor?0.06:0.06); // faint warm self-glow, not the zombie's undead visor red
+      sMat.emissiveIntensity=0.55;
       sMat.needsUpdate=true;
       survivorMatVariants.set(mat,sMat);
     });
@@ -8395,27 +8653,26 @@ function loop(now){
     for(let ci=celebratingSurvivors.length-1;ci>=0;ci--){
       const sv=celebratingSurvivors[ci];
       if(sv.mixer)sv.mixer.update(dt);
-      sv.celebT+=dt;
-      const hopDur=0.35,hops=3,totalDur=hopDur*hops;
-      sv.model.position.y=Math.max(0,Math.sin((Math.min(sv.celebT,totalDur)/hopDur)*Math.PI))*0.55;
-      if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
-      if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
-      if(sv.celebT>totalDur+0.6)celebratingSurvivors.splice(ci,1);
+      const done=updateSurvivorCelebration(sv,dt);
+      if(done)celebratingSurvivors.splice(ci,1);
     }
     if(hostage){
       const sv=hostage.survivor;
       if(sv){
         if(sv.mixer)sv.mixer.update(dt);
         if(sv.celebrating){
-          sv.celebT+=dt;
-          const hopDur=0.35,hops=3,totalDur=hopDur*hops;
-          const tt=Math.min(sv.celebT,totalDur);
-          sv.model.position.y=Math.max(0,Math.sin((tt/hopDur)*Math.PI))*0.55;
-          if(sv.waveBone&&sv.waveBaseQuat)sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(CELEBRATE_ARM_OFFSET);
-          if(sv.leftArmBone&&sv.leftArmBaseQuat)sv.leftArmBone.quaternion.copy(sv.leftArmBaseQuat).multiply(CELEBRATE_ARM_OFFSET_L);
-        }else if(hostage.state==='seek'&&sv.waveBone&&sv.waveBaseQuat){
-          const wag=Math.sin(now/240)*0.3;
-          sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(WAVE_ARM_BASE_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,wag));
+          updateSurvivorCelebration(sv,dt);
+        }else if(hostage.state==='seek'){
+          updateSurvivorIdle(sv,dt,now/1000);
+          if(sv.waveBone&&sv.waveBaseQuat){
+            // shoulder holds the "arm up, over here!" pose; forearm oscillates for a real hand wave
+            const shoulderWag=Math.sin(now/260)*0.14;
+            sv.waveBone.quaternion.copy(sv.waveBaseQuat).multiply(WAVE_ARM_BASE_OFFSET).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,shoulderWag));
+          }
+          if(sv.foreArmBone&&sv.foreArmBaseQuat){
+            const waveSwing=Math.sin(now/150)*0.55+0.15;
+            sv.foreArmBone.quaternion.copy(sv.foreArmBaseQuat).multiply(new THREE.Quaternion().setFromAxisAngle(WAVE_AXIS,waveSwing));
+          }
         }
       }else{
         hostage.arm.rotation.z=-0.6+Math.sin(now/200)*0.35;
