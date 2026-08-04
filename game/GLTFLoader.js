@@ -1740,15 +1740,10 @@
 			this.nodeNamesUsed = {}; // Use an THREE.ImageBitmapLoader if imageBitmaps are supported. Moves much of the
 			// expensive work of uploading a texture to the GPU off the main thread.
 
-			if ( typeof createImageBitmap !== 'undefined' && /Firefox/.test( navigator.userAgent ) === false ) {
-
-				this.textureLoader = new THREE.ImageBitmapLoader( this.options.manager );
-
-			} else {
-
-				this.textureLoader = new THREE.TextureLoader( this.options.manager );
-
-			}
+			// Force TextureLoader (<img> element → img-src) instead of the fetch-based
+			// ImageBitmapLoader (→ connect-src) so embedded data: textures load under the
+			// artifact's strict CSP.
+			this.textureLoader = new THREE.TextureLoader( this.options.manager );
 
 			this.textureLoader.setCrossOrigin( this.options.crossOrigin );
 			this.textureLoader.setRequestHeader( this.options.requestHeader );
@@ -2297,11 +2292,11 @@
 
 					}
 
-					isObjectURL = true;
-					const blob = new Blob( [ bufferView ], {
-						type: source.mimeType
-					} );
-					sourceURI = URL.createObjectURL( blob );
+					// CSP-safe: build a data: URI instead of a blob: URL (the artifact host's CSP blocks blob:)
+					isObjectURL = false;
+					var _u8 = new Uint8Array( bufferView ), _bin = '';
+					for ( var _i = 0; _i < _u8.length; _i ++ ) _bin += String.fromCharCode( _u8[ _i ] );
+					sourceURI = 'data:' + ( source.mimeType || 'image/png' ) + ';base64,' + btoa( _bin );
 					return sourceURI;
 
 				} );
