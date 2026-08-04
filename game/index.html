@@ -417,6 +417,53 @@ rim.position.set(-200,120,260);scene.add(rim);
 
 // ---------- AUDIO ----------
 let AC=null;
+let radioSpeaking=false; // throttle flag: only one command line audible at a time, never overlapping
+// Short bandpass noise burst + click, reusing the same WebAudio synth style as the rest of the sfx —
+// gives spoken lines a "radio squelch" bookend without any new assets.
+function radioSquelch(){
+  if(!AC)return;
+  try{
+    const t=AC.currentTime,dur=0.09;
+    const len=Math.max(1,Math.floor(dur*AC.sampleRate)),buf=AC.createBuffer(1,len,AC.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1);
+    const s=AC.createBufferSource();s.buffer=buf;
+    const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=3;
+    const g=AC.createGain();g.gain.setValueAtTime(0.05,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    s.connect(bp);bp.connect(g);g.connect(AC.destination);s.start(t);
+    const click=AC.createOscillator();click.type='square';click.frequency.value=2200;
+    const cg=AC.createGain();cg.gain.setValueAtTime(0.025,t);cg.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    click.connect(cg);cg.connect(AC.destination);click.start(t);click.stop(t+0.06);
+  }catch(e){}
+}
+// Speaks a COMMAND: line over Web Speech, with a lowered rate/pitch for a gruff radio-operator feel.
+// Gated behind the same user-gesture audio unlock as the rest of the sfx (requires AC to exist);
+// throttled so lines never overlap; entirely fail-safe if speechSynthesis is unavailable/blocked.
+function speakRadio(text){
+  if(!AC)return; // no gesture-unlocked audio yet — stay silent, consistent with the rest of the sfx gating
+  if(radioSpeaking)return; // throttle: don't stack/overlap command lines
+  if(typeof window.speechSynthesis==='undefined'||typeof SpeechSynthesisUtterance==='undefined')return; // fail-safe
+  try{
+    radioSpeaking=true;
+    radioSquelch();
+    setTimeout(()=>{
+      try{
+        const clean=String(text).replace(/^COMMAND:\s*/i,'');
+        const u=new SpeechSynthesisUtterance(clean);
+        u.rate=0.82;u.pitch=0.55;u.volume=0.85; // lowered rate/pitch = gruff radio-operator tone
+        try{
+          const voices=window.speechSynthesis.getVoices();
+          const v=(voices||[]).find(x=>/en/i.test(x.lang)&&/male/i.test(x.name))||(voices||[]).find(x=>/en/i.test(x.lang));
+          if(v)u.voice=v;
+        }catch(e){}
+        const done=()=>{radioSpeaking=false;radioSquelch();};
+        u.onend=done;u.onerror=done;
+        window.speechSynthesis.speak(u);
+        // belt-and-suspenders: if the browser never fires onend/onerror, don't stay throttled forever
+        setTimeout(()=>{if(radioSpeaking){radioSpeaking=false;}},9000);
+      }catch(e){radioSpeaking=false;}
+    },140); // let the pre-beep clear before the voice starts
+  }catch(e){radioSpeaking=false;}
+}
 function startAudio(){
   if(AC)return;
   try{
@@ -452,10 +499,12 @@ function startAudio(){
       const lines=['COMMAND: HOSTILES CONVERGING, STAY SHARP','COMMAND: SURVIVOR BEACON ACTIVE, PROCEED','COMMAND: MAINTAIN ALTITUDE, WEATHER CLEAR','COMMAND: GOOD HUNTING OUT THERE, PILOT','COMMAND: EXTRACTION ZONE STANDING BY'];
       const sub=document.getElementById('radioSub');
       if(sub){
-        sub.textContent=lines[Math.floor(Math.random()*lines.length)];
+        const line=lines[Math.floor(Math.random()*lines.length)];
+        sub.textContent=line;
         sub.style.opacity=1;
         clearTimeout(window.__subTimeout);
         window.__subTimeout=setTimeout(()=>{sub.style.opacity=0;},3200);
+        speakRadio(line);
       }
     }
     function scheduleRadio(){
@@ -2649,12 +2698,14 @@ document.getElementById('wpnBtn').addEventListener('pointerdown',e=>{setWpn((wpn
 // ---------- STATE ----------
 let yaw=0,pitch=0,roll=0,vSpeed=0;
 let hp=100,score=0,kills=0,wave=1,cockpitMode=false,gameOver=false;
+let killPopT=-1e9; // timestamp of most recent kill, drives the HUD kill-counter flash
 let wpn=0;
 const ammo=[Infinity,38,8,3];
 const wpnNames=['MINIGUN','HYDRA','HELLFIRE','NAPALM'];
 const cd=[0,0,0,0],cdMax=[0.07,0.35,1.2,2.5];
 function setWpn(i){wpn=i;sfx(0.04,0.08,0,1800);}
 const CRUISE=30;
+const LOCK_TIME=0.45; // seconds of steady acquisition before a target is confirmed LOCKED
 
 // ---------- HOSTAGE / MISSION ----------
 let missionLevel=1,hostage=null,missionLine='MISSION 1 — RESCUE HOSTAGE';
@@ -2739,10 +2790,12 @@ function spawnHostage(){
   {
     const sub=document.getElementById('radioSub');
     if(sub){
-      sub.textContent=rooftop?'COMMAND: SURVIVOR ON ROOFTOP, SECTOR MARKED':'COMMAND: SURVIVOR BEACON ACTIVE, PROCEED';
+      const line=rooftop?'COMMAND: SURVIVOR ON ROOFTOP, SECTOR MARKED':'COMMAND: SURVIVOR BEACON ACTIVE, PROCEED';
+      sub.textContent=line;
       sub.style.opacity=1;
       clearTimeout(window.__subTimeout);
       window.__subTimeout=setTimeout(()=>{sub.style.opacity=0;},3400);
+      speakRadio(line);
     }
     if(AC){
       const t=AC.currentTime,dur=0.3;
@@ -2990,7 +3043,10 @@ function fire(){
     b.quaternion.copy(heli.quaternion);b.rotateX(-Math.PI/2);
     addMissileGlow(b);
     scene.add(b);
-    bullets.push({m:b,v:fwd.clone().multiplyScalar(130),t:3,dmg:90,r:10,type:1,trailT:0});
+    // Hydra 70 rides the lock only when a target is fully LOCKED (post-acquire); otherwise dumb-fires straight.
+    const LKh=window.__lock;
+    const htg=(LKh&&LKh.target&&LKh.locked&&LKh.target.hp>0)?LKh.target:null;
+    bullets.push({m:b,v:fwd.clone().multiplyScalar(130),t:3,dmg:90,r:10,type:1,trailT:0,tg:htg,turn:1.7});
     sfxRocketLaunch(false);
   }else if(wpn===2){
     ammo[2]--;
@@ -2998,9 +3054,11 @@ function fire(){
     b.position.copy(heli.position).add(new THREE.Vector3(0,-1.8,-2).applyQuaternion(heli.quaternion));
     addMissileGlow(b);
     scene.add(b);
-    let tg=null,best=1e9;
-    zombies.forEach(z=>{const d=z.m.position.distanceTo(heli.position);if(d<best){best=d;tg=z;}});
-    bullets.push({m:b,v:fwd.clone().multiplyScalar(75),t:6,dmg:250,r:16,type:2,tg,trailT:0});
+    // Hellfire prefers the confirmed lock; falls back to nearest zombie so the weapon never goes dumb unnecessarily.
+    const LKm=window.__lock;
+    let tg=(LKm&&LKm.target&&LKm.locked&&LKm.target.hp>0)?LKm.target:null;
+    if(!tg){let best=1e9;zombies.forEach(z=>{const d=z.m.position.distanceTo(heli.position);if(d<best){best=d;tg=z;}});}
+    bullets.push({m:b,v:fwd.clone().multiplyScalar(75),t:6,dmg:250,r:16,type:2,tg,trailT:0,turn:2.8});
     sfxRocketLaunch(true);
   }else{
     ammo[3]--;
@@ -3471,17 +3529,19 @@ function drawHUD(now){
   hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';hudX.textAlign='left';hudX.fillText('THR',tgx,tgy+tgh+9);
   hudX.textAlign='right';hudX.fillText(thr<0.15?'HOVER':(Math.round(thr*100)+'%'),tgx+tgw,tgy+tgh+9);
 
-  // ---- target lock box ----
+  // ---- target lock box: acquire -> lock flow ----
   const LK=window.__lock;
+  const guidedWpn=wpn===1||wpn===2;
   if(LK&&LK.target&&LK.target.hp>0){
     const tp=LK.target.m.position.clone();tp.y+=LK.target.big?4:2;
     const sp=project(tp);
+    const rng=Math.round(heli.position.distanceTo(LK.target.m.position));
     if(sp.on){
-      const locked=LK.t>0.4;const col=locked?HUD_RED:HUD_AMBER;
+      const locked=LK.locked;const col=locked?HUD_RED:HUD_AMBER;
       const sz=locked?24:30-Math.min(6,LK.t*15);
       hudX.strokeStyle=col;hudX.lineWidth=1.6;
       if(locked){
-        // corner brackets
+        // corner brackets = confirmed lock
         const c=8;
         [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([ux,uy])=>{
           hudX.beginPath();
@@ -3489,14 +3549,53 @@ function drawHUD(now){
           hudX.stroke();
         });
         hudX.fillStyle=col;hudX.font='bold 10px monospace';hudX.textAlign='center';
-        if((now/120|0)%2)hudX.fillText('● LOCKED — FIRE',sp.x,sp.y+sz+13);
+        if((now/120|0)%2)hudX.fillText(guidedWpn?'● LOCKED — FIRE':'● LOCKED',sp.x,sp.y+sz+13);
+        hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';
+        hudX.fillText('RNG '+rng+'m',sp.x,sp.y-sz-6);
       }else{
+        // rotating box = acquiring, fills in as LK.t approaches LOCK_TIME
         hudX.save();hudX.translate(sp.x,sp.y);hudX.rotate(now/500);
         hudX.strokeRect(-sz/2,-sz/2,sz,sz);hudX.restore();
         hudX.fillStyle=col;hudX.font='9px monospace';hudX.textAlign='center';
-        hudX.fillText('ACQUIRING',sp.x,sp.y+sz+2);
+        const pct=Math.min(99,Math.round(LK.t/LOCK_TIME*100));
+        hudX.fillText('ACQUIRING '+pct+'%',sp.x,sp.y+sz+2);
       }
     }
+  }else if(guidedWpn&&(now/260|0)%2){
+    hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';hudX.textAlign='center';
+    hudX.fillText('NO TARGET',cx,cy+40);
+  }
+  // compact tracking-status readout under the weapon rack (visible even off-screen)
+  let ry2=tgy+tgh+24;
+  if(guidedWpn){
+    hudX.textAlign='right';hudX.font='bold 10px monospace';
+    const st=LK&&LK.locked?'LOCKED':(LK&&LK.target?'ACQUIRING':'NO TARGET');
+    hudX.fillStyle=st==='LOCKED'?HUD_RED:st==='ACQUIRING'?HUD_AMBER:HUD_DIM;
+    hudX.fillText('TRACK: '+st,rx,ry2);
+    ry2+=16;
+  }
+
+  // ---- prominent KILLS readout, with a pop/flash on each new kill ----
+  {
+    const pop=Math.max(0,1-(now-killPopT)/700); // 0..1, decays over 0.7s after a kill
+    const scale=1+pop*0.4;
+    const boxW=94,boxH=40,by=ry2+boxH*0.5;
+    hudX.save();
+    hudX.translate(rx-boxW*0.5,by);
+    hudX.scale(scale,scale);
+    hudX.textAlign='center';
+    hudX.fillStyle=pop>0?`rgba(255,${Math.round(210-140*pop)},${Math.round(60+90*pop)},1)`:HUD_DIM;
+    hudX.font='10px monospace';
+    hudX.fillText('KILLS',0,-10);
+    hudX.fillStyle=pop>0?'#fff6d8':HUD_RED;
+    hudX.font='bold 26px monospace';
+    hudX.fillText(String(kills),0,14);
+    hudX.restore();
+    if(pop>0.05){
+      hudX.strokeStyle=`rgba(255,180,90,${pop})`;hudX.lineWidth=1.4;
+      hudX.strokeRect(rx-boxW,ry2,boxW,boxH);
+    }
+    ry2+=boxH+6;
   }
 
   // ---- projected objective marker in the world ----
@@ -3694,9 +3793,10 @@ function loop(now){
     for(let i=bullets.length-1;i>=0;i--){
       const b=bullets[i];
       if(b.grav)b.v.y-=22*dt;
-      if(b.type===2&&b.tg&&b.tg.hp>0){
-        const want=b.tg.m.position.clone().add(new THREE.Vector3(0,2,0)).sub(b.m.position).normalize().multiplyScalar(100);
-        b.v.lerp(want,2.8*dt);
+      if((b.type===1||b.type===2)&&b.tg&&b.tg.hp>0){
+        const spd=b.v.length()||100;
+        const want=b.tg.m.position.clone().add(new THREE.Vector3(0,2,0)).sub(b.m.position).normalize().multiplyScalar(spd);
+        b.v.lerp(want,(b.turn||2)*dt);
         b.m.lookAt(b.m.position.clone().add(b.v));b.m.rotateX(Math.PI/2);
       }
       b.m.position.add(b.v.clone().multiplyScalar(dt));
@@ -3732,7 +3832,7 @@ function loop(now){
       if(z.hp<=0){
         blood(z.m.position);
         scene.remove(z.m);zombies.splice(i,1);
-        kills++;bumpStreak();
+        kills++;bumpStreak();killPopT=now;
         addScore(z.big?500:100);
         continue;
       }
@@ -3759,9 +3859,9 @@ function loop(now){
       }
     }
     {
-      if(!window.__lock)window.__lock={target:null,t:0};
+      if(!window.__lock)window.__lock={target:null,t:0,locked:false};
       const LK=window.__lock;
-      const activeMissile=bullets.find(b=>b.type===2&&b.tg&&b.tg.hp>0);
+      const activeMissile=bullets.find(b=>(b.type===1||b.type===2)&&b.tg&&b.tg.hp>0);
       let candidate=activeMissile?activeMissile.tg:null;
       if(!candidate){
         const lfwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
@@ -3777,8 +3877,11 @@ function loop(now){
         });
         candidate=best;
       }
-      if(candidate!==LK.target){LK.target=candidate;LK.t=0;if(candidate)sfx(0.05,0.12,0,2200);}
+      if(candidate!==LK.target){LK.target=candidate;LK.t=0;LK.locked=false;if(candidate)sfx(0.05,0.12,0,2200);}
       if(LK.target)LK.t+=dt;else LK.t=0;
+      const wasLocked=LK.locked;
+      LK.locked=LK.target&&LK.t>=LOCK_TIME;
+      if(LK.locked&&!wasLocked)sfx(0.09,0.16,2600,4200); // confirm-lock chirp
     }
     if(zombies.length===0&&now-waveSpawned>8000){wave++;waveSpawned=now;startWave();}
     const vgEl=document.getElementById('vignette');
