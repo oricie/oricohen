@@ -82,6 +82,7 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 <script src="three.min.js"></script>
 <script src="GLTFLoader.js"></script>
 <script src="SkeletonUtils.js"></script>
+<script src="Reflector.js"></script>
 <script src="models-zombie.js"></script>
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
@@ -694,6 +695,28 @@ function sfxExplosion(big){
 
 // ---------- TEXTURES ----------
 function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);if(aniso)t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
+// Build a tangent-space NORMAL MAP from a grayscale HEIGHT pattern (Sobel gradient). This is the
+// missing ingredient that made textures read "flat": with a normal map, the scene lights rake
+// across aggregate grain, crack grooves, tar-seam ridges and tire ruts so the pavement has real
+// micro-relief instead of being a painted-flat decal. Runs once per unique surface at load.
+function normalMapFromHeight(drawHeight,w,h,strength){
+  strength=strength||2.4;
+  const hc=document.createElement('canvas');hc.width=w;hc.height=h;const hg=hc.getContext('2d');
+  hg.fillStyle='#808080';hg.fillRect(0,0,w,h);drawHeight(hg,w,h);
+  const src=hg.getImageData(0,0,w,h).data;
+  const out=document.createElement('canvas');out.width=w;out.height=h;const og=out.getContext('2d');
+  const dst=og.createImageData(w,h),d=dst.data;
+  const H=(x,y)=>src[(((y+h)%h)*w+((x+w)%w))*4]/255;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const dx=(H(x+1,y)-H(x-1,y))*strength, dy=(H(x,y+1)-H(x,y-1))*strength;
+    let nx=-dx,ny=-dy,nz=1;const l=Math.hypot(nx,ny,nz)||1;nx/=l;ny/=l;nz/=l;
+    const i=(y*w+x)*4;
+    d[i]=(nx*0.5+0.5)*255;d[i+1]=(ny*0.5+0.5)*255;d[i+2]=(nz*0.5+0.5)*255;d[i+3]=255;
+  }
+  og.putImageData(dst,0,0);
+  const t=new THREE.CanvasTexture(out);t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
+}
 function facadeTex(base,opts){return tex((g,w,h)=>{
   const cols=(opts&&opts.cols)||10,rows=(opts&&opts.rows)||16;
   g.fillStyle=base;g.fillRect(0,0,w,h);
@@ -895,6 +918,64 @@ wetRoughTex.repeat.set(6,60);
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.62,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:0.9}));
 ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
+// ============ WET-STREET PLANAR REFLECTION ============================================
+// A real mirror. Env-map reflections can't paint neon onto flat road (they mirror the dark overhead
+// sky); a planar Reflector renders the actual city — signs, billboards, buildings — mirrored in the
+// street, at any camera angle. It sits as a TRANSPARENT WET FILM just above the road: its alpha is
+// driven by a wetness mask so dry asphalt (with its new worn normal-mapped texture) shows through,
+// and wet patches read as a soft neon mirror. 512² render target keeps it a wet blur (not glass) and
+// cheap (one extra scene pass). Sidewalks/buildings rise above the film and correctly occlude it.
+// dedicated wet MASK for the reflector (decoupled from the road roughness map) — PATCHY, not
+// uniform: dry worn asphalt over most of it (low reflection) with distinct wet streaks & pools
+// (strong mirror), so the eye reads matte grain next to wet shine like a real rained-on street.
+const reflWetMask=tex((g,w,h)=>{
+  g.fillStyle='#b4b4b4';g.fillRect(0,0,w,h); // mostly dry (dark→wet, so bright=dry)
+  for(let i=0;i<9;i++){ // wet streaks running one way (gutters / tyre channels holding water)
+    const x=Math.random()*w,sw=5+Math.random()*16;
+    const gr=g.createLinearGradient(x-sw,0,x+sw,0);
+    gr.addColorStop(0,'rgba(20,20,20,0)');gr.addColorStop(.5,`rgba(20,20,20,${0.7+Math.random()*0.3})`);gr.addColorStop(1,'rgba(20,20,20,0)');
+    g.fillStyle=gr;g.fillRect(x-sw,0,sw*2,h);
+  }
+  for(let i=0;i<10;i++){ // wet pools
+    const x=Math.random()*w,y=Math.random()*h,r=8+Math.random()*24;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);
+    gr.addColorStop(0,`rgba(14,14,14,${0.75+Math.random()*0.25})`);gr.addColorStop(1,'rgba(14,14,14,0)');
+    g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);
+  }
+  for(let i=0;i<5;i++){ // extra-dry rough patches (fully matte asphalt)
+    const x=Math.random()*w,y=Math.random()*h,r=10+Math.random()*18;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);
+    gr.addColorStop(0,'rgba(255,255,255,.5)');gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);
+  }
+},128,128,true);
+reflWetMask.wrapS=reflWetMask.wrapT=THREE.RepeatWrapping;
+const WetReflShader={
+  uniforms:{color:{value:null},tDiffuse:{value:null},textureMatrix:{value:null},
+    tWet:{value:reflWetMask},uStrength:{value:0.95},uWetScale:{value:0.05}},
+  vertexShader:`uniform mat4 textureMatrix;varying vec4 vUv;varying vec2 vWorld;
+    void main(){vUv=textureMatrix*vec4(position,1.0);vec4 wp=modelMatrix*vec4(position,1.0);
+    vWorld=wp.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform vec3 color;uniform sampler2D tDiffuse;uniform sampler2D tWet;
+    uniform float uStrength;uniform float uWetScale;varying vec4 vUv;varying vec2 vWorld;
+    void main(){
+      vec3 refl=texture2DProj(tDiffuse,vUv).rgb;
+      refl*=color;                                   // cool wet-film tint on the reflection
+      refl+=refl*refl*1.1;                           // lift bright neon so signs punch through the wet
+      float dry=texture2D(tWet,vWorld*uWetScale).r;  // wet mask: dark=wet in the source, so invert
+      float wet=clamp(1.0-dry,0.0,1.0);
+      float a=clamp(wet*uStrength,0.0,0.9);
+      gl_FragColor=vec4(refl,a);
+    }`
+};
+const wetReflector=new THREE.Reflector(new THREE.PlaneGeometry(CITY*2,CITY*2),{
+  textureWidth:512,textureHeight:512,color:0x8b97ad,shader:WetReflShader});
+wetReflector.rotation.x=-Math.PI/2;wetReflector.position.y=0.05;
+wetReflector.material.transparent=true;wetReflector.material.depthWrite=false;
+wetReflector.renderOrder=-1; // draw before the emissive road decals/puddles so they layer on top
+scene.add(wetReflector);
+// ======================================================================================
+
 // asphalt textures per road class
 // ---- shared realistic-asphalt detail painter -----------------------------------------------
 // Multi-scale grain + oil stains + tar/repair patches + faint hairline cracks, applied on top of
@@ -905,59 +986,70 @@ ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 // class/width — ever bake the identical pattern. That, plus a much larger world-length represented
 // per tile (see roadTexFor), is what kills the old unnatural regular repeating stripe/banding.
 function paintAsphaltGrain(g,w,h){
-  // coarse mottling: a few large soft patches shift the base tone slightly (resurfacing / weather)
-  for(let i=0;i<5;i++){
-    const sx=Math.random()*w,sy=Math.random()*h,sr=w*(0.22+Math.random()*0.42);
-    const dark=Math.random()<0.55;
+  // broad worn zones: uneven light/dark resurfacing blotches, HIGHER contrast so the road reads as
+  // patched and weathered rather than an even grey sheet.
+  for(let i=0;i<8;i++){
+    const sx=Math.random()*w,sy=Math.random()*h,sr=w*(0.18+Math.random()*0.5);
+    const dark=Math.random()<0.5;
     const gr=g.createRadialGradient(sx,sy,0,sx,sy,sr);
-    gr.addColorStop(0,dark?'rgba(0,0,0,.11)':'rgba(255,255,255,.05)');
+    gr.addColorStop(0,dark?'rgba(0,0,0,.2)':'rgba(210,205,200,.11)');
     gr.addColorStop(1,'rgba(0,0,0,0)');
     g.fillStyle=gr;g.fillRect(sx-sr,sy-sr,sr*2,sr*2);
   }
-  // fine multi-density speckle grain: three independent point-scales so it reads as continuous
-  // noise (which tiles far less noticeably than any large baked shape) instead of a pattern.
-  // Counts are capped (not proportional to full pixel area) — texture generation is synchronous
-  // at scene-init time and runs once per road, so this must stay cheap.
+  // VISIBLE AGGREGATE: this is the "grainy" cue — thousands of tiny stones, some catching light
+  // (pale quartz/granite chips), most dark, at two-three scales so it reads as a stone-in-bitumen
+  // surface, not smooth. Counts scale with area but capped for load cost.
   const area=w*h,cap=(f,mx)=>Math.min(mx,Math.round(area*f));
-  const n1=cap(0.045,2400),n2=cap(0.014,850),n3=cap(0.0035,240);
-  for(let i=0;i<n1;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.032})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
-  for(let i=0;i<n2;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.05})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-  for(let i=0;i<n3;i++){const v=16+Math.random()*10;g.fillStyle=`rgba(${v},${v-2},${v-4},${0.05+Math.random()*0.09})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
-  // oil stains: soft dark irregular blobs, built from several overlapping offset gradients so the
-  // edge is organic, not a perfect circle
-  const oilCount=2+Math.floor(Math.random()*3);
-  for(let i=0;i<oilCount;i++){
-    const cx0=Math.random()*w,cy0=Math.random()*h,baseR=w*(0.028+Math.random()*0.05);
+  const nPale=cap(0.02,3200),nMid=cap(0.03,4800),nDark=cap(0.02,3200),nFine=cap(0.05,7000);
+  for(let i=0;i<nFine;i++){const v=Math.random()*70;g.fillStyle=`rgba(${v},${v},${v},${0.05+Math.random()*0.14})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
+  for(let i=0;i<nDark;i++){g.fillStyle=`rgba(0,0,0,${0.12+Math.random()*0.3})`;g.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*1.6,1+Math.random()*1.6);}
+  for(let i=0;i<nMid;i++){const v=60+Math.random()*60;g.fillStyle=`rgba(${v},${v-4},${v-8},${0.1+Math.random()*0.22})`;g.fillRect(Math.random()*w,Math.random()*h,1.4,1.4);}
+  for(let i=0;i<nPale;i++){const v=150+Math.random()*90;g.fillStyle=`rgba(${v},${v-4},${v-10},${0.12+Math.random()*0.26})`;const s=1.2+Math.random()*1.8;g.fillRect(Math.random()*w,Math.random()*h,s,s);}
+  // oil stains: darker, glossier organic blobs
+  for(let i=0;i<3+Math.floor(Math.random()*3);i++){
+    const cx0=Math.random()*w,cy0=Math.random()*h,baseR=w*(0.03+Math.random()*0.06);
     for(let k=0;k<3;k++){
       const ox=cx0+(Math.random()-.5)*baseR*0.9,oy=cy0+(Math.random()-.5)*baseR*0.9,r=baseR*(0.55+Math.random()*0.6);
       const gr=g.createRadialGradient(ox,oy,0,ox,oy,r);
-      gr.addColorStop(0,'rgba(6,5,4,.36)');gr.addColorStop(.6,'rgba(6,5,4,.15)');gr.addColorStop(1,'rgba(6,5,4,0)');
+      gr.addColorStop(0,'rgba(4,4,5,.5)');gr.addColorStop(.6,'rgba(4,4,5,.2)');gr.addColorStop(1,'rgba(4,4,5,0)');
       g.fillStyle=gr;g.fillRect(ox-r,oy-r,r*2,r*2);
     }
   }
-  // tar/repair patches: mid-grey uneven rectangles (several jittered overlapping rects, not one
-  // clean box) so a resurfaced patch looks hand-cut, not a decal
-  const patchCount=Math.random()<0.75?1+Math.floor(Math.random()*2):0;
-  for(let i=0;i<patchCount;i++){
-    const px=Math.random()*w*0.82,py=Math.random()*h,pw=w*(0.05+Math.random()*0.09),ph=pw*(0.5+Math.random()*0.75);
-    g.fillStyle='rgba(38,37,35,.46)';
-    for(let k=0;k<4;k++){
-      const jx=px+(Math.random()-.5)*pw*0.3,jy=py+(Math.random()-.5)*ph*0.3;
-      g.fillRect(jx,jy,pw*(0.7+Math.random()*0.3),ph*(0.7+Math.random()*0.3));
-    }
-    g.strokeStyle='rgba(10,9,8,.3)';g.lineWidth=1;g.strokeRect(px,py,pw,ph);
+  // tar/repair patches: hand-cut resurfacing rectangles, darker + edged
+  for(let i=0;i<(Math.random()<0.8?1+Math.floor(Math.random()*2):0);i++){
+    const px=Math.random()*w*0.82,py=Math.random()*h,pw=w*(0.06+Math.random()*0.12),ph=pw*(0.5+Math.random()*0.8);
+    g.fillStyle='rgba(20,20,20,.5)';
+    for(let k=0;k<5;k++){const jx=px+(Math.random()-.5)*pw*0.3,jy=py+(Math.random()-.5)*ph*0.3;g.fillRect(jx,jy,pw*(0.7+Math.random()*0.3),ph*(0.7+Math.random()*0.3));}
+    g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=1.5;g.strokeRect(px,py,pw,ph);
   }
-  // faint hairline cracks: thin jagged strokes, low-contrast
-  const crackCount=Math.random()<0.65?1+Math.floor(Math.random()*2):0;
-  for(let i=0;i<crackCount;i++){
+  // TAR-SEALANT CRACK SEAMS: the signature worn-street mark — glossy black bitumen poured over old
+  // cracks, snaking across the lane, slightly raised and shiny (thicker than a hairline).
+  for(let i=0;i<2+Math.floor(Math.random()*3);i++){
+    let x=Math.random()*w,y=Math.random()*h;const horiz=Math.random()<0.4;
+    g.strokeStyle=`rgba(6,6,8,${0.5+Math.random()*0.35})`;g.lineWidth=1.6+Math.random()*2.2;g.lineCap='round';
+    g.beginPath();g.moveTo(x,y);const segs=8+Math.floor(Math.random()*8);
+    for(let s=0;s<segs;s++){if(horiz){x+=w/segs*(0.6+Math.random()*0.7);y+=(Math.random()-.5)*h*0.09;}else{y+=h/segs*(0.6+Math.random()*0.7);x+=(Math.random()-.5)*w*0.14;}g.lineTo(x,y);}
+    g.stroke();
+    g.strokeStyle='rgba(70,70,74,.14)';g.lineWidth=1;g.stroke(); // faint sheen highlight on the tar
+  }
+  // fine hairline cracks branching off
+  for(let i=0;i<2+Math.floor(Math.random()*2);i++){
     let x=Math.random()*w,y=Math.random()*h*0.2;
-    g.strokeStyle=`rgba(0,0,0,${0.1+Math.random()*0.12})`;g.lineWidth=1;
-    g.beginPath();g.moveTo(x,y);
+    g.strokeStyle=`rgba(0,0,0,${0.16+Math.random()*0.16})`;g.lineWidth=1;g.beginPath();g.moveTo(x,y);
     const segs=6+Math.floor(Math.random()*6);
-    for(let s=0;s<segs;s++){x+=(Math.random()-.5)*w*0.1;y+=h/segs*(0.7+Math.random()*0.6);g.lineTo(x,y);}
+    for(let s=0;s<segs;s++){x+=(Math.random()-.5)*w*0.1;y+=h/segs*(0.7+Math.random()*0.6);g.lineTo(x,y);if(Math.random()<0.25){g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*w*0.12,y+(Math.random()-.3)*h*0.05);g.moveTo(x,y);}}
     g.stroke();
   }
 }
+// shared ASPHALT NORMAL MAP: aggregate pebbles as raised bumps + crack/seam grooves, so scene light
+// rakes across real micro-relief. One map, reused (RepeatWrapping) by every asphalt material.
+const asphaltNormalTex=normalMapFromHeight((g,w,h)=>{
+  const area=w*h,cap=(f,mx)=>Math.min(mx,Math.round(area*f));
+  for(let i=0;i<cap(0.05,7000);i++){const s=1+Math.random()*2.2,v=150+Math.random()*90;g.fillStyle=`rgba(${v},${v},${v},${0.5+Math.random()*0.5})`;g.beginPath();g.arc(Math.random()*w,Math.random()*h,s,0,7);g.fill();} // raised stones
+  for(let i=0;i<cap(0.05,7000);i++){const s=1+Math.random()*1.6;g.fillStyle=`rgba(20,20,20,${0.4+Math.random()*0.5})`;g.beginPath();g.arc(Math.random()*w,Math.random()*h,s,0,7);g.fill();} // pits
+  for(let i=0;i<10;i++){let x=Math.random()*w,y=Math.random()*h;g.strokeStyle='rgba(10,10,10,.9)';g.lineWidth=1+Math.random()*1.5;g.beginPath();g.moveTo(x,y);for(let s=0;s<10;s++){x+=(Math.random()-.5)*w*0.14;y+=h*0.09;g.lineTo(x,y);}g.stroke();} // crack grooves
+},512,512,3.2);
+asphaltNormalTex.repeat.set(4,110);
 function makeRoadStripTex(){return tex((g,w,h)=>{
   g.fillStyle='#25272b';g.fillRect(0,0,w,h);
   paintAsphaltGrain(g,w,h);
@@ -974,7 +1066,7 @@ function makeRoadStripTex(){return tex((g,w,h)=>{
   }
   g.fillStyle='rgba(200,200,200,.3)';
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
-},176,352,true);}
+},256,512,true);}
 function makeMajorRoadTex(){return tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
   paintAsphaltGrain(g,w,h);
@@ -995,19 +1087,19 @@ function makeMajorRoadTex(){return tex((g,w,h)=>{
   g.fillRect(4,0,2.6,h);g.fillRect(w-6.6,0,2.6,h);
   g.fillStyle='rgba(228,198,86,.5)';
   g.fillRect(w/2-4.2,0,2.4,h);g.fillRect(w/2+1.8,0,2.4,h);
-},320,704,true);}
+},512,1024,true);}
 function makeAlleyTex(){return tex((g,w,h)=>{
   g.fillStyle='#232128';g.fillRect(0,0,w,h);
   paintAsphaltGrain(g,w,h);
   g.fillStyle='rgba(0,0,0,.42)';g.fillRect(w/2-2.5,0,5,h);
   g.strokeStyle='rgba(0,0,0,.24)';g.lineWidth=1;
   for(let y=0;y<h;y+=18){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
-},96,352,true);}
+},160,512,true);}
 function makePlainAsphaltTex(){return tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
   paintAsphaltGrain(g,w,h);
-},256,256,true);}
-const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+},512,512,true);}
+const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(1.3,1.3),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
 // REAL TOKYO SIDEWALK: cast concrete paver SLABS with per-slab tone variation, deep grimy joints,
 // cracks that cross slabs, moss/dirt collecting in the seams, dark gum spots, damp water staining,
@@ -1141,7 +1233,7 @@ function addRoad(axis,r){
   // per-road base roughness jitter on top of the roughness MAP: some stretches read drier/rougher,
   // others glossier/wetter, instead of every road sharing one flat roughness value
   const baseRough=(r.major?0.20:0.24)+Math.random()*0.16;
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(1.4,1.4),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -2630,14 +2722,14 @@ function reflStreaks(axis,r){
   const a=axis==='x'?0:Math.PI/2;
   const n=Math.round(CITY*2/16); // density along the road
   for(let i=0;i<n;i++){
-    if(Math.random()<0.24)continue;
+    if(Math.random()<0.62)continue; // sparser now that the planar reflector carries the wet look
     const along=(Math.random()-0.5)*CITY*1.92;
     const perp=(Math.random()-0.5)*(r.w-1.6);
     const x=axis==='x'?r.p+perp:along, z=axis==='x'?along:r.p+perp;
     if(x>RIVER.x0-6&&x<RIVER.x1+6)continue;
     const c=NEON_REFL[Math.floor(Math.random()*NEON_REFL.length)];
-    const bright=0.95+Math.random()*1.05; // some streaks punch brighter (nearer/bigger signs)
-    groundPoolXf.push({x,z,s:1.1+Math.random()*1.7,a,st:4.0+Math.random()*6.0,
+    const bright=0.7+Math.random()*0.7;
+    groundPoolXf.push({x,z,s:1.0+Math.random()*1.4,a,st:4.0+Math.random()*6.0,
       c:[c[0]*bright,c[1]*bright,c[2]*bright]});
   }
 }
