@@ -720,7 +720,15 @@ function normalMapFromHeight(drawHeight,w,h,strength){
 }
 function facadeTex(base,opts){return tex((g,w,h)=>{
   const cols=(opts&&opts.cols)||10,rows=(opts&&opts.rows)||16;
-  g.fillStyle=base;g.fillRect(0,0,w,h);
+  if(opts&&opts.concrete&&window.WALL_IMG){
+    // REAL poured-concrete facade (form-tie holes + panel seams), darkened and cooled into the
+    // night grade; lit windows still draw on top so the grime shows in the spandrels between them.
+    g.drawImage(window.WALL_IMG,0,0,window.WALL_IMG.width,window.WALL_IMG.height,0,0,w,h);
+    g.fillStyle='rgba(12,11,20,0.62)';g.fillRect(0,0,w,h);
+    g.fillStyle='rgba(70,60,95,0.10)';g.fillRect(0,0,w,h);
+  }else{
+    g.fillStyle=base;g.fillRect(0,0,w,h);
+  }
   for(let i=0;i<2200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
   const cw=w/cols,ch=h/rows;
   // realistic per-floor lighting: tiers span fully-dark -> mostly-dark -> mixed -> busy -> blazing
@@ -1138,7 +1146,19 @@ const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),
 // and a continuous YELLOW TACTILE-PAVING (tenji) strip near the kerb — the signature Japanese
 // street cue. Rendered at higher res + as a proper lit material (roughness map for damp patches)
 // so it reads as gritty walked-on pavement, not a flat glowing tan rectangle.
-const sidewalkTex=tex((g,w,h)=>{
+function drawSidewalk(g,w,h){
+  const cols=4,rows=5,cw=w/cols,ch=h/rows;
+  if(window.SIDE_IMG){
+    // REAL weathered-concrete photo as the base (darkened to the night grade); the paver-slab
+    // solid fills are skipped so the real grain shows — only joints/bevels/stains sit on top.
+    g.drawImage(window.SIDE_IMG,0,0,window.SIDE_IMG.width,window.SIDE_IMG.height,0,0,w,h);
+    g.fillStyle='rgba(10,10,13,0.5)';g.fillRect(0,0,w,h);
+    for(let cx=0;cx<cols;cx++)for(let cy=0;cy<rows;cy++){
+      const x=cx*cw,y=cy*ch;
+      g.fillStyle='rgba(255,255,255,.05)';g.fillRect(x+1.5,y+1.5,cw-3,1.5);g.fillRect(x+1.5,y+1.5,1.5,ch-3);
+      g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x+1.5,y+ch-3,cw-3,1.5);g.fillRect(x+cw-3,y+1.5,1.5,ch-3);
+    }
+  }else{
   // grimy grey concrete base with broad tonal drift
   g.fillStyle='#3c3a34';g.fillRect(0,0,w,h);
   for(let i=0;i<6;i++){
@@ -1149,7 +1169,6 @@ const sidewalkTex=tex((g,w,h)=>{
     g.fillStyle=gr;g.fillRect(sx-sr,sy-sr,sr*2,sr*2);
   }
   // paver SLAB grid: 4 cols × 5 rows, each slab its own tone + inset shadow so it reads as cast blocks
-  const cols=4,rows=5,cw=w/cols,ch=h/rows;
   for(let cx=0;cx<cols;cx++)for(let cy=0;cy<rows;cy++){
     const x=cx*cw,y=cy*ch,t=18+Math.random()*20; // slab luminance
     g.fillStyle=`rgb(${t+4},${t+2},${t-2})`;
@@ -1159,6 +1178,7 @@ const sidewalkTex=tex((g,w,h)=>{
     g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x+1.5,y+ch-3,cw-3,1.5);g.fillRect(x+cw-3,y+1.5,1.5,ch-3);
     // fine speckle per slab (aggregate in the concrete)
     for(let s=0;s<26;s++){g.fillStyle=`rgba(${Math.random()<0.5?0:200},${Math.random()<0.5?0:190},${Math.random()<0.5?0:180},${Math.random()*0.14})`;g.fillRect(x+Math.random()*cw,y+Math.random()*ch,1,1);}
+  }
   }
   // deep grimy joints between slabs (dark, with a hint of green moss collecting)
   g.lineWidth=2;
@@ -1197,10 +1217,9 @@ const sidewalkTex=tex((g,w,h)=>{
     gr.addColorStop(0,'rgba(232,188,52,.95)');gr.addColorStop(.75,'rgba(190,150,36,.9)');gr.addColorStop(1,'rgba(120,94,22,.6)');
     g.fillStyle=gr;g.beginPath();g.arc(dx,dy,dR,0,7);g.fill();
   }
-},128,160,true);
-sidewalkTex.wrapS=sidewalkTex.wrapT=THREE.RepeatWrapping;
-sidewalkTex.repeat.set(1,140);
-sidewalkTex.anisotropy=8;
+}
+function makeSidewalkTex(){const t=tex(drawSidewalk,384,480,true);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1,140);t.anisotropy=8;return t;}
+let sidewalkTex=makeSidewalkTex();
 // damp roughness map: reuse the wet-street map so puddles/damp patches on the walk catch neon too
 const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,roughness:0.82,roughnessMap:wetRoughTex,metalness:0.06,envMapIntensity:0.9,emissive:0x0a0a0a,emissiveMap:sidewalkTex,emissiveIntensity:0.14});
 // raised kerb: real relief, not a flat decal — a textured vertical wall face (grime streaks,
@@ -2109,6 +2128,7 @@ const facadeBaseColors=['#463a54','#4e4256','#3a3448','#524058','#3c3a4a','#4a3d
 const facades=facadeBaseColors.map((base,i)=>{
   const preset=facadeGridPresets[i%facadeGridPresets.length];
   return {
+    preset,
     map:facadeTex(base,preset),
     normal:facadeNormalMaps[i%facadeGridPresets.length],
     roughness:0.74+Math.random()*0.22,
@@ -2300,6 +2320,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
     bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48);
     const fac=facades[Math.floor(Math.random()*facades.length)];
     mat=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
+    (window.__bldgMats||(window.__bldgMats=[])).push({mat,preset:fac.preset||facadeGridPresets[0]}); // tracked for the concrete-facade pass
     // widened hue range (cool blue-grey concrete through the original violet-grey to magenta-grey)
     // for facade MATERIAL variety, kept in the same desaturated cool/purple family so the
     // neon-night mood stays intact (no drift into warm/green tones)
@@ -3903,6 +3924,40 @@ function applyRealAsphalt(){
   };
   img.onerror=e=>console.warn('asphalt diffuse decode failed',e);
   img.src=window.__ASPHALT_DIFF;
+})();
+
+// ===== REAL CONCRETE for sidewalks, kerbs and a subset of building facades. Same pattern: decode
+// the embedded photos, then regenerate the affected surfaces with the real texture + normal map. =====
+function loadImg(uri){return new Promise((res,rej)=>{if(!uri)return rej();const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=uri;});}
+function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.TextureLoader().load(uri,()=>res(t),undefined,()=>res(null));t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repX,repY);});}
+(async function loadRealConcrete(){
+  try{
+    // --- sidewalks + kerbs ---
+    if(window.__SIDE_DIFF&&window.__SIDE_NOR){
+      const [sImg,sNor]=await Promise.all([loadImg(window.__SIDE_DIFF),loadTex(window.__SIDE_NOR,1,140)]);
+      window.SIDE_IMG=sImg;
+      const nt=makeSidewalkTex();
+      sidewalkMat.map=nt;sidewalkMat.emissiveMap=nt;
+      if(sNor){sidewalkMat.normalMap=sNor;sidewalkMat.normalScale=new THREE.Vector2(0.7,0.7);}
+      sidewalkMat.needsUpdate=true;
+      if(sNor&&typeof curbFaceMat!=='undefined'){const cn=sNor.clone();cn.repeat.set(3,3);cn.needsUpdate=true;
+        curbFaceMat.normalMap=cn;curbFaceMat.normalScale=new THREE.Vector2(0.6,0.6);curbFaceMat.needsUpdate=true;}
+    }
+    // --- concrete facades on ~1/3 of tracked buildings ---
+    if(window.__WALL_DIFF&&window.__WALL_NOR){
+      const [wImg,wNor]=await Promise.all([loadImg(window.__WALL_DIFF),loadTex(window.__WALL_NOR,1,1)]);
+      window.WALL_IMG=wImg;
+      const cPool=facadeGridPresets.map(p=>{const t=facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true});return t;});
+      (window.__bldgMats||[]).forEach(bm=>{
+        if(Math.random()>0.34)return; // only a subset get the raw-concrete look
+        const idx=Math.max(0,facadeGridPresets.indexOf(bm.preset));
+        bm.mat.map=cPool[idx];
+        if(wNor){const n=wNor.clone();n.needsUpdate=true;bm.mat.normalMap=n;bm.mat.normalScale=new THREE.Vector2(0.5,0.5);}
+        bm.mat.color.setHSL((220+Math.random()*30)/360,0.05,0.5); // neutral cool tint over the grime
+        bm.mat.needsUpdate=true;
+      });
+    }
+  }catch(e){console.warn('loadRealConcrete failed',e);}
 })();
 
 function spawnZombie(big){
