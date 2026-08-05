@@ -83,6 +83,7 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 <script src="GLTFLoader.js"></script>
 <script src="SkeletonUtils.js"></script>
 <script src="Reflector.js"></script>
+<script src="models-ground.js"></script>
 <script src="models-zombie.js"></script>
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
@@ -1070,9 +1071,23 @@ const asphaltNormalTex=normalMapFromHeight((g,w,h)=>{
   for(let i=0;i<10;i++){let x=Math.random()*w,y=Math.random()*h;g.strokeStyle='rgba(10,10,10,.9)';g.lineWidth=1+Math.random()*1.5;g.beginPath();g.moveTo(x,y);for(let s=0;s<10;s++){x+=(Math.random()-.5)*w*0.14;y+=h*0.09;g.lineTo(x,y);}g.stroke();} // crack grooves
 },512,512,3.2);
 asphaltNormalTex.repeat.set(4,110);
+// REAL PHOTOGRAPHED ASPHALT (CC0 Poly Haven aerial_asphalt_01, embedded as a data URI). Loaded
+// async at startup; until it decodes, roads use the procedural fallback below, then swap to the
+// real photo. drawAsphaltPhoto tiles the 1k photo across the road canvas (one tile per road width),
+// darkened to sit in the neon-night grade — lane markings are still painted on top by each generator.
+let ASPHALT_IMG=null, ASPHALT_NOR=null;
+function drawAsphaltPhoto(g,w,h){
+  const tile=w;
+  for(let y=0;y<h;y+=tile) g.drawImage(ASPHALT_IMG,0,0,ASPHALT_IMG.width,ASPHALT_IMG.height,0,y,w,tile);
+  g.fillStyle='rgba(9,9,13,0.55)';g.fillRect(0,0,w,h);           // darken to the scene's night grade
+  g.fillStyle='rgba(60,55,80,0.05)';g.fillRect(0,0,w,h);         // faint cool cast
+}
+function asphaltBase(g,w,h,fallbackFill){
+  if(ASPHALT_IMG){drawAsphaltPhoto(g,w,h);}
+  else{g.fillStyle=fallbackFill;g.fillRect(0,0,w,h);paintAsphaltGrain(g,w,h);}
+}
 function makeRoadStripTex(){return tex((g,w,h)=>{
-  g.fillStyle='#25272b';g.fillRect(0,0,w,h);
-  paintAsphaltGrain(g,w,h);
+  asphaltBase(g,w,h,'#25272b');
   [[w*0.18],[w*0.38],[w*0.62],[w*0.82]].forEach(([x])=>{
     const gr=g.createLinearGradient(x-5,0,x+5,0);
     gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.32)');gr.addColorStop(1,'rgba(10,10,12,0)');
@@ -1088,8 +1103,7 @@ function makeRoadStripTex(){return tex((g,w,h)=>{
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
 },256,512,true);}
 function makeMajorRoadTex(){return tex((g,w,h)=>{
-  g.fillStyle='#26272c';g.fillRect(0,0,w,h);
-  paintAsphaltGrain(g,w,h);
+  asphaltBase(g,w,h,'#26272c');
   [0.13,0.31,0.69,0.87].forEach(f=>{
     const x=f*w;
     const gr=g.createLinearGradient(x-7,0,x+7,0);
@@ -1109,15 +1123,13 @@ function makeMajorRoadTex(){return tex((g,w,h)=>{
   g.fillRect(w/2-4.2,0,2.4,h);g.fillRect(w/2+1.8,0,2.4,h);
 },512,1024,true);}
 function makeAlleyTex(){return tex((g,w,h)=>{
-  g.fillStyle='#232128';g.fillRect(0,0,w,h);
-  paintAsphaltGrain(g,w,h);
+  asphaltBase(g,w,h,'#232128');
   g.fillStyle='rgba(0,0,0,.42)';g.fillRect(w/2-2.5,0,5,h);
   g.strokeStyle='rgba(0,0,0,.24)';g.lineWidth=1;
   for(let y=0;y<h;y+=18){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
 },160,512,true);}
 function makePlainAsphaltTex(){return tex((g,w,h)=>{
-  g.fillStyle='#26272c';g.fillRect(0,0,w,h);
-  paintAsphaltGrain(g,w,h);
+  asphaltBase(g,w,h,'#26272c');
 },512,512,true);}
 const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.7,0.7),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
@@ -1259,6 +1271,7 @@ function addRoad(axis,r){
   if(axis==='x')mesh.position.set(r.p,0.034,0);
   else mesh.position.set(0,0.04,r.p);
   mesh.receiveShadow=true;scene.add(mesh);
+  (window.__roadMeshes||(window.__roadMeshes=[])).push({mesh,r}); // tracked for the real-asphalt swap
   if(r.w<=10)return; // alleys: no sidewalks/curbs
   [-1,1].forEach(sd=>{
     const off=r.w/2+SW/2;
@@ -3861,6 +3874,36 @@ function initHumanoidModel(){
   }catch(e){console.warn('humanoid model init failed',e);}
 }
 initHumanoidModel();
+
+// ===== REAL ASPHALT SWAP: once the embedded photo + normal decode, regenerate every road/ground
+// surface with the real texture (keeping painted lane markings) and apply the real normal map. =====
+function applyRealAsphalt(){
+  try{
+    const regen=(pool,fn)=>{const n=pool.length;pool.length=0;for(let i=0;i<n;i++)pool.push(fn());};
+    regen(ROAD_POOL_MAJOR,makeMajorRoadTex);regen(ROAD_POOL_STRIP,makeRoadStripTex);regen(ROAD_POOL_ALLEY,makeAlleyTex);
+    const norFor=(mapTex,r)=>{const nr=ASPHALT_NOR.clone();nr.wrapS=nr.wrapT=THREE.RepeatWrapping;
+      nr.repeat.set(mapTex.repeat.x,mapTex.repeat.y*2);nr.offset.copy(mapTex.offset);nr.needsUpdate=true;return nr;};
+    (window.__roadMeshes||[]).forEach(rm=>{
+      const m=rm.mesh.material,nt=roadTexFor(rm.r);
+      m.map=nt;m.normalMap=norFor(nt,rm.r);m.normalScale.set(0.85,0.85);m.needsUpdate=true;
+    });
+    const pn=ASPHALT_NOR.clone();pn.wrapS=pn.wrapT=THREE.RepeatWrapping;pn.needsUpdate=true;
+    plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.normalMap=pn;plainAsphaltMat.normalScale.set(0.85,0.85);plainAsphaltMat.needsUpdate=true;
+    const gn=ASPHALT_NOR.clone();gn.wrapS=gn.wrapT=THREE.RepeatWrapping;gn.repeat.set(60,60);gn.needsUpdate=true;
+    if(typeof ground!=='undefined'){ground.material.normalMap=gn;ground.material.normalScale=new THREE.Vector2(0.7,0.7);ground.material.needsUpdate=true;}
+  }catch(e){console.warn('applyRealAsphalt failed',e);}
+}
+(function loadRealAsphalt(){
+  if(!window.__ASPHALT_DIFF||!window.__ASPHALT_NOR)return;
+  const img=new Image();
+  img.onload=()=>{
+    ASPHALT_IMG=img;
+    ASPHALT_NOR=new THREE.TextureLoader().load(window.__ASPHALT_NOR,()=>{applyRealAsphalt();},undefined,e=>console.warn('asphalt normal load failed',e));
+    ASPHALT_NOR.wrapS=ASPHALT_NOR.wrapT=THREE.RepeatWrapping;
+  };
+  img.onerror=e=>console.warn('asphalt diffuse decode failed',e);
+  img.src=window.__ASPHALT_DIFF;
+})();
 
 function spawnZombie(big){
   const g=new THREE.Group();
