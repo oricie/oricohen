@@ -995,30 +995,76 @@ function makePlainAsphaltTex(){return tex((g,w,h)=>{
 },256,256,true);}
 const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
+// REAL TOKYO SIDEWALK: cast concrete paver SLABS with per-slab tone variation, deep grimy joints,
+// cracks that cross slabs, moss/dirt collecting in the seams, dark gum spots, damp water staining,
+// and a continuous YELLOW TACTILE-PAVING (tenji) strip near the kerb — the signature Japanese
+// street cue. Rendered at higher res + as a proper lit material (roughness map for damp patches)
+// so it reads as gritty walked-on pavement, not a flat glowing tan rectangle.
 const sidewalkTex=tex((g,w,h)=>{
-  g.fillStyle='#4a453c';g.fillRect(0,0,w,h);
-  for(let i=0;i<400;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-  g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;
-  for(let x=0;x<=w;x+=w/3){g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();}
-  for(let y=0;y<=h;y+=h/6){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
-  for(let i=0;i<5;i++){
-    if(Math.random()<0.5)continue;
-    let x=Math.random()*w,y=0;
-    g.strokeStyle='rgba(15,13,10,.5)';g.lineWidth=1;
-    g.beginPath();g.moveTo(x,y);
-    for(let st=0;st<6;st++){x+=(Math.random()-.5)*14;y+=h/6;g.lineTo(x,y);}
-    g.stroke();
-  }
-  for(let i=0;i<10;i++){
-    const sx=Math.random()*w,sy=Math.random()*h,sr=8+Math.random()*20;
+  // grimy grey concrete base with broad tonal drift
+  g.fillStyle='#3c3a34';g.fillRect(0,0,w,h);
+  for(let i=0;i<6;i++){
+    const sx=Math.random()*w,sy=Math.random()*h,sr=w*(0.3+Math.random()*0.5);
     const gr=g.createRadialGradient(sx,sy,0,sx,sy,sr);
-    gr.addColorStop(0,'rgba(30,26,18,.3)');gr.addColorStop(1,'rgba(30,26,18,0)');
+    gr.addColorStop(0,Math.random()<0.5?'rgba(0,0,0,.14)':'rgba(150,146,136,.08)');
+    gr.addColorStop(1,'rgba(0,0,0,0)');
     g.fillStyle=gr;g.fillRect(sx-sr,sy-sr,sr*2,sr*2);
   }
-},64,64,true);
+  // paver SLAB grid: 4 cols × 5 rows, each slab its own tone + inset shadow so it reads as cast blocks
+  const cols=4,rows=5,cw=w/cols,ch=h/rows;
+  for(let cx=0;cx<cols;cx++)for(let cy=0;cy<rows;cy++){
+    const x=cx*cw,y=cy*ch,t=18+Math.random()*20; // slab luminance
+    g.fillStyle=`rgb(${t+4},${t+2},${t-2})`;
+    g.fillRect(x+1.5,y+1.5,cw-3,ch-3);
+    // subtle top-left bevel highlight + bottom-right shadow → tactile relief
+    g.fillStyle='rgba(255,255,255,.05)';g.fillRect(x+1.5,y+1.5,cw-3,1.5);g.fillRect(x+1.5,y+1.5,1.5,ch-3);
+    g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x+1.5,y+ch-3,cw-3,1.5);g.fillRect(x+cw-3,y+1.5,1.5,ch-3);
+    // fine speckle per slab (aggregate in the concrete)
+    for(let s=0;s<26;s++){g.fillStyle=`rgba(${Math.random()<0.5?0:200},${Math.random()<0.5?0:190},${Math.random()<0.5?0:180},${Math.random()*0.14})`;g.fillRect(x+Math.random()*cw,y+Math.random()*ch,1,1);}
+  }
+  // deep grimy joints between slabs (dark, with a hint of green moss collecting)
+  g.lineWidth=2;
+  for(let cx=0;cx<=cols;cx++){g.strokeStyle='rgba(0,0,0,.55)';g.beginPath();g.moveTo(cx*cw,0);g.lineTo(cx*cw,h);g.stroke();}
+  for(let cy=0;cy<=rows;cy++){g.strokeStyle='rgba(0,0,0,.55)';g.beginPath();g.moveTo(0,cy*ch);g.lineTo(w,cy*ch);g.stroke();}
+  for(let i=0;i<22;i++){g.fillStyle=`rgba(46,58,34,${0.18+Math.random()*0.3})`;const onV=Math.random()<0.5;if(onV){g.fillRect(Math.round(Math.random()*cols)*cw-1,Math.random()*h,2,4+Math.random()*10);}else{g.fillRect(Math.random()*w,Math.round(Math.random()*rows)*ch-1,4+Math.random()*10,2);}}
+  // cracks that run ACROSS slabs (jagged, low-contrast, sometimes branching)
+  for(let i=0;i<4;i++){
+    if(Math.random()<0.4)continue;
+    let x=Math.random()*w,y=Math.random()*h*0.3;
+    g.strokeStyle=`rgba(8,7,6,${0.35+Math.random()*0.3})`;g.lineWidth=1;
+    g.beginPath();g.moveTo(x,y);
+    const segs=7+Math.floor(Math.random()*6);
+    for(let st=0;st<segs;st++){x+=(Math.random()-.5)*18;y+=h/segs*(0.7+Math.random()*0.6);g.lineTo(x,y);
+      if(Math.random()<0.22){g.moveTo(x,y);const bx=x+(Math.random()-.5)*22,by=y+(Math.random()-.5)*10;g.lineTo(bx,by);g.moveTo(x,y);}}
+    g.stroke();
+  }
+  // dark chewing-gum spots + oil/water stains flattened into the concrete
+  for(let i=0;i<9;i++){
+    const sx=Math.random()*w,sy=Math.random()*h,sr=1.5+Math.random()*3.5;
+    g.fillStyle=`rgba(20,18,15,${0.3+Math.random()*0.4})`;g.beginPath();g.arc(sx,sy,sr,0,7);g.fill();
+  }
+  for(let i=0;i<7;i++){
+    const sx=Math.random()*w,sy=Math.random()*h,sr=10+Math.random()*24;
+    const gr=g.createRadialGradient(sx,sy,0,sx,sy,sr);
+    gr.addColorStop(0,'rgba(24,22,16,.28)');gr.addColorStop(1,'rgba(24,22,16,0)');
+    g.fillStyle=gr;g.fillRect(sx-sr,sy-sr,sr*2,sr*2);
+  }
+  // continuous YELLOW TACTILE-PAVING (tenji) strip near the kerb edge — bumpy truncated-dome dots
+  const stripX=w*0.10,stripW=w*0.15;
+  g.fillStyle='rgba(150,120,20,.5)';g.fillRect(stripX,0,stripW,h);
+  const dcols=2,drows=Math.round(rows*3),ddx=stripW/dcols,ddy=h/drows;
+  for(let dc=0;dc<dcols;dc++)for(let dr=0;dr<drows;dr++){
+    const dx=stripX+ddx*(dc+0.5),dy=ddy*(dr+0.5),dR=Math.min(ddx,ddy)*0.34;
+    const gr=g.createRadialGradient(dx-dR*0.3,dy-dR*0.3,0,dx,dy,dR);
+    gr.addColorStop(0,'rgba(232,188,52,.95)');gr.addColorStop(.75,'rgba(190,150,36,.9)');gr.addColorStop(1,'rgba(120,94,22,.6)');
+    g.fillStyle=gr;g.beginPath();g.arc(dx,dy,dR,0,7);g.fill();
+  }
+},128,160,true);
 sidewalkTex.wrapS=sidewalkTex.wrapT=THREE.RepeatWrapping;
-sidewalkTex.repeat.set(1,180);
-const sidewalkMat=new THREE.MeshLambertMaterial({map:sidewalkTex,emissive:0xffffff,emissiveMap:sidewalkTex,emissiveIntensity:0.3});
+sidewalkTex.repeat.set(1,140);
+sidewalkTex.anisotropy=8;
+// damp roughness map: reuse the wet-street map so puddles/damp patches on the walk catch neon too
+const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,roughness:0.82,roughnessMap:wetRoughTex,metalness:0.06,envMapIntensity:0.9,emissive:0x0a0a0a,emissiveMap:sidewalkTex,emissiveIntensity:0.14});
 // raised kerb: real relief, not a flat decal — a textured vertical wall face (grime streaks,
 // expansion joints, a bright top chamfer that catches passing neon) so the sidewalk visibly
 // STEPS UP from the road instead of sitting flush with it.
@@ -1145,33 +1191,60 @@ function buildRoadInstancedProp(geo,mat,count,minW,opts){
   scene.add(inst);
   return inst;
 }
-// manhole covers: weathered cast-iron disc, scattered across the roadway
-const manholeTex=tex((g,w,h)=>{
+// manhole / utility covers: WEATHERED, somewhat-broken cast iron. A damp seepage ring bleeds onto
+// the asphalt around the rim, rust streaks stain the metal, a hairline crack splits the plate and
+// one radial rib sits slightly ajar/chipped. A pool of round + square (utility/water valve) covers
+// gives variety instead of one identical disc everywhere.
+function makeManholeTex(square){return tex((g,w,h)=>{
+  g.clearRect(0,0,w,h);
   const cx=w/2,cy=h/2,r=w/2-1;
-  const gr=g.createRadialGradient(cx,cy,0,cx,cy,r);
-  gr.addColorStop(0,'#5c584f');gr.addColorStop(.7,'#3a3732');gr.addColorStop(1,'#201d1a');
-  g.fillStyle=gr;g.beginPath();g.arc(cx,cy,r,0,7);g.fill();
-  g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=2;g.beginPath();g.arc(cx,cy,r-2,0,7);g.stroke();
-  for(let rr=r*0.32;rr<r*0.92;rr+=r*0.17){g.strokeStyle='rgba(0,0,0,.32)';g.lineWidth=1;g.beginPath();g.arc(cx,cy,rr,0,7);g.stroke();}
-  for(let a=0;a<8;a++){
-    const ang=a/8*Math.PI*2;
-    g.strokeStyle='rgba(0,0,0,.3)';g.lineWidth=1.3;
-    g.beginPath();g.moveTo(cx+Math.cos(ang)*r*0.3,cy+Math.sin(ang)*r*0.3);
-    g.lineTo(cx+Math.cos(ang)*r*0.88,cy+Math.sin(ang)*r*0.88);g.stroke();
+  // damp seepage ring: dark wet halo on the surrounding road, slightly larger than the plate
+  const halo=g.createRadialGradient(cx,cy,r*0.86,cx,cy,r*1.02);
+  halo.addColorStop(0,'rgba(4,8,10,0)');halo.addColorStop(.6,'rgba(4,8,10,.5)');halo.addColorStop(1,'rgba(4,8,10,0)');
+  g.fillStyle=halo;g.fillRect(0,0,w,h);
+  const plate=()=>{ if(square){g.rect(cx-r,cy-r,r*2,r*2);} else {g.arc(cx,cy,r,0,7);} };
+  const gr=g.createRadialGradient(cx-r*0.2,cy-r*0.2,0,cx,cy,r);
+  gr.addColorStop(0,'#524e46');gr.addColorStop(.7,'#37342f');gr.addColorStop(1,'#1c1a17');
+  g.fillStyle=gr;g.beginPath();plate();g.fill();
+  g.strokeStyle='rgba(0,0,0,.7)';g.lineWidth=2;g.beginPath();plate();g.stroke();
+  if(square){
+    // grid/diamond tread of a utility cover
+    g.strokeStyle='rgba(0,0,0,.32)';g.lineWidth=1.4;
+    for(let k=-2;k<=2;k++){g.beginPath();g.moveTo(cx-r,cy+k*r*0.4);g.lineTo(cx+r,cy+k*r*0.4);g.stroke();g.beginPath();g.moveTo(cx+k*r*0.4,cy-r);g.lineTo(cx+k*r*0.4,cy+r);g.stroke();}
+  } else {
+    for(let rr=r*0.32;rr<r*0.92;rr+=r*0.17){g.strokeStyle='rgba(0,0,0,.34)';g.lineWidth=1;g.beginPath();g.arc(cx,cy,rr,0,7);g.stroke();}
+    for(let a=0;a<8;a++){
+      const ang=a/8*Math.PI*2;
+      g.strokeStyle=a===3?'rgba(0,0,0,.6)':'rgba(0,0,0,.3)';g.lineWidth=a===3?2.4:1.3; // one rib chipped/ajar
+      g.beginPath();g.moveTo(cx+Math.cos(ang)*r*0.3,cy+Math.sin(ang)*r*0.3);
+      g.lineTo(cx+Math.cos(ang)*r*0.88,cy+Math.sin(ang)*r*0.88);g.stroke();
+    }
   }
-  for(let i=0;i<44;i++){
-    const a2=Math.random()*Math.PI*2,rr2=Math.random()*r*0.9;
-    g.fillStyle=`rgba(120,60,20,${0.14+Math.random()*0.26})`;
+  // rust bleed
+  for(let i=0;i<52;i++){
+    const a2=Math.random()*Math.PI*2,rr2=Math.random()*r*0.92;
+    g.fillStyle=`rgba(122,58,18,${0.14+Math.random()*0.3})`;
     g.fillRect(cx+Math.cos(a2)*rr2,cy+Math.sin(a2)*rr2,2,2);
   }
-  g.fillStyle='rgba(255,255,255,.08)';g.beginPath();g.arc(cx-r*0.3,cy-r*0.3,r*0.18,0,7);g.fill();
-},64,64,true);
-const manholeMat=new THREE.MeshStandardMaterial({map:manholeTex,color:0xaaaaaa,roughness:0.5,metalness:0.6,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
-buildRoadInstancedProp(new THREE.CircleGeometry(0.5,16),manholeMat,240,10,{
+  // hairline crack splitting the plate
+  let x=cx-r*0.7,y=cy-r*0.3;
+  g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=1.2;g.beginPath();g.moveTo(x,y);
+  for(let s=0;s<7;s++){x+=r*0.24*(0.6+Math.random()*0.6);y+=(Math.random()-.5)*r*0.3;g.lineTo(x,y);}g.stroke();
+  g.fillStyle='rgba(255,255,255,.07)';g.beginPath();g.arc(cx-r*0.3,cy-r*0.3,r*0.16,0,7);g.fill();
+},72,72,true);}
+const manholeMatR=new THREE.MeshStandardMaterial({map:makeManholeTex(false),color:0xaaaaaa,roughness:0.46,roughnessMap:wetRoughTex,metalness:0.62,envMapIntensity:1.15,transparent:true,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const manholeMatS=new THREE.MeshStandardMaterial({map:makeManholeTex(true),color:0x9a9a9a,roughness:0.5,roughnessMap:wetRoughTex,metalness:0.55,envMapIntensity:1.05,transparent:true,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+buildRoadInstancedProp(new THREE.PlaneGeometry(1.1,1.1),manholeMatR,190,10,{
   lat:p=>(Math.random()-0.5)*(p.r.w*0.66),
   y:()=>0.052,
   rot:(d)=>d.rotation.set(-Math.PI/2,0,Math.random()*Math.PI*2),
-  scale:(d)=>{const s=0.82+Math.random()*0.32;d.scale.set(s,s,1);}
+  scale:(d)=>{const s=0.78+Math.random()*0.34;d.scale.set(s,s,1);}
+});
+buildRoadInstancedProp(new THREE.PlaneGeometry(0.8,0.8),manholeMatS,80,10,{
+  lat:p=>(Math.random()<0.5?-1:1)*(p.r.w*0.3+Math.random()*p.r.w*0.15),
+  y:()=>0.051,
+  rot:(d)=>d.rotation.set(-Math.PI/2,0,Math.random()<0.5?0:Math.PI/2),
+  scale:(d)=>{const s=0.7+Math.random()*0.3;d.scale.set(s,s,1);}
 });
 // expansion-seam / pavement-joint lines — ROUND-4 FIX: the old version baked a high-contrast
 // two-tone bar at a HARD-CODED full-road-width and scattered 380 of them, which — combined with
@@ -1272,7 +1345,7 @@ const puddleAlphaTex=tex((g,w,h)=>{
   g.restore();
 },128,128,true);
 const puddleMat=new THREE.MeshStandardMaterial({color:0x0b0f16,roughness:0.05,metalness:0.08,transparent:true,alphaMap:puddleAlphaTex,envMapIntensity:2.0,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-7,polygonOffsetUnits:-7});
-const PUDDLE_COUNT=170;
+const PUDDLE_COUNT=260;
 const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,PUDDLE_COUNT);
 {
   const dummy=new THREE.Object3D();
@@ -1283,14 +1356,20 @@ const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,
     if(!list.length)continue;
     const r=list[Math.floor(Math.random()*list.length)];
     const along=(Math.random()-0.5)*CITY*1.9;
-    const perp=(Math.random()-0.5)*(r.w-2.2);
-    const sx=(r.major?3.2+Math.random()*5.0:1.6+Math.random()*2.6);
-    const sz=sx*(0.5+Math.random()*0.55);
+    // ~45% of puddles hug the kerb/gutter line (where rain-water actually collects) as long thin
+    // ribbons; the rest scatter across the roadway as broader pools.
+    const kerb=Math.random()<0.45;
+    const perp=kerb?(Math.random()<0.5?-1:1)*(r.w/2-0.5-Math.random()*0.8):(Math.random()-0.5)*(r.w-2.2);
+    const sx=kerb?(0.7+Math.random()*1.1):(r.major?3.2+Math.random()*5.0:1.6+Math.random()*2.6);
+    const sz=kerb?sx*(2.4+Math.random()*3.0):sx*(0.5+Math.random()*0.55);
     let wx,wz;
     if(useX){wx=r.p+perp;wz=along;}else{wx=along;wz=r.p+perp;}
     if(wx>RIVER.x0-6&&wx<RIVER.x1+6)continue; // skip the river band
     dummy.position.set(wx,0.052,wz);
-    dummy.rotation.set(-Math.PI/2,0,Math.random()*Math.PI*2);
+    // kerb ribbons run ALONG the road (long axis = sz); align them to the road axis instead of
+    // spinning randomly (which would splay a thin ribbon across the lane). Broad pools stay random.
+    const zr=kerb?(useX?0:Math.PI/2):Math.random()*Math.PI*2;
+    dummy.rotation.set(-Math.PI/2,0,zr);
     dummy.scale.set(sx,sz,1);
     dummy.updateMatrix();
     puddleInst.setMatrixAt(placed,dummy.matrix);
