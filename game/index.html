@@ -92,7 +92,7 @@ renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.15;
+renderer.toneMappingExposure=1.2;
 const scene=new THREE.Scene();
 // night neon haze — deep indigo, layered with a low warm ground-haze band (see groundHaze below)
 scene.fog=new THREE.FogExp2(0x1c1732,0.00165);
@@ -344,7 +344,9 @@ for(let i=0;i<28;i++){
 }
 
 // ---------- LIGHTS ----------
-scene.add(new THREE.HemisphereLight(0x4a3a8e,0x201a30,0.64));
+// hemisphere: cool magenta-indigo sky, but a slightly WARM dark ground bounce (was flat purple) so
+// undersides/streets aren't uniformly blue — introduces subtle warm/cool split into the base grade.
+scene.add(new THREE.HemisphereLight(0x51428a,0x2c2430,0.66));
 const sun=new THREE.DirectionalLight(0x9a6aff,0.62);
 sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
@@ -379,23 +381,24 @@ rim.position.set(-200,120,260);scene.add(rim);
   hg.addColorStop(0.5,'rgba(255,130,110,.16)');
   hg.addColorStop(1,'rgba(255,130,110,0)');
   g.fillStyle=hg;g.fillRect(0,hy-18,w,36);
-  // scattered dim neon glow bands around the horizon (billboards/signage bleed)
-  const neon=['255,60,190','70,200,255','255,200,90','190,80,255','255,90,90'];
-  for(let i=0;i<40;i++){
-    const x=Math.random()*w,y=hy-24+Math.random()*46;
-    const r=3+Math.random()*7;
+  // scattered neon glow bands around the horizon (billboards/signage bleed) — brightened so wet
+  // surfaces have vivid colour to mirror (this env map IS what the wet road/puddles reflect)
+  const neon=['255,60,190','70,200,255','255,200,90','190,80,255','255,90,90','80,255,180'];
+  for(let i=0;i<64;i++){
+    const x=Math.random()*w,y=hy-30+Math.random()*56;
+    const r=3+Math.random()*8;
     const col=neon[Math.floor(Math.random()*neon.length)];
     const rg=g.createRadialGradient(x,y,0,x,y,r);
-    rg.addColorStop(0,`rgba(${col},.38)`);rg.addColorStop(1,`rgba(${col},0)`);
+    rg.addColorStop(0,`rgba(${col},.6)`);rg.addColorStop(1,`rgba(${col},0)`);
     g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);
   }
-  // a few brighter neon smears — the bits that actually punch through as reflections
-  for(let i=0;i<8;i++){
-    const x=Math.random()*w,y=hy-14+Math.random()*28;
+  // brighter neon smears — the bits that punch through strongest as reflections on wet asphalt
+  for(let i=0;i<16;i++){
+    const x=Math.random()*w,y=hy-16+Math.random()*34;
     const col=neon[Math.floor(Math.random()*neon.length)];
-    const rg=g.createRadialGradient(x,y,0,x,y,10);
-    rg.addColorStop(0,`rgba(${col},.7)`);rg.addColorStop(0.35,`rgba(${col},.3)`);rg.addColorStop(1,`rgba(${col},0)`);
-    g.fillStyle=rg;g.fillRect(x-10,y-10,20,20);
+    const rg=g.createRadialGradient(x,y,0,x,y,12);
+    rg.addColorStop(0,`rgba(${col},1)`);rg.addColorStop(0.35,`rgba(${col},.5)`);rg.addColorStop(1,`rgba(${col},0)`);
+    g.fillStyle=rg;g.fillRect(x-12,y-12,24,24);
   }
   // faint stars near zenith
   for(let i=0;i<160;i++){
@@ -859,17 +862,28 @@ groundTex.repeat.set(38,38);
 // wet-street roughness map: bright=dry/rough, dark streaks+puddles=wet/smooth so neon
 // reflects in long streaks (roughnessMap channel multiplies material.roughness)
 function makeWetRoughTex(){return tex((g,w,h)=>{
-  g.fillStyle='#c9c9c9';g.fillRect(0,0,w,h);
-  for(let i=0;i<7;i++){
-    const x=Math.random()*w,sw=4+Math.random()*14;
+  // base is now mid-wet (was near-dry #c9): most of the street reads damp/reflective at night,
+  // like the reference, with drier rough patches breaking it up rather than the reverse.
+  g.fillStyle='#8a8a8a';g.fillRect(0,0,w,h);
+  // broad wet sheets (very smooth = strong mirror) — many more, wider, so neon streaks dominate
+  for(let i=0;i<16;i++){
+    const x=Math.random()*w,sw=8+Math.random()*26;
     const gr=g.createLinearGradient(x-sw,0,x+sw,0);
-    gr.addColorStop(0,'rgba(15,15,15,0)');gr.addColorStop(.5,'rgba(15,15,15,.92)');gr.addColorStop(1,'rgba(15,15,15,0)');
+    gr.addColorStop(0,'rgba(8,8,8,0)');gr.addColorStop(.5,`rgba(8,8,8,${0.85+Math.random()*0.14})`);gr.addColorStop(1,'rgba(8,8,8,0)');
     g.fillStyle=gr;g.fillRect(x-sw,0,sw*2,h);
   }
-  for(let i=0;i<6;i++){
-    const x=Math.random()*w,y=Math.random()*h,r=6+Math.random()*18;
+  // wet pools
+  for(let i=0;i<12;i++){
+    const x=Math.random()*w,y=Math.random()*h,r=8+Math.random()*26;
     const gr=g.createRadialGradient(x,y,0,x,y,r);
-    gr.addColorStop(0,'rgba(10,10,10,.85)');gr.addColorStop(1,'rgba(10,10,10,0)');
+    gr.addColorStop(0,'rgba(6,6,6,.9)');gr.addColorStop(1,'rgba(6,6,6,0)');
+    g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);
+  }
+  // a few drier rough patches (lighter) so it isn't a uniform mirror
+  for(let i=0;i<5;i++){
+    const x=Math.random()*w,y=Math.random()*h,r=10+Math.random()*20;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);
+    gr.addColorStop(0,'rgba(220,220,220,.6)');gr.addColorStop(1,'rgba(220,220,220,0)');
     g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);
   }
 },128,128,true);}
@@ -1126,8 +1140,8 @@ function roadWetRoughFor(r){
 function addRoad(axis,r){
   // per-road base roughness jitter on top of the roughness MAP: some stretches read drier/rougher,
   // others glossier/wetter, instead of every road sharing one flat roughness value
-  const baseRough=(r.major?0.30:0.34)+Math.random()*0.22;
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.05,envMapIntensity:1.25,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const baseRough=(r.major?0.20:0.24)+Math.random()*0.16;
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -1344,7 +1358,7 @@ const puddleAlphaTex=tex((g,w,h)=>{
   g.fillStyle=gr;g.fill();
   g.restore();
 },128,128,true);
-const puddleMat=new THREE.MeshStandardMaterial({color:0x0b0f16,roughness:0.05,metalness:0.08,transparent:true,alphaMap:puddleAlphaTex,envMapIntensity:2.0,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-7,polygonOffsetUnits:-7});
+const puddleMat=new THREE.MeshStandardMaterial({color:0x0c1119,roughness:0.03,metalness:0.5,transparent:true,alphaMap:puddleAlphaTex,envMapIntensity:3.2,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-7,polygonOffsetUnits:-7});
 const PUDDLE_COUNT=260;
 const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,PUDDLE_COUNT);
 {
@@ -1384,9 +1398,48 @@ const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,
 }
 scene.add(puddleInst);
 
-// intersection patches: blank asphalt over crossing markings
+// GROUND-BLOCK VARIETY: not every crossing is bare asphalt — some are stone-paver plazas or large
+// tiled slabs (Tokyo scramble/arcade floors), so the street reads as different material blocks, not
+// one endless asphalt sheet. Each is wet-mapped so it catches neon like the road.
+const cobbleTex=tex((g,w,h)=>{
+  g.fillStyle='#181a1e';g.fillRect(0,0,w,h); // dark mortar base
+  const rows=9,perRow=8,ch=h/rows;
+  for(let ry=0;ry<rows;ry++){
+    const cw=w/perRow,ox=(ry%2)*cw*0.5; // running-bond offset
+    for(let cxi=-1;cxi<perRow;cxi++){
+      const cx=cxi*cw+ox+cw*0.5,cy=ry*ch+ch*0.5;
+      const t=40+Math.random()*40,rw=cw*0.42,rh=ch*0.4;
+      const gr=g.createRadialGradient(cx-rw*0.3,cy-rh*0.3,1,cx,cy,rw*1.1);
+      gr.addColorStop(0,`rgb(${t+14},${t+10},${t+4})`);gr.addColorStop(.7,`rgb(${t},${t-4},${t-8})`);gr.addColorStop(1,`rgb(${t-22},${t-24},${t-26})`);
+      g.fillStyle=gr;g.beginPath();g.ellipse(cx,cy,rw,rh,0,0,7);g.fill();
+      g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=1;g.stroke();
+    }
+  }
+  for(let i=0;i<300;i++){g.fillStyle=`rgba(${Math.random()<0.5?0:210},${Math.random()<0.5?0:200},${Math.random()<0.5?0:190},${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
+},128,128,true);
+const cobbleMat=new THREE.MeshStandardMaterial({map:cobbleTex,roughness:0.34,roughnessMap:wetRoughTex,metalness:0.12,envMapIntensity:1.9,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const tileTex=tex((g,w,h)=>{
+  g.fillStyle='#2b2c30';g.fillRect(0,0,w,h);
+  const n=4,s=w/n;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const t=42+Math.random()*26;
+    g.fillStyle=`rgb(${t},${t},${t+3})`;g.fillRect(i*s+2,j*s+2,s-4,s-4);
+    g.fillStyle='rgba(255,255,255,.05)';g.fillRect(i*s+2,j*s+2,s-4,1.5);
+    g.fillStyle='rgba(0,0,0,.4)';g.fillRect(i*s+2,j*s+s-3,s-4,1.5);
+    for(let k=0;k<40;k++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(i*s+Math.random()*s,j*s+Math.random()*s,1,1);}
+    if(Math.random()<0.3){ // a cracked/chipped tile
+      let x=i*s+Math.random()*s,y=j*s+2;g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=1;g.beginPath();g.moveTo(x,y);
+      for(let c=0;c<4;c++){x+=(Math.random()-.5)*s*0.4;y+=s/4;g.lineTo(x,y);}g.stroke();
+    }
+  }
+  g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=2.5;
+  for(let i=0;i<=n;i++){g.beginPath();g.moveTo(i*s,0);g.lineTo(i*s,h);g.stroke();g.beginPath();g.moveTo(0,i*s);g.lineTo(w,i*s);g.stroke();}
+},128,128,true);
+const tileMat=new THREE.MeshStandardMaterial({map:tileTex,roughness:0.28,roughnessMap:wetRoughTex,metalness:0.14,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+// intersection patches: mostly asphalt, some stone-paver plazas / tiled slabs for block variety
 ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
-  const patch=new THREE.Mesh(new THREE.PlaneGeometry(rx.w,rz.w),plainAsphaltMat);
+  const roll=Math.random(),bm=roll<0.16?cobbleMat:(roll<0.28?tileMat:plainAsphaltMat);
+  const patch=new THREE.Mesh(new THREE.PlaneGeometry(rx.w,rz.w),bm);
   patch.rotation.x=-Math.PI/2;patch.position.set(rx.p,0.046,rz.p);
   scene.add(patch);
 });});
@@ -2093,6 +2146,21 @@ const warmGlowMat=new THREE.MeshBasicMaterial({map:warmGlowTex,transparent:true,
 const warmGlowGeo=new THREE.PlaneGeometry(1,1);
 const warmGlowXf=[];
 
+// GROUND LIGHT-POOLS: the street was a flat cool wash because nothing cast light DOWN onto it —
+// lamps only glowed at the head, and every scene light is cool purple/pink. These are additive
+// radial-glow decals laid FLAT on the road/sidewalk with a PER-INSTANCE colour (warm sodium under
+// lamps, cool mercury under others, and saturated neon splashes under shopfronts/signs), so the
+// pavement gets bright warm/cool pools that (a) break the monotone blue and (b) rake light across
+// the asphalt/paver texture so it actually reads. One InstancedMesh = one draw call for all of them.
+const poolGlowTex=tex((g,w,h)=>{
+  const gr=g.createRadialGradient(w/2,h/2,1,w/2,h/2,w/2);
+  gr.addColorStop(0,'rgba(255,255,255,.85)');gr.addColorStop(.35,'rgba(255,255,255,.34)');
+  gr.addColorStop(.7,'rgba(255,255,255,.09)');gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+},64,64);
+const poolGlowMat=new THREE.MeshBasicMaterial({map:poolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true});
+const groundPoolXf=[]; // {x,z,s,c:[r,g,b]}
+
 function spawnBuilding(cx,cz,bw,bd,style){
   const grp=new THREE.Group();
   let bh,mat;
@@ -2137,6 +2205,13 @@ function spawnBuilding(cx,cz,bw,bd,style){
       // warm shop-light spill onto the sidewalk below the storefront (instanced after the district loop)
       const push=o[0]>=0?2.0:-2.0;
       warmGlowXf.push({x:cx,z:cz+o[0]+push,w:Math.max(3,bw*0.85),d:4.2});
+      // saturated NEON splash pooling on the street a bit further out from the shopfront — colour
+      // pulled from a neon palette so avenues get pink/cyan/amber/green light variance on the ground.
+      if(Math.random()<0.7){
+        const NP=[[1.0,0.34,0.72],[0.28,0.9,1.0],[1.0,0.7,0.24],[0.5,1.0,0.5],[0.85,0.5,1.0]];
+        const c=NP[Math.floor(Math.random()*NP.length)];
+        groundPoolXf.push({x:cx+(Math.random()-.5)*bw*0.5,z:cz+o[0]+push*(1.7+Math.random()*0.7),s:5+Math.random()*5,c});
+      }
     });
     addNeonSigns(grp,bw,bd,Math.min(bh,46),cx,cz);
     if(style==='neon'||style==='mixed')addBillboard(grp,bw,bd,bh,cx,cz);
@@ -2518,23 +2593,76 @@ const coolGlowTex=tex((g,w,h)=>{
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },64,64);
 const lampMat=new THREE.MeshLambertMaterial({color:0x2c2838});
+// warm-sodium glow variant so avenues aren't lit by a single cool-white lamp type
+const warmLampGlowTex=tex((g,w,h)=>{
+  const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
+  gr.addColorStop(0,'rgba(255,214,150,.55)');gr.addColorStop(.4,'rgba(255,176,96,.16)');gr.addColorStop(1,'rgba(255,160,80,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+},64,64);
 function lampRow(axis,r){
   for(let a=-540;a<=540;a+=46){
     [-1,1].forEach(sd=>{
       if(Math.random()<0.12)return;
       const off=r.w/2+1.0;
       const x=axis==='x'?r.p+sd*off:a+(sd>0?23:0), z=axis==='x'?a+(sd>0?23:0):r.p+sd*off;
+      const warm=Math.random()<0.5; // alternate warm-sodium / cool-mercury lamps for colour variance
       const pole=new THREE.Mesh(new THREE.CylinderGeometry(.13,.17,9.5,6),lampMat);
       pole.position.set(x,4.75,z);scene.add(pole);
-      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:0xf4f8ff}));
+      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:warm?0xffc070:0xf4f8ff}));
       head.position.set(x,9.6,z);scene.add(head);
-      const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+      const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:warm?warmLampGlowTex:coolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
       spr.scale.set(4.5,4.5,1);spr.position.set(x,9.8,z);scene.add(spr);
+      // the pool of light this lamp actually casts on the road below (warm sodium or cool mercury)
+      groundPoolXf.push({x:x+(axis==='x'?-sd*1.2:0),z:z+(axis==='x'?0:-sd*1.2),s:7+Math.random()*3,
+        c:warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
     });
   }
 }
 ROADS_X.filter(r=>r.major).forEach(r=>lampRow('x',r));
 ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z).forEach(r=>lampRow('z',r));
+
+// WET-STREET NEON REFLECTION STREAKS: the hero cue from the reference. Env-map reflection can't
+// paint bright neon onto flat road near the camera (a horizontal plane mirrors the dark overhead
+// sky), so these emissive additive streaks — long, thin, coloured, running ALONG each avenue —
+// stand in for vertical signs mirrored in the wet asphalt. Dense but all one instanced draw call.
+const NEON_REFL=[[1.0,0.28,0.7],[0.26,0.85,1.0],[1.0,0.66,0.22],[0.55,1.0,0.55],[0.82,0.45,1.0],[1.0,0.35,0.35]];
+function reflStreaks(axis,r){
+  const a=axis==='x'?0:Math.PI/2;
+  const n=Math.round(CITY*2/16); // density along the road
+  for(let i=0;i<n;i++){
+    if(Math.random()<0.24)continue;
+    const along=(Math.random()-0.5)*CITY*1.92;
+    const perp=(Math.random()-0.5)*(r.w-1.6);
+    const x=axis==='x'?r.p+perp:along, z=axis==='x'?along:r.p+perp;
+    if(x>RIVER.x0-6&&x<RIVER.x1+6)continue;
+    const c=NEON_REFL[Math.floor(Math.random()*NEON_REFL.length)];
+    const bright=0.95+Math.random()*1.05; // some streaks punch brighter (nearer/bigger signs)
+    groundPoolXf.push({x,z,s:1.1+Math.random()*1.7,a,st:4.0+Math.random()*6.0,
+      c:[c[0]*bright,c[1]*bright,c[2]*bright]});
+  }
+}
+ROADS_X.filter(r=>r.w>8).forEach(r=>reflStreaks('x',r));
+ROADS_Z.filter(r=>r.w>8&&r.p!==HWY_Z).forEach(r=>reflStreaks('z',r));
+
+// instance every ground light-pool (lamp sodium/mercury pools + neon shopfront splashes + wet
+// reflection streaks) as ONE draw call, each with its own colour, laid flat just above the road.
+let groundPoolInst=null;
+if(groundPoolXf.length){
+  groundPoolInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),poolGlowMat,groundPoolXf.length);
+  const d=new THREE.Object3D(),col=new THREE.Color();
+  groundPoolXf.forEach((p,i)=>{
+    // stretch each pool into an ellipse (reads as a neon reflection SMEAR on the wet street rather
+    // than a flat circle). Road-reflection streaks pass an explicit angle+stretch so they run ALONG
+    // the avenue like a real vertical-sign reflection; ambient pools get a random orientation.
+    const stretch=p.st||(1.5+Math.random()*1.6);
+    const ang=(p.a!==undefined)?p.a:Math.random()*Math.PI*2;
+    d.position.set(p.x,0.06,p.z);d.rotation.set(-Math.PI/2,0,ang);
+    d.scale.set(p.s,p.s*stretch,1);d.updateMatrix();groundPoolInst.setMatrixAt(i,d.matrix);
+    groundPoolInst.setColorAt(i,col.setRGB(p.c[0],p.c[1],p.c[2]));
+  });
+  groundPoolInst.instanceMatrix.needsUpdate=true;if(groundPoolInst.instanceColor)groundPoolInst.instanceColor.needsUpdate=true;
+  groundPoolInst.frustumCulled=false;scene.add(groundPoolInst);
+}
 
 // utility poles + sagging wires down the back streets (Tokyo signature)
 const poleMat=new THREE.MeshLambertMaterial({color:0x201c26});
@@ -4591,6 +4719,7 @@ function loop(now){
       s.g.material.opacity=0.05*v*__altFade;
     });
     warmGlowMat.opacity=__altFade;
+    poolGlowMat.opacity=__altFade;
     billboardGlowMat.opacity=0.07*__altFade;
     screenT+=dt;
     if(screenT>0.5){bigScreens.forEach(bs=>bs.draw(now/1600));screenT=0;}
