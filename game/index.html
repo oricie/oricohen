@@ -958,13 +958,31 @@ const WetReflShader={
     vWorld=wp.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
   fragmentShader:`uniform vec3 color;uniform sampler2D tDiffuse;uniform sampler2D tWet;
     uniform float uStrength;uniform float uWetScale;varying vec4 vUv;varying vec2 vWorld;
+    // BLURRED sample: average several taps in projected space so the mirror reads WET (soft smears),
+    // not a stippled field of sharp point-reflections. Offsets are tiny fractions of the proj coord.
+    vec3 sampleBlur(){
+      vec2 uv=vUv.xy; float w=vUv.w; vec2 o=vec2(0.006,0.006)*w;
+      vec3 s=texture2DProj(tDiffuse,vUv).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv+vec2(o.x,0.0),vUv.z,w)).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv-vec2(o.x,0.0),vUv.z,w)).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv+vec2(0.0,o.y),vUv.z,w)).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv-vec2(0.0,o.y),vUv.z,w)).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv+o,vUv.z,w)).rgb;
+      s+=texture2DProj(tDiffuse,vec4(uv-o,vUv.z,w)).rgb;
+      return s/7.0;
+    }
     void main(){
-      vec3 refl=texture2DProj(tDiffuse,vUv).rgb;
-      refl*=color;                                   // cool wet-film tint on the reflection
-      refl+=refl*refl*1.1;                           // lift bright neon so signs punch through the wet
+      vec3 refl=sampleBlur();
+      // THRESHOLD: kill the dim window-speckle (the "static"), keep only bright neon so the road
+      // shows coherent sign reflections on a dark wet surface instead of colored noise.
+      float lum=dot(refl,vec3(0.299,0.587,0.114));
+      float keep=smoothstep(0.18,0.5,lum);
+      refl=refl*keep*color;
+      refl+=refl*refl*1.0;                           // let the surviving bright neon bloom
       float dry=texture2D(tWet,vWorld*uWetScale).r;  // wet mask: dark=wet in the source, so invert
       float wet=clamp(1.0-dry,0.0,1.0);
-      float a=clamp(wet*uStrength,0.0,0.9);
+      // alpha = wetness, weighted toward where there's bright neon to reflect (keeps empty road dark)
+      float a=clamp(wet*uStrength*(0.5+0.5*keep),0.0,0.95);
       gl_FragColor=vec4(refl,a);
     }`
 };
@@ -1000,11 +1018,13 @@ function paintAsphaltGrain(g,w,h){
   // (pale quartz/granite chips), most dark, at two-three scales so it reads as a stone-in-bitumen
   // surface, not smooth. Counts scale with area but capped for load cost.
   const area=w*h,cap=(f,mx)=>Math.min(mx,Math.round(area*f));
-  const nPale=cap(0.02,3200),nMid=cap(0.03,4800),nDark=cap(0.02,3200),nFine=cap(0.05,7000);
-  for(let i=0;i<nFine;i++){const v=Math.random()*70;g.fillStyle=`rgba(${v},${v},${v},${0.05+Math.random()*0.14})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
+  // grain is now SUBTLE and mostly dark (fine tonal texture, not bright sparkle) — the bright-stone
+  // speckle read as "static" from altitude, so it's cut way down.
+  const nMid=cap(0.03,4800),nDark=cap(0.025,3600),nFine=cap(0.05,7000),nPale=cap(0.005,700);
+  for(let i=0;i<nFine;i++){const v=Math.random()*60;g.fillStyle=`rgba(${v},${v},${v},${0.05+Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
   for(let i=0;i<nDark;i++){g.fillStyle=`rgba(0,0,0,${0.12+Math.random()*0.3})`;g.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*1.6,1+Math.random()*1.6);}
-  for(let i=0;i<nMid;i++){const v=60+Math.random()*60;g.fillStyle=`rgba(${v},${v-4},${v-8},${0.1+Math.random()*0.22})`;g.fillRect(Math.random()*w,Math.random()*h,1.4,1.4);}
-  for(let i=0;i<nPale;i++){const v=150+Math.random()*90;g.fillStyle=`rgba(${v},${v-4},${v-10},${0.12+Math.random()*0.26})`;const s=1.2+Math.random()*1.8;g.fillRect(Math.random()*w,Math.random()*h,s,s);}
+  for(let i=0;i<nMid;i++){const v=52+Math.random()*44;g.fillStyle=`rgba(${v},${v-4},${v-8},${0.08+Math.random()*0.16})`;g.fillRect(Math.random()*w,Math.random()*h,1.4,1.4);}
+  for(let i=0;i<nPale;i++){const v=120+Math.random()*70;g.fillStyle=`rgba(${v},${v-4},${v-10},${0.08+Math.random()*0.14})`;const s=1+Math.random()*1.4;g.fillRect(Math.random()*w,Math.random()*h,s,s);}
   // oil stains: darker, glossier organic blobs
   for(let i=0;i<3+Math.floor(Math.random()*3);i++){
     const cx0=Math.random()*w,cy0=Math.random()*h,baseR=w*(0.03+Math.random()*0.06);
@@ -1099,7 +1119,7 @@ function makePlainAsphaltTex(){return tex((g,w,h)=>{
   g.fillStyle='#26272c';g.fillRect(0,0,w,h);
   paintAsphaltGrain(g,w,h);
 },512,512,true);}
-const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(1.3,1.3),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.7,0.7),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
 
 // REAL TOKYO SIDEWALK: cast concrete paver SLABS with per-slab tone variation, deep grimy joints,
 // cracks that cross slabs, moss/dirt collecting in the seams, dark gum spots, damp water staining,
@@ -1233,7 +1253,7 @@ function addRoad(axis,r){
   // per-road base roughness jitter on top of the roughness MAP: some stretches read drier/rougher,
   // others glossier/wetter, instead of every road sharing one flat roughness value
   const baseRough=(r.major?0.20:0.24)+Math.random()*0.16;
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(1.4,1.4),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.7,0.7),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -1451,7 +1471,7 @@ const puddleAlphaTex=tex((g,w,h)=>{
   g.restore();
 },128,128,true);
 const puddleMat=new THREE.MeshStandardMaterial({color:0x0c1119,roughness:0.03,metalness:0.5,transparent:true,alphaMap:puddleAlphaTex,envMapIntensity:3.2,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-7,polygonOffsetUnits:-7});
-const PUDDLE_COUNT=260;
+const PUDDLE_COUNT=90;
 const puddleInst=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),puddleMat,PUDDLE_COUNT);
 {
   const dummy=new THREE.Object3D();
@@ -2733,8 +2753,9 @@ function reflStreaks(axis,r){
       c:[c[0]*bright,c[1]*bright,c[2]*bright]});
   }
 }
-ROADS_X.filter(r=>r.w>8).forEach(r=>reflStreaks('x',r));
-ROADS_Z.filter(r=>r.w>8&&r.p!==HWY_Z).forEach(r=>reflStreaks('z',r));
+// (emissive reflection streaks removed — the planar reflector now carries the wet look; these
+//  only added colour-dot noise on top of it.)
+void reflStreaks;
 
 // instance every ground light-pool (lamp sodium/mercury pools + neon shopfront splashes + wet
 // reflection streaks) as ONE draw call, each with its own colour, laid flat just above the road.
