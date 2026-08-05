@@ -349,12 +349,12 @@ for(let i=0;i<28;i++){
 // hemisphere: DESATURATED cool sky + a warm-neutral ground bounce. The old sky was a saturated
 // indigo that painted every grey surface blue and buried the concrete/asphalt texture — pulled
 // toward neutral so material albedo actually reads at night, with only a gentle cool cast.
-scene.add(new THREE.HemisphereLight(0x6f7098,0x38322e,0.74));
+scene.add(new THREE.HemisphereLight(0x6f7098,0x38322e,0.6));
 // KEY light: was a saturated purple (0x9a6aff) that tinted all lit surfaces violet and hid the
 // real textures — everything only showed its true grey during the neutral muzzle-flash. Swapped to
 // a desaturated cool MOONLIGHT so structures/streets are legible in normal play; the neon mood now
 // comes from the pink rim, emissive signs and point lights (all unaffected by this change).
-const sun=new THREE.DirectionalLight(0xc4c8e6,0.78);
+const sun=new THREE.DirectionalLight(0xc4c8e6,0.64);
 sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.left=-260;sun.shadow.camera.right=260;
@@ -2767,13 +2767,48 @@ function lampRow(axis,r){
       const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:warm?warmLampGlowTex:coolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
       spr.scale.set(4.5,4.5,1);spr.position.set(x,9.8,z);scene.add(spr);
       // the pool of light this lamp actually casts on the road below (warm sodium or cool mercury)
-      groundPoolXf.push({x:x+(axis==='x'?-sd*1.2:0),z:z+(axis==='x'?0:-sd*1.2),s:7+Math.random()*3,
-        c:warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
+      const px=x+(axis==='x'?-sd*1.2:0),pz=z+(axis==='x'?0:-sd*1.2);
+      groundPoolXf.push({x:px,z:pz,s:7+Math.random()*3,c:warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
+      // record the lamp so a bounded set of REAL lights can snap to the nearest ones and actually
+      // illuminate the textured road (the sprite above only adds glow; it can't reveal the grain).
+      (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm});
     });
   }
 }
 ROADS_X.filter(r=>r.major).forEach(r=>lampRow('x',r));
 ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z).forEach(r=>lampRow('z',r));
+
+// ===== DYNAMIC REVEAL LIGHTS =====
+// A small FIXED pool of real point lights (no shadows) that each frame snap to the nearest street-
+// lamps and car headlights around the helicopter, plus one downlight under the heli. Unlike the
+// additive glow sprites, these actually illuminate the textured road/sidewalk — so you get genuine
+// pools of light that reveal the asphalt/concrete grain, with darker gaps between. Bounded count =
+// bounded cost (this does NOT reintroduce the per-object-light perf problem).
+const REVEAL_N=6, revealLights=[];
+for(let i=0;i<REVEAL_N;i++){const L=new THREE.PointLight(0xffd9a6,0,34,2);L.castShadow=false;scene.add(L);revealLights.push(L);}
+const heliDownLight=new THREE.PointLight(0xdfe8ff,0,52,2);heliDownLight.castShadow=false;scene.add(heliDownLight);
+const __revealCand=[];
+function updateRevealLights(){
+  if(typeof heli==='undefined')return;
+  const hx=heli.position.x,hz=heli.position.z;
+  __revealCand.length=0;
+  const lamps=window.__lampPts||[];
+  for(let i=0;i<lamps.length;i++){const l=lamps[i],dx=l.x-hx,dz=l.z-hz,d2=dx*dx+dz*dz;
+    if(d2<170*170)__revealCand.push({x:l.x,z:l.z,d2,warm:l.warm,car:false});}
+  const cars=window.__movingCars||[];
+  for(let i=0;i<cars.length;i++){const m=cars[i].m,dx=m.position.x-hx,dz=m.position.z-hz,d2=dx*dx+dz*dz;
+    if(d2<140*140)__revealCand.push({x:m.position.x,z:m.position.z,d2,warm:false,car:true});}
+  __revealCand.sort((a,b)=>a.d2-b.d2);
+  for(let i=0;i<REVEAL_N;i++){
+    const L=revealLights[i],c=__revealCand[i];
+    if(!c){L.intensity=0;continue;}
+    if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.95,0.86);L.intensity=2.4;L.distance=24;}
+    else if(c.warm){L.position.set(c.x,7.5,c.z);L.color.setRGB(1.0,0.72,0.4);L.intensity=4.2;L.distance=34;}
+    else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.66,0.8,1.0);L.intensity=3.8;L.distance=34;}
+  }
+  heliDownLight.position.set(hx,Math.max(7,heli.position.y*0.55),hz);
+  heliDownLight.intensity=3.2;
+}
 
 // WET-STREET NEON REFLECTION STREAKS: the hero cue from the reference. Env-map reflection can't
 // paint bright neon onto flat road near the camera (a horizontal plane mirrors the dark overhead
@@ -5116,6 +5151,7 @@ function loop(now){
       if(c.onX)c.m.position.set(c.pos,0,c.lane);
       else c.m.position.set(c.lane,0,c.pos);
     });
+    updateRevealLights(); // snap the reveal-light pool to the nearest lamps/car headlights this frame
     if(window.__waterTex)window.__waterTex.offset.y+=dt*0.015;
     if(!window.__hwyCars){
       window.__hwyCars=[];
