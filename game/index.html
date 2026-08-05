@@ -3910,11 +3910,11 @@ function applyRealAsphalt(){
   try{
     const regen=(pool,fn)=>{const n=pool.length;pool.length=0;for(let i=0;i<n;i++)pool.push(fn());};
     regen(ROAD_POOL_MAJOR,makeMajorRoadTex);regen(ROAD_POOL_STRIP,makeRoadStripTex);regen(ROAD_POOL_ALLEY,makeAlleyTex);
-    const norFor=(mapTex,r)=>{const nr=ASPHALT_NOR.clone();nr.wrapS=nr.wrapT=THREE.RepeatWrapping;
-      nr.repeat.set(mapTex.repeat.x,mapTex.repeat.y*2);nr.offset.copy(mapTex.offset);nr.needsUpdate=true;return nr;};
+    // ONE shared road normal (was a per-road clone each — needless VRAM/perf). Fixed repeat gives a
+    // sensible grain scale; exact per-road tiling alignment isn't visible on asphalt anyway.
+    ASPHALT_NOR.wrapS=ASPHALT_NOR.wrapT=THREE.RepeatWrapping;ASPHALT_NOR.repeat.set(3,180);ASPHALT_NOR.needsUpdate=true;
     (window.__roadMeshes||[]).forEach(rm=>{
-      const m=rm.mesh.material,nt=roadTexFor(rm.r);
-      m.map=nt;m.normalMap=norFor(nt,rm.r);m.normalScale.set(0.85,0.85);m.needsUpdate=true;
+      const m=rm.mesh.material;m.map=roadTexFor(rm.r);m.normalMap=ASPHALT_NOR;m.normalScale.set(0.7,0.7);m.needsUpdate=true;
     });
     const pn=ASPHALT_NOR.clone();pn.wrapS=pn.wrapT=THREE.RepeatWrapping;pn.needsUpdate=true;
     plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.normalMap=pn;plainAsphaltMat.normalScale.set(0.85,0.85);plainAsphaltMat.needsUpdate=true;
@@ -3951,16 +3951,15 @@ function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.Textu
       if(sNor&&typeof curbFaceMat!=='undefined'){const cn=sNor.clone();cn.repeat.set(3,3);cn.needsUpdate=true;
         curbFaceMat.normalMap=cn;curbFaceMat.normalScale=new THREE.Vector2(0.6,0.6);curbFaceMat.needsUpdate=true;}
     }
-    // --- concrete facades on ~1/3 of tracked buildings ---
-    if(window.__WALL_DIFF&&window.__WALL_NOR){
-      const [wImg,wNor]=await Promise.all([loadImg(window.__WALL_DIFF),loadTex(window.__WALL_NOR,1,1)]);
-      window.WALL_IMG=wImg;
-      const cPool=facadeGridPresets.map(p=>{const t=facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true});return t;});
+    // --- concrete facades on ~1/3 of tracked buildings (albedo grime only; they keep their existing
+    // shared window-bump normal, so no per-building normal clones — that was the main perf cost). ---
+    if(window.__WALL_DIFF){
+      window.WALL_IMG=await loadImg(window.__WALL_DIFF);
+      const cPool=facadeGridPresets.map(p=>facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true}));
       (window.__bldgMats||[]).forEach(bm=>{
         if(Math.random()>0.34)return; // only a subset get the raw-concrete look
         const idx=Math.max(0,facadeGridPresets.indexOf(bm.preset));
         bm.mat.map=cPool[idx];
-        if(wNor){const n=wNor.clone();n.needsUpdate=true;bm.mat.normalMap=n;bm.mat.normalScale=new THREE.Vector2(0.5,0.5);}
         bm.mat.color.setHSL((220+Math.random()*30)/360,0.05,0.5); // neutral cool tint over the grime
         bm.mat.needsUpdate=true;
       });
