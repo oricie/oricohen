@@ -4673,10 +4673,15 @@ for(let i=0;i<28;i++){
 }
 
 // ---------- LIGHTS ----------
-// hemisphere: cool magenta-indigo sky, but a slightly WARM dark ground bounce (was flat purple) so
-// undersides/streets aren't uniformly blue — introduces subtle warm/cool split into the base grade.
-scene.add(new THREE.HemisphereLight(0x51428a,0x2c2430,0.66));
-const sun=new THREE.DirectionalLight(0x9a6aff,0.62);
+// hemisphere: DESATURATED cool sky + a warm-neutral ground bounce. The old sky was a saturated
+// indigo that painted every grey surface blue and buried the concrete/asphalt texture — pulled
+// toward neutral so material albedo actually reads at night, with only a gentle cool cast.
+scene.add(new THREE.HemisphereLight(0x6f7098,0x38322e,0.74));
+// KEY light: was a saturated purple (0x9a6aff) that tinted all lit surfaces violet and hid the
+// real textures — everything only showed its true grey during the neutral muzzle-flash. Swapped to
+// a desaturated cool MOONLIGHT so structures/streets are legible in normal play; the neon mood now
+// comes from the pink rim, emissive signs and point lights (all unaffected by this change).
+const sun=new THREE.DirectionalLight(0xc4c8e6,0.78);
 sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.left=-260;sun.shadow.camera.right=260;
@@ -4830,6 +4835,7 @@ function duckRotor(down){
 // Gated behind the same user-gesture audio unlock as the rest of the sfx (requires AC to exist);
 // throttled so lines never overlap. If speechSynthesis is unavailable/blocked, the FX chain still
 // plays (with the on-screen subtitle) so it reads as a transmission even with no voice.
+window.VOICE_ON=false; // spoken radio voice muted by default (toggle to re-enable the TTS later)
 function speakRadio(text){
   if(!AC)return; // no gesture-unlocked audio yet — stay silent, consistent with the rest of the sfx gating
   if(radioSpeaking)return; // throttle: don't stack/overlap command lines
@@ -4848,7 +4854,9 @@ function speakRadio(text){
       radioMicKey();
       duckRotor(false);
     };
-    const hasSpeech=typeof window.speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined';
+    // VOICE_ON gates the spoken TTS. Muted by default (the synth voice reads as annoying); the
+    // squelch + hiss FX and the on-screen subtitle still play, so transmissions stay in-world.
+    const hasSpeech=window.VOICE_ON&&typeof window.speechSynthesis!=='undefined'&&typeof SpeechSynthesisUtterance!=='undefined';
     if(!hasSpeech){
       // fail-safe: no TTS available — the squelch+hiss FX plus the on-screen subtitle still sell it
       setTimeout(finish,900+Math.min(1800,clean.length*45));
