@@ -86,7 +86,6 @@ if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[
 <script>
 const W=()=>innerWidth,H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,logarithmicDepthBuffer:true});
-window.__dbgRenderer=renderer; // TEMP DEBUG - survivor test-capture camera framing hook, remove before final run
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.shadowMap.enabled=true;
