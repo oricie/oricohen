@@ -1265,7 +1265,7 @@ const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,roughness:0.82
 // STEPS UP from the road instead of sitting flush with it.
 const CURB_H=0.2; // kerb step height (within 0.15-0.25m brief target)
 const curbFaceTex=tex((g,w,h)=>{
-  g.fillStyle='#4a463c';g.fillRect(0,0,w,h);
+  g.fillStyle='#565660';g.fillRect(0,0,w,h); // cool grey concrete kerb (was brown #4a463c)
   for(let i=0;i<220;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.2})`;g.fillRect(Math.random()*w,Math.random()*h,2,1);}
   for(let x=8;x<w;x+=24){g.fillStyle='rgba(0,0,0,.42)';g.fillRect(x,0,1,h);} // expansion joints
   for(let i=0;i<12;i++){ // grime drips hanging from the sidewalk edge
@@ -1277,7 +1277,7 @@ const curbFaceTex=tex((g,w,h)=>{
   g.fillStyle='rgba(255,255,255,.14)';g.fillRect(0,0,w,1); // top chamfer highlight catches neon
 },192,20,true);
 curbFaceTex.wrapS=THREE.RepeatWrapping;curbFaceTex.repeat.set(240,1);
-const curbFaceMat=new THREE.MeshStandardMaterial({map:curbFaceTex,color:0x8f8a7c,roughness:0.86,metalness:0.1,envMapIntensity:0.65});
+const curbFaceMat=new THREE.MeshStandardMaterial({map:curbFaceTex,color:0xa2a4ae,roughness:0.86,metalness:0.1,envMapIntensity:0.65});
 const curbBottomMat=new THREE.MeshStandardMaterial({color:0x14120e,roughness:0.9,metalness:0.02});
 const curbMat=curbFaceMat; // legacy alias
 
@@ -2992,27 +2992,40 @@ for(let i=0;i<44;i++){
   scene.add(vm);
 }
 
-// parked cars hugging the curbs of side streets
+// parked cars hugging the curbs of side streets — upgraded from flat boxes to real bodies with
+// round wheels, a glass greenhouse and lights so they read like the moving traffic. Placements that
+// would land over the river band are skipped, so no parked car floats over open water.
 {
-  const carCols=[0xb03030,0x3050a0,0xd8d8d8,0x222428,0x777c80,0xc8a030];
+  const carCols=[0xb03030,0x3050a0,0xd8d8d8,0x2a2c30,0x6a7078,0xc8a030,0x30506a,0x8a3050];
   const minorX=ROADS_X.filter(r=>!r.major&&r.w>10);
   const minorZ=ROADS_Z.filter(r=>!r.major&&r.w>10);
+  const pWheelG=new THREE.CylinderGeometry(0.42,0.42,0.32,12);
+  const pWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
+  const pHubM=new THREE.MeshLambertMaterial({color:0x8a8f98});
+  const pGlassM=new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.12,opacity:.72,transparent:true});
+  const pHlM=new THREE.MeshBasicMaterial({color:0xdfe6ff}), pTlM=new THREE.MeshBasicMaterial({color:0x661010});
   for(let i=0;i<56;i++){
     const onX=Math.random()<0.5;
     const arr=onX?minorZ:minorX;
     if(!arr.length)break;
     const r=arr[Math.floor(Math.random()*arr.length)];
-    const car=new THREE.Group();
-    const c=carCols[Math.floor(Math.random()*carCols.length)];
-    const bod=new THREE.Mesh(new THREE.BoxGeometry(2,0.8,4.4),new THREE.MeshLambertMaterial({color:c}));
-    bod.position.y=0.75;bod.castShadow=true;car.add(bod);
-    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.65,2.2),new THREE.MeshLambertMaterial({color:0x18222c}));
-    cab.position.y=1.4;car.add(cab);
-    const wg=new THREE.Mesh(new THREE.BoxGeometry(2.05,0.35,4.5),new THREE.MeshLambertMaterial({color:0x121212}));
-    wg.position.y=0.3;car.add(wg);
     const a=(Math.random()-.5)*1000;
     const sd=Math.random()<.5?-1:1;
     const off=r.w/2-1.3;
+    const wx=onX?a:(r.p+sd*off); // world-x of this car
+    if(wx>RIVER.x0-4&&wx<RIVER.x1+4)continue; // would float over the river — skip
+    const car=new THREE.Group();
+    const c=carCols[Math.floor(Math.random()*carCols.length)];
+    const bodM=new THREE.MeshPhysicalMaterial({color:c,metalness:0.55,roughness:0.32,clearcoat:0.4,clearcoatRoughness:0.2});
+    const bod=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.62,4.3),bodM);bod.position.y=0.66;bod.castShadow=true;car.add(bod);
+    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,2.0),pGlassM);cab.position.set(0,1.05,-0.1);car.add(cab);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(1.66,0.16,2.0),bodM);roof.position.set(0,1.36,-0.1);car.add(roof);
+    [[-1.3,-0.86],[-1.3,0.86],[1.3,-0.86],[1.3,0.86]].forEach(([z,x])=>{
+      const wh=new THREE.Mesh(pWheelG,pWheelM);wh.rotation.z=Math.PI/2;wh.position.set(x,0.42,z);car.add(wh);
+      const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.34,10),pHubM);hub.rotation.z=Math.PI/2;hub.position.set(x,0.42,z);car.add(hub);
+    });
+    const hl=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.12,0.06),pHlM);hl.position.set(0,0.62,-2.16);car.add(hl);
+    const tl=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.12,0.06),pTlM);tl.position.set(0,0.62,2.16);car.add(tl);
     if(onX){car.position.set(a,0,r.p+sd*off);car.rotation.y=Math.PI/2;}
     else car.position.set(r.p+sd*off,0,a);
     scene.add(car);
@@ -5268,8 +5281,8 @@ function loop(now){
         const glass=new THREE.Mesh(glassGeo,new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.1,envMapIntensity:1.3,transparent:true,opacity:.72}));
         glass.position.set(0,1.12,0.15);car.add(glass);
         [[-1.3,-0.85],[-1.3,0.85],[1.0,-0.85],[1.0,0.85]].forEach(([z,x])=>{
-          const wh=new THREE.Mesh(mcWheelG,mcWheelM);wh.rotation.x=Math.PI/2;wh.position.set(x,0.46,z);car.add(wh);
-          const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.36,12),hubM);hub.rotation.x=Math.PI/2;hub.position.set(x,0.46,z);car.add(hub);
+          const wh=new THREE.Mesh(mcWheelG,mcWheelM);wh.rotation.z=Math.PI/2;wh.position.set(x,0.46,z);car.add(wh);
+          const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.36,12),hubM);hub.rotation.z=Math.PI/2;hub.position.set(x,0.46,z);car.add(hub);
         });
         const hl=new THREE.Mesh(new THREE.BoxGeometry(1.4,.14,.08),new THREE.MeshBasicMaterial({color:0xfff4d0}));
         hl.position.set(0,.55,-2.3);car.add(hl);
