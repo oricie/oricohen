@@ -5692,11 +5692,12 @@ function roadWetRoughFor(r){
 function addRoad(axis,r){
   // per-road base roughness jitter on top of the roughness MAP: some stretches read drier/rougher,
   // others glossier/wetter, instead of every road sharing one flat roughness value
-  const baseRough=(r.major?0.20:0.24)+Math.random()*0.16;
-  // normalScale kept LOW: a strong grain normal on a shiny wet road shatters the point-light and
-  // env-map speculars into a confetti "sparkle/static" field (the #1 game-tell). A near-flat normal
-  // lets the wetness reflect neon as coherent smooth streaks instead of glitter.
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.10,0.10),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  // Rebalanced toward grainy matte ASPHALT: base roughness raised (drier, less mirror) so the pebble
+  // grain reads as texture instead of a glossy sheet. Because the surface is now rougher, the grain
+  // normal can come up (0.10 -> 0.32) WITHOUT shattering into sparkle — a rough surface diffuses each
+  // specular. The wet roughness MAP still darkens streaks/pools, so those keep a coherent neon shine.
+  const baseRough=(r.major?0.52:0.56)+Math.random()*0.18;
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.32,0.32),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.08,envMapIntensity:1.2,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
