@@ -1294,7 +1294,7 @@ function addRoad(axis,r){
   // normalScale kept LOW: a strong grain normal on a shiny wet road shatters the point-light and
   // env-map speculars into a confetti "sparkle/static" field (the #1 game-tell). A near-flat normal
   // lets the wetness reflect neon as coherent smooth streaks instead of glitter.
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.16,0.16),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.10,0.10),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.1,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -2808,8 +2808,11 @@ function updateRevealLights(){
     else if(c.warm){L.position.set(c.x,7.5,c.z);L.color.setRGB(1.0,0.72,0.4);L.intensity=4.2;L.distance=34;}
     else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.66,0.8,1.0);L.intensity=3.8;L.distance=34;}
   }
-  heliDownLight.position.set(hx,Math.max(7,heli.position.y*0.55),hz);
-  heliDownLight.intensity=3.2;
+  // raised + softened: a bright point light close to the wet road shatters into a specular glint
+  // burst directly under the aircraft (the last near-field "static"). Lifting it and cutting intensity
+  // spreads the highlight into a single coherent downwash pool instead of scattered sparkle.
+  heliDownLight.position.set(hx,Math.max(11,heli.position.y*0.7),hz);
+  heliDownLight.intensity=1.7;
 }
 
 // WET-STREET NEON REFLECTION STREAKS: the hero cue from the reference. Env-map reflection can't
