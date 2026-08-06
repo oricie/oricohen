@@ -5518,8 +5518,8 @@ function drawSidewalk(g,w,h){
       g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x+1.5,y+ch-3,cw-3,1.5);g.fillRect(x+cw-3,y+1.5,1.5,ch-3);
     }
   }else{
-  // grimy grey concrete base with broad tonal drift
-  g.fillStyle='#3c3a34';g.fillRect(0,0,w,h);
+  // grimy grey concrete base with broad tonal drift (cool grey, was warm #3c3a34 that read brown)
+  g.fillStyle='#43454d';g.fillRect(0,0,w,h);
   for(let i=0;i<6;i++){
     const sx=Math.random()*w,sy=Math.random()*h,sr=w*(0.3+Math.random()*0.5);
     const gr=g.createRadialGradient(sx,sy,0,sx,sy,sr);
@@ -5529,8 +5529,8 @@ function drawSidewalk(g,w,h){
   }
   // paver SLAB grid: 4 cols × 5 rows, each slab its own tone + inset shadow so it reads as cast blocks
   for(let cx=0;cx<cols;cx++)for(let cy=0;cy<rows;cy++){
-    const x=cx*cw,y=cy*ch,t=18+Math.random()*20; // slab luminance
-    g.fillStyle=`rgb(${t+4},${t+2},${t-2})`;
+    const x=cx*cw,y=cy*ch,t=30+Math.random()*22; // slab luminance (cool, brighter than the old warm 18-38)
+    g.fillStyle=`rgb(${t},${t+2},${t+7})`;
     g.fillRect(x+1.5,y+1.5,cw-3,ch-3);
     // subtle top-left bevel highlight + bottom-right shadow → tactile relief
     g.fillStyle='rgba(255,255,255,.05)';g.fillRect(x+1.5,y+1.5,cw-3,1.5);g.fillRect(x+1.5,y+1.5,1.5,ch-3);
@@ -5579,8 +5579,26 @@ function drawSidewalk(g,w,h){
 }
 function makeSidewalkTex(){const t=tex(drawSidewalk,384,480,true);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1,140);t.anisotropy=8;return t;}
 let sidewalkTex=makeSidewalkTex();
+// height→normal for the pavement so slab joints recess and the tenji dots dome up: this is what makes
+// the sidewalk catch raking neon/lamp light with real relief instead of reading as a flat plastic band.
+function drawSidewalkHeight(g,w,h){
+  const cols=4,rows=5,cw=w/cols,ch=h/rows;
+  g.fillStyle='#8c8c8c';g.fillRect(0,0,w,h);                 // slab tops
+  g.strokeStyle='#242424';g.lineWidth=3;                     // recessed joints
+  for(let cx=0;cx<=cols;cx++){g.beginPath();g.moveTo(cx*cw,0);g.lineTo(cx*cw,h);g.stroke();}
+  for(let cy=0;cy<=rows;cy++){g.beginPath();g.moveTo(0,cy*ch);g.lineTo(w,cy*ch);g.stroke();}
+  const stripX=w*0.10,stripW=w*0.15,dcols=2,drows=Math.round(rows*3),ddx=stripW/dcols,ddy=h/drows;
+  for(let dc=0;dc<dcols;dc++)for(let dr=0;dr<drows;dr++){    // raised tactile-paving domes
+    const dx=stripX+ddx*(dc+0.5),dy=ddy*(dr+0.5),dR=Math.min(ddx,ddy)*0.34;
+    const gr=g.createRadialGradient(dx,dy,0,dx,dy,dR);
+    gr.addColorStop(0,'#ffffff');gr.addColorStop(1,'#7a7a7a');
+    g.fillStyle=gr;g.beginPath();g.arc(dx,dy,dR,0,7);g.fill();
+  }
+}
+const sidewalkNormal=normalMapFromHeight(drawSidewalkHeight,384,480,1.7);
+sidewalkNormal.repeat.set(1,140);
 // damp roughness map: reuse the wet-street map so puddles/damp patches on the walk catch neon too
-const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,roughness:0.82,roughnessMap:wetRoughTex,metalness:0.06,envMapIntensity:0.9,emissive:0x0a0a0a,emissiveMap:sidewalkTex,emissiveIntensity:0.14});
+const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,normalMap:sidewalkNormal,normalScale:new THREE.Vector2(0.85,0.85),roughness:0.82,roughnessMap:wetRoughTex,metalness:0.06,envMapIntensity:0.9,emissive:0x080808,emissiveMap:sidewalkTex,emissiveIntensity:0.12});
 // raised kerb: real relief, not a flat decal — a textured vertical wall face (grime streaks,
 // expansion joints, a bright top chamfer that catches passing neon) so the sidewalk visibly
 // STEPS UP from the road instead of sitting flush with it.
@@ -6301,6 +6319,11 @@ function storefrontTex(){return tex((g,w,h)=>{
 },1536,192,true);}
 const STOREFRONT_VARIANT_COUNT=6; // pooled variants (was 3) so shop rows repeat far less across the city
 const storefrontMats=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>new THREE.MeshBasicMaterial({map:storefrontTex()}));
+// shared materials for the 3D storefront bays (frame recess, protruding awnings, emissive sign band)
+// so shopfronts read as real street frontage with depth, not flat posters. Pooled = few materials.
+const sfFrameMat=new THREE.MeshStandardMaterial({color:0x14131a,roughness:0.7,metalness:0.35});
+const sfAwningMats=[0x9a2740,0x243f6a,0x1f5a44,0x6a5410,0x40204a,0x20222a].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.62,metalness:0.05}));
+const sfSignMats=[0xff4fa0,0x35e0ff,0xffb23a,0x8bff5a,0xc46bff,0xff6a3a].map(c=>new THREE.MeshBasicMaterial({color:c}));
 
 // generic original "idol" billboard (NOT a copy of any copyrighted character)
 function idolPosterTex(){return tex((g,w,h)=>{
@@ -6742,8 +6765,22 @@ function spawnBuilding(cx,cz,bw,bd,style){
   if(style==='neon'||style==='mixed'){
     const sf=storefrontMats[Math.floor(Math.random()*STOREFRONT_VARIANT_COUNT)];
     [[bd/2+0.15,0],[-bd/2-0.15,Math.PI]].forEach(o=>{
-      const pl=new THREE.Mesh(new THREE.PlaneGeometry(bw,5),sf);
-      pl.position.set(0,2.5,o[0]);pl.rotation.y=o[1];grp.add(pl);
+      const zc=o[0], ry=o[1], fs=zc>=0?1:-1; // fs = outward normal direction for this face
+      // lit interior window (the shop poster) sits recessed behind a dark frame
+      const pl=new THREE.Mesh(new THREE.PlaneGeometry(bw*0.98,4.2),sf);
+      pl.position.set(0,2.5,zc);pl.rotation.y=ry;grp.add(pl);
+      // dark frame recess: top bulkhead + bottom kickplate + two end jambs give the window depth
+      const bulk=new THREE.Mesh(new THREE.BoxGeometry(bw,1.0,0.5),sfFrameMat);bulk.position.set(0,4.9,zc+fs*0.12);bulk.rotation.y=ry;grp.add(bulk);
+      const kick=new THREE.Mesh(new THREE.BoxGeometry(bw,0.7,0.5),sfFrameMat);kick.position.set(0,0.35,zc+fs*0.12);kick.rotation.y=ry;grp.add(kick);
+      // emissive shop SIGN BAND across the bulkhead
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(bw*0.9,0.42,0.12),sfSignMats[Math.floor(Math.random()*sfSignMats.length)]);
+      sign.position.set(0,4.75,zc+fs*0.42);sign.rotation.y=ry;grp.add(sign);
+      // protruding AWNING canopies over the sidewalk, split into 2 shop segments (real street depth + shadow)
+      const segN=2, segW=bw/segN;
+      for(let s2=0;s2<segN;s2++){
+        const aw=new THREE.Mesh(new THREE.BoxGeometry(segW*0.92,0.14,1.3),sfAwningMats[Math.floor(Math.random()*sfAwningMats.length)]);
+        aw.position.set(-bw/2+segW*(s2+0.5),4.05,zc+fs*0.75);aw.rotation.y=ry;aw.castShadow=true;grp.add(aw);
+      }
       // warm shop-light spill onto the sidewalk below the storefront (instanced after the district loop)
       const push=o[0]>=0?2.0:-2.0;
       warmGlowXf.push({x:cx,z:cz+o[0]+push,w:Math.max(3,bw*0.85),d:4.2});
