@@ -1031,7 +1031,7 @@ const reflWetMask=tex((g,w,h)=>{
 reflWetMask.wrapS=reflWetMask.wrapT=THREE.RepeatWrapping;
 const WetReflShader={
   uniforms:{color:{value:null},tDiffuse:{value:null},textureMatrix:{value:null},
-    tWet:{value:reflWetMask},uStrength:{value:0.95},uWetScale:{value:0.05}},
+    tWet:{value:reflWetMask},uStrength:{value:0.4},uWetScale:{value:0.05}},
   vertexShader:`uniform mat4 textureMatrix;varying vec4 vUv;varying vec2 vWorld;
     void main(){vUv=textureMatrix*vec4(position,1.0);vec4 wp=modelMatrix*vec4(position,1.0);
     vWorld=wp.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
@@ -1055,7 +1055,7 @@ const WetReflShader={
       // THRESHOLD: kill the dim window-speckle (the "static"), keep only bright neon so the road
       // shows coherent sign reflections on a dark wet surface instead of colored noise.
       float lum=dot(refl,vec3(0.299,0.587,0.114));
-      float keep=smoothstep(0.18,0.5,lum);
+      float keep=smoothstep(0.42,0.72,lum); // only the BRIGHTEST neon reflects — kills the broad building/heli mirror that read as glass
       refl=refl*keep*color;
       refl+=refl*refl*1.0;                           // let the surviving bright neon bloom
       float dry=texture2D(tWet,vWorld*uWetScale).r;  // wet mask: dark=wet in the source, so invert
@@ -1066,7 +1066,7 @@ const WetReflShader={
     }`
 };
 const wetReflector=new THREE.Reflector(new THREE.PlaneGeometry(CITY*2,CITY*2),{
-  textureWidth:512,textureHeight:512,color:0x8b97ad,shader:WetReflShader});
+  textureWidth:512,textureHeight:512,color:0x5a626e,shader:WetReflShader});
 wetReflector.rotation.x=-Math.PI/2;wetReflector.position.y=0.05;
 wetReflector.material.transparent=true;wetReflector.material.depthWrite=false;
 wetReflector.renderOrder=-1; // draw before the emissive road decals/puddles so they layer on top
