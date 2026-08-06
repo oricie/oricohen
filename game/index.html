@@ -1309,7 +1309,9 @@ function drawSidewalkHeight(g,w,h){
 const sidewalkNormal=normalMapFromHeight(drawSidewalkHeight,384,480,1.7);
 sidewalkNormal.repeat.set(1,140);
 // damp roughness map: reuse the wet-street map so puddles/damp patches on the walk catch neon too
-const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,normalMap:sidewalkNormal,normalScale:new THREE.Vector2(0.85,0.85),roughness:0.82,roughnessMap:wetRoughTex,metalness:0.06,envMapIntensity:0.9,emissive:0x080808,emissiveMap:sidewalkTex,emissiveIntensity:0.12});
+// matte grainy CONCRETE: dropped the wet roughnessMap (it turned the pavement to glass in damp
+// patches), raised roughness and cut envMap so the slab/grain normal reads as texture, not a mirror.
+const sidewalkMat=new THREE.MeshStandardMaterial({map:sidewalkTex,normalMap:sidewalkNormal,normalScale:new THREE.Vector2(0.95,0.95),roughness:0.9,metalness:0.02,envMapIntensity:0.32,emissive:0x080808,emissiveMap:sidewalkTex,emissiveIntensity:0.12});
 // raised kerb: real relief, not a flat decal — a textured vertical wall face (grime streaks,
 // expansion joints, a bright top chamfer that catches passing neon) so the sidewalk visibly
 // STEPS UP from the road instead of sitting flush with it.
@@ -1376,7 +1378,7 @@ function addRoad(axis,r){
   // normal can come up (0.10 -> 0.32) WITHOUT shattering into sparkle — a rough surface diffuses each
   // specular. The wet roughness MAP still darkens streaks/pools, so those keep a coherent neon shine.
   const baseRough=(r.major?0.52:0.56)+Math.random()*0.18;
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.32,0.32),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.08,envMapIntensity:1.2,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.36,0.36),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.07,envMapIntensity:1.0,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
   if(axis==='x')mesh.position.set(r.p,0.034,0);
@@ -1653,7 +1655,7 @@ const cobbleTex=tex((g,w,h)=>{
   }
   for(let i=0;i<300;i++){g.fillStyle=`rgba(${Math.random()<0.5?0:210},${Math.random()<0.5?0:200},${Math.random()<0.5?0:190},${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,1,1);}
 },128,128,true);
-const cobbleMat=new THREE.MeshStandardMaterial({map:cobbleTex,roughness:0.34,roughnessMap:wetRoughTex,metalness:0.12,envMapIntensity:1.9,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const cobbleMat=new THREE.MeshStandardMaterial({map:cobbleTex,roughness:0.82,metalness:0.05,envMapIntensity:0.45,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}); // matte paver plaza (was glassy)
 const tileTex=tex((g,w,h)=>{
   g.fillStyle='#2b2c30';g.fillRect(0,0,w,h);
   const n=4,s=w/n;
@@ -1671,7 +1673,7 @@ const tileTex=tex((g,w,h)=>{
   g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=2.5;
   for(let i=0;i<=n;i++){g.beginPath();g.moveTo(i*s,0);g.lineTo(i*s,h);g.stroke();g.beginPath();g.moveTo(0,i*s);g.lineTo(w,i*s);g.stroke();}
 },128,128,true);
-const tileMat=new THREE.MeshStandardMaterial({map:tileTex,roughness:0.28,roughnessMap:wetRoughTex,metalness:0.14,envMapIntensity:2.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+const tileMat=new THREE.MeshStandardMaterial({map:tileTex,roughness:0.8,metalness:0.05,envMapIntensity:0.5,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}); // matte tiled slab plaza (was glassy)
 // intersection patches: mostly asphalt, some stone-paver plazas / tiled slabs for block variety
 ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
   const roll=Math.random(),bm=roll<0.16?cobbleMat:(roll<0.28?tileMat:plainAsphaltMat);
