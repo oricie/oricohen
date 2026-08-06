@@ -15,17 +15,48 @@
   #tacwrap { bottom:14px; left:12px; display:flex; flex-direction:column; gap:0; }
   #tacTitle { font-size:10px; letter-spacing:2px; color:#9dffb0; background:rgba(3,12,6,.7); border:1px solid rgba(157,255,176,.4); border-bottom:none; padding:2px 6px; width:max-content; }
   #tacmap { background:#02120a; border:1px solid rgba(157,255,176,.4); box-shadow:inset 0 0 14px rgba(0,0,0,.9), 0 0 10px rgba(60,255,120,.12); }
+  /* ---- HELI CONTROL CLUSTER: metallic MFD-style tactical controls ---- */
   .tbtn { position:absolute; pointer-events:auto; user-select:none; -webkit-user-select:none; z-index:9;
-    color:#9dffb0; background:rgba(6,18,10,.55); border:1px solid rgba(157,255,176,.55);
-    border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold;
-    font-family:'Courier New',monospace; letter-spacing:1px; text-shadow:0 0 4px rgba(120,255,150,.6); }
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; color:#7fe0ff;
+    font-family:'Bahnschrift','DIN Alternate','Arial Narrow',sans-serif; font-weight:700; letter-spacing:1.5px;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+    transition:transform .08s ease, box-shadow .15s ease, filter .15s ease; }
+  .tbtn .ic { font-size:19px; line-height:1; filter:drop-shadow(0 0 5px currentColor); }
+  .tbtn .lb { font-size:8.5px; opacity:.9; }
+  .tbtn:active { transform:scale(.92); }
+  .mfd { width:62px; height:62px; border-radius:13px;
+    background:linear-gradient(158deg, rgba(22,44,60,.92), rgba(6,13,22,.94));
+    border:1px solid rgba(120,220,255,.5);
+    box-shadow:inset 0 1px 0 rgba(180,240,255,.22), inset 0 0 15px rgba(0,44,66,.5), 0 4px 10px rgba(0,0,0,.5), 0 0 13px rgba(60,200,255,.12); }
+  .mfd::before { content:''; position:absolute; inset:4px; border-radius:9px; border:1px solid rgba(120,220,255,.14); pointer-events:none; }
+  .mfd:hover { filter:brightness(1.15); box-shadow:inset 0 1px 0 rgba(180,240,255,.3), inset 0 0 16px rgba(0,60,90,.6), 0 4px 12px rgba(0,0,0,.6), 0 0 20px rgba(70,210,255,.32); }
+  .mfd.on { color:#8bffbe; border-color:rgba(140,255,190,.9); box-shadow:inset 0 0 16px rgba(0,70,40,.5), 0 0 22px rgba(90,255,150,.45); }
   #stick-zone { position:absolute; left:0; bottom:0; width:45%; height:55%; pointer-events:auto; z-index:7; }
   #stick-base { position:absolute; width:110px; height:110px; border-radius:50%; border:2px solid rgba(157,255,176,.4); background:rgba(6,18,10,.3); display:none; z-index:9; }
   #stick-knob { position:absolute; width:48px; height:48px; border-radius:50%; background:rgba(157,255,176,.45); display:none; z-index:9; }
-  #fireBtn { right:22px; bottom:60px; width:92px; height:92px; font-size:15px; background:rgba(70,10,14,.6); border-color:rgba(255,90,90,.7); color:#ff9090; }
-  #camBtn { right:34px; bottom:170px; width:56px; height:56px; font-size:11px; }
-  #wpnBtn { right:130px; bottom:150px; width:56px; height:56px; font-size:11px; }
-  #stopBtn { border-radius:14px !important; }
+  #camBtn { right:150px; bottom:204px; }
+  #wpnBtn { right:150px; bottom:60px; }
+  #stopBtn { right:150px; bottom:132px; }
+  #fireBtn { right:24px; bottom:56px; width:106px; height:106px; border-radius:50%; color:#ff8080;
+    background:radial-gradient(circle at 50% 36%, rgba(96,18,22,.96), rgba(34,5,9,.97));
+    border:2px solid rgba(255,96,96,.85);
+    box-shadow:inset 0 0 24px rgba(255,70,70,.32), 0 0 30px rgba(255,40,60,.42), 0 6px 16px rgba(0,0,0,.6); }
+  #fireBtn .ic { font-size:26px; }
+  #fireBtn .lb { font-size:11px; letter-spacing:3px; }
+  #fireBtn::before { content:''; position:absolute; inset:8px; border-radius:50%; border:2px dashed rgba(255,120,120,.42); animation:fireRing 9s linear infinite; pointer-events:none; }
+  #fireBtn:active { filter:brightness(1.25); box-shadow:inset 0 0 30px rgba(255,90,90,.55), 0 0 42px rgba(255,50,70,.75); }
+  @keyframes fireRing { to { transform:rotate(360deg); } }
+  /* ---- NEON TITLE WORDMARK ---- */
+  .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
+  .logo-main { font-family:'Arial Black',Impact,sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; font-style:italic;
+    background:linear-gradient(180deg,#ffffff 0%,#8be9ff 42%,#33c7ff 56%,#0a6fb0 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
+    filter:drop-shadow(0 0 2px #bff3ff) drop-shadow(0 0 16px #23c6ff); }
+  .logo-main em { font-style:italic; margin-left:.16em;
+    background:linear-gradient(180deg,#ffffff 0%,#ffb0e6 45%,#ff2f8f 60%,#a01560 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 16px #ff2f8f); }
+  .logo-jp { font-family:'Hiragino Kaku Gothic Pro','Yu Gothic','Noto Sans JP','MS Gothic',sans-serif; font-weight:700; font-size:19px; letter-spacing:8px; color:#ffd84d; text-shadow:0 0 12px #ff9e2e; padding-left:8px; }
   #cockpit { display:none; }
 </style>
 
@@ -45,10 +76,10 @@
 
 <div id="stick-zone"></div>
 <div id="stick-base"></div><div id="stick-knob"></div>
-<div class="tbtn" id="fireBtn">FIRE</div>
-<div class="tbtn" id="camBtn">CAM</div>
-<div class="tbtn" id="wpnBtn">WPN</div>
-<div class="tbtn" id="stopBtn" style="right:130px;bottom:230px;width:56px;height:56px;font-size:10px;" onpointerdown="window.__throttleTarget=(window.__throttleTarget===undefined||window.__throttleTarget>0.5)?0:1;event.preventDefault();">HVR</div>
+<div class="tbtn" id="fireBtn"><span class="ic">⌖</span><span class="lb">FIRE</span></div>
+<div class="tbtn mfd" id="camBtn"><span class="ic">◎</span><span class="lb">CAM</span></div>
+<div class="tbtn mfd" id="wpnBtn"><span class="ic">◈</span><span class="lb">WPN</span></div>
+<div class="tbtn mfd" id="stopBtn" onpointerdown="window.__throttleTarget=(window.__throttleTarget===undefined||window.__throttleTarget>0.5)?0:1;event.preventDefault();"><span class="ic">⇅</span><span class="lb">HVR</span></div>
 
 <div id="cockpit">
   <div id="frame"></div>
@@ -9104,8 +9135,8 @@ gameOver=true; // gate the sim until START
 const ov=document.createElement('div');
 ov.style.cssText='position:absolute;inset:0;background:rgba(6,4,18,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:60;font-family:Courier New,monospace;color:#fff;text-align:center;gap:12px;padding:20px;';
 ov.innerHTML=`
-  <div style="font-size:34px;font-weight:bold;color:#ff4fd0;text-shadow:0 0 18px #ff4fd0">NEON TOKYO</div>
-  <div style="font-size:16px;color:#35e0ff;text-shadow:0 0 10px #35e0ff;margin-top:-8px">ZOMBIE RESCUE SQUADRON</div>
+  <div class="logo"><span class="logo-main">NEON<em>TOKYO</em></span><span class="logo-jp">ネオン東京</span></div>
+  <div style="font-size:14px;color:#35e0ff;text-shadow:0 0 10px #35e0ff;letter-spacing:7px;font-family:'Bahnschrift','Arial Narrow',sans-serif;font-weight:700;margin-top:2px">ZOMBIE RESCUE SQUADRON</div>
   <div id="ovStats" style="font-size:13px;color:#cfc;line-height:1.7"></div>
   <input id="pName" maxlength="10" placeholder="CALLSIGN" style="background:#0c0a18;border:1px solid #35e0ff;color:#fff;padding:8px 12px;font-family:inherit;font-size:14px;text-align:center;border-radius:6px;width:180px;pointer-events:auto">
   <button id="startBtn" style="background:#ff2f8f;border:none;color:#fff;padding:14px 44px;font-size:18px;font-weight:bold;font-family:inherit;border-radius:8px;cursor:pointer;pointer-events:auto;box-shadow:0 0 24px rgba(255,47,143,.6)">TAKE OFF</button>
@@ -9215,6 +9246,7 @@ function loop(now){
     if(window.__throttleTarget===undefined)window.__throttleTarget=1;
     if(window.__throttle===undefined)window.__throttle=1;
     window.__throttle=THREE.MathUtils.lerp(window.__throttle,window.__throttleTarget,1.6*dt);
+    {const hb=document.getElementById('stopBtn');if(hb)hb.classList.toggle('on',window.__throttleTarget<0.5);} // HVR lights up when hover engaged
     const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
     heli.position.add(fwd.clone().multiplyScalar(CRUISE*window.__throttle*dt));
     heli.position.y=Math.max(3,Math.min(180,heli.position.y+vSpeed*dt));
