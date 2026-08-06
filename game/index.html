@@ -3008,32 +3008,62 @@ const peds=[];
   pedBodyMesh.instanceMatrix.needsUpdate=true;pedHeadMesh.instanceMatrix.needsUpdate=true;
 }
 
-// rooftop clutter: dishes, pipes, AC units
-const clutterM=new THREE.MeshLambertMaterial({color:0x4a4454});
-const dishM=new THREE.MeshLambertMaterial({color:0x9a96a4,side:THREE.DoubleSide});
+// ROOFTOP SILHOUETTE — the critic's #1 building fix vs Ghostwire: Tokyo. The old pass added a tiny
+// dish/pipe on ~45% of roofs, so from altitude every building still read as a clean flat-topped box.
+// This adds PROMINENT silhouette-breakers — stair/elevator penthouse blocks (the biggest jag), the
+// iconic Tokyo cylindrical water tanks, AC condenser banks and antenna masts with red warning lights.
+// All batched through InstancedMesh (transforms collected first, ~6 draw calls total) so a jagged,
+// cluttered roofline costs almost nothing.
+const dummy=new THREE.Object3D();
+const HOUS=[],TANK=[],TLEG=[],ACU=[],MAST=[],MLED=[];
 buildings.forEach(b=>{
-  if(Math.random()>0.45)return;
-  const bx=b.m.position.x,bz=b.m.position.z,by=b.h;
-  if(Math.random()<.6){
-    const dish=new THREE.Mesh(new THREE.CircleGeometry(1.1,10),dishM);
-    dish.position.set(bx+(Math.random()-.5)*b.w*.4,by+1.6,bz+(Math.random()-.5)*b.d*.4);
-    dish.rotation.set(-0.8,Math.random()*6.28,0);
-    scene.add(dish);
-    const stand=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,1.4,5),clutterM);
-    stand.position.set(dish.position.x,by+0.7,dish.position.z);scene.add(stand);
+  const bx=b.m.position.x,bz=b.m.position.z,by=b.h,bw=b.w,bd=b.d;
+  const tall=by>24;
+  // stair/elevator penthouse housing — the strongest silhouette break; taller on taller buildings
+  if(Math.random()<0.62){
+    const hw=Math.min(bw*(0.26+Math.random()*0.24),bw-1.4);
+    const hd=Math.min(bd*(0.26+Math.random()*0.24),bd-1.4);
+    const hh=2.6+Math.random()*(tall?6:2.6);
+    dummy.position.set(bx+(Math.random()-.5)*bw*0.32,by+hh/2,bz+(Math.random()-.5)*bd*0.32);
+    dummy.rotation.set(0,0,0);dummy.scale.set(hw,hh,hd);dummy.updateMatrix();HOUS.push(dummy.matrix.clone());
   }
-  if(Math.random()<.6){
-    const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,b.d*.6,6),clutterM);
-    pipe.rotation.x=Math.PI/2;
-    pipe.position.set(bx+(Math.random()-.5)*b.w*.5,by+0.5,bz);
-    scene.add(pipe);
+  // cylindrical water tank on a short stand (iconic Tokyo rooftop)
+  if(Math.random()<0.42){
+    const tr=1.0+Math.random()*0.9,th=2.2+Math.random()*1.9;
+    const tx=bx+(Math.random()-.5)*bw*0.4,tz=bz+(Math.random()-.5)*bd*0.4;
+    dummy.position.set(tx,by+1.0+th/2,tz);dummy.rotation.set(0,0,0);dummy.scale.set(tr,th,tr);
+    dummy.updateMatrix();TANK.push(dummy.matrix.clone());
+    dummy.position.set(tx,by+0.5,tz);dummy.scale.set(tr*1.15,1.0,tr*1.15);
+    dummy.updateMatrix();TLEG.push(dummy.matrix.clone());
   }
-  if(Math.random()<.5){
-    const ac=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.5,2.2),new THREE.MeshLambertMaterial({color:0x6a6674}));
-    ac.position.set(bx+(Math.random()-.5)*b.w*.4,by+0.95,bz+(Math.random()-.5)*b.d*.4);
-    scene.add(ac);
+  // AC condenser bank
+  if(Math.random()<0.5){
+    dummy.position.set(bx+(Math.random()-.5)*bw*0.42,by+0.75,bz+(Math.random()-.5)*bd*0.42);
+    dummy.rotation.set(0,Math.random()*6.28,0);dummy.scale.set(2.0+Math.random(),1.4,2.0);
+    dummy.updateMatrix();ACU.push(dummy.matrix.clone());
+  }
+  // antenna mast + red aircraft-warning light on taller buildings
+  if(tall&&Math.random()<0.5){
+    const mh=6+Math.random()*11,mx=bx+(Math.random()-.5)*bw*0.3,mz=bz+(Math.random()-.5)*bd*0.3;
+    dummy.position.set(mx,by+mh/2,mz);dummy.rotation.set(0,0,0);dummy.scale.set(1,mh,1);
+    dummy.updateMatrix();MAST.push(dummy.matrix.clone());
+    dummy.position.set(mx,by+mh,mz);dummy.scale.set(1,1,1);dummy.updateMatrix();MLED.push(dummy.matrix.clone());
   }
 });
+function instAdd(geo,mat,arr,shadow){
+  if(!arr.length)return null;
+  const im=new THREE.InstancedMesh(geo,mat,arr.length);
+  arr.forEach((m,i)=>im.setMatrixAt(i,m));
+  im.instanceMatrix.needsUpdate=true;
+  if(shadow){im.castShadow=true;im.receiveShadow=true;}
+  scene.add(im);return im;
+}
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x38333f}),HOUS,true);
+instAdd(new THREE.CylinderGeometry(1,1,1,12),new THREE.MeshLambertMaterial({color:0x5a544e}),TANK,true);
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x2c2830}),TLEG,false);
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x6a6674}),ACU,false);
+instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshLambertMaterial({color:0x50505a}),MAST,false);
+instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
 
 // trees: parks + ginkgo rows on the avenues
 const trunkG=new THREE.CylinderGeometry(.35,.5,4,6);
