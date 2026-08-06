@@ -2040,6 +2040,10 @@ const sfAwningCols=[0x9a2740,0x243f6a,0x1f5a44,0x6a5410,0x40204a,0x20222a];
 const sfUnitBox=new THREE.BoxGeometry(1,1,1), sfUnitPlane=new THREE.PlaneGeometry(1,1);
 const sfFrameXf=[],sfSignXf=[],sfAwningXf=[],_sfCol=new THREE.Color();
 const sfInnerXf=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>[]);
+const parapetXf=[]; // PERF: every building's roof parapet, batched into one InstancedMesh
+const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, batched + shared material
+const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
+const warnGeo=new THREE.SphereGeometry(1,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff3366});
 
 // generic original "idol" billboard (NOT a copy of any copyrighted character)
 function idolPosterTex(){return tex((g,w,h)=>{
@@ -2463,8 +2467,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
   }
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,rm,rm,mat,mat]);
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
-  const pp=new THREE.Mesh(new THREE.BoxGeometry(bw+0.7,style==='res'?0.7:1.1,bd+0.7),parapetMat);
-  pp.position.y=bh+0.28;grp.add(pp);
+  parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7}); // batched after the loop
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
     const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
@@ -2473,10 +2476,8 @@ function spawnBuilding(cx,cz,bw,bd,style){
     topY=bh+h2;bh=topY;
   }
   if(topY>70){
-    const ant=new THREE.Mesh(new THREE.CylinderGeometry(.3,.5,14,6),new THREE.MeshLambertMaterial({color:0x555}));
-    ant.position.y=topY+7;grp.add(ant);
-    const bl=new THREE.Mesh(new THREE.SphereGeometry(1,6,6),new THREE.MeshBasicMaterial({color:0xff3366}));
-    bl.position.y=topY+14.5;grp.add(bl);
+    antXf.push({x:cx,y:topY+7,z:cz});
+    warnXf.push({x:cx,y:topY+14.5,z:cz});
   }
   if(style==='neon'||style==='mixed'){
     const sfi=Math.floor(Math.random()*STOREFRONT_VARIANT_COUNT);
@@ -2660,6 +2661,19 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   sfBoxBatch(sfFrameXf,sfFrameMat,false);
   sfBoxBatch(sfSignXf,sfSignInstMat,true);
   sfBoxBatch(sfAwningXf,sfAwningInstMat,true);
+  if(parapetXf.length){
+    const m=new THREE.InstancedMesh(sfUnitBox,parapetMat,parapetXf.length);
+    parapetXf.forEach((t,i)=>{dummy.position.set(t.x,t.y,t.z);dummy.rotation.set(0,0,0);dummy.scale.set(t.w,t.h,t.d);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});
+    m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);
+  }
+  const posBatch=(arr,geo,mat)=>{ // batch fixed-size props that only vary in position
+    if(!arr.length)return;
+    const m=new THREE.InstancedMesh(geo,mat,arr.length);
+    arr.forEach((t,i)=>{dummy.position.set(t.x,t.y,t.z);dummy.rotation.set(0,0,0);dummy.scale.set(1,1,1);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});
+    m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;scene.add(m);
+  };
+  posBatch(antXf,antGeo,antMat);
+  posBatch(warnXf,warnGeo,warnMat);
   for(let v=0;v<STOREFRONT_VARIANT_COUNT;v++){
     if(!sfInnerXf[v].length)continue;
     const m=new THREE.InstancedMesh(sfUnitPlane,storefrontMats[v],sfInnerXf[v].length);
