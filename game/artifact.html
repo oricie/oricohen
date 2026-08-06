@@ -6468,7 +6468,40 @@ const facades=facadeBaseColors.map((base,i)=>{
   };
 });
 const glassT=glassTex();
-const roofMat=new THREE.MeshLambertMaterial({map:gravelTex});
+// ---- REAL ROOFTOP SURFACES ----
+// The old roof was flat gravel-noise on a Lambert material with no normal map, so from altitude every
+// roof read as generic vector-purple. This is tar-felt roofing with ALIGNED panel seams, patch
+// repairs, water-pooling stains and rust streaks, plus a matching normal map so raking light picks
+// out the seams and patches. A 3-map pool + per-building pick kills the identical-layout repeat.
+function drawRoofSeams(g,w,h,albedo){
+  const strip=h/8;
+  for(let s=1;s<8;s++){const y=s*strip;
+    if(albedo){g.fillStyle='rgba(0,0,0,.34)';g.fillRect(0,y-1.5,w,3);g.fillStyle='rgba(150,140,160,.10)';g.fillRect(0,y+1.5,w,1.5);}
+    else{g.fillStyle='#c8c8c8';g.fillRect(0,y-1.5,w,3);}
+  }
+}
+function makeRoofMap(){return tex((g,w,h)=>{
+  g.fillStyle='#2b2734';g.fillRect(0,0,w,h);
+  for(let i=0;i<11000;i++){const v=Math.random()*32;g.fillStyle=`rgba(${50+v},${44+v},${56+v},.6)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  const strip=h/8;
+  for(let s=0;s<8;s++){g.fillStyle=`rgba(${18+Math.random()*26},${16+Math.random()*22},${28+Math.random()*28},.12)`;g.fillRect(0,s*strip,w,strip);}
+  drawRoofSeams(g,w,h,true);
+  for(let i=0;i<6;i++){const pw=26+Math.random()*80,ph=20+Math.random()*60,px=Math.random()*w,py=Math.random()*h;
+    g.fillStyle='rgba(12,10,16,.5)';g.fillRect(px,py,pw,ph);g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;g.strokeRect(px,py,pw,ph);}
+  for(let i=0;i<9;i++){const cx=Math.random()*w,cy=Math.random()*h,rr=16+Math.random()*44;
+    const gr=g.createRadialGradient(cx,cy,rr*0.15,cx,cy,rr);
+    gr.addColorStop(0,'rgba(64,60,78,.20)');gr.addColorStop(.75,'rgba(36,32,46,.10)');gr.addColorStop(1,'rgba(8,6,12,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,rr,0,7);g.fill();}
+  for(let i=0;i<7;i++){g.strokeStyle=`rgba(${96+Math.random()*40},${52+Math.random()*18},28,.16)`;g.lineWidth=2+Math.random()*3;
+    const x=Math.random()*w,y=Math.random()*h;g.beginPath();g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*24,y+24+Math.random()*46);g.stroke();}
+},512,512,true);}
+const roofNrm=normalMapFromHeight((g,w,h)=>{
+  drawRoofSeams(g,w,h,false);
+  for(let i=0;i<3500;i++){const v=110+Math.random()*90;g.fillStyle=`rgb(${v},${v},${v})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+},512,512,1.9);
+const roofMats=[0,1,2].map(()=>new THREE.MeshStandardMaterial({map:makeRoofMap(),normalMap:roofNrm,normalScale:new THREE.Vector2(0.75,0.75),roughness:0.85,metalness:0.05}));
+const roofMat=roofMats[0]; // alias for any single-reference use
+function pickRoof(){return roofMats[Math.floor(Math.random()*roofMats.length)];}
 const parapetMat=new THREE.MeshLambertMaterial({color:0x3a3448});
 const woodMat=new THREE.MeshLambertMaterial({color:0x4e3a2e});
 function vintagePosterTex(){return tex((g,w,h)=>{
@@ -6639,6 +6672,7 @@ const groundPoolXf=[]; // {x,z,s,c:[r,g,b]}
 
 function spawnBuilding(cx,cz,bw,bd,style){
   const grp=new THREE.Group();
+  const rm=pickRoof();
   let bh,mat;
   if(style==='glass'){
     bh=80+Math.random()*95;
@@ -6657,14 +6691,14 @@ function spawnBuilding(cx,cz,bw,bd,style){
     // neon-night mood stays intact (no drift into warm/green tones)
     mat.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
   }
-  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,roofMat,roofMat,mat,mat]);
+  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,rm,rm,mat,mat]);
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const pp=new THREE.Mesh(new THREE.BoxGeometry(bw+0.7,style==='res'?0.7:1.1,bd+0.7),parapetMat);
   pp.position.y=bh+0.28;grp.add(pp);
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
     const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
-    const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),[mat,mat,roofMat,roofMat,mat,mat]);
+    const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),[mat,mat,rm,rm,mat,mat]);
     b2.position.y=bh+h2/2;b2.castShadow=true;grp.add(b2);
     topY=bh+h2;bh=topY;
   }
@@ -7382,11 +7416,51 @@ function instAdd(geo,mat,arr,shadow){
   if(shadow){im.castShadow=true;im.receiveShadow=true;}
   scene.add(im);return im;
 }
-instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x38333f}),HOUS,true);
-instAdd(new THREE.CylinderGeometry(1,1,1,12),new THREE.MeshLambertMaterial({color:0x5a544e}),TANK,true);
-instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x2c2830}),TLEG,false);
-instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshLambertMaterial({color:0x6a6674}),ACU,false);
-instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshLambertMaterial({color:0x50505a}),MAST,false);
+// TEXTURED CLUTTER MATERIALS — the flat solid-colour boxes were the 'vector generic' read up close.
+// Ribbed rusty metal (tanks), louvered vented panels (AC), formed concrete with a door (housing).
+const tankMat=(()=>{
+  const map=tex((g,w,h)=>{
+    g.fillStyle='#4c4740';g.fillRect(0,0,w,h);
+    for(let x=0;x<w;x+=w/12){g.fillStyle='rgba(255,255,255,.06)';g.fillRect(x,0,2,h);g.fillStyle='rgba(0,0,0,.24)';g.fillRect(x+w/24,0,2,h);}
+    g.fillStyle='rgba(0,0,0,.3)';g.fillRect(0,4,w,3);g.fillRect(0,h-8,w,3);
+    for(let i=0;i<26;i++){g.strokeStyle=`rgba(${110+Math.random()*50},${58+Math.random()*24},30,${.1+Math.random()*.2})`;g.lineWidth=1+Math.random()*3;
+      const x=Math.random()*w;g.beginPath();g.moveTo(x,Math.random()*h*.4);g.lineTo(x+(Math.random()-.5)*8,h*(.5+Math.random()*.5));g.stroke();}
+  },128,128);
+  const nrm=normalMapFromHeight((g,w,h)=>{for(let x=0;x<w;x+=w/12){g.fillStyle='#c8c8c8';g.fillRect(x,0,3,h);g.fillStyle='#404040';g.fillRect(x+w/24,0,3,h);}},128,128,2.4);
+  return new THREE.MeshStandardMaterial({map,normalMap:nrm,roughness:0.62,metalness:0.55});
+})();
+const acMat=(()=>{
+  const map=tex((g,w,h)=>{
+    g.fillStyle='#6a6674';g.fillRect(0,0,w,h);
+    for(let y=h*0.16;y<h*0.84;y+=6){g.fillStyle='rgba(0,0,0,.36)';g.fillRect(6,y,w-12,3);g.fillStyle='rgba(255,255,255,.08)';g.fillRect(6,y+3,w-12,1);}
+    g.strokeStyle='rgba(0,0,0,.42)';g.lineWidth=3;g.strokeRect(3,3,w-6,h-6);
+    for(const[bx,by]of[[10,10],[w-10,10],[10,h-10],[w-10,h-10]]){g.fillStyle='#2a2a30';g.beginPath();g.arc(bx,by,2.5,0,7);g.fill();}
+  },96,96);
+  const nrm=normalMapFromHeight((g,w,h)=>{for(let y=h*0.16;y<h*0.84;y+=6){g.fillStyle='#5a5a5a';g.fillRect(6,y,w-12,3);g.fillStyle='#b4b4b4';g.fillRect(6,y+3,w-12,2);}},96,96,2.0);
+  return new THREE.MeshStandardMaterial({map,normalMap:nrm,roughness:0.7,metalness:0.35});
+})();
+const housMat=(()=>{
+  const map=tex((g,w,h)=>{
+    g.fillStyle='#38333f';g.fillRect(0,0,w,h);
+    for(let i=0;i<2600;i++){const v=Math.random()*26;g.fillStyle=`rgba(${52+v},${48+v},${60+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+    for(let x=0;x<=w;x+=w/3){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(x-1,0,2,h);}
+    for(let y=0;y<=h;y+=h/2){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(0,y-1,w,2);}
+    g.fillStyle='#20222a';g.fillRect(w*0.4,h*0.5,w*0.2,h*0.5);
+    g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=2;g.strokeRect(w*0.4,h*0.5,w*0.2,h*0.5);
+    for(let i=0;i<10;i++){g.strokeStyle='rgba(100,54,30,.12)';g.lineWidth=2;const x=Math.random()*w;g.beginPath();g.moveTo(x,h*.2);g.lineTo(x,h*.2+20+Math.random()*30);g.stroke();}
+  },96,96);
+  const nrm=normalMapFromHeight((g,w,h)=>{
+    for(let x=0;x<=w;x+=w/3){g.fillStyle='#5a5a5a';g.fillRect(x-1,0,2,h);}
+    for(let y=0;y<=h;y+=h/2){g.fillStyle='#5a5a5a';g.fillRect(0,y-1,w,2);}
+    g.fillStyle='#6a6a6a';g.fillRect(w*0.4,h*0.5,w*0.2,h*0.5);
+  },96,96,1.6);
+  return new THREE.MeshStandardMaterial({map,normalMap:nrm,normalScale:new THREE.Vector2(0.6,0.6),roughness:0.9,metalness:0.03});
+})();
+instAdd(new THREE.BoxGeometry(1,1,1),housMat,HOUS,true);
+instAdd(new THREE.CylinderGeometry(1,1,1,14),tankMat,TANK,true);
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x2c2830,roughness:0.8,metalness:0.3}),TLEG,false);
+instAdd(new THREE.BoxGeometry(1,1,1),acMat,ACU,false);
+instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshStandardMaterial({color:0x50505a,roughness:0.6,metalness:0.5}),MAST,false);
 instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
 
 // trees: parks + ginkgo rows on the avenues
