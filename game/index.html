@@ -117,7 +117,7 @@ const wideRT2=new THREE.WebGLRenderTarget(bw2,bh2,rtParams);
 const postScene=new THREE.Scene();
 const postCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 const brightMat=new THREE.ShaderMaterial({
-  uniforms:{tDiffuse:{value:null},threshold:{value:0.72},knee:{value:0.5}},
+  uniforms:{tDiffuse:{value:null},threshold:{value:0.63},knee:{value:0.5}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
   fragmentShader:`uniform sampler2D tDiffuse;uniform float threshold;uniform float knee;varying vec2 vUv;
     void main(){
@@ -150,7 +150,7 @@ const blurMat=new THREE.ShaderMaterial({
     }`
 });
 const compositeMat=new THREE.ShaderMaterial({
-  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.42},bloomWideStrength:{value:0.30}},
+  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
   fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;varying vec2 vUv;
     void main(){
