@@ -5201,6 +5201,62 @@ async function endRun(){
 }
 document.getElementById('startBtn').addEventListener('pointerdown',e=>{e.preventDefault();startRun();});
 loadMeta();
+
+// ---------- PERF: merge pooled static geometry to slash draw calls ----------
+// The city runs ~5.2k draw calls/frame; ~2.6k of those meshes share just 47
+// pooled materials. Fusing each pooled group into a single mesh removes ~2.5k
+// draw calls with no visual change (frustum culling barely helps here — from the
+// air you see the whole city anyway). Dynamic subtrees (heli, ship, train) are
+// excluded so nothing that moves gets frozen; moving cars are already instanced.
+(function mergePooledStatics(){
+  try{
+    const dyn=new Set([heli]);
+    if(window.__navyShip&&window.__navyShip.g)dyn.add(window.__navyShip.g);
+    if(window.__train&&window.__train.cars)window.__train.cars.forEach(c=>dyn.add(c));
+    const isDyn=o=>{let n=o;while(n){if(dyn.has(n))return true;n=n.parent;}return false;};
+    scene.updateMatrixWorld(true);
+    const byMat=new Map();
+    scene.traverse(o=>{
+      if(!o.isMesh||o.isInstancedMesh)return;
+      if(Array.isArray(o.material)||isDyn(o))return;
+      const g=o.geometry,m=o.material;
+      if(!g||!g.index||!g.getAttribute('position')||!g.getAttribute('normal')||!g.getAttribute('uv'))return;
+      if(m.transparent&&m.blending!==THREE.AdditiveBlending)return; // preserve alpha-blend order
+      let e=byMat.get(m.uuid); if(!e){e={mat:m,list:[]};byMat.set(m.uuid,e);} e.list.push(o);
+    });
+    const mNorm=new THREE.Matrix3(),v=new THREE.Vector3(),n=new THREE.Vector3();
+    let mergedMeshes=0,removed=0;
+    byMat.forEach(({mat,list})=>{
+      if(list.length<2)return;
+      const P=[],N=[],U=[],I=[]; let voff=0;
+      for(const o of list){
+        const g=o.geometry,pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index;
+        mNorm.getNormalMatrix(o.matrixWorld);
+        for(let i=0;i<pos.count;i++){
+          v.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld); P.push(v.x,v.y,v.z);
+          n.fromBufferAttribute(nor,i).applyNormalMatrix(mNorm).normalize(); N.push(n.x,n.y,n.z);
+          U.push(uv.getX(i),uv.getY(i));
+        }
+        for(let i=0;i<idx.count;i++) I.push(idx.getX(i)+voff);
+        voff+=pos.count;
+      }
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+      geo.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
+      geo.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+      geo.setIndex(new THREE.Uint32BufferAttribute(I,1));
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.castShadow=list.some(o=>o.castShadow);
+      mesh.receiveShadow=list.some(o=>o.receiveShadow);
+      mesh.frustumCulled=false; mesh.renderOrder=list[0].renderOrder;
+      scene.add(mesh);
+      for(const o of list){ if(o.parent)o.parent.remove(o); removed++; }
+      mergedMeshes++;
+    });
+    window.__mergeStats={mergedMeshes,removed};
+  }catch(err){ window.__mergeErr=String(err&&err.stack||err); }
+})();
+
 let last=performance.now(),screenT=0;
 function loop(now){
   requestAnimationFrame(loop);
