@@ -7248,6 +7248,39 @@ const SEA_Z0=600; // coastline: city to the north, open bay to the south
   }
 }
 
+// ---------- TOKYO: hung chochin lantern strings + neon water glow ----------
+// Chochin are one InstancedMesh (1 draw call for all); the water glow uses 3
+// shared additive materials so the merge pass fuses them to ~3 draw calls.
+{
+  const palette=[0xff3a24,0xff5a2a,0xff2a5a,0xffb020]; // red / orange-red / pink-red / amber
+  const items=[];
+  const pool=[...ROADS_X.map(r=>({axis:'z',p:r.p})), ...ROADS_Z.map(r=>({axis:'x',p:r.p}))];
+  for(let i=0;i<11;i++){
+    const s=pool[Math.floor(Math.random()*pool.length)];
+    const c=(Math.random()-0.5)*720, from=c-70, to=c+70;
+    const off=(Math.random()<0.5?-1:1)*(6+Math.random()*3), y=8+Math.random()*2.5;
+    for(let t=from;t<=to;t+=5){
+      let x,z; if(s.axis==='z'){x=s.p+off;z=t;}else{x=t;z=s.p+off;}
+      if(x>440&&x<560)continue; if(z>560)continue; // skip river/bay
+      if(buildings.some(b=>Math.abs(x-b.m.position.x)<b.w/2&&Math.abs(z-b.m.position.z)<b.d/2))continue;
+      items.push({x,y,z,c:palette[Math.random()<0.72?0:1+Math.floor(Math.random()*3)]});
+    }
+  }
+  if(items.length){
+    const geo=new THREE.SphereGeometry(0.5,7,6); geo.scale(1,1.5,1); // chochin: taller than wide
+    const im=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({color:0xffffff}),items.length);
+    const m=new THREE.Matrix4(),q=new THREE.Quaternion(),pos=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),col=new THREE.Color();
+    items.forEach((it,i)=>{pos.set(it.x,it.y,it.z);m.compose(pos,q,one);im.setMatrixAt(i,m);im.setColorAt(i,col.setHex(it.c));});
+    im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true; im.frustumCulled=false;
+    scene.add(im); window.__chochin=items.length;
+  }
+  // neon reflections glowing on the water — magenta / cyan / amber (shared mats -> merged)
+  const nwMats=[0xff2fae,0x2fd9ff,0xffc24a].map(c=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.16,blending:THREE.AdditiveBlending,depthWrite:false}));
+  const addGlow=(x,y,z,w,l)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,l),nwMats[Math.floor(Math.random()*nwMats.length)]);p.rotation.x=-Math.PI/2;p.position.set(x,y,z);scene.add(p);};
+  for(let i=0;i<36;i++) addGlow(468+Math.random()*76, -1.5, (Math.random()-0.5)*900, 6+Math.random()*10, 22+Math.random()*50);      // river
+  for(let i=0;i<30;i++) addGlow((Math.random()-0.5)*1200, 0.36, 622+Math.random()*210, 10+Math.random()*22, 34+Math.random()*70); // bay
+}
+
 // ---------- ELEVATED RAIL + COMMUTER TRAIN ----------
 {
   const RY=10.4;
