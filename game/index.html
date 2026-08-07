@@ -1761,7 +1761,7 @@ function makeOceanMat({color=0x0c2a44,amp=1.0,metalness=0.05,roughness=0.12,emis
       // troughs darker / crests lighter so the swell reads as 3D even in weak light
       .replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb *= 0.55 + 0.85*clamp(vCrest*0.5+0.5,0.0,1.0);')
       // self-lit ocean cues (independent of scene lighting): moonlit crest sheen + moving glitter path + foam
-      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n {\n float crest=clamp(vCrest,0.0,1.0);\n totalEmissiveRadiance += vec3(0.13,0.21,0.31)*crest;\n float g1=sin(vP.x*0.85+uTime*2.1)*sin(vP.y*0.80-uTime*1.6);\n float g2=sin(vP.x*1.7-uTime*1.3)*sin(vP.y*1.55+uTime*2.4);\n float g3=sin(vP.x*3.3+uTime*3.1)*sin(vP.y*3.0-uTime*2.7);\n float spk=pow(max(g1,0.0),30.0)+0.7*pow(max(g2,0.0),40.0)+0.5*pow(max(g3,0.0),60.0);\n totalEmissiveRadiance += vec3(0.75,0.88,1.05)*spk*smoothstep(-0.15,0.55,vCrest);\n totalEmissiveRadiance += vec3(0.66,0.80,0.96)*clamp(vFoam,0.0,0.75);\n }');
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n {\n float crest=clamp(vCrest,0.0,1.0);\n totalEmissiveRadiance += vec3(0.13,0.21,0.31)*crest;\n float g1=sin(vP.x*0.85+uTime*2.1)*sin(vP.y*0.80-uTime*1.6);\n float g2=sin(vP.x*1.7-uTime*1.3)*sin(vP.y*1.55+uTime*2.4);\n float g3=sin(vP.x*3.3+uTime*3.1)*sin(vP.y*3.0-uTime*2.7);\n float spk=pow(max(g1,0.0),34.0)+0.6*pow(max(g2,0.0),46.0)+0.28*pow(max(g3,0.0),72.0);\n totalEmissiveRadiance += vec3(0.60,0.73,0.92)*spk*smoothstep(0.0,0.6,vCrest);\n totalEmissiveRadiance += vec3(0.66,0.80,0.96)*clamp(vFoam,0.0,0.75);\n }');
   };
   m.customProgramCacheKey=()=>'ocean_'+amp.toFixed(2);
   __oceanMats.push(uni);
@@ -2800,6 +2800,12 @@ const SEA_Z0=600; // coastline: city to the north, open bay to the south
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,240,120),
     makeOceanMat({color:0x0c2c48,amp:0.50,roughness:0.10,metalness:0.05,emissive:0x081a2a,emissiveIntensity:0.45}));
   sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,SEA_Z0+seaLen/2);sea.frustumCulled=false;scene.add(sea);
+  // OPAQUE SEA BED just under the surface: the city ground/roads/sidewalks (all <=0.2 high) run
+  // on past the coastline, and the wave troughs (down to ~-3.3) would otherwise expose those roads
+  // in the water. This dark plane at 0.24 sits above every street element but below the calm surface,
+  // so troughs reveal deep dark water instead of streets, and calm water hides the bed entirely.
+  const seabed=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen),new THREE.MeshBasicMaterial({color:0x05111c}));
+  seabed.rotation.x=-Math.PI/2;seabed.position.set(0,0.24,SEA_Z0+seaLen/2);seabed.frustumCulled=false;scene.add(seabed);
   for(let i=0;i<32;i++){ // neon/city-glow reflections streaking on the near water
     const col=new THREE.Color(['#ff4fd0','#35e0ff','#ffe14d','#7bff8a'][Math.floor(Math.random()*4)]);
     const st=new THREE.Mesh(new THREE.PlaneGeometry(5+Math.random()*9,30+Math.random()*70),
