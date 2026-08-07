@@ -6046,11 +6046,54 @@ const waterTex=tex((g,w,h)=>{
 waterTex.wrapS=waterTex.wrapT=THREE.RepeatWrapping;
 waterTex.repeat.set(2,26);
 window.__waterTex=waterTex;
+
+// ---------- MOVING NIGHT-OCEAN WATER (real 3D waves via shader displacement) ----------
+// A subdivided plane displaced in the vertex shader by summed sines (Gerstner-ish),
+// with the surface normal recomputed analytically so the moonlight throws moving
+// specular glints across the swells and foam catches the crests. Built on
+// MeshStandardMaterial so scene fog + tone-mapping + bloom all keep working.
+const __oceanMats=[]; // {uTime} uniforms, ticked each frame
+const WAVE_GLSL=`
+uniform float uTime; uniform float uAmp; varying float vFoam; varying float vCrest; varying vec2 vP;
+float waveH(vec2 p){
+  float t=uTime; float w=0.0;
+  w += sin(p.x*0.055 + t*0.9)*2.2;
+  w += sin(p.y*0.040 - t*0.7)*2.6;
+  w += sin((p.x*0.030+p.y*0.050) + t*1.30)*1.4;
+  w += sin((p.x*0.110 - p.y*0.070) - t*1.90)*0.7;
+  w += sin((p.x*0.180 + p.y*0.140) + t*2.70)*0.35;
+  return w*uAmp;
+}
+vec3 waveNormal(vec2 p){
+  float e=1.5;
+  float hx=waveH(p+vec2(e,0.0))-waveH(p-vec2(e,0.0));
+  float hy=waveH(p+vec2(0.0,e))-waveH(p-vec2(0.0,e));
+  return normalize(vec3(-hx/(2.0*e), -hy/(2.0*e), 1.0));
+}`;
+function makeOceanMat({color=0x0c2a44,amp=1.0,metalness=0.05,roughness=0.12,emissive=0x06121e,emissiveIntensity=0.5}={}){
+  const m=new THREE.MeshStandardMaterial({color,metalness,roughness,emissive,emissiveIntensity});
+  const uni={uTime:{value:Math.random()*40},uAmp:{value:amp}};
+  m.onBeforeCompile=(sh)=>{
+    sh.uniforms.uTime=uni.uTime; sh.uniforms.uAmp=uni.uAmp;
+    sh.vertexShader=WAVE_GLSL+'\n'+sh.vertexShader
+      .replace('#include <beginnormal_vertex>','vec3 objectNormal = waveNormal(position.xy);')
+      .replace('#include <begin_vertex>','vec3 transformed=vec3(position); float _h=waveH(position.xy); transformed.z+=_h; vP=position.xy; vCrest=_h/max(uAmp*6.5,0.001); vFoam=smoothstep(0.60,0.98,vCrest);');
+    sh.fragmentShader='varying float vFoam; varying float vCrest; varying vec2 vP; uniform float uTime;\n'+sh.fragmentShader
+      // troughs darker / crests lighter so the swell reads as 3D even in weak light
+      .replace('#include <color_fragment>','#include <color_fragment>\n diffuseColor.rgb *= 0.55 + 0.85*clamp(vCrest*0.5+0.5,0.0,1.0);')
+      // self-lit ocean cues (independent of scene lighting): moonlit crest sheen + moving glitter path + foam
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n {\n float crest=clamp(vCrest,0.0,1.0);\n totalEmissiveRadiance += vec3(0.13,0.21,0.31)*crest;\n float g1=sin(vP.x*0.85+uTime*2.1)*sin(vP.y*0.80-uTime*1.6);\n float g2=sin(vP.x*1.7-uTime*1.3)*sin(vP.y*1.55+uTime*2.4);\n float g3=sin(vP.x*3.3+uTime*3.1)*sin(vP.y*3.0-uTime*2.7);\n float spk=pow(max(g1,0.0),30.0)+0.7*pow(max(g2,0.0),40.0)+0.5*pow(max(g3,0.0),60.0);\n totalEmissiveRadiance += vec3(0.75,0.88,1.05)*spk*smoothstep(-0.15,0.55,vCrest);\n totalEmissiveRadiance += vec3(0.66,0.80,0.96)*clamp(vFoam,0.0,0.75);\n }');
+  };
+  m.customProgramCacheKey=()=>'ocean_'+amp.toFixed(2);
+  __oceanMats.push(uni);
+  return m;
+}
+
 {
   const rw=RIVER.x1-RIVER.x0,rcx=(RIVER.x0+RIVER.x1)/2;
-  const water=new THREE.Mesh(new THREE.PlaneGeometry(rw,CITY*2),
-    new THREE.MeshStandardMaterial({map:waterTex,roughness:0.15,metalness:0.45,envMapIntensity:1.3}));
-  water.rotation.x=-Math.PI/2;water.position.set(rcx,-1.9,0);
+  const water=new THREE.Mesh(new THREE.PlaneGeometry(rw,CITY*2,Math.max(8,Math.round(rw/3)),480),
+    makeOceanMat({color:0x0b2338,amp:0.16,roughness:0.16,metalness:0.08}));
+  water.rotation.x=-Math.PI/2;water.position.set(rcx,-1.7,0);water.frustumCulled=false;
   scene.add(water);
   const wallMat=new THREE.MeshLambertMaterial({color:0x4a4550});
   [RIVER.x0,RIVER.x1].forEach((wx,k)=>{
@@ -7073,17 +7116,16 @@ const SEA_Z0=600; // coastline: city to the north, open bay to the south
 {
   // clear outskirt buildings that would otherwise stand in the water
   for(let i=buildings.length-1;i>=0;i--){ if(buildings[i].m.position.z>SEA_Z0-30){scene.remove(buildings[i].m);buildings.splice(i,1);} }
-  // animated ocean surface (own texture clone so it ripples independently of the river)
-  const oceanTex=waterTex.clone();oceanTex.needsUpdate=true;oceanTex.wrapS=oceanTex.wrapT=THREE.RepeatWrapping;oceanTex.repeat.set(46,30);window.__oceanTex=oceanTex;
+  // real moving night-ocean surface: big rolling swells with moving moonlight glints + foam
   const seaLen=2600, seaW=5200;
-  const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen),
-    new THREE.MeshStandardMaterial({map:oceanTex,color:0x163a5a,roughness:0.52,metalness:0.28,envMapIntensity:0.6,emissive:0x0b2438,emissiveIntensity:0.6}));
-  sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,SEA_Z0+seaLen/2);sea.receiveShadow=true;scene.add(sea);
-  for(let i=0;i<24;i++){ // neon/city shimmer on the near water
+  const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,240,120),
+    makeOceanMat({color:0x0c2c48,amp:0.50,roughness:0.10,metalness:0.05,emissive:0x081a2a,emissiveIntensity:0.45}));
+  sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,SEA_Z0+seaLen/2);sea.frustumCulled=false;scene.add(sea);
+  for(let i=0;i<32;i++){ // neon/city-glow reflections streaking on the near water
     const col=new THREE.Color(['#ff4fd0','#35e0ff','#ffe14d','#7bff8a'][Math.floor(Math.random()*4)]);
-    const st=new THREE.Mesh(new THREE.PlaneGeometry(4+Math.random()*7,26+Math.random()*60),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.05+Math.random()*.06,blending:THREE.AdditiveBlending,depthWrite:false}));
-    st.rotation.x=-Math.PI/2;st.position.set((Math.random()-.5)*1500,0.34,SEA_Z0+24+Math.random()*320);scene.add(st);
+    const st=new THREE.Mesh(new THREE.PlaneGeometry(5+Math.random()*9,30+Math.random()*70),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.10+Math.random()*.10,blending:THREE.AdditiveBlending,depthWrite:false}));
+    st.rotation.x=-Math.PI/2;st.position.set((Math.random()-.5)*1500,1.9,SEA_Z0+24+Math.random()*340);scene.add(st);
   }
   const seawall=new THREE.Mesh(new THREE.BoxGeometry(seaW,3.4,4),new THREE.MeshStandardMaterial({color:0x3a3a42,roughness:0.9,metalness:0.05}));
   seawall.position.set(0,0.1,SEA_Z0);scene.add(seawall);
@@ -7091,41 +7133,109 @@ const SEA_Z0=600; // coastline: city to the north, open bay to the south
   // ----- US NAVY DESTROYER -----
   const shipPadTex=tex((g,w,h)=>{g.fillStyle='#20262e';g.fillRect(0,0,w,h);g.strokeStyle='#39e6ff';g.lineWidth=9;g.beginPath();g.arc(w/2,h/2,w/2-7,0,7);g.stroke();g.lineWidth=16;g.strokeStyle='#eaf6ff';g.beginPath();g.moveTo(w*.34,h*.30);g.lineTo(w*.34,h*.70);g.moveTo(w*.66,h*.30);g.lineTo(w*.66,h*.70);g.moveTo(w*.34,h*.5);g.lineTo(w*.66,h*.5);g.stroke();},128,128);
   const ship=new THREE.Group();
-  const hullMat=new THREE.MeshStandardMaterial({color:0x55606a,roughness:0.62,metalness:0.35,emissive:0x171d25,emissiveIntensity:0.6});
-  const superMat=new THREE.MeshStandardMaterial({color:0x6a747e,roughness:0.6,metalness:0.3,emissive:0x1d252d,emissiveIntensity:0.65});
-  const deckMat=new THREE.MeshStandardMaterial({color:0x3f4750,roughness:0.82,metalness:0.2,emissive:0x141a1f,emissiveIntensity:0.55});
-  const L=92, Wd=13;
-  const hull=new THREE.Mesh(new THREE.BoxGeometry(L,6,Wd),hullMat);hull.position.y=1.2;hull.castShadow=true;ship.add(hull);
-  const bow=new THREE.Mesh(new THREE.ConeGeometry(Wd/2,16,4),hullMat);bow.rotation.set(0,Math.PI/4,-Math.PI/2);bow.position.set(L/2+6,1.2,0);ship.add(bow);
-  const deck=new THREE.Mesh(new THREE.BoxGeometry(L,0.5,Wd),deckMat);deck.position.y=4.4;ship.add(deck);
-  const turret=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.8,2,12),superMat);turret.position.set(L*0.3,5.6,0);ship.add(turret);
-  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,9,8),superMat);barrel.rotation.z=Math.PI/2;barrel.position.set(L*0.3+5.5,6.2,0);ship.add(barrel);
-  const s1=new THREE.Mesh(new THREE.BoxGeometry(24,6,10),superMat);s1.position.set(-2,7.9,0);s1.castShadow=true;ship.add(s1);
-  const s2=new THREE.Mesh(new THREE.BoxGeometry(14,4,8),superMat);s2.position.set(-4,11.6,0);ship.add(s2);
-  const bridgeWin=new THREE.Mesh(new THREE.BoxGeometry(9,3,7.2),new THREE.MeshStandardMaterial({color:0x1a2028,roughness:0.35,metalness:0.5,emissive:0x0a1015,emissiveIntensity:0.5}));bridgeWin.position.set(3,11.6,0);ship.add(bridgeWin);
-  const funnel=new THREE.Mesh(new THREE.BoxGeometry(6,5,5),new THREE.MeshStandardMaterial({color:0x3a4048,roughness:0.7}));funnel.position.set(-14,10.8,0);ship.add(funnel);
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.55,12,6),superMat);mast.position.set(-3,17,0);ship.add(mast);
-  const radar=new THREE.Mesh(new THREE.BoxGeometry(0.4,2.2,3.6),new THREE.MeshStandardMaterial({color:0xc2c8ce}));radar.position.set(-3,20.2,0);ship.add(radar);window.__shipRadar=radar;
-  const mastLight=new THREE.Mesh(new THREE.SphereGeometry(0.4,6,6),new THREE.MeshBasicMaterial({color:0xff3030}));mastLight.position.set(-3,23.3,0);ship.add(mastLight);
-  // aft helipad (the delivery target)
-  const padX=-L*0.36;
+  // weathered naval greys + detail materials (shared so the whole ship is few programs)
+  const hullMat =new THREE.MeshStandardMaterial({color:0x47515b,roughness:0.68,metalness:0.22,emissive:0x0f141a,emissiveIntensity:0.5});
+  const superMat=new THREE.MeshStandardMaterial({color:0x6b747e,roughness:0.62,metalness:0.2,emissive:0x151b21,emissiveIntensity:0.5});
+  const deckMat =new THREE.MeshStandardMaterial({color:0x30353c,roughness:0.92,metalness:0.08,emissive:0x0b0e11,emissiveIntensity:0.45});
+  const darkMat =new THREE.MeshStandardMaterial({color:0x20242a,roughness:0.7,metalness:0.35});
+  const spyMat  =new THREE.MeshStandardMaterial({color:0x2b3138,roughness:0.4,metalness:0.5,emissive:0x3a2a10,emissiveIntensity:0.55}); // SPY-1 phased-array faces (faint amber)
+  const glassMat=new THREE.MeshStandardMaterial({color:0x0f151c,roughness:0.25,metalness:0.6,emissive:0x0a161f,emissiveIntensity:0.6});
+  const whiteMat=new THREE.MeshStandardMaterial({color:0xb7bec4,roughness:0.5,metalness:0.15}); // CIWS domes / radar
+  const L=100, Wd=13;
+  const box=(w,h,d,mat)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  const cyl=(rt,rb,h,mat,seg)=>new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||12),mat);
+  const add=(m,x,y,z,rx,ry,rz)=>{m.position.set(x,y,z);m.rotation.set(rx||0,ry||0,rz||0);ship.add(m);return m;};
+  // VLS cell-grid texture (dark hatches with lit borders)
+  const vlsTex=tex((g,w,h)=>{g.fillStyle='#191d23';g.fillRect(0,0,w,h);const cols=8,rows=4;for(let c=0;c<cols;c++)for(let r=0;r<rows;r++){const x=w/cols*c+3,y=h/rows*r+3,cw=w/cols-6,ch=h/rows-6;g.fillStyle='#0a0c0f';g.fillRect(x,y,cw,ch);g.strokeStyle='#46525c';g.lineWidth=2;g.strokeRect(x,y,cw,ch);}},128,64);
+  const vlsMat=new THREE.MeshStandardMaterial({map:vlsTex,roughness:0.7,metalness:0.3,emissive:0x0a0c0f,emissiveIntensity:0.4});
+
+  // ---- HULL ----
+  add(box(L,7,Wd,hullMat),0,0.9,0).castShadow=true;                 // main hull (top at y≈4.4)
+  add(box(L*0.7,3.4,Wd*0.5,darkMat),-3,-3.1,0);                     // keel taper (mostly underwater)
+  add(box(L+3,1.5,Wd+2.6,hullMat),1,3.9,0);                         // flared deck-edge / knuckle (wider than hull)
+  add(box(L*0.98,0.5,Wd,deckMat),0,4.45,0);                         // weather-deck plating
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(Wd*0.52,24,4),hullMat);
+  bow.rotation.set(0,Math.PI/4,-Math.PI/2+0.14);bow.position.set(L/2+9,2.6,0);bow.castShadow=true;ship.add(bow); // raked clipper prow
+  add(box(30,1.6,Wd-1.2,hullMat),L*0.28,5.1,0);                     // raised forecastle
+  // deck-edge railings (thin, both sides)
+  [-1,1].forEach(s=>{ add(box(L*0.92,0.55,0.09,superMat),-2,5.05,s*(Wd/2+0.15));
+                      add(box(L*0.92,0.05,0.09,superMat),-2,5.5, s*(Wd/2+0.15)); });
+
+  // ---- FORWARD ARMAMENT: Mk45 5" gun on a step, then VLS ----
+  add(box(13,2.2,10,superMat),L*0.30,5.9,0);                        // gun deckhouse
+  const gunBase=add(cyl(3.0,3.4,2.2,superMat,16),L*0.30,7.9,0);     // rounded gun house base
+  add(box(6.6,2.6,4.4,superMat),L*0.30+0.6,8.4,0);                  // angular gun turret shell
+  add(cyl(0.34,0.34,11,darkMat,10),L*0.30+8.6,8.7,0,0,0,Math.PI/2-0.06); // 5" barrel, slight elevation
+  add(box(15,1.5,11,vlsMat),L*0.14,5.3,0);                          // forward 32-cell VLS (grid on top)
+  add(box(15,1.5,11,deckMat),L*0.14,5.28,0);                        // VLS surround (under the grid edges)
+
+  // ---- SUPERSTRUCTURE (blocky Aegis deckhouse) ----
+  add(box(34,7.5,12.2,superMat),-3,8.7,0).castShadow=true;          // main deckhouse
+  add(box(18,5,10.5,superMat),5,13.8,0);                            // 02 level / bridge tier
+  add(box(12.5,3.4,9.6,glassMat),8.2,14.6,0,0,0,-0.12);             // bridge window band (raked)
+  // SPY-1 phased-array panels on the deckhouse faces (the signature octagon plates)
+  const spyGeo=new THREE.CircleGeometry(3.1,8);
+  add(new THREE.Mesh(spyGeo,spyMat),12.4,10.6,-4.9,0,-0.62,0);      // forward-port
+  add(new THREE.Mesh(spyGeo,spyMat),12.4,10.6, 4.9,0, 0.62,0);      // forward-stbd
+  add(new THREE.Mesh(spyGeo,spyMat),-16.5,10.6,-6.15,0,-Math.PI+0.5,0); // aft-port
+  add(new THREE.Mesh(spyGeo,spyMat),-16.5,10.6, 6.15,0, Math.PI-0.5,0); // aft-stbd
+
+  // ---- FUNNELS (macks) with black caps + exhausts ----
+  [[-13,10.8,7.5],[-30,10.2,7]].forEach(([fx,fy,fh])=>{
+    add(box(7,fh,7,superMat),fx,fy,0,0,0,0.08);
+    add(box(7.4,1,7.4,darkMat),fx-0.3,fy+fh/2+0.3,0);
+    add(cyl(0.7,0.8,2.4,darkMat,8),fx-1.2,fy+fh/2+1.3,-1.6);
+    add(cyl(0.7,0.8,2.4,darkMat,8),fx-1.2,fy+fh/2+1.3, 1.6);
+  });
+
+  // ---- MAST + radars ----
+  add(cyl(0.45,0.95,15,superMat,8),-19,16.5,0);                     // main mast pole
+  [ -4,4 ].forEach(dz=> add(cyl(0.25,0.3,9,superMat,6),-19,15.5,0,0.34*Math.sign(dz),0,0).position.z=dz ); // splayed legs (approx)
+  add(box(7,0.3,0.3,superMat),-19,20,0); add(box(0.3,0.3,6,superMat),-19,22,0); // yardarm cross-trees
+  const radar=add(box(0.7,3.4,5.2,whiteMat),-19,25,0); window.__shipRadar=radar;  // rotating air-search array
+  add(new THREE.Mesh(new THREE.SphereGeometry(2.0,12,10),whiteMat),-30,14.5,-3.4); // SATCOM radome
+  add(new THREE.Mesh(new THREE.SphereGeometry(2.0,12,10),whiteMat),-30,14.5, 3.4);
+  add(cyl(0.08,0.08,7,superMat,5),-24,20,0); add(cyl(0.08,0.08,6,superMat,5),-14,19,2); // whip antennas
+
+  // ---- AFT: hangar block, CIWS, helo deck ----
+  add(box(18,6.5,11.5,superMat),-28,8.4,0);                         // helicopter hangar
+  add(box(7.6,4.4,0.4,darkMat),-37,7.2,-2.6); add(box(7.6,4.4,0.4,darkMat),-37,7.2,2.6); // hangar doors (aft face)
+  add(box(13,1.5,10,vlsMat),-22,5.3,0);                             // aft VLS grid
+  // Phalanx CIWS (white R2D2 mounts) fore-atop-gunhouse and aft-atop-hangar
+  [[L*0.30,9.3,0],[-28,12.1,0]].forEach(([cx,cy,cz])=>{
+    add(cyl(1.4,1.7,1.6,whiteMat,12),cx,cy,cz);
+    add(new THREE.Mesh(new THREE.SphereGeometry(1.5,12,10),whiteMat),cx,cy+1.2,cz);
+    add(cyl(0.5,0.5,2.2,darkMat,8),cx+1.4,cy+1.0,cz,0,0,Math.PI/2-0.2);
+  });
+  // ---- aft helipad (the delivery target) ----
+  const padX=-L*0.37;
+  add(box(24,0.45,Wd-1,deckMat),padX,4.55,0);                       // flat flight deck
   const helipad=new THREE.Mesh(new THREE.CircleGeometry(6.4,28),new THREE.MeshBasicMaterial({map:shipPadTex}));
-  helipad.rotation.x=-Math.PI/2;helipad.position.set(padX,4.72,0);ship.add(helipad);
-  // (no static ring here — the active delivery LZ pad, placed on this deck during a
-  //  ferry mission, supplies its own pulsing ring/beam so the two never z-fight)
-  // tall extraction beacon so the ship is findable from across the city
+  helipad.rotation.x=-Math.PI/2;helipad.position.set(padX,4.82,0);ship.add(helipad);
+
+  // ---- night self-lighting + nav lights (emissive only, no dynamic lights) ----
+  const winMat=new THREE.MeshBasicMaterial({color:0xffe6a8});
+  [-6.2,6.2].forEach(zs=>{ for(let wx=-20;wx<=12;wx+=2.6){ add(box(1.4,0.7,0.05,winMat),wx,9.3,zs); } });
+  for(let wx=-1;wx<=13;wx+=2.4) add(box(1.5,0.8,0.05,winMat),wx,14.6,5.35); // bridge windows lit
+  const edgeMat=new THREE.MeshBasicMaterial({color:0xffcf7a});
+  for(let ex=-L/2+6;ex<=L/2-6;ex+=9){ [-1,1].forEach(s=> add(new THREE.Mesh(new THREE.SphereGeometry(0.3,5,5),edgeMat),ex,4.85,s*(Wd/2+0.2)) ); }
+  add(new THREE.Mesh(new THREE.SphereGeometry(0.55,7,7),new THREE.MeshBasicMaterial({color:0xff2222})),0,6.4,-Wd/2-0.3);   // port nav (red)
+  add(new THREE.Mesh(new THREE.SphereGeometry(0.55,7,7),new THREE.MeshBasicMaterial({color:0x22ff22})),0,6.4, Wd/2+0.3);   // stbd nav (green)
+  add(new THREE.Mesh(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff3030})),-19,26.9,0);         // masthead light
+
+  // ---- hull wake / foam so the ship sits IN the water ----
+  const foamMat=new THREE.MeshBasicMaterial({color:0xdff3ff,transparent:true,opacity:0.42,blending:THREE.AdditiveBlending,depthWrite:false});
+  [-1,1].forEach(s=>{ const f=new THREE.Mesh(new THREE.PlaneGeometry(52,8),foamMat);f.rotation.set(-Math.PI/2,0,s*0.4);f.position.set(L*0.24,0.55,s*8);ship.add(f); }); // bow V-wake
+  [-1,1].forEach(s=>{ const f=new THREE.Mesh(new THREE.PlaneGeometry(L*0.9,4.5),foamMat);f.rotation.x=-Math.PI/2;f.position.set(-4,0.52,s*(Wd/2+1.6));ship.add(f); }); // hull-side foam
+  const wake=new THREE.Mesh(new THREE.PlaneGeometry(22,70),foamMat);wake.rotation.x=-Math.PI/2;wake.position.set(-L/2-30,0.5,0);ship.add(wake); // stern wake trail
+
+  // ---- tall extraction beacon so the ship is findable from across the city ----
   const sbeam=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,340,12,1,true),new THREE.MeshBasicMaterial({color:0x39e6ff,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false}));sbeam.position.set(padX,174,0);ship.add(sbeam);
   const beaconTop=new THREE.Mesh(new THREE.SphereGeometry(3.4,12,12),new THREE.MeshBasicMaterial({color:0x9ff2ff,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));beaconTop.position.set(padX,344,0);ship.add(beaconTop);window.__shipBeacon=beaconTop;
-  const portL=new THREE.Mesh(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2020}));portL.position.set(0,6.4,-Wd/2-0.2);ship.add(portL);
-  const stbdL=new THREE.Mesh(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0x20ff20}));stbdL.position.set(0,6.4,Wd/2+0.2);ship.add(stbdL);
-  // --- night self-lighting (emissive only, no dynamic lights, so it's free) ---
-  const winMat=new THREE.MeshBasicMaterial({color:0xffe6a8});
-  [-5.06,5.06].forEach(zside=>{ for(let wx=-11;wx<=7;wx+=2.6){ const w=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.06),winMat);w.position.set(wx,8.0,zside);ship.add(w); } });
-  const edgeMat=new THREE.MeshBasicMaterial({color:0xffd27a});
-  for(let ex=-L/2+4;ex<=L/2-4;ex+=7){ [-Wd/2,Wd/2].forEach(ez=>{ const dd=new THREE.Mesh(new THREE.SphereGeometry(0.32,5,5),edgeMat);dd.position.set(ex,4.7,ez);ship.add(dd); }); }
+
   const SHIP_Z=680;
   ship.position.set(0,0,SHIP_Z);scene.add(ship);
-  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX,4.72,SHIP_Z), t:0};
+  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX,4.82,SHIP_Z), t:0};
 }
 
 // ---------- TOKYO TOWER-style landmark (pink lit) ----------
@@ -10017,8 +10127,7 @@ function loop(now){
       I.hlIM.instanceMatrix.needsUpdate=true;I.tlIM.instanceMatrix.needsUpdate=true;
     }
     updateRevealLights(); // snap the reveal-light pool to the nearest lamps/car headlights this frame
-    if(window.__waterTex)window.__waterTex.offset.y+=dt*0.015;
-    if(window.__oceanTex)window.__oceanTex.offset.y+=dt*0.006;
+    for(let wi=0;wi<__oceanMats.length;wi++)__oceanMats[wi].uTime.value+=dt;
     if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar(0.8+b*0.4);}}
     if(!window.__hwyCars){
       window.__hwyCars=[];
