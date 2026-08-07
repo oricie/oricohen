@@ -7153,6 +7153,100 @@ const SEA_Z0=600; // coastline: city to the north, open bay to the south
   buildings.push({m:tw,w:44,d:44,h:170});
 }
 
+// ---------- TOKYO: shrines · vermilion torii · stone lanterns · gardens ----------
+// Perf-first: trees + lanterns (100+) are InstancedMesh (a few draw calls total);
+// no dynamic lights; decorative shadows off. Torii/shrines are few, so kept plain.
+{
+  const V=0xd93b2b;
+  const toriiMat=new THREE.MeshLambertMaterial({color:V,emissive:0x4a1109,emissiveIntensity:0.55});
+  const stoneMat=new THREE.MeshLambertMaterial({color:0x928c80});
+  const darkStone=new THREE.MeshLambertMaterial({color:0x6d685e});
+  const woodMat=new THREE.MeshLambertMaterial({color:0x6b4a2f});
+  const roofMat=new THREE.MeshLambertMaterial({color:0x2a2d33});
+  const glowMat=new THREE.MeshBasicMaterial({color:0xffcf87});
+  const trunkMat=new THREE.MeshLambertMaterial({color:0x3a2a1e});
+  const leafCols=[new THREE.Color(0x274b30),new THREE.Color(0x2f5a38),new THREE.Color(0x203f28),new THREE.Color(0x356b3e)];
+  const treeItems=[], lantItems=[];
+  const addTree=(x,z,h)=>treeItems.push({x,z,s:h/11.5,ry:Math.random()*Math.PI*2,c:leafCols[Math.floor(Math.random()*leafCols.length)]});
+  const addLantern=(x,z)=>lantItems.push({x,z,ry:Math.random()*Math.PI*2});
+  const clearAround=(x,z,r)=>{for(let i=buildings.length-1;i>=0;i--){const b=buildings[i];const dx=b.m.position.x-x,dz=b.m.position.z-z;if(dx*dx+dz*dz<r*r){scene.remove(b.m);buildings.splice(i,1);}}};
+
+  function makeTorii(s){
+    const g=new THREE.Group();
+    const pr=s*0.05, ph=s*0.82, span=s*0.62;
+    [-span/2,span/2].forEach(px=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(pr*0.85,pr,ph,8),toriiMat);p.position.set(px,ph/2,0);g.add(p);});
+    const kw=span+s*0.3;
+    const kasagi=new THREE.Mesh(new THREE.BoxGeometry(kw,pr*1.6,pr*2.2),toriiMat);kasagi.position.set(0,ph+pr,0);g.add(kasagi);
+    const nuki=new THREE.Mesh(new THREE.BoxGeometry(span+pr*4,pr*1.1,pr*1.5),toriiMat);nuki.position.set(0,ph*0.72,0);g.add(nuki);
+    const tab=new THREE.Mesh(new THREE.BoxGeometry(pr*2.4,s*0.11,pr*0.7),toriiMat);tab.position.set(0,ph*0.86,0);g.add(tab);
+    return g;
+  }
+  function makeShrine(){
+    const g=new THREE.Group();
+    const plat=new THREE.Mesh(new THREE.BoxGeometry(16,1.2,12),darkStone);plat.position.y=0.6;g.add(plat);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(12,6,9),woodMat);body.position.y=4.2;body.castShadow=true;g.add(body);
+    [-6,6].forEach(px=>[-4.5,4.5].forEach(pz=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.7,6,0.7),toriiMat);p.position.set(px,4.2,pz);g.add(p);}));
+    const rw=18, rl=13;
+    [-1,1].forEach(sd=>{const slab=new THREE.Mesh(new THREE.BoxGeometry(rw,0.7,rl*0.64),roofMat);slab.position.set(0,8.7,sd*rl*0.24);slab.rotation.x=sd*0.6;slab.castShadow=true;g.add(slab);});
+    const ridge=new THREE.Mesh(new THREE.BoxGeometry(rw,0.9,0.9),new THREE.MeshLambertMaterial({color:0x3a3e46}));ridge.position.y=10.1;g.add(ridge);
+    [-1,1].forEach(sd=>{const ch=new THREE.Mesh(new THREE.BoxGeometry(0.35,3.4,0.35),roofMat);ch.position.set(sd*rw*0.42,10.7,0);ch.rotation.x=0.5;g.add(ch);const ch2=ch.clone();ch2.rotation.x=-0.5;g.add(ch2);});
+    const steps=new THREE.Mesh(new THREE.BoxGeometry(8,0.8,2.4),stoneMat);steps.position.set(0,0.9,6.6);g.add(steps);
+    return g;
+  }
+  function shrineComplex(cx,cz){
+    clearAround(cx,cz,58);
+    const g=new THREE.Group();
+    const plaza=new THREE.Mesh(new THREE.BoxGeometry(72,0.3,72),new THREE.MeshLambertMaterial({color:0x59554c}));plaza.position.y=0.16;plaza.receiveShadow=true;g.add(plaza);
+    const path=new THREE.Mesh(new THREE.BoxGeometry(7,0.34,52),new THREE.MeshLambertMaterial({color:0x7c7669}));path.position.set(0,0.19,5);g.add(path);
+    const t=makeTorii(20);t.position.set(0,0,28);g.add(t);
+    const sh=makeShrine();sh.position.set(0,0,-22);g.add(sh);
+    g.position.set(cx,0,cz);scene.add(g);
+    for(let z2=20;z2>=-12;z2-=11){[-5,5].forEach(x2=>addLantern(cx+x2,cz+z2));}
+    for(let i=0;i<10;i++){const a=Math.random()*Math.PI*2,rad=30+Math.random()*7;const lx=Math.cos(a)*rad,lz=Math.sin(a)*rad;if(Math.abs(lx)<8&&lz>10)continue;addTree(cx+lx,cz+lz,11+Math.random()*8);}
+  }
+
+  shrineComplex(-185,-120);
+  shrineComplex(300,-70);
+  shrineComplex(-330,250);
+
+  const toriiSpots=[[-60,-360],[150,300],[-380,-40],[380,170],[-150,70],[240,-250],[70,430],[-260,-300],[420,-150],[-40,250],[190,-430],[-430,330]];
+  toriiSpots.forEach(([x,z])=>{ if(x>440&&x<560)return; if(z>560)return; if(Math.abs(z-192)<12||Math.abs(z+288)<12)return;
+    clearAround(x,z,15); const t=makeTorii(11+Math.random()*4);t.position.set(x,0,z);t.rotation.y=Math.random()*Math.PI;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
+
+  let placed=0,tries=0;
+  while(placed<18&&tries<220){tries++; const x=(Math.random()-0.5)*1000,z=(Math.random()-0.5)*1000;
+    if(x>440&&x<560)continue; if(z>560)continue; if(Math.abs(z-192)<14||Math.abs(z+288)<14)continue;
+    let near=false; for(const b of buildings){const dx=b.m.position.x-x,dz=b.m.position.z-z;if(dx*dx+dz*dz<420){near=true;break;}} if(near)continue;
+    const n=2+Math.floor(Math.random()*3); for(let k=0;k<n;k++)addTree(x+(Math.random()-.5)*11,z+(Math.random()-.5)*11,9+Math.random()*8); placed++; }
+
+  // ---- build instanced trees ----
+  if(treeItems.length){
+    const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,5,6);trunkGeo.translate(0,2.5,0);
+    const can1Geo=new THREE.ConeGeometry(3.9,4.6,7);can1Geo.translate(0,7.0,0);
+    const can2Geo=new THREE.ConeGeometry(2.8,4.2,7);can2Geo.translate(0,9.6,0);
+    const canMat=new THREE.MeshLambertMaterial({color:0xffffff});
+    const trunkIM=new THREE.InstancedMesh(trunkGeo,trunkMat,treeItems.length);
+    const can1IM=new THREE.InstancedMesh(can1Geo,canMat,treeItems.length);
+    const can2IM=new THREE.InstancedMesh(can2Geo,canMat,treeItems.length);
+    const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),pos=new THREE.Vector3(),scl=new THREE.Vector3();
+    treeItems.forEach((it,i)=>{e.set(0,it.ry,0);q.setFromEuler(e);pos.set(it.x,0,it.z);scl.set(it.s,it.s,it.s);m.compose(pos,q,scl);
+      trunkIM.setMatrixAt(i,m);can1IM.setMatrixAt(i,m);can2IM.setMatrixAt(i,m);can1IM.setColorAt(i,it.c);can2IM.setColorAt(i,it.c);});
+    [trunkIM,can1IM,can2IM].forEach(im=>{im.instanceMatrix.needsUpdate=true;im.castShadow=false;scene.add(im);});
+    can1IM.instanceColor.needsUpdate=true;can2IM.instanceColor.needsUpdate=true;
+  }
+  // ---- build instanced stone lanterns ----
+  if(lantItems.length){
+    const baseGeo=new THREE.CylinderGeometry(0.7,0.95,0.5,6);baseGeo.translate(0,0.25,0);
+    const postGeo=new THREE.CylinderGeometry(0.26,0.3,2.2,6);postGeo.translate(0,1.55,0);
+    const glowGeo=new THREE.BoxGeometry(0.85,0.95,0.85);glowGeo.translate(0,3.25,0);
+    const capGeo=new THREE.ConeGeometry(0.95,0.65,6);capGeo.translate(0,3.95,0);
+    const mk=(geo,mat)=>{const im=new THREE.InstancedMesh(geo,mat,lantItems.length);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),one=new THREE.Vector3(1,1,1);
+      lantItems.forEach((it,i)=>{e.set(0,it.ry,0);q.setFromEuler(e);p.set(it.x,0,it.z);m.compose(p,q,one);im.setMatrixAt(i,m);});
+      im.instanceMatrix.needsUpdate=true;im.castShadow=false;scene.add(im);};
+    mk(baseGeo,darkStone);mk(postGeo,stoneMat);mk(glowGeo,glowMat);mk(capGeo,darkStone);
+  }
+}
+
 // ---------- ELEVATED RAIL + COMMUTER TRAIN ----------
 {
   const RY=10.4;
