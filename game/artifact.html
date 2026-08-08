@@ -5236,6 +5236,9 @@ const gravelTex=tex((g,w,h)=>{
 // Hierarchical grid: wide avenues, side streets, back alleys, irregular blocks,
 // a river with bridges on the east side, rail + expressway corridors.
 const CITY=1150;            // visual ground half-extent
+const SEA_Z0=600;           // coastline: land to the north, open bay to the south
+const LAND_LEN=CITY+SEA_Z0; // z-depth of the land slab (-CITY .. SEA_Z0)
+const LAND_CZ=(SEA_Z0-CITY)/2; // z-centre of the land slab
 const SW=3.0;               // sidewalk width
 const RIVER={x0:468,x1:544};// river band (constant-x strip)
 const RAIL_Z=192;           // elevated rail corridor (constant z)
@@ -5281,7 +5284,7 @@ const groundTex=tex((g,w,h)=>{
   }
 },512,512,true);
 groundTex.wrapS=groundTex.wrapT=THREE.RepeatWrapping;
-groundTex.repeat.set(38,38);
+groundTex.repeat.set(38,38*LAND_LEN/(CITY*2)); // v scaled to the clipped land depth so tile size stays square
 // wet-street roughness map: bright=dry/rough, dark streaks+puddles=wet/smooth so neon
 // reflects in long streaks (roughnessMap channel multiplies material.roughness)
 function makeWetRoughTex(){return tex((g,w,h)=>{
@@ -5315,8 +5318,9 @@ wetRoughTex.wrapS=wetRoughTex.wrapT=THREE.RepeatWrapping;
 wetRoughTex.repeat.set(6,60);
 // NOTE: per-road wet-rough maps are generated fresh in roadWetRoughFor() below (own canvas each
 // time, not a clone of this one) so streets never repeat an identical wet-streak pattern.
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,CITY*2),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.92,metalness:0.0,envMapIntensity:0.35})); // matte asphalt: dropped wet roughnessMap so open ground reads dry, not slick
-ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+// ground is clipped to the LAND slab (ends at the coastline) so nothing sits under the bay
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,LAND_LEN),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.92,metalness:0.0,envMapIntensity:0.35})); // matte asphalt: dropped wet roughnessMap so open ground reads dry, not slick
+ground.rotation.x=-Math.PI/2;ground.position.z=LAND_CZ;ground.receiveShadow=true;scene.add(ground);
 
 // ============ WET-STREET PLANAR REFLECTION ============================================
 // A real mirror. Env-map reflections can't paint neon onto flat road (they mirror the dark overhead
@@ -5386,9 +5390,9 @@ const WetReflShader={
       gl_FragColor=vec4(refl,a);
     }`
 };
-const wetReflector=new THREE.Reflector(new THREE.PlaneGeometry(CITY*2,CITY*2),{
+const wetReflector=new THREE.Reflector(new THREE.PlaneGeometry(CITY*2,LAND_LEN),{
   textureWidth:512,textureHeight:512,color:0x5a626e,shader:WetReflShader});
-wetReflector.rotation.x=-Math.PI/2;wetReflector.position.y=0.05;
+wetReflector.rotation.x=-Math.PI/2;wetReflector.position.set(0,0.05,LAND_CZ);
 wetReflector.material.transparent=true;wetReflector.material.depthWrite=false;
 wetReflector.renderOrder=-1; // draw before the emissive road decals/puddles so they layer on top
 scene.add(wetReflector);
@@ -5700,9 +5704,12 @@ function addRoad(axis,r){
   // specular. The wet roughness MAP still darkens streaks/pools, so those keep a coherent neon shine.
   const baseRough=(r.major?0.52:0.56)+Math.random()*0.18;
   const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.36,0.36),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.07,envMapIntensity:1.0,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
-  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,CITY*2),mat);
+  // clip the grid at the coastline so no street runs out into the bay
+  if(axis==='z'&&r.p>SEA_Z0)return;                       // east-west road fully seaward: drop it
+  const spanLen=axis==='x'?LAND_LEN:CITY*2;               // north-south roads end at the coast
+  const mesh=new THREE.Mesh(new THREE.PlaneGeometry(r.w,spanLen),mat);
   mesh.rotation.set(-Math.PI/2,0,axis==='z'?Math.PI/2:0);
-  if(axis==='x')mesh.position.set(r.p,0.034,0);
+  if(axis==='x')mesh.position.set(r.p,0.034,LAND_CZ);
   else mesh.position.set(0,0.04,r.p);
   mesh.receiveShadow=true;scene.add(mesh);
   (window.__roadMeshes||(window.__roadMeshes=[])).push({mesh,r}); // tracked for the real-asphalt swap
@@ -5712,9 +5719,9 @@ function addRoad(axis,r){
     // sidewalk is now a single raised BOX (not a flat plane): the top face is the walkable
     // texture, the vertical side faces are the weathered kerb wall — real relief/depth instead
     // of a painted-flat decal, and one mesh instead of two (fewer draw calls than before).
-    const boxGeo=axis==='x'?new THREE.BoxGeometry(SW,CURB_H,CITY*2):new THREE.BoxGeometry(CITY*2,CURB_H,SW);
+    const boxGeo=axis==='x'?new THREE.BoxGeometry(SW,CURB_H,LAND_LEN):new THREE.BoxGeometry(CITY*2,CURB_H,SW);
     const sw2=new THREE.Mesh(boxGeo,[curbFaceMat,curbFaceMat,sidewalkMat,curbBottomMat,curbFaceMat,curbFaceMat]);
-    if(axis==='x')sw2.position.set(r.p+sd*off,CURB_H/2,0);
+    if(axis==='x')sw2.position.set(r.p+sd*off,CURB_H/2,LAND_CZ);
     else sw2.position.set(0,CURB_H/2,r.p+sd*off);
     sw2.receiveShadow=true;
     scene.add(sw2);
@@ -7112,29 +7119,31 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 })();
 
 // ---------- TOKYO BAY: sea on the south edge + US Navy destroyer (extraction ship) ----------
-const SEA_Z0=600; // coastline: city to the north, open bay to the south
 {
   // clear outskirt buildings that would otherwise stand in the water
   for(let i=buildings.length-1;i>=0;i--){ if(buildings[i].m.position.z>SEA_Z0-30){scene.remove(buildings[i].m);buildings.splice(i,1);} }
-  // real moving night-ocean surface: big rolling swells with moving moonlight glints + foam
-  const seaLen=2600, seaW=5200;
-  const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,240,120),
-    makeOceanMat({color:0x0c2c48,amp:0.50,roughness:0.10,metalness:0.05,emissive:0x081a2a,emissiveIntensity:0.45}));
-  sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,SEA_Z0+seaLen/2);sea.frustumCulled=false;scene.add(sea);
-  // OPAQUE SEA BED just under the surface: the city ground/roads/sidewalks (all <=0.2 high) run
-  // on past the coastline, and the wave troughs (down to ~-3.3) would otherwise expose those roads
-  // in the water. This dark plane at 0.24 sits above every street element but below the calm surface,
-  // so troughs reveal deep dark water instead of streets, and calm water hides the bed entirely.
-  const seabed=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen),new THREE.MeshBasicMaterial({color:0x05111c}));
-  seabed.rotation.x=-Math.PI/2;seabed.position.set(0,0.24,SEA_Z0+seaLen/2);seabed.frustumCulled=false;scene.add(seabed);
-  for(let i=0;i<32;i++){ // neon/city-glow reflections streaking on the near water
-    const col=new THREE.Color(['#ff4fd0','#35e0ff','#ffe14d','#7bff8a'][Math.floor(Math.random()*4)]);
-    const st=new THREE.Mesh(new THREE.PlaneGeometry(5+Math.random()*9,30+Math.random()*70),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.10+Math.random()*.10,blending:THREE.AdditiveBlending,depthWrite:false}));
-    st.rotation.x=-Math.PI/2;st.position.set((Math.random()-.5)*1500,1.9,SEA_Z0+24+Math.random()*340);scene.add(st);
+  const seaLen=2600, seaW=5200, seaCz=SEA_Z0+seaLen/2;
+  // DEEP DARK SEAFLOOR: the land is clipped at the coast, so this backstops the void beneath the wave
+  // troughs and below the coastline edge — glimpses under a wave read as deep dark water, not sky.
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen),new THREE.MeshBasicMaterial({color:0x03080f}));
+  floor.rotation.x=-Math.PI/2;floor.position.set(0,-6,seaCz);floor.frustumCulled=false;scene.add(floor);
+  // real moving night-ocean surface: rolling swells with moving moonlight glints, neon reflections + foam.
+  // Nothing sits under the bay now (land clipped), so the full wave range is free to show.
+  const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,260,140),
+    makeOceanMat({color:0x0b2a45,amp:0.50,roughness:0.10,metalness:0.05,emissive:0x0a1c2e,emissiveIntensity:0.5}));
+  sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,seaCz);sea.frustumCulled=false;scene.add(sea);
+  // CITY-LIGHT REFLECTIONS on the near water: bright neon smears raking toward the viewer — the main
+  // 'lights reflecting on the sea' cue. Denser + brighter than before and concentrated along the shore.
+  for(let i=0;i<70;i++){
+    const near=Math.random();
+    const col=new THREE.Color(['#ff3cc6','#31dcff','#ffd23c','#ff7a3c','#8a7bff'][Math.floor(Math.random()*5)]);
+    const st=new THREE.Mesh(new THREE.PlaneGeometry(3+Math.random()*7,40+Math.random()*120),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.14+Math.random()*.24,blending:THREE.AdditiveBlending,depthWrite:false}));
+    st.rotation.x=-Math.PI/2;st.renderOrder=2;st.position.set((Math.random()-.5)*1700,1.2,SEA_Z0+20+near*near*520);scene.add(st);
   }
-  const seawall=new THREE.Mesh(new THREE.BoxGeometry(seaW,3.4,4),new THREE.MeshStandardMaterial({color:0x3a3a42,roughness:0.9,metalness:0.05}));
-  seawall.position.set(0,0.1,SEA_Z0);scene.add(seawall);
+  // taller/deeper seawall hides the coastline edge: spans from the seafloor gap up to just above the calm waterline
+  const seawall=new THREE.Mesh(new THREE.BoxGeometry(seaW,9,5),new THREE.MeshStandardMaterial({color:0x33333a,roughness:0.9,metalness:0.05}));
+  seawall.position.set(0,-3.2,SEA_Z0);scene.add(seawall);
 
   // ----- US NAVY DESTROYER -----
   const shipPadTex=tex((g,w,h)=>{g.fillStyle='#20262e';g.fillRect(0,0,w,h);g.strokeStyle='#39e6ff';g.lineWidth=9;g.beginPath();g.arc(w/2,h/2,w/2-7,0,7);g.stroke();g.lineWidth=16;g.strokeStyle='#eaf6ff';g.beginPath();g.moveTo(w*.34,h*.30);g.lineTo(w*.34,h*.70);g.moveTo(w*.66,h*.30);g.lineTo(w*.66,h*.70);g.moveTo(w*.34,h*.5);g.lineTo(w*.66,h*.5);g.stroke();},128,128);
