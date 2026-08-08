@@ -6163,6 +6163,98 @@ const kanji=[
 const neonCols=['#ff4fd0','#35e0ff','#ffe14d','#ff5533','#7dff6a','#c88aff','#ff9d2e','#ff2f8f','#2fffe0','#3d6bff','#c6ff4d','#ff2222','#8fd9ff','#9d4dff','#ffcf4d','#4dffb8','#ff6fa8','#ff7a1a'];
 const signShapes=['tall','slim','wide','square'];
 const frameStyles=['steel','rust','black','chrome'];
+
+// ================= 80s/90s JAPANESE SIGN FACES =================
+// A shared high-detail renderer for shop/neon/billboard sign faces in the Showa-late / bubble-era
+// graphic style: vertical mincho kanji columns (tate-kanban), chrome romaji, magenta→cyan gradient
+// wordmarks, starbursts, halftone & grid grounds, noren-red izakaya boards, and ¥ price bursts.
+// One call paints a full varied face into any rect, so EVERY sign surface in the city draws from the
+// same rich pool — no flat single-kanji placeholders anywhere.
+const shopWords=['ラーメン','居酒屋','カラオケ','寿司','ホテル','薬局','パチンコ','喫茶店','焼肉','本屋','電器','うどん','ゲーム','定食','餃子','焼鳥','天ぷら','蕎麦','弁当','質屋','雀荘','スナック','食堂','中華','カフェ','美容室','古着','写真','宝石','マッサージ','両替'];
+const kataSub=['スナック','クラブ','ラウンジ','酒場','喫茶','劇場','会館','商店','本舗','横丁','歌謡','純喫茶','珈琲','夜總会'];
+const romajiBrand=['BAR','CLUB','SNACK','LOUNGE','NEON','TOKYO','NIGHT','ROYAL','STAR','KING','DRAGON','SUPER','GOLD','LUCKY','CROWN','PARADISE','FUJI','SAKURA','MILKY','DISCO','PINK'];
+const powerKanji=['龍','夢','虎','鬼','極','華','雅','月','花','愛','福','酒','湯','金','風','雷','桜','鶴'];
+const priceNums=['980','500','1000','390','680','2980','198','298','1980','390'];
+const _compl=['#ff2f8f','#2fffe0','#ffe14d','#9d4dff','#ff7a1a','#3d6bff','#7dff6a','#ff4fd0'];
+const MINCHO='"Hiragino Mincho ProN","Yu Mincho",serif', GOTHIC='"Hiragino Kaku Gothic ProN",sans-serif';
+function _hexRGB(c){c=(c||'#fff').replace('#','');if(c.length===3)c=c.split('').map(x=>x+x).join('');return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];}
+function _mixc(a,b,t){return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)];}
+function _rgba(c,a){return `rgba(${c[0]},${c[1]},${c[2]},${a})`;}
+const _pick=a=>a[Math.floor(Math.random()*a.length)];
+function _fit(g,txt,maxW,size,weight,family){g.font=`${weight} ${size}px ${family}`;let s=size;while(s>6&&g.measureText(txt).width>maxW){s-=1;g.font=`${weight} ${s}px ${family}`;}return s;}
+function _glowText(g,txt,cx,cy,size,family,col,glow){g.font=`bold ${size}px ${family}`;g.textAlign='center';g.textBaseline='middle';g.shadowColor=col;g.shadowBlur=glow;g.fillStyle=col;g.fillText(txt,cx,cy);g.fillText(txt,cx,cy);g.shadowBlur=0;}
+function _outlineText(g,txt,cx,cy,size,family,fill,outline,ow){g.font=`bold ${size}px ${family}`;g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';g.lineWidth=ow;g.strokeStyle=outline;g.strokeText(txt,cx,cy);g.fillStyle=fill;g.fillText(txt,cx,cy);}
+function _chromeText(g,txt,cx,cy,size,family){g.font=`bold ${size}px ${family}`;g.textAlign='center';g.textBaseline='middle';const gd=g.createLinearGradient(0,cy-size*0.55,0,cy+size*0.55);gd.addColorStop(0,'#ffffff');gd.addColorStop(.42,'#c9d2dd');gd.addColorStop(.5,'#7f8a99');gd.addColorStop(.58,'#4c5666');gd.addColorStop(1,'#e9eef4');g.lineJoin='round';g.lineWidth=Math.max(2,size*0.1);g.strokeStyle='#080810';g.strokeText(txt,cx,cy);g.fillStyle=gd;g.fillText(txt,cx,cy);}
+function _starburst(g,cx,cy,r,rays,col){g.save();g.translate(cx,cy);g.strokeStyle=col;g.globalAlpha=0.45;for(let i=0;i<rays;i++){g.rotate(Math.PI*2/rays);g.lineWidth=Math.max(1,r*0.02);g.beginPath();g.moveTo(0,0);g.lineTo(r,0);g.stroke();}g.globalAlpha=1;g.restore();}
+function _sparkle(g,cx,cy,r,col){g.fillStyle=col;g.beginPath();g.moveTo(cx,cy-r*2);g.lineTo(cx+r*.5,cy-r*.5);g.lineTo(cx+r*2,cy);g.lineTo(cx+r*.5,cy+r*.5);g.lineTo(cx,cy+r*2);g.lineTo(cx-r*.5,cy+r*.5);g.lineTo(cx-r*2,cy);g.lineTo(cx-r*.5,cy-r*.5);g.closePath();g.fill();}
+function drawSignFace(g,x,y,w,h,col,vertical){
+  g.save();
+  g.beginPath();g.rect(x,y,w,h);g.clip();                 // keep every motif inside the panel
+  const rgb=_hexRGB(col), comp=_hexRGB(_pick(_compl)), dark=[10,8,14], cx=x+w/2, cy=y+h/2;
+  const tall=h>w*1.25, mn=Math.min(w,h);
+  // base panel: deep near-black with a faint wash of the accent colour
+  const bg=g.createLinearGradient(x,y,x,y+h);
+  bg.addColorStop(0,_rgba(_mixc(dark,rgb,0.16),1));bg.addColorStop(1,_rgba(dark,1));
+  g.fillStyle=bg;g.fillRect(x,y,w,h);
+  const pool=tall?['vcol','power','izakaya','stripe']:['chrome','gradient','grid','power','price','izakaya','stripe','vcol'];
+  const arch=_pick(pool);
+  if(arch==='vcol'){                                       // vertical mincho kanji column
+    const word=_pick(shopWords).replace(/ー/g,'│'), chars=[...word].slice(0,4);
+    const rule=x+w*(Math.random()<.5?0.24:0.76);
+    g.strokeStyle=_rgba(rgb,0.6);g.lineWidth=Math.max(1,w*0.02);g.beginPath();g.moveTo(rule,y+h*0.1);g.lineTo(rule,y+h*0.9);g.stroke();
+    const colX=x+w*(rule<cx?0.6:0.42), size=Math.min(h*0.82/chars.length,w*0.66);
+    const step=h*0.8/chars.length;
+    chars.forEach((c,i)=>_glowText(g,c,colX,y+h*0.12+step*(i+.5),size,MINCHO,col,mn*0.14));
+    _glowText(g,_pick(kataSub),x+w*(rule<cx?0.22:0.78),y+h*0.5,Math.min(h*0.05,w*0.5),GOTHIC,'#fff',6);
+  }else if(arch==='power'){                                // one blazing power-kanji + starburst
+    _starburst(g,cx,cy,mn*0.62,18+Math.floor(Math.random()*10),_rgba(comp,1));
+    const s=mn*0.82;
+    if(Math.random()<0.5)_chromeText(g,_pick(powerKanji),cx,cy,s,MINCHO);
+    else _glowText(g,_pick(powerKanji),cx,cy,s,MINCHO,col,mn*0.2);
+    for(let i=0;i<3;i++)_sparkle(g,x+w*(0.15+Math.random()*0.7),y+h*(0.12+Math.random()*0.2),mn*0.04,'#fff');
+  }else if(arch==='chrome'){                               // chrome romaji wordmark + kana subtitle
+    const word=_pick(romajiBrand), s=_fit(g,word,w*0.86,h*0.5,'bold',GOTHIC);
+    _chromeText(g,word,cx,y+h*0.4,s,GOTHIC);
+    g.fillStyle=_rgba(rgb,0.9);g.fillRect(x+w*0.2,y+h*0.63,w*0.6,Math.max(2,h*0.02));
+    _glowText(g,_pick(kataSub),cx,y+h*0.8,Math.min(h*0.16,w*0.16),GOTHIC,col,mn*0.08);
+  }else if(arch==='gradient'){                             // bubble magenta→cyan gradient wordmark
+    const word=Math.random()<0.5?_pick(romajiBrand):_pick(shopWords), s=_fit(g,word,w*0.9,tall?h*0.3:h*0.62,'bold',GOTHIC);
+    const gd=g.createLinearGradient(0,cy-s*0.5,0,cy+s*0.5);
+    gd.addColorStop(0,`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`);gd.addColorStop(1,`rgb(${comp[0]},${comp[1]},${comp[2]})`);
+    g.shadowColor=_rgba(rgb,0.9);g.shadowBlur=mn*0.12;
+    _outlineText(g,word,cx,cy,s,GOTHIC,'#0a0a12',_rgba(dark,1),Math.max(3,s*0.16));
+    g.shadowBlur=0;g.font=`bold ${s}px ${GOTHIC}`;g.fillStyle=gd;g.textAlign='center';g.textBaseline='middle';g.fillText(word,cx,cy);
+    for(let i=0;i<2;i++)_sparkle(g,x+w*(0.12+Math.random()*0.76),y+h*(0.15+Math.random()*0.7),mn*0.05,'#fff');
+  }else if(arch==='grid'){                                 // 80s tech grid ground + bold word
+    g.strokeStyle=_rgba(rgb,0.35);g.lineWidth=1;
+    const gs=Math.max(6,mn*0.14);
+    for(let gx=x;gx<=x+w;gx+=gs){g.beginPath();g.moveTo(gx,y);g.lineTo(gx,y+h);g.stroke();}
+    for(let gy=y;gy<=y+h;gy+=gs){g.beginPath();g.moveTo(x,gy);g.lineTo(x+w,gy);g.stroke();}
+    const word=Math.random()<0.5?_pick(romajiBrand):_pick(shopWords), s=_fit(g,word,w*0.86,h*0.6,'bold',GOTHIC);
+    g.fillStyle=_rgba(dark,0.7);g.fillRect(cx-g.measureText(word).width*0.6,cy-s*0.6,g.measureText(word).width*1.2,s*1.2);
+    _glowText(g,word,cx,cy,s,GOTHIC,col,mn*0.12);
+  }else if(arch==='price'){                                // ¥ price burst — sale board
+    _starburst(g,cx,cy,mn*0.6,14,_rgba(rgb,1));
+    _outlineText(g,'¥'+_pick(priceNums),cx,y+h*0.42,_fit(g,'¥'+_pick(priceNums),w*0.9,h*0.5,'bold',GOTHIC),GOTHIC,'#ffe14d','#c01818',Math.max(3,h*0.05));
+    _outlineText(g,_pick(['大特価','セール','激安','半額','均一']),cx,y+h*0.8,Math.min(h*0.2,w*0.22),GOTHIC,'#fff','#c01818',Math.max(2,h*0.03));
+  }else if(arch==='izakaya'){                              // noren-red board, white brush kanji
+    const warm=Math.random()<0.5?[168,26,32]:[196,64,16];
+    g.fillStyle=_rgba(warm,1);g.fillRect(x+w*0.06,y+h*0.06,w*0.88,h*0.88);
+    g.strokeStyle='#f4ece0';g.lineWidth=Math.max(2,mn*0.03);g.strokeRect(x+w*0.06,y+h*0.06,w*0.88,h*0.88);
+    const word=_pick(['ラーメン','寿司','焼肉','居酒屋','餃子','焼鳥','うどん','おでん','串','酒']);
+    const chars=[...word].slice(0,tall?4:3);
+    if(tall){const step=h*0.76/chars.length,s=Math.min(step*0.9,w*0.6);chars.forEach((c,i)=>_outlineText(g,c,cx,y+h*0.14+step*(i+.5),s,MINCHO,'#fff8ee','#3a0808',Math.max(2,s*0.06)));}
+    else _outlineText(g,word,cx,cy,_fit(g,word,w*0.78,h*0.62,'bold',MINCHO),MINCHO,'#fff8ee','#3a0808',Math.max(2,h*0.05));
+  }else{                                                    // candy-stripe awning band + word
+    const stripeH=h*0.3, sw=Math.max(4,w*0.09);
+    for(let sx=x-h;sx<x+w;sx+=sw*2){g.fillStyle=_rgba(rgb,0.9);g.beginPath();g.moveTo(sx,y);g.lineTo(sx+sw,y);g.lineTo(sx+sw-stripeH,y+stripeH);g.lineTo(sx-stripeH,y+stripeH);g.closePath();g.fill();}
+    const word=Math.random()<0.5?_pick(shopWords):_pick(romajiBrand), s=_fit(g,word,w*0.86,h*0.5,'bold',GOTHIC);
+    _glowText(g,word,cx,y+h*0.66,s,GOTHIC,col,mn*0.1);
+  }
+  g.restore();
+}
+// ================= END SIGN FACES =================
+
 function neonTex(txt,col,shape,frameStyle){
   shape=shape||'tall';frameStyle=frameStyle||'steel';
   const landscape=shape==='wide';
@@ -6188,30 +6280,12 @@ function neonTex(txt,col,shape,frameStyle){
     [[frameW*1.5,frameW*1.5],[w-frameW*1.5,frameW*1.5],[frameW*1.5,h-frameW*1.5],[w-frameW*1.5,h-frameW*1.5]].forEach(([rx,ry])=>{
       g.beginPath();g.arc(rx,ry,2.5,0,7);g.fill();
     });
-    g.strokeStyle=col;g.lineWidth=landscape?4:3;g.strokeRect(frameW+2,frameW+2,w-frameW*2-4,h-frameW*2-4);
-    g.textAlign='center';g.textBaseline='middle';
-    g.shadowColor=col;g.shadowBlur=landscape?14:18;g.fillStyle=col;
-    const chars=txt.split('');
-    if(landscape){
-      g.font=`bold ${Math.round(h*0.5)}px sans-serif`;
-      const step=(w-40)/Math.max(1,chars.length);
-      chars.forEach((c,i)=>{g.fillText(c,20+step*(i+.5),h/2);g.fillText(c,20+step*(i+.5),h/2);});
-    }else{
-      g.font=`bold ${shape==='slim'?32:42}px sans-serif`;
-      const step=(h-40)/chars.length;
-      chars.forEach((c,i)=>{g.fillText(c,w/2,30+step*(i+.5));g.fillText(c,w/2,30+step*(i+.5));});
-    }
-    g.shadowBlur=0;
-    if(!landscape&&Math.random()<0.5){
-      const pw=w*0.7,ph=14,px=(w-pw)/2,py=6;
-      const pg=g.createLinearGradient(0,py,0,py+ph);
-      pg.addColorStop(0,'#8a7a4a');pg.addColorStop(1,'#5a4e2e');
-      g.fillStyle=pg;g.fillRect(px,py,pw,ph);
-      g.strokeStyle='#2a2418';g.lineWidth=1;g.strokeRect(px,py,pw,ph);
-      g.fillStyle='#2a2418';g.font='bold 10px monospace';g.textAlign='center';g.textBaseline='middle';
-      const letters=['D5','F','R4','A2','C1','B7'];
-      g.fillText(letters[Math.floor(Math.random()*letters.length)],w/2,py+ph/2);
-    }
+    // high-detail 80s/90s Japanese sign face inside the frame (varied every draw)
+    const inx=frameW+2,iny=frameW+2,inw=w-frameW*2-4,inh=h-frameW*2-4;
+    drawSignFace(g,inx,iny,inw,inh,col,!landscape);
+    // glowing neon-tube border on top of the face
+    g.strokeStyle=col;g.lineWidth=landscape?4:3;g.shadowColor=col;g.shadowBlur=8;
+    g.strokeRect(inx+1,iny+1,inw-2,inh-2);g.shadowBlur=0;
   },w,h);
 }
 const neonMats=[];
@@ -6382,15 +6456,12 @@ function drawShopBay(g,x0,y0,sw,h){
   }
   // window frame mullion between bays
   g.fillStyle='rgba(6,4,4,.9)';g.fillRect(x0,y0,3,h);
-  // glowing nameplate signage bar above the window, in its own dark frame box (a real sign, not a
-  // blank glow) — text kept short so it reads at distance
+  // glowing nameplate signage bar above the window — a full high-detail 80s/90s sign face in a dark
+  // frame box (varied per bay), not a single blank kanji
   const signY=y0,signH=h*0.16,col=neonCols[Math.floor(Math.random()*neonCols.length)];
   g.fillStyle='#0c0a10';g.fillRect(bx-1,signY,bw2+2,signH);
-  g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=1;g.strokeRect(bx-1,signY,bw2+2,signH);
-  g.shadowColor=col;g.shadowBlur=Math.round(h*0.05);g.fillStyle=col;
-  g.font=`bold ${Math.round(signH*0.72)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
-  g.fillText(kanji[Math.floor(Math.random()*kanji.length)].slice(0,2),bx+bw2/2,signY+signH*0.55);
-  g.shadowBlur=0;
+  drawSignFace(g,bx,signY,bw2,signH,col,false);
+  g.strokeStyle=col;g.lineWidth=1;g.shadowColor=col;g.shadowBlur=Math.round(h*0.03);g.strokeRect(bx-1,signY,bw2+2,signH);g.shadowBlur=0;
   // warm/cool floor-light hint right under the window (interior spill toward the glass base)
   g.fillStyle=`rgba(${mul(tintA[0],bright*0.4)},${mul(tintA[1],bright*0.4)},${mul(tintA[2],bright*0.4)},.4)`;
   g.fillRect(bx,by+bh2+1,bw2,Math.max(1,h*0.06));
@@ -6468,28 +6539,9 @@ function ledScanlines(g,w,h,strength){
 // branded LED ad panel: a hexagonal emblem + wordmark + tagline bar + weathered mount-screw
 // frame, so it reads as a real physical billboard (no generic circle-and-bars placeholder)
 function adTex(){return tex((g,w,h)=>{
-  const hue=Math.random()*360;
-  const gr=g.createLinearGradient(0,0,0,h);
-  gr.addColorStop(0,`hsl(${hue},58%,20%)`);gr.addColorStop(1,`hsl(${hue},62%,8%)`);
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  const bx=w*0.24,by=h*0.36,br=h*0.24;
-  g.save();g.translate(bx,by);
-  g.fillStyle=`hsl(${hue},85%,62%)`;
-  g.beginPath();g.moveTo(br,0);for(let i=1;i<=6;i++){const a=i/6*Math.PI*2;g.lineTo(Math.cos(a)*br,Math.sin(a)*br);}g.closePath();g.fill();
-  g.fillStyle='rgba(10,10,14,.9)';
-  g.beginPath();g.moveTo(br*0.55,0);for(let i=1;i<=6;i++){const a=i/6*Math.PI*2;g.lineTo(Math.cos(a)*br*0.55,Math.sin(a)*br*0.55);}g.closePath();g.fill();
-  g.strokeStyle=`hsl(${hue},90%,74%)`;g.lineWidth=2.4;
-  g.beginPath();g.moveTo(-br*0.3,br*0.06);g.lineTo(0,-br*0.32);g.lineTo(br*0.3,br*0.06);g.stroke();
-  g.restore();
-  const word=kanji[Math.floor(Math.random()*kanji.length)];
-  g.textAlign='left';g.textBaseline='middle';
-  g.fillStyle='rgba(255,255,255,.95)';g.font=`bold ${Math.round(h*0.24)}px sans-serif`;
-  g.shadowColor=`hsl(${hue},90%,70%)`;g.shadowBlur=10;
-  g.fillText(word,w*0.44,h*0.34);
-  g.shadowBlur=0;
-  g.fillStyle='rgba(255,255,255,.92)';
-  g.fillRect(w*.14,h*.62,w*.72,h*.09);
-  g.fillRect(w*.14,h*.76,w*.5,h*.07);
+  // rooftop LED billboard: a full high-detail 80s/90s sign face, then LED scanlines + mount frame
+  const col=neonCols[Math.floor(Math.random()*neonCols.length)];
+  drawSignFace(g,0,0,w,h,col,false);
   ledScanlines(g,w,h,0.12);
   g.strokeStyle='rgba(255,255,255,.5)';g.lineWidth=3;
   g.strokeRect(4,4,w-8,h-8);
@@ -6660,44 +6712,47 @@ const roofMat=roofMats[0]; // alias for any single-reference use
 function pickRoof(){return roofMats[Math.floor(Math.random()*roofMats.length)];}
 const parapetMat=new THREE.MeshLambertMaterial({color:0x3a3448});
 const woodMat=new THREE.MeshLambertMaterial({color:0x4e3a2e});
+// Showa enka / theatre bill: gold title band, vertical mincho kanji with cream outline, cast line.
 function vintagePosterTex(){return tex((g,w,h)=>{
-  const rg=g.createLinearGradient(0,0,0,h);
-  rg.addColorStop(0,'#a82820');rg.addColorStop(1,'#7a1c16');
+  const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#b8281e');rg.addColorStop(1,'#6c1610');
   g.fillStyle=rg;g.fillRect(0,0,w,h);
-  for(let i=0;i<200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.15})`;g.fillRect(Math.random()*w,Math.random()*h,1,6+Math.random()*10);}
-  const kanjiSet=['舞','踊','飛','館','味','極'];
-  g.textAlign='center';g.textBaseline='middle';
-  for(let i=0;i<3;i++){
-    const ch=kanjiSet[Math.floor(Math.random()*kanjiSet.length)];
-    g.font='bold '+(h*0.24)+'px sans-serif';
-    g.strokeStyle='#f0e6d0';g.lineWidth=6;g.strokeText(ch,w/2,h*(0.2+i*0.28));
-    g.fillStyle='#181410';g.fillText(ch,w/2,h*(0.2+i*0.28));
-  }
-  g.strokeStyle='rgba(20,10,8,.6)';g.lineWidth=4;g.strokeRect(3,3,w-6,h-6);
+  for(let i=0;i<220;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.14})`;g.fillRect(Math.random()*w,Math.random()*h,1,5+Math.random()*10);}
+  g.fillStyle='#e8c862';g.fillRect(w*0.1,h*0.045,w*0.8,h*0.06);
+  g.fillStyle='#3a0e0a';g.font=`bold ${h*0.042}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';g.fillText(_pick(['大歌謡ショー','特別公演','名作劇場','夜の舞台']),w/2,h*0.075);
+  const set=['舞','踊','華','夢','恋','唄','龍','虎','雅'];
+  const n=3, step=h*0.62/n, s=step*0.82;
+  for(let i=0;i<n;i++)_outlineText(g,_pick(set),w/2,h*0.2+step*(i+.5),s,MINCHO,'#f6ead0','#2a0808',Math.max(3,s*0.08));
+  g.fillStyle='rgba(20,8,6,.75)';g.fillRect(w*0.12,h*0.9,w*0.76,h*0.06);
+  g.fillStyle='#e8c862';g.font=`${h*0.03}px ${MINCHO}`;g.fillText('毎夜 開演 午後七時',w/2,h*0.93);
+  for(let i=0;i<3;i++)_sparkle(g,w*(0.15+Math.random()*0.7),h*(0.12+Math.random()*0.7),3,'#ffe8a0');
+  g.strokeStyle='#e8c862';g.lineWidth=4;g.strokeRect(3,3,w-6,h-6);
 },128,384,true);}
+// Shokudo food bill: steaming ramen bowl, bold outlined 特製/定食 in mincho red, ¥ price flash.
 function foodAdTex(){return tex((g,w,h)=>{
-  const rg=g.createLinearGradient(0,0,0,h);
-  rg.addColorStop(0,'#d8c8a0');rg.addColorStop(1,'#b8a070');
+  const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#efe0b8');rg.addColorStop(1,'#c8a86e');
   g.fillStyle=rg;g.fillRect(0,0,w,h);
-  g.fillStyle='#2a2a30';g.beginPath();g.ellipse(w/2,h*0.35,w*0.28,h*0.1,0,0,7);g.fill();
-  g.fillStyle='#e8e0d0';g.beginPath();g.ellipse(w/2,h*0.32,w*0.24,h*0.08,0,0,7);g.fill();
-  g.strokeStyle='rgba(255,255,255,.4)';g.lineWidth=3;
-  for(let i=0;i<3;i++){
-    g.beginPath();g.moveTo(w*0.35+i*w*0.15,h*0.2);
-    g.quadraticCurveTo(w*0.4+i*w*0.15,h*0.1,w*0.35+i*w*0.15,h*0.02);g.stroke();
-  }
-  g.fillStyle='#181410';g.font='bold '+(h*0.1)+'px sans-serif';g.textAlign='center';
-  g.fillText('特製',w/2,h*0.55);g.fillText('定食',w/2,h*0.68);
-  g.strokeStyle='rgba(30,20,10,.5)';g.lineWidth=4;g.strokeRect(3,3,w-6,h-6);
+  g.strokeStyle='rgba(255,255,255,.45)';g.lineWidth=3;
+  for(let i=0;i<3;i++){g.beginPath();g.moveTo(w*0.34+i*w*0.16,h*0.24);g.quadraticCurveTo(w*0.4+i*w*0.16,h*0.12,w*0.34+i*w*0.16,h*0.03);g.stroke();}
+  g.fillStyle='#2a2a30';g.beginPath();g.ellipse(w/2,h*0.4,w*0.3,h*0.11,0,0,7);g.fill();
+  g.fillStyle='#e8ddc6';g.beginPath();g.ellipse(w/2,h*0.37,w*0.26,h*0.09,0,0,7);g.fill();
+  g.fillStyle='#c86a2a';g.beginPath();g.ellipse(w/2,h*0.36,w*0.2,h*0.055,0,0,7);g.fill();
+  const dish=_pick([['特製','定食'],['元祖','拉麺'],['名物','餃子'],['本格','中華'],['自慢','天丼']]);
+  _outlineText(g,dish[0],w/2,h*0.58,h*0.12,MINCHO,'#b81818','#fff4e0',Math.max(3,h*0.02));
+  _outlineText(g,dish[1],w/2,h*0.71,h*0.12,MINCHO,'#b81818','#fff4e0',Math.max(3,h*0.02));
+  _outlineText(g,'¥'+_pick(priceNums),w/2,h*0.86,h*0.085,GOTHIC,'#1a1a1a','#ffd84a',Math.max(2,h*0.015));
+  g.strokeStyle='#8a5a2a';g.lineWidth=4;g.strokeRect(3,3,w-6,h-6);
 },128,384,true);}
+// Noir film bill: cold spotlight, figure silhouette, glowing mincho title, red "近日上映" tag.
 function noirPosterTex(){return tex((g,w,h)=>{
-  const rg=g.createLinearGradient(0,0,0,h);
-  rg.addColorStop(0,'#1a1e2c');rg.addColorStop(1,'#0a0c14');
+  const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#1a1e2c');rg.addColorStop(1,'#080a12');
   g.fillStyle=rg;g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(120,180,255,.5)';g.beginPath();g.ellipse(w/2,h*0.3,w*0.32,h*0.18,0,0,7);g.fill();
-  const kanjiSet=['夜','闇','嵐','影'];
-  g.fillStyle='#e8eef8';g.font='bold '+(h*0.16)+'px sans-serif';g.textAlign='center';
-  kanjiSet.slice(0,2).forEach((ch,i)=>g.fillText(ch,w/2,h*(0.55+i*0.18)));
+  g.fillStyle='rgba(120,180,255,.5)';g.beginPath();g.ellipse(w/2,h*0.26,w*0.3,h*0.16,0,0,7);g.fill();
+  g.fillStyle='rgba(4,6,12,.85)';g.beginPath();g.ellipse(w/2,h*0.3,w*0.085,h*0.055,0,0,7);g.fill();g.fillRect(w*0.4,h*0.33,w*0.2,h*0.28);
+  const set=['夜','闇','嵐','影','罪','龍','狼','刃'];
+  _glowText(g,_pick(set),w/2,h*0.62,h*0.19,MINCHO,'#9fd0ff',16);
+  _glowText(g,_pick(set),w/2,h*0.79,h*0.19,MINCHO,'#9fd0ff',16);
+  g.fillStyle='#c01818';g.fillRect(w*0.2,h*0.9,w*0.6,h*0.05);
+  g.fillStyle='#fff';g.font=`bold ${h*0.03}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';g.fillText('近日 上映',w/2,h*0.925);
   g.strokeStyle='rgba(120,180,255,.6)';g.lineWidth=3;g.strokeRect(3,3,w-6,h-6);
 },128,384,true);}
 // dark backing frame + glow are uniform (only size/position/rotation vary), so they're collected here
