@@ -6121,15 +6121,8 @@ function makeOceanMat({color=0x0c2a44,amp=1.0,metalness=0.05,roughness=0.12,emis
     const rail2=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.9,CITY*2),new THREE.MeshLambertMaterial({color:0x5a6470}));
     rail2.position.set(wx+(k?0.4:-0.4),0.9,0);scene.add(rail2);
   });
-  // neon shimmer on the water
-  for(let i=0;i<16;i++){
-    const col=new THREE.Color(['#ff4fd0','#35e0ff','#ffe14d','#ff2f8f'][Math.floor(Math.random()*4)]);
-    const p2=new THREE.Mesh(new THREE.PlaneGeometry(3+Math.random()*5,14+Math.random()*30),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.08+Math.random()*.07,blending:THREE.AdditiveBlending,depthWrite:false}));
-    p2.rotation.x=-Math.PI/2;
-    p2.position.set(RIVER.x0+4+Math.random()*(rw-8),-1.82,(Math.random()-.5)*900);
-    scene.add(p2);
-  }
+  // (No flat neon shimmer quads on the river surface — the shader sheen handles reflections without
+  //  leaving hard-edged geometric stripes on the water.)
   // bridges where cross-streets span the river
   const girderMat=new THREE.MeshLambertMaterial({color:0x3c4452});
   ROADS_Z.forEach(r=>{
@@ -7145,15 +7138,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,260,140),
     makeOceanMat({color:0x061321,amp:0.50,roughness:0.09,metalness:0.18,emissive:0x050f18,emissiveIntensity:0.38}));
   sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,seaCz);sea.frustumCulled=false;scene.add(sea);
-  // CITY-LIGHT REFLECTIONS on the near water: bright neon smears raking toward the viewer — the main
-  // 'lights reflecting on the sea' cue. Denser + brighter than before and concentrated along the shore.
-  for(let i=0;i<70;i++){
-    const near=Math.random();
-    const col=new THREE.Color(['#ff3cc6','#31dcff','#ffd23c','#ff7a3c','#8a7bff'][Math.floor(Math.random()*5)]);
-    const st=new THREE.Mesh(new THREE.PlaneGeometry(3+Math.random()*7,40+Math.random()*120),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.14+Math.random()*.24,blending:THREE.AdditiveBlending,depthWrite:false}));
-    st.rotation.x=-Math.PI/2;st.renderOrder=2;st.position.set((Math.random()-.5)*1700,1.2,SEA_Z0+20+near*near*520);scene.add(st);
-  }
+  // (Reflections come from the water shader's silky moonlight sheen — no flat stacked quads on the
+  //  surface, which read as hard geometric stripes at a grazing viewing angle.)
   // taller/deeper seawall hides the coastline edge: spans from the seafloor gap up to just above the calm waterline
   const seawall=new THREE.Mesh(new THREE.BoxGeometry(seaW,9,5),new THREE.MeshStandardMaterial({color:0x33333a,roughness:0.9,metalness:0.05}));
   seawall.position.set(0,-3.2,SEA_Z0);scene.add(seawall);
@@ -7452,11 +7438,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     im.instanceMatrix.needsUpdate=true; im.instanceColor.needsUpdate=true; im.frustumCulled=false;
     scene.add(im); window.__chochin=items.length;
   }
-  // neon reflections glowing on the water — magenta / cyan / amber (shared mats -> merged)
-  const nwMats=[0xff2fae,0x2fd9ff,0xffc24a].map(c=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0.16,blending:THREE.AdditiveBlending,depthWrite:false}));
-  const addGlow=(x,y,z,w,l)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,l),nwMats[Math.floor(Math.random()*nwMats.length)]);p.rotation.x=-Math.PI/2;p.position.set(x,y,z);scene.add(p);};
-  for(let i=0;i<36;i++) addGlow(468+Math.random()*76, -1.5, (Math.random()-0.5)*900, 6+Math.random()*10, 22+Math.random()*50);      // river
-  for(let i=0;i<30;i++) addGlow((Math.random()-0.5)*1200, 0.36, 622+Math.random()*210, 10+Math.random()*22, 34+Math.random()*70); // bay
+  // (No flat neon glow quads laid on the river/bay surface — they read as geometric stripes from the
+  //  air. The moving reflective look now comes entirely from the ocean shader's sheen.)
 }
 
 // ---------- ELEVATED RAIL + COMMUTER TRAIN ----------
