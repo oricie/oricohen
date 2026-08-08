@@ -4447,6 +4447,11 @@ renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFShadowMap;
+// PERF: the sun is fixed and the city is static, yet the shadow map re-renders every shadow-caster
+// every frame. Drive it manually (see loop) so it refreshes every 2nd frame — a full geometry pass
+// saved on alternate frames, with imperceptible shadow lag on the few moving casters.
+renderer.shadowMap.autoUpdate=false;
+renderer.shadowMap.needsUpdate=true;
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
@@ -9752,9 +9757,11 @@ loadMeta();
 })();
 
 let last=performance.now(),screenT=0;
+let __frame=0;
 function loop(now){
   requestAnimationFrame(loop);
   const dt=Math.min((now-last)/1000,0.05);last=now;
+  if((__frame++&1)===0)renderer.shadowMap.needsUpdate=true; // refresh shadows every 2nd frame (see setup)
   if(!gameOver){
     let turn=0,climb=0;
     if(keys['ArrowLeft']||keys['KeyA'])turn+=1;
