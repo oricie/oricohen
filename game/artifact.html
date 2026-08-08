@@ -9004,6 +9004,16 @@ let waveSpawned=0;
 
 // ---------- PROJECTILES / FX ----------
 const bullets=[],explosions=[],debris=[];
+// shortest distance from point P to the segment A->B (used for swept bullet hit tests so fast tracers
+// can't tunnel through a target between frames — the hit is tested against the whole travel segment)
+const __segTmp=new THREE.Vector3(),__segAP=new THREE.Vector3();
+function distToSeg(P,A,B){
+  __segAP.subVectors(P,A); __segTmp.subVectors(B,A);
+  const len2=__segTmp.lengthSq();
+  let t=len2>0?__segAP.dot(__segTmp)/len2:0; t=t<0?0:(t>1?1:t);
+  __segTmp.multiplyScalar(t).add(A);
+  return __segTmp.distanceTo(P);
+}
 const MAX_FX=260,MAX_DEBRIS=70;
 function pushFX(o){explosions.push(o);if(explosions.length>MAX_FX){const old=explosions.shift();scene.remove(old.m);}}
 const tracerG=new THREE.CylinderGeometry(.09,.09,2.6,5);
@@ -9012,15 +9022,37 @@ const rocketG=new THREE.CylinderGeometry(.15,.3,1.6,6);
 const rocketM=new THREE.MeshBasicMaterial({color:0xffaa33});
 const missileM=new THREE.MeshBasicMaterial({color:0xff4444});
 const napalmM=new THREE.MeshBasicMaterial({color:0xff6600});
+// Minigun aim-assist: a helicopter flying level fires horizontally, so un-assisted the tracer
+// stream sails over the zombies on the ground. Pick the best zombie roughly ahead (or the locked
+// target) so the stream rakes DOWN onto it and the gun actually connects.
+function pickGunTarget(fwd,origin){
+  const LK=window.__lock;
+  if(LK&&LK.target&&LK.locked&&LK.target.hp>0)return LK.target;
+  let best=null,bestScore=-1;
+  for(const z of zombies){
+    if(z.hp<=0)continue;
+    const to=z.m.position.clone().add(new THREE.Vector3(0,2,0)).sub(origin);
+    const dist=to.length(); if(dist>380)continue;
+    const dot=fwd.dot(to.normalize());
+    if(dot<0.15)continue;                 // must be within a wide forward cone (ahead / ahead-and-below)
+    const score=dot-dist/2600;            // favour well-aligned and closer targets
+    if(score>bestScore){bestScore=score;best=z;}
+  }
+  return best;
+}
 function fire(){
   if(cd[wpn]>0||ammo[wpn]<=0)return;
   cd[wpn]=cdMax[wpn];
   const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(heli.quaternion);
   if(wpn===0){
-    const spread=new THREE.Vector3((Math.random()-.5)*.025,(Math.random()-.5)*.025,0);
-    const v=fwd.clone().add(spread).multiplyScalar(260);
+    const origin=heli.position.clone().add(new THREE.Vector3(0,-1.3,-4.4).applyQuaternion(heli.quaternion));
+    let aimDir=fwd.clone();
+    const gt=pickGunTarget(fwd,origin);
+    if(gt)aimDir=gt.m.position.clone().add(new THREE.Vector3(0,2,0)).sub(origin).normalize();
+    const spread=new THREE.Vector3((Math.random()-.5)*.03,(Math.random()-.5)*.03,(Math.random()-.5)*.03);
+    const v=aimDir.add(spread).normalize().multiplyScalar(260);
     const b=new THREE.Mesh(tracerG,tracerM);
-    b.position.copy(heli.position).add(new THREE.Vector3(0,-1.3,-4.4).applyQuaternion(heli.quaternion));
+    b.position.copy(origin);
     b.lookAt(b.position.clone().add(v));b.rotateX(Math.PI/2);
     const tg=new THREE.Sprite(new THREE.SpriteMaterial({map:emberTex,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false}));
     tg.scale.set(.5,.5,1);tg.position.set(0,0,1.2);
@@ -9851,6 +9883,7 @@ function loop(now){
         b.v.lerp(want,(b.turn||2)*dt);
         b.m.lookAt(b.m.position.clone().add(b.v));b.m.rotateX(Math.PI/2);
       }
+      const prev=b.m.position.clone();
       b.m.position.add(b.v.clone().multiplyScalar(dt));
       b.t-=dt;
       if(b.type===1||b.type===2){
@@ -9865,16 +9898,20 @@ function loop(now){
           scene.add(s);
         }
       }
-      let hit=b.m.position.y<=0.2;
+      // swept hit tests against the travel segment prev->pos, so bullets never tunnel through targets
+      let hit=(prev.y>0.2&&b.m.position.y<=0.2)||b.m.position.y<=0.2; // crossed / reached the ground
       if(!hit)for(const z of zombies){
-        if(z.hp>0&&b.m.position.distanceTo(z.m.position.clone().setY(b.m.position.y))<(z.big?3.8:1.8)&&b.m.position.y<(z.big?8:4)){hit=true;break;}
+        if(z.hp<=0)continue;
+        const zc=z.m.position.clone().setY(z.m.position.y+(z.big?3.2:2.0)); // aim at torso height
+        if(distToSeg(zc,prev,b.m.position)<(z.big?4.6:2.8)){hit=true;break;}
       }
       if(!hit)for(const bd of buildings){
         if(Math.abs(b.m.position.x-bd.m.position.x)<bd.w/2&&Math.abs(b.m.position.z-bd.m.position.z)<bd.d/2&&b.m.position.y<bd.h){hit=true;break;}
       }
       if(hit||b.t<=0){
         if(b.type===0){
-          zombies.forEach(z=>{if(z.m.position.distanceTo(b.m.position)<b.r+(z.big?2.5:0)){z.hp-=b.dmg;blood(z.m.position);}});
+          // damage every zombie whose torso is within the tracer's travel segment (+splash)
+          zombies.forEach(z=>{if(z.hp<=0)return;const zc=z.m.position.clone().setY(z.m.position.y+(z.big?3.2:2.0));if(distToSeg(zc,prev,b.m.position)<b.r+(z.big?2.6:0.8)){z.hp-=b.dmg;blood(zc);}});
         }else explode(b.m.position,b.r,b.dmg,b.type===3);
         scene.remove(b.m);bullets.splice(i,1);
       }
