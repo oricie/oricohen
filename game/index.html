@@ -4324,7 +4324,9 @@ function spawnHostage(){
   marker.position.y=5;g.add(marker);
   const beaconLight=new THREE.PointLight(0x33ff99,3,60);
   beaconLight.position.y=5;g.add(beaconLight);
-  let x,z,y=0,tries=0,ok=false,rooftop=Math.random()<0.5;
+  // survivors spawn at STREET LEVEL so you actually see the person you extract (rooftop rescues let
+  // you trigger pickup by flying near a building without ever seeing the small figure on the roof)
+  let x,z,y=0,tries=0,ok=false,rooftop=false;
   if(rooftop){
     const candidates=buildings.filter(b=>!b.raw&&b.h<60&&b.h>15);
     if(candidates.length>0){
