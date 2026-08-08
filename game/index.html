@@ -1075,6 +1075,12 @@ wetReflector.rotation.x=-Math.PI/2;wetReflector.position.set(0,0.05,LAND_CZ);
 wetReflector.material.transparent=true;wetReflector.material.depthWrite=false;
 wetReflector.renderOrder=-1; // draw before the emissive road decals/puddles so they layer on top
 scene.add(wetReflector);
+// PERF: the reflector re-renders the ENTIRE scene (every building, from a mirror camera) into its
+// buffer on every frame — one of the biggest hidden costs. Throttle that reflection render to every
+// 3rd frame; the plane keeps drawing itself with the last texture each frame, so the subtle wet sheen
+// is unchanged to the eye (a ~2-frame-stale reflection is imperceptible) at a third of the pass cost.
+{ const _obr=wetReflector.onBeforeRender; let _rf=0;
+  wetReflector.onBeforeRender=function(r,s,c){ if((_rf++%3)===0)_obr.call(this,r,s,c); }; }
 // ======================================================================================
 
 // asphalt textures per road class
