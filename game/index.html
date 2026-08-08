@@ -1789,7 +1789,7 @@ function makeOceanMat({color=0x0c2a44,amp=1.0,metalness=0.05,roughness=0.12,emis
 {
   const rw=RIVER.x1-RIVER.x0,rcx=(RIVER.x0+RIVER.x1)/2;
   const water=new THREE.Mesh(new THREE.PlaneGeometry(rw,CITY*2,Math.max(8,Math.round(rw/3)),480),
-    makeOceanMat({color:0x0b2338,amp:0.16,roughness:0.16,metalness:0.08}));
+    makeOceanMat({color:0x05101b,amp:0.16,roughness:0.22,metalness:0.10,emissive:0x03080f,emissiveIntensity:0.35}));
   water.rotation.x=-Math.PI/2;water.position.set(rcx,-1.7,0);water.frustumCulled=false;
   scene.add(water);
   const wallMat=new THREE.MeshLambertMaterial({color:0x4a4550});
@@ -2820,7 +2820,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   // real moving night-ocean surface: rolling swells with moving moonlight glints, neon reflections + foam.
   // Nothing sits under the bay now (land clipped), so the full wave range is free to show.
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(seaW,seaLen,260,140),
-    makeOceanMat({color:0x0b2a45,amp:0.50,roughness:0.10,metalness:0.05,emissive:0x0a1c2e,emissiveIntensity:0.5}));
+    makeOceanMat({color:0x071726,amp:0.50,roughness:0.16,metalness:0.06,emissive:0x061420,emissiveIntensity:0.4}));
   sea.rotation.x=-Math.PI/2;sea.position.set(0,0.3,seaCz);sea.frustumCulled=false;scene.add(sea);
   // CITY-LIGHT REFLECTIONS on the near water: bright neon smears raking toward the viewer — the main
   // 'lights reflecting on the sea' cue. Denser + brighter than before and concentrated along the shore.
