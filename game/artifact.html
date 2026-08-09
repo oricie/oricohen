@@ -10,7 +10,14 @@
   .hud { position:absolute; color:#9dffb0; text-shadow:0 0 4px rgba(120,255,150,.6); user-select:none; pointer-events:none; z-index:8; font-family:'Courier New',monospace; }
   #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:bold; text-align:center; display:none; color:#ff4040; text-shadow:0 0 12px #f00; width:90%; letter-spacing:2px; }
   #radioSub { bottom:130px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; color:#ffd27a; text-shadow:0 0 6px #000; opacity:0; transition:opacity .4s; letter-spacing:.5px; }
-  #taskPanel { bottom:104px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; letter-spacing:1px; color:#9dffb0; background:rgba(3,12,6,.45); border:1px solid rgba(157,255,176,.35); padding:4px 14px; }
+  #taskPanel { bottom:104px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; letter-spacing:1px; color:#9dffb0; border:1px solid rgba(157,255,176,.35); padding:5px 16px;
+    --tc:rgba(157,255,176,.85);
+    background:
+      linear-gradient(var(--tc),var(--tc)) 0 0/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 0/2px 9px no-repeat,
+      linear-gradient(var(--tc),var(--tc)) 100% 0/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 0/2px 9px no-repeat,
+      linear-gradient(var(--tc),var(--tc)) 0 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 100%/2px 9px no-repeat,
+      linear-gradient(var(--tc),var(--tc)) 100% 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 100%/2px 9px no-repeat,
+      rgba(3,12,6,.5); }
   #help { bottom:6px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.65; text-align:center; width:95%; transition:opacity 1.2s; }
   #tacwrap { bottom:14px; left:12px; display:flex; flex-direction:column; gap:0; }
   #tacTitle { font-size:10px; letter-spacing:2px; color:#9dffb0; background:rgba(3,12,6,.7); border:1px solid rgba(157,255,176,.4); border-bottom:none; padding:2px 6px; width:max-content; }
@@ -4445,6 +4452,11 @@ const W=()=>innerWidth,H=()=>innerHeight;
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,powerPreference:'high-performance'});
 renderer.setSize(W(),H());
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+// device-pixel render size: the scene render target must match the canvas' actual pixel buffer,
+// otherwise the 3D is rendered at 1x (CSS px) and upscaled to the device buffer -> soft/pixelated
+// next to the crisp HUD. RW()/RH() give the true pixel dimensions to size sceneRT with.
+const RS=()=>renderer.getPixelRatio();
+const RW=()=>Math.max(2,Math.round(W()*RS())), RH=()=>Math.max(2,Math.round(H()*RS()));
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFShadowMap;
 // PERF: the sun is fixed and the city is static, yet the shadow map re-renders every shadow-caster
@@ -4493,7 +4505,7 @@ function wheelSetGeo(cyl,offsets){
 let bw=Math.floor(W()/3),bh=Math.floor(H()/3);
 let bw2=Math.max(2,Math.floor(bw/2)),bh2=Math.max(2,Math.floor(bh/2));
 const rtParams={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat};
-const sceneRT=new THREE.WebGLRenderTarget(W(),H(),rtParams);
+const sceneRT=new THREE.WebGLRenderTarget(RW(),RH(),rtParams);
 const brightRT=new THREE.WebGLRenderTarget(bw,bh,rtParams);
 const blurRT1=new THREE.WebGLRenderTarget(bw,bh,rtParams);
 const blurRT2=new THREE.WebGLRenderTarget(bw,bh,rtParams);
@@ -9330,6 +9342,17 @@ function sizeHUD(){hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()
 sizeHUD();
 const HUD_G='#8dff9f',HUD_DIM='rgba(141,255,159,.34)',HUD_FAINT='rgba(141,255,159,.14)',
       HUD_AMBER='#ffc23a',HUD_RED='#ff4d4d',HUD_CYAN='#39e6ff';
+// unified HUD typography + panel chrome — matches the #taskPanel command box (translucent dark-green
+// fill, thin green border) so every readout reads as one cohesive instrument set, plus corner ticks.
+const HUD_FONT='"Courier New",monospace';
+const HF=spec=>spec+' '+HUD_FONT;
+function hudPanel(x,y,w,h){
+  hudX.fillStyle='rgba(3,12,6,.5)';hudX.fillRect(x,y,w,h);
+  hudX.strokeStyle='rgba(157,255,176,.35)';hudX.lineWidth=1;hudX.strokeRect(x+0.5,y+0.5,w-1,h-1);
+  hudX.strokeStyle='rgba(157,255,176,.85)';hudX.lineWidth=1.4;const c=7;
+  [[x+0.5,y+0.5,1,1],[x+w-0.5,y+0.5,-1,1],[x+0.5,y+h-0.5,1,-1],[x+w-0.5,y+h-0.5,-1,-1]].forEach(([px,py,sx,sy])=>{
+    hudX.beginPath();hudX.moveTo(px,py+sy*c);hudX.lineTo(px,py);hudX.lineTo(px+sx*c,py);hudX.stroke();});
+}
 const _pv=new THREE.Vector3();
 function project(v){_pv.copy(v).project(cam);return {x:(_pv.x*0.5+0.5)*W(),y:(-_pv.y*0.5+0.5)*H(),on:_pv.z<1&&_pv.z>-1};}
 
@@ -9557,57 +9580,65 @@ function drawHUD(now){
   // ---- heading tape (top center) ----
   headingTape(cx,30,Math.min(440,w*0.5),hdg);
 
-  // ---- top-left: identity, score, health, combat status ----
-  const lx=14;let ly=20;
-  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font='bold 13px monospace';
-  hudX.fillText((compact?'AH-7 · ':'APACHE-7 · ')+pilotName+(compact?'  W'+wave:''),lx,ly);ly+=17;
-  hudX.font='11px monospace';hudX.fillStyle=HUD_DIM;
+  // ---- top-left panel: identity, score, health, combat status ----
+  const plW=compact?168:214, plX=10, plY=10;
+  const plH=(mult>1?96:80);
+  hudPanel(plX,plY,plW,plH);
+  const lx=plX+11;let ly=plY+20;
+  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 13px');
+  hudX.fillText((compact?'AH-7 · ':'APACHE-7 · ')+pilotName+(compact?'  W'+wave:''),lx,ly);ly+=18;
+  hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
   hudX.fillText('SCORE',lx,ly);hudX.fillText('KILLS',lx+108,ly);
-  hudX.fillStyle='#eaffea';hudX.font='bold 14px monospace';
-  hudX.fillText(String(score),lx+46,ly);hudX.fillText(String(kills),lx+154,ly);ly+=16;
-  if(mult>1){hudX.fillStyle=HUD_AMBER;hudX.font='bold 11px monospace';hudX.fillText('x'+mult.toFixed(1)+' COMBO ·'+streak,lx,ly);}
-  ly+=6;
+  hudX.fillStyle='#eaffea';hudX.font=HF('bold 14px');
+  hudX.fillText(String(score),lx+46,ly);hudX.fillText(String(kills),lx+152,ly);ly+=17;
+  if(mult>1){hudX.fillStyle=HUD_AMBER;hudX.font=HF('bold 11px');hudX.fillText('x'+mult.toFixed(1)+' COMBO · '+streak,lx,ly);ly+=15;}
   // integrity (health) bar
-  const bw=compact?150:182,bh=11;
+  const bw=plW-22,bh=11;
   hudX.strokeStyle=HUD_DIM;hudX.lineWidth=1;hudX.strokeRect(lx,ly,bw,bh);
   const frac=Math.max(0,hp)/100;
   const hcol=hp>60?'#3fe07a':hp>30?'#ffc23a':'#ff4d4d';
   hudX.fillStyle=hcol;hudX.fillRect(lx+1,ly+1,(bw-2)*frac,bh-2);
   for(let g=1;g<5;g++){hudX.strokeStyle=HUD_FAINT;hudX.beginPath();hudX.moveTo(lx+bw*g/5,ly);hudX.lineTo(lx+bw*g/5,ly+bh);hudX.stroke();}
-  hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';hudX.fillText('HULL',lx,ly+bh+10);
-  hudX.fillStyle=hcol;hudX.textAlign='right';hudX.fillText(Math.max(0,Math.round(hp))+'%',lx+bw,ly+bh+10);
+  hudX.fillStyle=HUD_DIM;hudX.font=HF('9px');hudX.textAlign='left';hudX.fillText('HULL',lx,ly+bh+9);
+  hudX.fillStyle=hcol;hudX.textAlign='right';hudX.fillText(Math.max(0,Math.round(hp))+'%',lx+bw,ly+bh+9);
   hudX.textAlign='left';
 
-  // wave + mission line, centered under heading tape (roomy layouts only)
+  // ---- wave + mission: centered pill under the heading tape (matches the command box) ----
   if(!compact){
+    hudX.font=HF('bold 15px');const wvT='WAVE '+wave;
+    hudX.font=HF('11px');const wm=Math.max(hudX.measureText(missionLine).width, 120);
+    const mpW=Math.min(w*0.6,wm+40),mpX=cx-mpW/2,mpY=50,mpH=38;
+    hudPanel(mpX,mpY,mpW,mpH);
     hudX.textAlign='center';
-    hudX.fillStyle=HUD_G;hudX.font='bold 15px monospace';
-    hudX.fillText('WAVE '+wave,cx,64);
-    hudX.fillStyle=HUD_CYAN;hudX.font='11px monospace';
-    hudX.fillText(missionLine,cx,80);
+    hudX.fillStyle=HUD_G;hudX.font=HF('bold 14px');hudX.fillText('WAVE '+wave,cx,mpY+16);
+    hudX.fillStyle=HUD_CYAN;hudX.font=HF('11px');hudX.fillText(missionLine,cx,mpY+30);
   }
 
-  // ---- top-right: weapon rack ----
-  const rx=w-14;let ry=20;const rackW=compact?128:150,fs=compact?11:12;
+  // ---- top-right panel: weapon rack + throttle ----
+  const fs=compact?11:12, rackW=compact?132:158, prW=rackW+22, prX=w-10-prW, prY=10;
+  const prH=4*(compact?18:20)+30;
+  hudPanel(prX,prY,prW,prH);
+  const rx=prX+prW-11;let ry=prY+20;
   hudX.textAlign='right';
   const names=compact?['MINIGN','HYDRA','HLFIRE','NAPALM']:['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'];
   for(let k=0;k<4;k++){
     const sel=k===wpn;
     const am=ammo[k]===Infinity?'∞':ammo[k];
-    hudX.font=(sel?'bold ':'')+fs+'px monospace';
+    hudX.font=HF((sel?'bold ':'')+fs+'px');
+    if(sel){hudX.fillStyle='rgba(255,194,58,.14)';hudX.fillRect(prX+5,ry-12,prW-10,18);hudX.strokeStyle=HUD_AMBER;hudX.lineWidth=1;hudX.strokeRect(prX+5,ry-12,prW-10,18);}
     hudX.fillStyle=sel?HUD_AMBER:(ammo[k]<=0?'rgba(255,80,80,.5)':HUD_DIM);
-    if(sel){hudX.strokeStyle=HUD_AMBER;hudX.lineWidth=1;hudX.strokeRect(rx-rackW,ry-11,rackW,16);}
-    hudX.fillText('['+(k+1)+'] '+names[k],rx-26,ry);
-    hudX.fillText(am,rx-4,ry);
-    ry+=compact?17:19;
+    hudX.textAlign='left';hudX.fillText('['+(k+1)+'] '+names[k],prX+11,ry);
+    hudX.textAlign='right';hudX.fillText(String(am),rx,ry);
+    ry+=compact?18:20;
   }
   // throttle bar under weapon rack
   const thr=window.__throttle!==undefined?window.__throttle:1;
-  const tgx=rx-rackW,tgy=ry+4,tgw=rackW,tgh=10;
+  const tgx=prX+11,tgy=ry+2,tgw=prW-22,tgh=9;
   hudX.strokeStyle=HUD_DIM;hudX.lineWidth=1;hudX.strokeRect(tgx,tgy,tgw,tgh);
   hudX.fillStyle=thr<0.15?'#ff6a6a':'#5fff8f';hudX.fillRect(tgx+1,tgy+1,(tgw-2)*Math.max(0,Math.min(1,thr)),tgh-2);
-  hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';hudX.textAlign='left';hudX.fillText('THR',tgx,tgy+tgh+9);
+  hudX.fillStyle=HUD_DIM;hudX.font=HF('9px');hudX.textAlign='left';hudX.fillText('THR',tgx,tgy+tgh+9);
   hudX.textAlign='right';hudX.fillText(thr<0.15?'HOVER':(Math.round(thr*100)+'%'),tgx+tgw,tgy+tgh+9);
+  hudX.textAlign='left';
 
   // ---- target lock box: acquire -> lock flow ----
   const LK=window.__lock;
@@ -10414,7 +10445,7 @@ onresize=()=>{
   sizeHUD();
   bw=Math.floor(W()/3);bh=Math.floor(H()/3);
   bw2=Math.max(2,Math.floor(bw/2));bh2=Math.max(2,Math.floor(bh/2));
-  sceneRT.setSize(W(),H());
+  sceneRT.setSize(RW(),RH());
   brightRT.setSize(bw,bh);blurRT1.setSize(bw,bh);blurRT2.setSize(bw,bh);
   wideRT1.setSize(bw2,bh2);wideRT2.setSize(bw2,bh2);
   blurMat.uniforms.res.value.set(bw,bh);
