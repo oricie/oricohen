@@ -7191,6 +7191,57 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   }
 })();
 
+// ---------- IMPERIAL PALACE (皇居): the central Tokyo landmark — a green forbidden compound ringed
+// by a wide dark moat and granite embankment, with the Edo-castle keep (tenshu) at its heart. Instantly
+// reads as real Tokyo (Chiyoda). Static, so the merge pass fuses it to a few draw calls. ----------
+(function buildImperialPalace(){
+  const cx=-90,cz=-30,outerR=155,innerR=118;
+  // clear any city buildings inside the compound
+  for(let i=buildings.length-1;i>=0;i--){const b=buildings[i];const dx=b.m.position.x-cx,dz=b.m.position.z-cz;if(dx*dx+dz*dz<(outerR+18)*(outerR+18)){scene.remove(b.m);buildings.splice(i,1);}}
+  const grp=new THREE.Group();
+  const wallMat=new THREE.MeshStandardMaterial({color:0x5a5f57,roughness:0.92,metalness:0.04});
+  // moat: dark reflective water ring
+  const moat=new THREE.Mesh(new THREE.RingGeometry(innerR,outerR,72),new THREE.MeshStandardMaterial({color:0x0a2436,roughness:0.14,metalness:0.45,emissive:0x03101c,emissiveIntensity:0.55}));
+  moat.rotation.x=-Math.PI/2;moat.position.set(cx,0.12,cz);grp.add(moat);
+  // inner grounds (grass), lifted just above the streets it covers
+  const green=new THREE.Mesh(new THREE.CircleGeometry(innerR+3,56),grassMat);
+  green.rotation.x=-Math.PI/2;green.position.set(cx,0.16,cz);grp.add(green);
+  // angled granite embankment (inner) + a low outer rim wall
+  const bank=new THREE.Mesh(new THREE.CylinderGeometry(innerR,innerR+9,9,56,1,true),wallMat);bank.position.set(cx,3.8,cz);grp.add(bank);
+  const rim=new THREE.Mesh(new THREE.CylinderGeometry(outerR+2,outerR+7,5,56,1,true),wallMat);rim.position.set(cx,2,cz);grp.add(rim);
+  // Edo-castle keep (tenshu): stone base + tiered white floors with dark tiled roofs + gold finial
+  const keep=new THREE.Group();
+  const plasterM=new THREE.MeshStandardMaterial({color:0xe9e3d5,roughness:0.85,metalness:0.02});
+  const roofM=new THREE.MeshStandardMaterial({color:0x282c31,roughness:0.65,metalness:0.25,emissive:0x0a0b0d,emissiveIntensity:0.3});
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(20,26,11,4),wallMat);base.rotation.y=Math.PI/4;base.position.y=5.5;keep.add(base);
+  let y=11,w=27;
+  for(let t=0;t<4;t++){
+    const floor=new THREE.Mesh(new THREE.BoxGeometry(w,6.5,w),plasterM);floor.position.y=y+3.25;keep.add(floor);
+    const eave=new THREE.Mesh(new THREE.BoxGeometry(w*1.12,0.5,w*1.12),roofM);eave.position.y=y+6.6;keep.add(eave);
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(w*0.86,4.6,4),roofM);roof.rotation.y=Math.PI/4;roof.position.y=y+9;keep.add(roof);
+    y+=8.6;w*=0.76;
+  }
+  const finial=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.9,2.4,6),new THREE.MeshStandardMaterial({color:0xd9b64a,metalness:0.85,roughness:0.3,emissive:0x3a2a08,emissiveIntensity:0.5}));finial.position.y=y+1.2;keep.add(finial);
+  keep.position.set(cx,0,cz);grp.add(keep);
+  // pine groves across the grounds (dark Japanese black pine)
+  const pineTrunk=new THREE.MeshLambertMaterial({color:0x38291d}),pineLeaf=new THREE.MeshLambertMaterial({color:0x1c3a24});
+  for(let i=0;i<44;i++){
+    const a=Math.random()*Math.PI*2,r=44+Math.random()*(innerR-58),px=cx+Math.cos(a)*r,pz=cz+Math.sin(a)*r;
+    if(Math.hypot(px-cx,pz-cz)<34)continue; // keep the keep courtyard clear
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.55,3,5),pineTrunk);tr.position.set(px,1.5,pz);grp.add(tr);
+    const lf=new THREE.Mesh(new THREE.ConeGeometry(2.2+Math.random(),4.5+Math.random()*2,6),pineLeaf);lf.position.set(px,5+Math.random(),pz);grp.add(lf);
+  }
+  // two stone bridges across the moat (Nijubashi-style) on the south + east approaches
+  const bridgeMat=new THREE.MeshStandardMaterial({color:0x6b6f66,roughness:0.9});
+  [[0,1],[1,0]].forEach(([sx,sz])=>{
+    const bx=cx+sx*(innerR+ (outerR-innerR)/2),bz=cz+sz*(innerR+(outerR-innerR)/2);
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(sz?outerR-innerR+16:9,1.4,sz?9:outerR-innerR+16),bridgeMat);
+    deck.position.set(bx,2.4,bz);grp.add(deck);
+  });
+  scene.add(grp);
+  window.__palace={x:cx,z:cz,r:outerR};
+})();
+
 // ---------- TOKYO BAY: sea on the south edge + US Navy destroyer (extraction ship) ----------
 {
   // clear outskirt buildings that would otherwise stand in the water
@@ -9388,6 +9439,12 @@ function drawTacMap(now){
   tacC.fillStyle='rgba(40,110,150,.5)';
   const rx0=(RIVER.x0-heli.position.x)*scale,rx1=(RIVER.x1-heli.position.x)*scale;
   tacC.fillRect(rx0,-TAC,rx1-rx0,TAC*2);
+  // Imperial Palace — moat ring + green grounds landmark
+  if(window.__palace){
+    const P=window.__palace,pdx=(P.x-heli.position.x)*scale,pdz=(P.z-heli.position.z)*scale,pr=P.r*scale;
+    tacC.fillStyle='rgba(40,110,80,.28)';tacC.beginPath();tacC.arc(pdx,pdz,pr*0.76,0,7);tacC.fill();
+    tacC.strokeStyle='rgba(90,200,130,.55)';tacC.lineWidth=1.5;tacC.beginPath();tacC.arc(pdx,pdz,pr,0,7);tacC.stroke();
+  }
   // buildings
   tacC.fillStyle='rgba(120,150,140,.28)';
   buildings.forEach(b=>{
@@ -9790,49 +9847,54 @@ const EN_DARK=new THREE.MeshStandardMaterial({color:0x3a3e49,roughness:0.55,meta
 const EN_STEEL=new THREE.MeshStandardMaterial({color:0x4a505c,roughness:0.6,metalness:0.35,emissive:0x1c1e26,emissiveIntensity:0.7});
 const EN_GLASS=new THREE.MeshStandardMaterial({color:0x3a0a0a,emissive:0xff2626,emissiveIntensity:1.1,roughness:0.2,metalness:0.6});
 const EN_LIGHT=new THREE.MeshBasicMaterial({color:0xff3838}); // always-bright red running-light material
-// Attack gunship (nose at -Z). Rounded cockpit, tapered fuselage, thin tail boom + tail rotor,
-// stub weapon wings, landing skids, a chin gun at the nose, and a 4-blade main rotor + disc.
+// Attack gunship, Apache/Hind-style so the silhouette is unmistakably a helicopter (nose at -Z):
+// a long low fuselage, angular pointed nose, stepped tandem canopy, a thin tail boom running well
+// back to a vertical fin + tail rotor, stub weapon wings, skids, and a long 2-blade main rotor.
 function makeEnemyHeli(){
   const g=new THREE.Group();
-  const cockpit=new THREE.Mesh(new THREE.SphereGeometry(1.25,14,10),EN_DARK);cockpit.scale.set(1,0.92,1.55);cockpit.position.set(0,0,-1.7);g.add(cockpit);
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.7,3.2),EN_DARK);body.position.set(0,0.05,0.4);g.add(body);
-  const spine=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.9,2.6),EN_DARK);spine.position.set(0,0.55,1.6);g.add(spine);       // engine hump under the rotor
-  const boom=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.52,5.4,8),EN_DARK);boom.rotation.x=Math.PI/2;boom.position.set(0,0.45,4.1);g.add(boom); // tapered tail boom
-  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.5,1.1),EN_DARK);fin.position.set(0,1.05,6.4);g.add(fin);
-  const stab=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.7),EN_DARK);stab.position.set(0,0.5,6.0);g.add(stab);          // tail-plane
-  // tail rotor (spins) on the side of the fin
-  const trotor=new THREE.Group();trotor.position.set(0.42,0.9,6.4);
-  for(let k=0;k<2;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(0.05,2.6,0.2),EN_STEEL);bl.rotation.z=k*Math.PI/2;trotor.add(bl);}
+  // long low fuselage (clearly longer front-to-back than it is wide/tall)
+  const belly=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.95,5.4),EN_DARK);belly.position.set(0,0,0.1);g.add(belly);
+  // angular pointed nose
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.75,1.5),EN_DARK);nose.position.set(0,-0.12,-3.1);g.add(nose);
+  const noseTip=new THREE.Mesh(new THREE.ConeGeometry(0.55,1.5,4),EN_DARK);noseTip.rotation.set(-Math.PI/2,0,Math.PI/4);noseTip.position.set(0,-0.12,-4.1);g.add(noseTip);
+  // stepped tandem cockpit canopies (gunner low+front, pilot raised behind) — the attack-heli read
+  const c1=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.6,1.3),EN_GLASS);c1.position.set(0,0.5,-2.1);g.add(c1);
+  const c2=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.7,1.3),EN_GLASS);c2.position.set(0,0.78,-0.75);g.add(c2);
+  // engine/rotor deck
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(1.45,0.85,2.3),EN_DARK);deck.position.set(0,0.72,0.9);g.add(deck);
+  const intake=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.5,1.4),EN_STEEL);intake.position.set(0,0.95,1.4);g.add(intake);
+  // thin tail boom extending well back + fin + horizontal stabiliser
+  const boom=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.46,5.2),EN_DARK);boom.position.set(0,0.5,4.5);g.add(boom);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.35,1.05),EN_DARK);fin.position.set(0,0.95,6.9);g.add(fin);
+  const stab=new THREE.Mesh(new THREE.BoxGeometry(2.3,0.12,0.65),EN_DARK);stab.position.set(0,0.55,6.4);g.add(stab);
+  // tail rotor (spins) on the fin
+  const trotor=new THREE.Group();trotor.position.set(0.32,1.0,6.9);
+  for(let k=0;k<2;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(0.05,2.3,0.16),EN_STEEL);bl.rotation.z=k*Math.PI/2;trotor.add(bl);}
   g.add(trotor);
-  // red cockpit canopy
-  const gl=new THREE.Mesh(new THREE.SphereGeometry(0.9,12,9),EN_GLASS);gl.scale.set(1,0.78,1.25);gl.position.set(0,0.32,-2.3);g.add(gl);
-  // NOSE chin gun turret — the muzzle the gunship fires from
-  const chin=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.55,0.9),EN_STEEL);chin.position.set(0,-0.95,-2.7);g.add(chin);
-  const gun=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,1.5,6),EN_STEEL);gun.rotation.x=Math.PI/2;gun.position.set(0,-0.95,-3.6);g.add(gun);
+  // chin gun turret at the nose (fires from here)
+  const gunbase=new THREE.Mesh(new THREE.SphereGeometry(0.35,8,6),EN_STEEL);gunbase.position.set(0,-0.62,-3.2);g.add(gunbase);
+  const gun=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,1.4,6),EN_STEEL);gun.rotation.x=Math.PI/2;gun.position.set(0,-0.62,-4.0);g.add(gun);
   // stub weapon wings + rocket pods
   [-1,1].forEach(s=>{
-    const wing=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.22,1.1),EN_STEEL);wing.position.set(s*1.5,-0.05,0.3);g.add(wing);
-    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,1.5,8),EN_STEEL);pod.rotation.x=Math.PI/2;pod.position.set(s*2.15,-0.3,0.3);g.add(pod);
+    const wing=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.18,0.95),EN_STEEL);wing.position.set(s*1.25,0.05,0.3);g.add(wing);
+    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,1.25,8),EN_STEEL);pod.rotation.x=Math.PI/2;pod.position.set(s*1.85,-0.12,0.3);g.add(pod);
   });
   // landing skids
   [-1,1].forEach(s=>{
-    const skid=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.8,6),EN_STEEL);skid.rotation.x=Math.PI/2;skid.position.set(s*1.05,-1.45,0.2);g.add(skid);
-    [-1.2,1.0].forEach(z=>{const strut=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.7,0.1),EN_STEEL);strut.position.set(s*1.05,-1.05,z);g.add(strut);});
+    const skid=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,3.4,6),EN_STEEL);skid.rotation.x=Math.PI/2;skid.position.set(s*0.85,-0.95,0.2);g.add(skid);
+    const strut=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.55,0.09),EN_STEEL);strut.position.set(s*0.85,-0.62,0.2);g.add(strut);
   });
-  // main rotor: mast + 4 blades + faint disc
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,6),EN_STEEL);mast.position.set(0,1.35,0.6);g.add(mast);
-  const rotor=new THREE.Group();rotor.position.set(0,1.65,0.6);
-  for(let k=0;k<4;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(11,0.06,0.4),EN_STEEL);bl.rotation.y=k*Math.PI/4;rotor.add(bl);}
+  // main rotor: mast + 2 long thin blades + a thin disc RING (not a filled blob)
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.55,6),EN_STEEL);mast.position.set(0,1.28,0.9);g.add(mast);
+  const rotor=new THREE.Group();rotor.position.set(0,1.55,0.9);
+  const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.24,8),EN_STEEL);rotor.add(hub);
+  for(let k=0;k<2;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(12.5,0.05,0.42),EN_STEEL);bl.rotation.y=k*Math.PI/2;rotor.add(bl);}
   g.add(rotor);
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(5.5,24),new THREE.MeshBasicMaterial({color:0x445,transparent:true,opacity:0.08,side:THREE.DoubleSide}));disc.rotation.x=-Math.PI/2;disc.position.set(0,1.66,0.6);g.add(disc);
-  // hostile red running lights — emissive/basic meshes only (NO per-unit PointLight; those tank FPS
-  // when several gunships are up). Bright enough to read the silhouette against the night.
-  [[0,-1.15,3.6,0.24],[0,0.9,-2.9,0.18],[-2.15,-0.3,0.3,0.16],[2.15,-0.3,0.3,0.16]].forEach(([x,y,z,r])=>{
+  const disc=new THREE.Mesh(new THREE.RingGeometry(5.4,6.2,28),new THREE.MeshBasicMaterial({color:0x667,transparent:true,opacity:0.12,side:THREE.DoubleSide}));disc.rotation.x=-Math.PI/2;disc.position.set(0,1.56,0.9);g.add(disc);
+  // small red running lights only (no big glow sprite — that was reading as a bug eye)
+  [[0,0.95,6.95,0.12],[-1.85,-0.12,0.3,0.1],[1.85,-0.12,0.3,0.1],[0,-0.55,-3.5,0.11]].forEach(([x,y,z,r])=>{
     const l=new THREE.Mesh(new THREE.SphereGeometry(r,6,6),EN_LIGHT);l.position.set(x,y,z);g.add(l);
   });
-  // a faint additive glow sprite so the gunship pops even at distance
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({color:0xff5a4a,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false}));
-  glow.scale.set(4,4,1);glow.position.set(0,0,-1.4);g.add(glow);
   g.scale.setScalar(1.5);
   return {g,rotor,trotor};
 }
@@ -9877,7 +9939,7 @@ function enemyFire(e){
   hostileBullets.push({m:b,v:aim.multiplyScalar(spd),t:5,dmg:boat?16:6,r:boat?7:3,boat});
   sfx(0.05,0.05,boat?170:820,boat?110:520);
 }
-const MAX_EHELI=4; // hard cap on concurrent gunships — unbounded accumulation across waves caused the lag
+const MAX_EHELI=3; // hard cap on concurrent gunships — keep pressure light and the frame-rate high
 function spawnEnemyHeli(){
   if(enemies.reduce((n,e)=>n+(e.kind==='heli'?1:0),0)>=MAX_EHELI)return;
   const em=makeEnemyHeli();
