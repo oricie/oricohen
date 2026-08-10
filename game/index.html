@@ -5074,12 +5074,28 @@ function drawTacMap(now){
     if(Math.abs(dx)>TAC/2||Math.abs(dz)>TAC/2)return;
     const sz=Math.max(1.4,b.w*scale*0.6);tacC.fillRect(dx-sz/2,dz-sz/2,sz,sz);
   });
-  // threats
+  // threats — zombies: small red/orange squares
   zombies.forEach(z=>{
     const dx=(z.m.position.x-heli.position.x)*scale,dz=(z.m.position.z-heli.position.z)*scale;
     if(Math.abs(dx)>TAC/2||Math.abs(dz)>TAC/2)return;
     tacC.fillStyle=z.big?'#ff8a2a':'#ff3b3b';
     const s2=z.big?4:2.6;tacC.fillRect(dx-s2/2,dz-s2/2,s2,s2);
+  });
+  // enemy aircraft / boss — distinct hostile markers (magenta diamonds, boss = pulsing red ring)
+  enemies.forEach(e=>{
+    const dx=(e.m.position.x-heli.position.x)*scale,dz=(e.m.position.z-heli.position.z)*scale;
+    const cl=Math.max(-TAC/2+5,Math.min(TAC/2-5,dx)),cd=Math.max(-TAC/2+5,Math.min(TAC/2-5,dz)); // clamp to edge so off-map threats still show
+    tacC.save();tacC.translate(cl,cd);
+    if(e.boss){
+      const pl=5+Math.sin(now/170)*1.6;
+      tacC.strokeStyle='#ff2f2f';tacC.lineWidth=2;tacC.beginPath();tacC.arc(0,0,pl,0,7);tacC.stroke();
+      tacC.fillStyle='#ff5a5a';tacC.beginPath();tacC.arc(0,0,2,0,7);tacC.fill();
+    }else{
+      tacC.rotate(Math.PI/4);
+      tacC.fillStyle='#ff2fa0';tacC.fillRect(-3,-3,6,6);
+      tacC.strokeStyle='#ffd0e8';tacC.lineWidth=1;tacC.strokeRect(-3,-3,6,6);
+    }
+    tacC.restore();
   });
   // objective
   if(hostage){
@@ -5123,6 +5139,13 @@ function drawDashMFD(){
     const a=Math.atan2(dx,-dz)-yaw;const rr=d/320*50;
     radarC.fillStyle=z.big?'#f80':'#f33';
     radarC.fillRect(55+Math.sin(a)*rr-2,55-Math.cos(a)*rr-2,z.big?5:3,z.big?5:3);
+  });
+  enemies.forEach(e=>{ // enemy aircraft/boss = magenta/red diamonds
+    const dx=e.m.position.x-heli.position.x,dz=e.m.position.z-heli.position.z;
+    const d=Math.sqrt(dx*dx+dz*dz);if(d>340)return;
+    const a=Math.atan2(dx,-dz)-yaw,rr=Math.min(50,d/320*50),px=55+Math.sin(a)*rr,py=55-Math.cos(a)*rr,s=e.boss?6:4;
+    radarC.save();radarC.translate(px,py);radarC.rotate(Math.PI/4);
+    radarC.fillStyle=e.boss?'#ff2f2f':'#ff2fa0';radarC.fillRect(-s/2,-s/2,s,s);radarC.restore();
   });
   radarC.fillStyle='#0f0';radarC.fillRect(53,53,4,4);
   horC.clearRect(0,0,110,110);horC.save();
@@ -5443,27 +5466,46 @@ function comRadio(text){
 const EN_DARK=new THREE.MeshStandardMaterial({color:0x14151b,roughness:0.62,metalness:0.42,emissive:0x0b0102,emissiveIntensity:0.4});
 const EN_STEEL=new THREE.MeshStandardMaterial({color:0x242730,roughness:0.7,metalness:0.3});
 const EN_GLASS=new THREE.MeshStandardMaterial({color:0x2a0808,emissive:0xff2020,emissiveIntensity:0.6,roughness:0.2,metalness:0.6});
+// Attack gunship (nose at -Z). Rounded cockpit, tapered fuselage, thin tail boom + tail rotor,
+// stub weapon wings, landing skids, a chin gun at the nose, and a 4-blade main rotor + disc.
 function makeEnemyHeli(){
   const g=new THREE.Group();
-  const fus=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.9,6),EN_DARK);g.add(fus);
-  const nose=new THREE.Mesh(new THREE.ConeGeometry(1.15,2.6,6),EN_DARK);nose.rotation.x=-Math.PI/2;nose.position.set(0,-0.1,-3.8);g.add(nose);
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,5),EN_DARK);tail.position.set(0,0.35,4.4);g.add(tail);
-  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.18,1.7,1.2),EN_DARK);fin.position.set(0,1.0,6.3);g.add(fin);
-  const gl=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.95,1.7),EN_GLASS);gl.position.set(0,0.55,-2.1);g.add(gl);
+  const cockpit=new THREE.Mesh(new THREE.SphereGeometry(1.25,14,10),EN_DARK);cockpit.scale.set(1,0.92,1.55);cockpit.position.set(0,0,-1.7);g.add(cockpit);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.7,3.2),EN_DARK);body.position.set(0,0.05,0.4);g.add(body);
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.9,2.6),EN_DARK);spine.position.set(0,0.55,1.6);g.add(spine);       // engine hump under the rotor
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.52,5.4,8),EN_DARK);boom.rotation.x=Math.PI/2;boom.position.set(0,0.45,4.1);g.add(boom); // tapered tail boom
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.5,1.1),EN_DARK);fin.position.set(0,1.05,6.4);g.add(fin);
+  const stab=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,0.7),EN_DARK);stab.position.set(0,0.5,6.0);g.add(stab);          // tail-plane
+  // tail rotor (spins) on the side of the fin
+  const trotor=new THREE.Group();trotor.position.set(0.42,0.9,6.4);
+  for(let k=0;k<2;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(0.05,2.6,0.2),EN_STEEL);bl.rotation.z=k*Math.PI/2;trotor.add(bl);}
+  g.add(trotor);
+  // red cockpit canopy
+  const gl=new THREE.Mesh(new THREE.SphereGeometry(0.9,12,9),EN_GLASS);gl.scale.set(1,0.78,1.25);gl.position.set(0,0.32,-2.3);g.add(gl);
+  // NOSE chin gun turret — the muzzle the gunship fires from
+  const chin=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.55,0.9),EN_STEEL);chin.position.set(0,-0.95,-2.7);g.add(chin);
+  const gun=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,1.5,6),EN_STEEL);gun.rotation.x=Math.PI/2;gun.position.set(0,-0.95,-3.6);g.add(gun);
+  // stub weapon wings + rocket pods
   [-1,1].forEach(s=>{
-    const wing=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.24,1.3),EN_STEEL);wing.position.set(s*1.7,-0.25,0);g.add(wing);
-    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,1.7,8),EN_STEEL);pod.rotation.x=Math.PI/2;pod.position.set(s*2.5,-0.45,0);g.add(pod);
+    const wing=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.22,1.1),EN_STEEL);wing.position.set(s*1.5,-0.05,0.3);g.add(wing);
+    const pod=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,1.5,8),EN_STEEL);pod.rotation.x=Math.PI/2;pod.position.set(s*2.15,-0.3,0.3);g.add(pod);
   });
-  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.6,6),EN_STEEL);mast.position.y=1.3;g.add(mast);
-  const rotor=new THREE.Group();rotor.position.y=1.55;
-  for(let k=0;k<2;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(9.5,0.06,0.42),EN_STEEL);bl.rotation.y=k*Math.PI/2;rotor.add(bl);}
+  // landing skids
+  [-1,1].forEach(s=>{
+    const skid=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,3.8,6),EN_STEEL);skid.rotation.x=Math.PI/2;skid.position.set(s*1.05,-1.45,0.2);g.add(skid);
+    [-1.2,1.0].forEach(z=>{const strut=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.7,0.1),EN_STEEL);strut.position.set(s*1.05,-1.05,z);g.add(strut);});
+  });
+  // main rotor: mast + 4 blades + faint disc
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.7,6),EN_STEEL);mast.position.set(0,1.35,0.6);g.add(mast);
+  const rotor=new THREE.Group();rotor.position.set(0,1.65,0.6);
+  for(let k=0;k<4;k++){const bl=new THREE.Mesh(new THREE.BoxGeometry(11,0.06,0.4),EN_STEEL);bl.rotation.y=k*Math.PI/4;rotor.add(bl);}
   g.add(rotor);
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(4.7,20),new THREE.MeshBasicMaterial({color:0x334,transparent:true,opacity:0.1,side:THREE.DoubleSide}));disc.rotation.x=-Math.PI/2;disc.position.y=1.56;g.add(disc);
-  const rl=new THREE.Mesh(new THREE.SphereGeometry(0.22,6,6),new THREE.MeshBasicMaterial({color:0xff2020}));rl.position.set(0,-1.05,0);g.add(rl);
-  const elight=new THREE.PointLight(0xff3020,0.7,44,2);elight.position.set(0,-1,0);g.add(elight);
-  // red dragon emblem plate on the tail (syndicate marking)
-  g.scale.setScalar(1.5);
-  return {g,rotor};
+  const disc=new THREE.Mesh(new THREE.CircleGeometry(5.5,24),new THREE.MeshBasicMaterial({color:0x445,transparent:true,opacity:0.08,side:THREE.DoubleSide}));disc.rotation.x=-Math.PI/2;disc.position.set(0,1.66,0.6);g.add(disc);
+  // hostile red running lights
+  const rl=new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6),new THREE.MeshBasicMaterial({color:0xff2020}));rl.position.set(0,-1.15,3.6);g.add(rl);
+  const elight=new THREE.PointLight(0xff3020,0.8,52,2);elight.position.set(0,-0.4,-2.4);g.add(elight);
+  g.scale.setScalar(1.4);
+  return {g,rotor,trotor};
 }
 function makeBossBoat(){
   const g=new THREE.Group();
@@ -5490,7 +5532,12 @@ const EH_SHELL=new THREE.MeshBasicMaterial({color:0xff7a2a,transparent:true,opac
 function enemyFire(e){
   if(gameOver)return;
   const boat=e.kind==='boat';
-  const muzzle=e.m.position.clone().add(new THREE.Vector3(0,boat?6:0,0));
+  let muzzle;
+  if(boat){ muzzle=e.m.position.clone().add(new THREE.Vector3(0,6,0)); }
+  else { // fire from the NOSE chin gun at the front (the gunship faces the player)
+    const fwd=heli.position.clone().sub(e.m.position).setY(0).normalize();
+    muzzle=e.m.position.clone().add(fwd.multiplyScalar(5.4)).add(new THREE.Vector3(0,-1.2,0));
+  }
   const aim=heli.position.clone().add(new THREE.Vector3(0,1.4,0)).sub(muzzle); aim.normalize();
   const jit=boat?0.02:0.05; aim.x+=(Math.random()-.5)*jit;aim.y+=(Math.random()-.5)*jit;aim.z+=(Math.random()-.5)*jit; aim.normalize();
   const spd=boat?100:135;
@@ -5506,7 +5553,7 @@ function spawnEnemyHeli(){
   const ang=Math.random()*Math.PI*2,r=180+Math.random()*90;
   em.g.position.set(heli.position.x+Math.cos(ang)*r,Math.max(38,heli.position.y+8+Math.random()*20),heli.position.z+Math.sin(ang)*r);
   scene.add(em.g);
-  enemies.push({m:em.g,rotor:em.rotor,kind:'heli',hp:120,spd:24,standoff:66,fireCd:1.2+Math.random()*1.6,fireRate:1.5,score:600,t:0});
+  enemies.push({m:em.g,rotor:em.rotor,trotor:em.trotor,kind:'heli',hp:120,spd:24,standoff:66,fireCd:1.2+Math.random()*1.6,fireRate:1.5,score:600,t:0});
 }
 function spawnBossBoat(){
   if(window.__bossAlive)return;
@@ -5534,13 +5581,16 @@ function updateEnemies(dt,now){
     const toH=heli.position.clone().sub(e.m.position);const dist=toH.length();
     if(e.kind==='heli'){
       if(e.rotor)e.rotor.rotation.y+=34*dt;
+      if(e.trotor)e.trotor.rotation.x+=48*dt;
       const dir=dist>e.standoff?1:(dist<e.standoff*0.7?-1:0);
       const flat=toH.clone().setY(0).normalize();
       e.m.position.add(flat.multiplyScalar(dir*e.spd*dt));
       const wantY=Math.max(26,heli.position.y+Math.sin(e.t*0.7)*7);
       e.m.position.y+=(wantY-e.m.position.y)*Math.min(1,dt*1.3);
-      e.m.rotation.y=Math.atan2(heli.position.x-e.m.position.x,heli.position.z-e.m.position.z);
-      e.m.rotation.z=Math.sin(e.t*1.1)*0.12;
+      // face the player so the NOSE (local -Z) points at them — the gun fires from the front
+      e.m.rotation.y=Math.atan2(e.m.position.x-heli.position.x,e.m.position.z-heli.position.z);
+      e.m.rotation.z=Math.sin(e.t*1.1)*0.1;
+      e.m.rotation.x=-0.08; // slight nose-down attack attitude
       e.fireCd-=dt;
       if(e.fireCd<=0&&dist<170){e.fireCd=e.fireRate;enemyFire(e);}
     }else{ // boat
@@ -5572,8 +5622,9 @@ function updateHostileBullets(dt,now){
 }
 // wave director for enemy forces — escalates gunships, brings the boss at wave 3+
 function spawnWaveEnemies(){
-  if(wave>=2){const n=Math.min(3,wave-1);for(let k=0;k<n;k++)setTimeout(()=>{if(!gameOver)spawnEnemyHeli();},1500+k*2600);}
-  if(wave>=3&&!window.__bossAlive&&!window.__bossDead)setTimeout(()=>{if(!gameOver){spawnBossBoat();window.__bossDead=false;}},4000);
+  const n=Math.min(6,wave+1); // more syndicate gunships, escalating each wave (from wave 1)
+  for(let k=0;k<n;k++)setTimeout(()=>{if(!gameOver)spawnEnemyHeli();},900+k*1400);
+  if(wave>=3&&!window.__bossAlive&&!window.__bossDead)setTimeout(()=>{if(!gameOver)spawnBossBoat();},4000);
 }
 
 // ---------- LOOP ----------
