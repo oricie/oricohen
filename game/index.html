@@ -2594,35 +2594,40 @@ const poolGlowTex=tex((g,w,h)=>{
 const poolGlowMat=new THREE.MeshBasicMaterial({map:poolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,vertexColors:true});
 const groundPoolXf=[]; // {x,z,s,c:[r,g,b]}
 
+// PERF: buildings used to mint a BRAND-NEW material each (unique random colour), and their box used a
+// 6-material array — both of which the static-merge pass cannot fuse, so every building cost its own
+// draw call. With the dense Tokyo blocks (~1500 buildings) that dominated the frame. Instead we build
+// POOLS of shared materials up-front (colour variety now comes from pool size, not per-building
+// mutation) and give the box a single material with a separate roof cap on top, so the merge pass can
+// fuse thousands of buildings down to a handful of draw calls.
+const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
+  const fac=facades[i%facades.length];
+  const m=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
+  m.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0]});
+  a.push(m);} return a;})();
+const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++)a.push(new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.12+Math.random()*0.08,metalness:0.2,envMapIntensity:1.7,clearcoat:0.4,clearcoatRoughness:0.2}));return a;})();
+const RES_POOL=resFacades.map(t=>new THREE.MeshLambertMaterial({map:t}));
+const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
 function spawnBuilding(cx,cz,bw,bd,style){
   const grp=new THREE.Group();
   const rm=pickRoof();
   let bh,mat;
-  if(style==='glass'){
-    bh=80+Math.random()*95;
-    mat=new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.14,metalness:0.2,envMapIntensity:1.7,clearcoat:0.4,clearcoatRoughness:0.2});
-  }else if(style==='res'){
-    bh=6+Math.random()*4;
-    if(Math.random()<0.25)bh=16+Math.random()*10;
-    mat=new THREE.MeshLambertMaterial({map:resFacades[Math.floor(Math.random()*resFacades.length)]});
-  }else{
-    bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48);
-    const fac=facades[Math.floor(Math.random()*facades.length)];
-    mat=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
-    (window.__bldgMats||(window.__bldgMats=[])).push({mat,preset:fac.preset||facadeGridPresets[0]}); // tracked for the concrete-facade pass
-    // widened hue range (cool blue-grey concrete through the original violet-grey to magenta-grey)
-    // for facade MATERIAL variety, kept in the same desaturated cool/purple family so the
-    // neon-night mood stays intact (no drift into warm/green tones)
-    mat.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
-  }
-  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),[mat,mat,rm,rm,mat,mat]);
+  if(style==='glass'){ bh=80+Math.random()*95; mat=_pickPool(GLASS_POOL); }
+  else if(style==='res'){ bh=6+Math.random()*4; if(Math.random()<0.25)bh=16+Math.random()*10; mat=_pickPool(RES_POOL); }
+  else{ bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48); mat=_pickPool(FACADE_POOL); }
+  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
+  cap.position.y=bh+0.1;cap.receiveShadow=true;grp.add(cap);
   parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7}); // batched after the loop
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
     const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
-    const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),[mat,mat,rm,rm,mat,mat]);
+    const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),mat);
     b2.position.y=bh+h2/2;b2.castShadow=true;grp.add(b2);
+    const cap2=new THREE.Mesh(new THREE.BoxGeometry(w2*1.004,0.35,d2*1.004),rm);
+    cap2.position.y=bh+h2+0.1;grp.add(cap2);
     topY=bh+h2;bh=topY;
   }
   if(topY>70){
@@ -6289,22 +6294,27 @@ function loop(now){
       // [profileFn, spawn-weight] — kei vehicles dominate; a few sports cars remain for variety
       const carProfiles=[[profileKeiTruck,4],[profileKeiVan,4],[profileKeiCar,4],[profile911,1],[profileAngular,1],[profileSupra,1]];
       const giPool=[];
+      // CAR_S scales the whole fleet up: kei vehicles are genuinely tiny in real life, which read as
+      // toys at this scale, so bodies are enlarged and widened for a believable road presence.
+      const CAR_S=1.26, CAR_W=2.05;
       carProfiles.forEach(([fn,wt])=>{
         try{
-          const geo=new THREE.ExtrudeGeometry(fn(),{depth:1.62,bevelEnabled:true,bevelThickness:0.07,bevelSize:0.07,bevelSegments:2});
-          geo.translate(0,0,-0.81);const idx=carGeos.length;carGeos.push(geo);
+          const geo=new THREE.ExtrudeGeometry(fn(),{depth:CAR_W,bevelEnabled:true,bevelThickness:0.08,bevelSize:0.08,bevelSegments:2});
+          geo.translate(0,0,-CAR_W/2);
+          geo.scale(CAR_S,CAR_S,1);           // longer + taller; width already set by extrude depth
+          const idx=carGeos.length;carGeos.push(geo);
           for(let k=0;k<wt;k++)giPool.push(idx);
         }catch(err){console.warn('car profile failed',err);}
       });
       if(carGeos.length===0){
         const fb=new THREE.BoxGeometry(4.6,0.9,1.7);carGeos.push(fb);
       }
-      const glassGeo=new THREE.BoxGeometry(1.15,0.4,1.45);
-      const mcWheelG=new THREE.CylinderGeometry(0.46,0.46,0.34,14);
+      const glassGeo=new THREE.BoxGeometry(1.5,0.52,1.72);
+      const mcWheelG=new THREE.CylinderGeometry(0.58,0.58,0.4,16);
       const mcWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
       const hubM=new THREE.MeshLambertMaterial({color:0x999aa2});
-      const mcWheelOff=[[-0.85,0.46,-1.3],[0.85,0.46,-1.3],[-0.85,0.46,1.0],[0.85,0.46,1.0]]; // [x,y,z]
-      const mcWheelSet=wheelSetGeo(mcWheelG,mcWheelOff), mcHubSet=wheelSetGeo(new THREE.CylinderGeometry(0.2,0.2,0.36,12),mcWheelOff); // PERF: 4 wheels -> 1 mesh
+      const mcWheelOff=[[-1.02,0.58,-1.62],[1.02,0.58,-1.62],[-1.02,0.58,1.28],[1.02,0.58,1.28]]; // [x,y,z] — track+wheelbase scaled with the bigger bodies
+      const mcWheelSet=wheelSetGeo(mcWheelG,mcWheelOff), mcHubSet=wheelSetGeo(new THREE.CylinderGeometry(0.27,0.27,0.44,12),mcWheelOff); // PERF: 4 wheels -> 1 mesh
       // PERF: the whole 80-car fleet renders as per-component InstancedMesh (3 body silhouettes +
       // glass/wheels/hubs/head+tail = ~8 draw calls, was ~500). State lives in __movingCars; only the
       // instance matrices are rewritten each frame (position moves; yaw is fixed per car).
@@ -6315,7 +6325,8 @@ function loop(now){
         const gi=giPool.length?giPool[Math.floor(Math.random()*giPool.length)]:Math.floor(Math.random()*carGeos.length);
         const onX=Math.random()<0.5, pl=pickLane(onX);
         const yaw=onX?(pl.dir>0?Math.PI/2:-Math.PI/2):(pl.dir>0?0:Math.PI);
-        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:16+Math.random()*12,yaw,gi,color:c,slot:geoCount[gi]++});
+        const taxi=Math.random()<0.16; // Tokyo streets carry a lot of taxis
+        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:16+Math.random()*12,yaw,gi,color:taxi?(Math.random()<0.5?0x14161a:0x1d3a2a):c,slot:geoCount[gi]++,taxi});
       }
       const bodyMeshes=carGeos.map((geo,gi)=>{
         if(!geoCount[gi])return null;
@@ -6326,8 +6337,8 @@ function loop(now){
       bodyMeshes.forEach(m=>{if(m&&m.instanceColor)m.instanceColor.needsUpdate=true;});
       const glassIM=new THREE.InstancedMesh(glassGeo,new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.1,envMapIntensity:1.3,transparent:true,opacity:.72}),MC_N);
       const whIM=new THREE.InstancedMesh(mcWheelSet,mcWheelM,MC_N), hbIM=new THREE.InstancedMesh(mcHubSet,hubM,MC_N);
-      const hlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.4,.14,.08),new THREE.MeshBasicMaterial({color:0xfff4d0}),MC_N);
-      const tlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.5,.12,.08),new THREE.MeshBasicMaterial({color:0xff2818}),MC_N);
+      const hlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.72,.18,.1),new THREE.MeshBasicMaterial({color:0xfff4d0}),MC_N);
+      const tlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.82,.16,.1),new THREE.MeshBasicMaterial({color:0xff2818}),MC_N);
       // Japanese rear number plate (kei = yellow with black text): region kanji + classification, then
       // the big kana + number row. Tiny from the air but authentic on low passes / cockpit view.
       const plateTex=tex((g,w,h)=>{
@@ -6337,9 +6348,13 @@ function loop(now){
         g.font=`bold ${Math.round(h*0.44)}px sans-serif`;g.fillText('あ 12-34',w/2,h*0.66);
         g.strokeStyle='#141414';g.lineWidth=Math.max(1,h*0.05);g.strokeRect(1,1,w-2,h-2);
       },64,32);
-      const plateIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(0.92,0.44),new THREE.MeshBasicMaterial({map:plateTex}),MC_N);
-      [glassIM,whIM,hbIM,hlIM,tlIM,plateIM].forEach(m=>{m.frustumCulled=false;scene.add(m);});
-      window.__mcInst={bodyMeshes,glassIM,whIM,hbIM,hlIM,tlIM,plateIM,Rbody:new THREE.Matrix4().makeRotationY(Math.PI/2),
+      const plateIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1,0.52),new THREE.MeshBasicMaterial({map:plateTex}),MC_N);
+      // Tokyo taxi roof sign (行灯) — a lit box on the roof of the taxi share of the fleet
+      const taxiTex=tex((g,w,h)=>{g.fillStyle='#f4e9c8';g.fillRect(0,0,w,h);g.fillStyle='#1a1a1a';g.textAlign='center';g.textBaseline='middle';g.font=`bold ${Math.round(h*0.6)}px sans-serif`;g.fillText('個人',w/2,h*0.55);},32,16);
+      const taxiIM=new THREE.InstancedMesh(new THREE.BoxGeometry(0.74,0.3,0.42),new THREE.MeshBasicMaterial({map:taxiTex}),MC_N);
+      [glassIM,whIM,hbIM,hlIM,tlIM,plateIM,taxiIM].forEach(m=>{m.frustumCulled=false;scene.add(m);});
+      window.__mcInst={bodyMeshes,glassIM,whIM,hbIM,hlIM,tlIM,plateIM,taxiIM,Rbody:new THREE.Matrix4().makeRotationY(Math.PI/2),
+        Zero:new THREE.Matrix4().makeScale(0,0,0),
         G:new THREE.Matrix4(),L:new THREE.Matrix4(),M:new THREE.Matrix4(),q:new THREE.Quaternion(),e:new THREE.Euler(),p:new THREE.Vector3(),s:new THREE.Vector3(1,1,1)};
     }
     { const MC=window.__movingCars, I=window.__mcInst;
@@ -6349,14 +6364,16 @@ function loop(now){
         I.p.set(c.onX?c.pos:c.lane,0,c.onX?c.lane:c.pos);
         I.e.set(0,c.yaw,0);I.q.setFromEuler(I.e);I.G.compose(I.p,I.q,I.s);
         const bm=I.bodyMeshes[c.gi];if(bm){I.M.multiplyMatrices(I.G,I.Rbody);bm.setMatrixAt(c.slot,I.M);}
-        I.L.makeTranslation(0,1.12,0.15);I.M.multiplyMatrices(I.G,I.L);I.glassIM.setMatrixAt(i,I.M);
+        I.L.makeTranslation(0,1.42,0.2);I.M.multiplyMatrices(I.G,I.L);I.glassIM.setMatrixAt(i,I.M);
         I.whIM.setMatrixAt(i,I.G);I.hbIM.setMatrixAt(i,I.G);
-        I.L.makeTranslation(0,.55,-2.3);I.M.multiplyMatrices(I.G,I.L);I.hlIM.setMatrixAt(i,I.M);
-        I.L.makeTranslation(0,.6,2.4);I.M.multiplyMatrices(I.G,I.L);I.tlIM.setMatrixAt(i,I.M);
-        I.L.makeTranslation(0,.42,2.44);I.M.multiplyMatrices(I.G,I.L);I.plateIM.setMatrixAt(i,I.M); // rear number plate
+        I.L.makeTranslation(0,.7,-2.92);I.M.multiplyMatrices(I.G,I.L);I.hlIM.setMatrixAt(i,I.M);
+        I.L.makeTranslation(0,.76,3.02);I.M.multiplyMatrices(I.G,I.L);I.tlIM.setMatrixAt(i,I.M);
+        I.L.makeTranslation(0,.53,3.07);I.M.multiplyMatrices(I.G,I.L);I.plateIM.setMatrixAt(i,I.M); // rear number plate
+        if(c.taxi){I.L.makeTranslation(0,1.92,0.1);I.M.multiplyMatrices(I.G,I.L);I.taxiIM.setMatrixAt(i,I.M);} // roof sign
+        else I.taxiIM.setMatrixAt(i,I.Zero);
       });
       I.bodyMeshes.forEach(m=>{if(m)m.instanceMatrix.needsUpdate=true;});
-      I.plateIM.instanceMatrix.needsUpdate=true;
+      I.plateIM.instanceMatrix.needsUpdate=true;I.taxiIM.instanceMatrix.needsUpdate=true;
       I.glassIM.instanceMatrix.needsUpdate=true;I.whIM.instanceMatrix.needsUpdate=true;I.hbIM.instanceMatrix.needsUpdate=true;
       I.hlIM.instanceMatrix.needsUpdate=true;I.tlIM.instanceMatrix.needsUpdate=true;
     }
