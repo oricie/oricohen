@@ -7058,20 +7058,30 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const d=districtOf(cx,cz);
   if(d==='park'&&!railBlocked(z0,z1)){makePark(x0,x1,z0,z1);continue;}
   if(d==='cbd'&&!railBlocked(z0,z1)){
-    const bw=Math.min(bwT-6,26+Math.random()*10),bd2=Math.min(bdT-6,26+Math.random()*10);
-    spawnBuilding(cx,cz,bw,bd2,'glass');
+    // business districts: a tower per large parcel rather than one lonely tower in a big empty block
+    const tx=Math.max(1,Math.min(3,Math.round(bwT/38))), tz=Math.max(1,Math.min(3,Math.round(bdT/38)));
+    const tw=bwT/tx, td=bdT/tz;
+    for(let a=0;a<tx;a++)for(let b=0;b<tz;b++){
+      if(tx*tz>1&&Math.random()<0.10)continue;
+      const lcx=x0+tw*(a+0.5),lcz=z0+td*(b+0.5);
+      const bw=Math.max(10,tw-3.5-Math.random()*2),bd2=Math.max(10,td-3.5-Math.random()*2);
+      spawnBuilding(lcx,lcz,bw,bd2,'glass');
+    }
     continue;
   }
-  const cell=d==='res'?15:24;
-  const nx=Math.max(1,Math.min(4,Math.round(bwT/cell)));
-  const nz=Math.max(1,Math.min(4,Math.round(bdT/cell)));
+  // TOKYO DENSITY: real Tokyo blocks are packed with many narrow buildings sharing party walls, with
+  // only slivers between them and very few empty lots. Subdivide each block into small parcels, fill
+  // nearly all of them, and leave only a thin gap so neighbours almost touch.
+  const cell=d==='res'?11:16;
+  const nx=Math.max(1,Math.min(8,Math.round(bwT/cell)));
+  const nz=Math.max(1,Math.min(8,Math.round(bdT/cell)));
   const lw=bwT/nx,ld=bdT/nz;
   for(let a=0;a<nx;a++)for(let b=0;b<nz;b++){
-    if(Math.random()<(d==='res'?0.12:0.18))continue;
+    if(Math.random()<(d==='res'?0.04:0.055))continue;   // very few vacant lots
     const lcx=x0+lw*(a+0.5),lcz=z0+ld*(b+0.5);
     if(railBlocked(lcz-ld/2,lcz+ld/2))continue;
-    const bw=lw-2.5-Math.random()*2,bd2=ld-2.5-Math.random()*2;
-    if(bw<6||bd2<6)continue;
+    const bw=lw-0.9-Math.random()*1.1,bd2=ld-0.9-Math.random()*1.1; // slim gaps -> near party-wall packing
+    if(bw<3.6||bd2<3.6)continue;
     let style=d;
     if(d==='mixed')style=Math.random()<0.08?'glass':(Math.random()<0.5?'neon':'mixed');
     spawnBuilding(lcx,lcz,bw,bd2,style==='cbd'?'mixed':style);
