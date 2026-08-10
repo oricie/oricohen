@@ -2044,7 +2044,7 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
     else if(nm.shape==='square'){sh=Math.min(bh*0.32,4+Math.random()*5);sw=sh*(0.82+Math.random()*0.3);}
     else if(nm.shape==='slim'){sh=Math.min(bh*0.62,13+Math.random()*15);sw=sh*(0.09+Math.random()*0.08);}
     else{sh=Math.min(bh*0.55,9+Math.random()*17);sw=sh*(0.18+Math.random()*0.16);}
-    const sign=new THREE.Mesh(new THREE.BoxGeometry(0.5,sh,sw),[nm.m,nm.m,nm.m,nm.m,nm.m,nm.m]);
+    const sign=new THREE.Mesh(new THREE.BoxGeometry(0.5,sh,sw),nm.m); // single shared material -> the merge pass fuses all signs of each variant (was a 6-material array, which it had to skip)
     const side=Math.random()<.5?1:-1;
     // ~28% of signs project on an arm perpendicular to the wall (Tokyo blade/cantilever signs),
     // readable edge-on along the sidewalk and face-on from the cross street
@@ -2684,6 +2684,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
 // as real Tokyo: skyscraper Shinjuku, neon Shibuya/Akihabara, upscale Ginza, business Chiyoda around
 // the Palace, low-rise old-town Asakusa, bayside Minato. wardAt() also drives the live map readout.
 const TOWER={x:-450,z:440};
+const PALACE={x:-90,z:-30,r:155}; // Imperial Palace grounds (used to keep buildings + their details out)
 const WARDS=[
   {name:'CHIYODA',   jp:'千代田区', style:'cbd',   test:(x,z)=>Math.hypot(x+90,z+30)<300},          // Palace + govt/business towers
   {name:'SHINJUKU',  jp:'新宿区',   style:'cbd',   test:(x,z)=>x<-440},                              // skyscraper west
@@ -2721,6 +2722,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   if(bwT<12||bdT<12)continue;
   const cx=(x0+x1)/2,cz=(z0+z1)/2;
   if(Math.abs(cx-riverCX(cz))<RIVER_HW+24)continue; // keep the meandering river channel clear of buildings
+  if(cz>SEA_Z0-24)continue;                          // no buildings over the bay (and no orphaned details there)
+  if(Math.hypot(cx-PALACE.x,cz-PALACE.z)<PALACE.r+18)continue; // no buildings on the Palace grounds
   const d=districtOf(cx,cz);
   if(d==='park'&&!railBlocked(z0,z1)){makePark(x0,x1,z0,z1);continue;}
   if(d==='cbd'&&!railBlocked(z0,z1)){
