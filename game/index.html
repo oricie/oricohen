@@ -945,14 +945,24 @@ const RIVER_AMP=78, RIVER_FREQ=0.0044, RIVER_PHASE=1.15, RIVER_CX0=(RIVER.x0+RIV
 function riverCX(z){return RIVER_CX0+RIVER_AMP*Math.sin(z*RIVER_FREQ+RIVER_PHASE);}
 const RAIL_Z=192;           // elevated rail corridor (constant z)
 const HWY_Z=-288;           // expressway rides above this avenue
+// Irregular Tokyo street spacing: real Tokyo isn't an even grid — it's a jumble of narrow alleys,
+// mid blocks, the odd big lot, and a few wide avenues. Spacing is drawn from a mixed distribution so
+// block sizes vary a lot, which breaks the uniform-grid read while staying axis-aligned (the whole
+// block/sidewalk/lane system needs axis-aligned streets).
 function buildRoadAxis(majorsAt,avoid){
   const roads=majorsAt.map(m=>({p:m,w:26,major:true}));
-  let p=-560+Math.random()*20;
-  while(p<560){
-    const nearMajor=majorsAt.some(m=>Math.abs(p-m)<40);
+  let p=-640+Math.random()*30;
+  while(p<640){
+    const nearMajor=majorsAt.some(m=>Math.abs(p-m)<34);
     const nearAvoid=avoid.some(a=>Math.abs(p-a)<26);
-    if(!nearMajor&&!nearAvoid)roads.push({p,w:Math.random()<0.22?7:14,major:false});
-    p+=52+Math.random()*68;
+    if(!nearMajor&&!nearAvoid){
+      const wr=Math.random();
+      roads.push({p, w: wr<0.14?20 : wr<0.5?7 : 13, major:false}); // occasional avenue, many alleys, some mid streets
+    }
+    const roll=Math.random();
+    p += roll<0.30 ? (20+Math.random()*16)    // tight alley / side street
+       : roll<0.82 ? (48+Math.random()*46)    // ordinary block
+       :             (104+Math.random()*82);  // big block / open lot
   }
   return roads.sort((a,b)=>a.p-b.p);
 }
