@@ -18,6 +18,10 @@
       linear-gradient(var(--tc),var(--tc)) 0 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 100%/2px 9px no-repeat,
       linear-gradient(var(--tc),var(--tc)) 100% 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 100%/2px 9px no-repeat,
       rgba(3,12,6,.5); }
+  #intelLog { right:12px; top:96px; width:270px; font-size:10.5px; line-height:1.5; color:#cfe9ff; background:rgba(3,12,6,.5); border:1px solid rgba(157,255,176,.35); padding:7px 10px; display:none; }
+  #intelLog b { color:#8dff9f; letter-spacing:1px; }
+  #intelLog .cw { color:#ffd24a; }
+  #intelLog .done { color:#6a7a70; text-decoration:line-through; }
   #help { bottom:6px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.65; text-align:center; width:95%; transition:opacity 1.2s; }
   #tacwrap { bottom:14px; left:12px; display:flex; flex-direction:column; gap:0; }
   #tacTitle { font-size:10px; letter-spacing:2px; color:#9dffb0; background:rgba(3,12,6,.7); border:1px solid rgba(157,255,176,.4); border-bottom:none; padding:2px 6px; width:max-content; }
@@ -74,6 +78,7 @@
 <div class="hud" id="msg"></div>
 <div class="hud" id="radioSub">RADIO</div>
 <div class="hud" id="taskPanel">STANDBY</div>
+<div class="hud" id="intelLog"></div>
 <div class="hud" id="help">STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract</div>
 
 <div class="hud" id="tacwrap">
@@ -10151,13 +10156,26 @@ function spawnWaveEnemies(){
 // you land at real Tokyo places (a sushi counter, the fish market, an '89 electronics shop), go INSIDE
 // on foot, talk to the owner, and come out with intel, a map, or a weapon. Rescue every crew member
 // and ferry them to the Navy ship to finish the night.
+// Each crew member has a written, findable location — the owners tell you in plain language where to
+// go, and the intel log keeps it on screen so you never have to guess.
 const CREW=[
-  {id:'KAZE',  name:'"KAZE" HAYASHI',  role:'CO-PILOT',  x:-360, z:120,  found:false, rescued:false},
-  {id:'MIKO',  name:'"MIKO" TANAKA',   role:'GUNNER',    x: 250, z:-300, found:false, rescued:false},
-  {id:'BULL',  name:'"BULL" OKADA',    role:'CREW CHIEF',x:-520, z:-330, found:false, rescued:false},
-  {id:'REI',   name:'"REI" NAKAMURA',  role:'MEDIC',     x: 330, z: 300, found:false, rescued:false},
-  {id:'DOC',   name:'"DOC" SHIMIZU',   role:'ENGINEER',  x:-140, z: 420, found:false, rescued:false},
+  {id:'KAZE',  name:'"KAZE" HAYASHI',  role:'CO-PILOT',  x:-360, z:120,  found:false, rescued:false,
+   where:'SHIBUYA — on a rooftop west of the river bend, south of the Palace.'},
+  {id:'MIKO',  name:'"MIKO" TANAKA',   role:'GUNNER',    x: 250, z:-300, found:false, rescued:false,
+   where:'AKIHABARA — north-east, in the electric-town backstreets by the expressway.'},
+  {id:'BULL',  name:'"BULL" OKADA',    role:'CREW CHIEF',x:-520, z:-330, found:false, rescued:false,
+   where:'SHINJUKU — far north-west, at the foot of the skyscraper cluster.'},
+  {id:'REI',   name:'"REI" NAKAMURA',  role:'MEDIC',     x: 330, z: 300, found:false, rescued:false,
+   where:'GINZA/MINATO — south-east, near the bay-side avenues.'},
+  {id:'DOC',   name:'"DOC" SHIMIZU',   role:'ENGINEER',  x:-140, z: 420, found:false, rescued:false,
+   where:'MINATO — due south toward the waterfront, near Tokyo Tower.'},
 ];
+function compassTo(x,z){
+  const dx=x-heli.position.x, dz=z-heli.position.z;
+  const a=(Math.atan2(dx,-dz)*180/Math.PI+360)%360;
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(a/45)%8]+' '+Math.round(Math.hypot(dx,dz))+'m';
+}
 const VENUES=[
   {key:'sushi', name:'SUSHI KANDA',  jp:'鮨 かんだ',  x:VENUE_SPOTS[0].x, z:VENUE_SPOTS[0].z, visited:false,
    line:'The owner slides a napkin across the counter — two of your crew, marked in pen.',
@@ -10449,11 +10467,28 @@ function buildDenki(){
     const po=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.9),new THREE.MeshBasicMaterial({map:inAdPosterTex()}));
     po.position.set(-1.5+i*3.0,2.3,-D/2+0.2);s.add(po);
   }
-  // centre bargain bin of cassettes/radios
-  s.add(inBox(2.2,0.7,3.2,IN_STEEL,0,0.35,1.6));
-  const junk=[0x2a2f36,0x50565e,0x8a8f96,0x1f242a];
-  for(let i=0;i<22;i++)s.add(inBox(0.3+Math.random()*0.25,0.16,0.22+Math.random()*0.2,new THREE.MeshStandardMaterial({color:junk[i%junk.length],roughness:0.6,metalness:0.4}),
-    (Math.random()-0.5)*1.7,0.78,1.6+(Math.random()-0.5)*2.6,Math.random()*3));
+  // centre bargain bin (ワゴンセール): a real container with walls, packed with boxed stock standing
+  // on edge like cassettes in a crate — the old version was loose pale boxes that read as rubble
+  const binMat=_inMat(0x2f3740,0.7,0.45);
+  s.add(inBox(2.0,0.14,3.0,binMat,0,0.62,1.6));                 // bin floor
+  [[-1,0,0.98,3.0],[1,0,0.98,3.0]].forEach(([sx,sz])=>s.add(inBox(0.1,0.5,3.0,binMat,sx*0.98,0.87,1.6)));
+  [[0,-1],[0,1]].forEach(([,sz])=>s.add(inBox(2.0,0.5,0.1,binMat,0,0.87,1.6+sz*1.5)));
+  [-1,1].forEach(s2=>{const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.62,6),IN_STEEL);leg.position.set(s2*0.85,0.31,1.6);s.add(leg);});
+  // boxed software/cassettes standing on edge, in tidy rows with bright spine labels
+  const spineCols=[0xd8342a,0x2a6ad8,0xe0a828,0x2ea86a,0x8a3ad0,0xd8582a,0x1f9ad8];
+  for(let row=0;row<2;row++)for(let i=0;i<11;i++){
+    const c=spineCols[(row*11+i)%spineCols.length];
+    const m=new THREE.MeshStandardMaterial({color:c,roughness:0.62,emissive:c,emissiveIntensity:0.05});
+    const bx=(row?0.42:-0.42), bz=1.6-1.28+i*0.26;
+    const item=inBox(0.62,0.42,0.2,m,bx,0.9,bz,(Math.random()-0.5)*0.12);
+    s.add(item);
+    s.add(inBox(0.63,0.1,0.205,new THREE.MeshStandardMaterial({color:0xf2f2f0,roughness:0.8}),bx,1.05,bz)); // white title band
+  }
+  const binSign=new THREE.Mesh(new THREE.PlaneGeometry(1.05,0.26),new THREE.MeshBasicMaterial({map:tex((g,w,h)=>{
+    g.fillStyle='#e0141c';g.fillRect(0,0,w,h);
+    g.fillStyle='#fff';g.font=`bold ${Math.round(h*0.5)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText('ワゴンセール',w/2,h*0.5);},128,32),side:THREE.DoubleSide}));
+  binSign.position.set(0,1.22,0.08);s.add(binSign);
   // fluorescent + neon shop sign glow
   for(let i=0;i<3;i++){
     s.add(inBox(4.2,0.1,0.26,new THREE.MeshBasicMaterial({color:0xf2f8ff}),0,3.42,-4+i*4));
@@ -10545,6 +10580,23 @@ function revealCrew(id){
   c.marker=g;scene.add(g);
 }
 function crewRemaining(){return CREW.filter(c=>!c.rescued).length;}
+// The intel log writes itself: every lead an owner gives you stays on screen with the district, a
+// live compass bearing and distance, so you always know where to look next.
+function renderIntelLog(){
+  const el=document.getElementById('intelLog'); if(!el)return;
+  const known=CREW.filter(c=>c.found);
+  if(!known.length||interiorMode){el.style.display='none';return;}
+  el.style.display='block';
+  let html='<b>◆ INTEL — CREW LOCATIONS</b><br>';
+  known.forEach(c=>{
+    if(c.rescued){html+='<span class="done">'+c.id+' — recovered</span><br>';return;}
+    if(c.aboard){html+='<span class="cw">'+c.id+' — ABOARD, fly to the ship</span><br>';return;}
+    html+='<span class="cw">'+c.id+'</span> ('+c.role+')<br>&nbsp;&nbsp;'+c.where+'<br>&nbsp;&nbsp;<b>'+compassTo(c.x,c.z)+'</b><br>';
+  });
+  const un=VENUES.filter(v=>!v.visited);
+  if(un.length)html+='<br><b>NO LEAD YET</b><br>&nbsp;&nbsp;Ask at '+un.map(v=>v.name).join(', ')+'.';
+  el.innerHTML=html;
+}
 function objectiveText(){
   if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
   if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — FERRY TO THE NAVY SHIP IN THE BAY';
@@ -10569,6 +10621,7 @@ function enterVenue(v){
   window.__RS=I.scene;window.__RC=fpCam;
   for(const k in keys)keys[k]=false; // don't carry the E press into the on-foot look control
   cockpitGroup.visible=false;
+  {const el=document.getElementById('intelLog');if(el)el.style.display='none';}
   flashMsg('▼ ENTERING '+v.name+' '+v.jp,'#3fe0ff');
   document.getElementById('help').style.opacity=.75;
   document.getElementById('help').textContent='ON FOOT — WASD/arrows to walk · look with Q/E · stand at the counter and press F to talk · press X to leave';
@@ -10579,6 +10632,7 @@ function exitVenue(){
   window.__RS=null;window.__RC=null;
   for(const k in keys)keys[k]=false; // don't carry the X press into the throttle toggle
   document.getElementById('help').textContent='STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract';
+  renderIntelLog();
   flashMsg('▲ BACK IN THE COCKPIT','#3ef');
 }
 function talkToOwner(){
@@ -10591,6 +10645,12 @@ function talkToOwner(){
   if(v.marker)v.marker.visible=false;
   flashMsg(v.reward,'#ffe14d');
   comRadio('INTEL: '+v.line);
+  // spell the leads out in words, one line each, so the player is told exactly where to look
+  v.reveals.forEach((id,i)=>{
+    const c=CREW.find(m=>m.id===id); if(!c)return;
+    setTimeout(()=>{ if(!gameOver)comRadio('LEAD — '+c.id+' ('+c.role+'): '+c.where); },2600+i*4200);
+  });
+  renderIntelLog();
   addScore(750);
 }
 // On-foot HUD: the flight instruments (tapes, reticle, weapon rack) make no sense indoors, so this
@@ -10749,6 +10809,7 @@ function resetRunState(){
   CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
   VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
   aboard=[];missionDone=false;
+  {const el=document.getElementById('intelLog');if(el){el.innerHTML='';el.style.display='none';}}
   missionLine='OPERATION — RECOVER THE CREW';
   yaw=0;vSpeed=0;pitch=0;roll=0;shake=0;
   heli.position.set(0,45,120);heli.visible=true;
@@ -11411,6 +11472,7 @@ function loop(now){
       v.tdl.forEach((l,i)=>{ l.material.color.setHex(((Math.floor(t*7)+i)%12===0)?0xffffff:0x7ff6ff); });
       v.ring.material.opacity=0.45+0.3*Math.sin(t*3);
     });
+    if((__frame&15)===0)renderIntelLog(); // keep bearings/distances live without rebuilding every frame
     const tp=document.getElementById('taskPanel');
     const nv=nearestVenue();
     if(nv&&!nv.visited)tp.textContent='PRESS E — GO INSIDE '+nv.name+' '+nv.jp;
