@@ -972,7 +972,24 @@ function buildRoadAxis(majorsAt,avoid){
        : roll<0.88 ? (34+Math.random()*30)    // ordinary block
        :             (78+Math.random()*56);   // big block / open lot
   }
-  return roads.sort((a,b)=>a.p-b.p);
+  roads.sort((a,b)=>a.p-b.p);
+  // PRUNE: a block only exists between two roads if the leftover strip is wide enough to build on
+  // (gap - half of each road - both sidewalks - kerb padding). Tight alley spacing was producing
+  // degenerate blocks that the district loop then skipped, leaving BARE ASPHALT STRIPS across the
+  // city. Drop the offending minor road instead, so every surviving gap is a real, built-on block.
+  const MIN_BLOCK=10;
+  const need=(a,b)=>MIN_BLOCK+(a.w+b.w)/2+2*SW+2.4;
+  const out=[roads[0]];
+  for(let i=1;i<roads.length;i++){
+    const r=roads[i], prev=out[out.length-1];
+    if(r.p-prev.p>=need(prev,r)){out.push(r);continue;}
+    // too close: keep whichever matters more (majors are fixed avenues and always win)
+    if(r.major&&!prev.major){out.pop();
+      while(out.length&&r.p-out[out.length-1].p<need(out[out.length-1],r))out.pop();
+      out.push(r);}
+    // else: skip r entirely
+  }
+  return out;
 }
 const ROADS_X=buildRoadAxis([-352,-32,288],[]).filter(r=>r.p<RIVER.x0-26||r.p>RIVER.x1+26); // run along z
 const ROADS_Z=buildRoadAxis([HWY_Z,64,384],[RAIL_Z]);                                       // run along x
@@ -2760,7 +2777,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const x0=ra.p+ra.w/2+SW+1.2,x1=rb.p-rb.w/2-SW-1.2;
   const z0=rc.p+rc.w/2+SW+1.2,z1=rd.p-rd.w/2-SW-1.2;
   const bwT=x1-x0,bdT=z1-z0;
-  if(bwT<12||bdT<12)continue;
+  if(bwT<9||bdT<9)continue; // matches the road-pruning MIN_BLOCK, so no gap is left un-built
   const cx=(x0+x1)/2,cz=(z0+z1)/2;
   if(Math.abs(cx-riverCX(cz))<RIVER_HW+24)continue; // keep the meandering river channel clear of buildings
   if(cz>SEA_Z0-24)continue;                          // no buildings over the bay (and no orphaned details there)
