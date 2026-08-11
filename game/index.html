@@ -24,6 +24,14 @@
       linear-gradient(var(--tc),var(--tc)) 0 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 100%/2px 9px no-repeat,
       linear-gradient(var(--tc),var(--tc)) 100% 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 100%/2px 9px no-repeat,
       rgba(3,12,6,.5); }
+  #dialog { left:50%; bottom:96px; transform:translateX(-50%); width:min(680px,88vw); display:none;
+    background:rgba(6,14,10,.9); border:1px solid rgba(157,255,176,.5); padding:12px 18px 10px; z-index:12;
+    box-shadow:0 0 26px rgba(0,0,0,.7); }
+  #dlgWho { font-size:11px; letter-spacing:2px; color:#ffd24a; margin-bottom:6px; }
+  #dlgTxt { font-size:14px; line-height:1.6; color:#eafff0; min-height:46px; }
+  #dlgTxt .item { color:#ffd24a; font-weight:bold; }
+  #dlgTxt .place { color:#7dff6a; font-weight:bold; }
+  #dlgHint { font-size:10px; color:rgba(157,255,176,.7); text-align:right; margin-top:6px; }
   #intelLog { right:12px; top:96px; width:270px; font-size:10.5px; line-height:1.5; color:#cfe9ff; background:rgba(3,12,6,.5); border:1px solid rgba(157,255,176,.35); padding:7px 10px; display:none; }
   #intelLog b { color:#8dff9f; letter-spacing:1px; }
   #intelLog .cw { color:#ffd24a; }
@@ -86,6 +94,7 @@
 <div class="hud" id="radioSub">RADIO</div>
 <div class="hud" id="taskPanel">STANDBY</div>
 <div class="hud" id="intelLog"></div>
+<div class="hud" id="dialog"><div id="dlgWho"></div><div id="dlgTxt"></div><div id="dlgHint">▼ press F to continue</div></div>
 <div class="hud" id="help">STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract</div>
 
 <div class="hud" id="tacwrap">
@@ -5884,7 +5893,9 @@ const VENUES=[
    reveals:['DOC'], reward:'NAPALM + SCANNER'},
 ];
 let interiorMode=false, curVenue=null, aboard=[], missionDone=false;
-const fp={x:0,z:6,yaw:Math.PI,pitch:0,bob:0}; // on-foot player state
+const fp={x:0,z:6,yaw:Math.PI,pitch:0,bob:0,mdx:0,mdy:0}; // on-foot player state (mdx/mdy = mouse look delta)
+addEventListener('mousemove',e=>{ if(interiorMode){fp.mdx+=e.movementX||0;fp.mdy+=e.movementY||0;} });
+addEventListener('click',()=>{ if(interiorMode&&document.pointerLockElement!==document.body){document.body.requestPointerLock&&document.body.requestPointerLock();} });
 // DEDICATED interior camera. The flight camera is a CHILD of the city scene, and three.js only calls
 // updateMatrixWorld() on a camera whose parent is null — reusing it for a different scene left it with
 // a stale world matrix (rendering from the wrong place, i.e. a black screen). This one is unparented.
@@ -6028,6 +6039,11 @@ function buildSushi(){
   s.add(inBox(W,3.4,0.2,IN_WALL,0,1.7,-D/2));                      // back wall
   [-1,1].forEach(k=>s.add(inBox(0.2,3.4,D,IN_WALL,k*W/2,1.7,0)));  // sides
   s.add(inBox(W,0.2,D,new THREE.MeshStandardMaterial({color:0x2a211a,roughness:1}),0,3.4,0)); // ceiling
+  // exposed ceiling beams + a paper-shade strip light — there is something to see when you look up
+  for(let i=0;i<5;i++)s.add(inBox(W-0.3,0.22,0.3,IN_WOOD_D,0,3.25,-D/2+1.4+i*2.2));
+  s.add(inBox(0.34,0.22,D-1.6,IN_WOOD_D,0,3.22,0));
+  const shade=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.3,0.7),new THREE.MeshBasicMaterial({color:0xffe9c4}));
+  shade.position.set(0,3.02,-1.2);s.add(shade);
   // hinoki counter + glass neta case
   s.add(inBox(6.4,0.16,1.5,IN_WOOD,0,1.05,-2.2));
   s.add(inBox(6.4,1.0,1.4,IN_WOOD_D,0,0.5,-2.2));
@@ -6312,7 +6328,7 @@ function enterVenue(v){
   if(interiorMode)return;
   interiorMode=true;curVenue=v;
   const I=getInterior(v.key);
-  fp.x=I.exit.x;fp.z=I.exit.z-1.2;fp.yaw=0;fp.pitch=0; // face INTO the room (-Z), not at the exit wall
+  fp.x=I.exit.x;fp.z=I.exit.z-1.2;fp.yaw=0;fp.pitch=0;fp.mdx=0;fp.mdy=0;dlgLines=null; // face INTO the room (-Z), not at the exit wall
   fpCam.aspect=W()/H();fpCam.updateProjectionMatrix();
   window.__RS=I.scene;window.__RC=fpCam;
   for(const k in keys)keys[k]=false; // don't carry the E press into the on-foot look control
@@ -6320,16 +6336,67 @@ function enterVenue(v){
   {const el=document.getElementById('intelLog');if(el)el.style.display='none';}
   flashMsg('▼ ENTERING '+v.name+' '+v.jp,'#3fe0ff');
   document.getElementById('help').style.opacity=.75;
-  document.getElementById('help').textContent='ON FOOT — WASD/arrows to walk · look with Q/E · stand at the counter and press F to talk · press X to leave';
+  document.getElementById('help').textContent='ON FOOT — WASD to walk · MOUSE or arrows to look up/down/around · F to talk at the counter · X to leave';
 }
 function exitVenue(){
   if(!interiorMode)return;
   interiorMode=false;curVenue=null;
+  dlgLines=null;{const d=document.getElementById('dialog');if(d)d.style.display='none';}
+  if(document.exitPointerLock)document.exitPointerLock();
   window.__RS=null;window.__RC=null;
   for(const k in keys)keys[k]=false; // don't carry the X press into the throttle toggle
   document.getElementById('help').textContent='STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract';
   renderIntelLog();
   flashMsg('▲ BACK IN THE COCKPIT','#3ef');
+}
+// ---- SHOPKEEPER DIALOGUE: the owner actually talks to you, hands over a map, and states in plain
+// words where each crew member is. Advance with F. The reward lands on the "receive" line. ----
+const DIALOG={
+  sushi:[
+    {who:'ITAMAE · 板前',t:'…irasshai. You have been flying all night, pilot. Sit.'},
+    {who:'ITAMAE · 板前',t:'Two of your people came through my shop before the trouble started. I drew where they went.'},
+    {who:'ITAMAE · 板前',t:'▶ RECEIVED: <span class="item">KANDA DISTRICT MAP</span> — their beacons are on your map now.',give:true},
+    {who:'ITAMAE · 板前',t:'<span class="place">KAZE</span> is on a rooftop in <span class="place">SHIBUYA</span> — west, past the bend in the river.'},
+    {who:'ITAMAE · 板前',t:'<span class="place">MIKO</span> went north-east to <span class="place">AKIHABARA</span>, the backstreets under the expressway.'},
+    {who:'ITAMAE · 板前',t:'Go. Fly low over the green beacon and they will run to you. Bring them to the ship.'}
+  ],
+  fish:[
+    {who:'FISHMONGER · 魚屋',t:'You are the helicopter. I have been listening to the harbour radio all night.'},
+    {who:'FISHMONGER · 魚屋',t:'Two of your crew are out there, and the Black Dragon boys are looking for them too.'},
+    {who:'FISHMONGER · 魚屋',t:'▶ RECEIVED: <span class="item">HARBOUR CHART + HYDRA/HELLFIRE RESUPPLY</span>',give:true},
+    {who:'FISHMONGER · 魚屋',t:'<span class="place">BULL</span> is far north-west in <span class="place">SHINJUKU</span>, at the foot of the towers.'},
+    {who:'FISHMONGER · 魚屋',t:'<span class="place">REI</span> is south-east near the bay avenues, <span class="place">GINZA/MINATO</span> side.'},
+    {who:'FISHMONGER · 魚屋',t:'Take the ordnance. You will need it before the night is done.'}
+  ],
+  denki:[
+    {who:'OWNER · 店主',t:'Hah — a customer. Nobody comes to Denki-do since the trouble.'},
+    {who:'OWNER · 店主',t:'I built you something out of the junk bin. A scanner. It hears distress beacons.'},
+    {who:'OWNER · 店主',t:'▶ RECEIVED: <span class="item">BEACON SCANNER + NAPALM</span>',give:true},
+    {who:'OWNER · 店主',t:'Your last one, <span class="place">DOC</span>, is due <span class="place">SOUTH in MINATO</span> — near the tower, by the waterfront.'},
+    {who:'OWNER · 店主',t:'That is all of them. Get your people home, pilot.'}
+  ]
+};
+let dlgLines=null,dlgIdx=0,dlgCool=0;
+function showDialog(){
+  const el=document.getElementById('dialog');
+  if(!dlgLines){el.style.display='none';return;}
+  const L=dlgLines[dlgIdx];
+  el.style.display='block';
+  document.getElementById('dlgWho').textContent=L.who;
+  document.getElementById('dlgTxt').innerHTML=L.t;
+  document.getElementById('dlgHint').textContent=(dlgIdx<dlgLines.length-1)?'▼ press F to continue':'▼ press F to finish · X to leave';
+}
+function startDialog(v){
+  dlgLines=DIALOG[v.key]||null;dlgIdx=0;dlgCool=0.35;
+  if(!dlgLines){talkToOwner();return;}
+  showDialog();
+}
+function advanceDialog(){
+  if(!dlgLines)return;
+  if(dlgLines[dlgIdx].give)talkToOwner();       // reward + reveals land on the "RECEIVED" line
+  dlgIdx++;
+  if(dlgIdx>=dlgLines.length){dlgLines=null;document.getElementById('dialog').style.display='none';return;}
+  showDialog();
 }
 function talkToOwner(){
   const v=curVenue; if(!v||v.visited)return;
@@ -6365,17 +6432,51 @@ function drawFootHUD(now){
   // subtle centre dot so the player has an aim/interaction reference
   hudX.strokeStyle='rgba(141,255,159,.5)';hudX.lineWidth=1.2;
   hudX.beginPath();hudX.arc(w/2,h*0.5,3.5,0,7);hudX.stroke();
+  // GUIDE MARKER: project the counter (or the exit, once you have the lead) so you always know where
+  // to walk inside — the rooms are small but it should never be a hunt
+  if(curVenue&&!dlgLines){
+    const I=getInterior(curVenue.key);
+    const goTalk=!curVenue.visited;
+    const t=goTalk?I.talk:I.exit;
+    const wp=new THREE.Vector3(t.x,goTalk?1.5:1.7,t.z);
+    const v=wp.clone().project(fpCam);
+    const on=v.z>-1&&v.z<1;
+    const sx=(v.x*0.5+0.5)*w, sy=(-v.y*0.5+0.5)*h;
+    const col=goTalk?'#ffd24a':'#8dff9f', lbl=goTalk?'OWNER — press F':'EXIT — press X';
+    hudX.save();
+    if(on&&sx>40&&sx<w-40&&sy>70&&sy<h-90){
+      hudX.strokeStyle=col;hudX.lineWidth=2;
+      hudX.beginPath();hudX.arc(sx,sy,13,0,7);hudX.stroke();
+      hudX.beginPath();hudX.moveTo(sx,sy-19);hudX.lineTo(sx-5,sy-28);hudX.lineTo(sx+5,sy-28);hudX.closePath();hudX.fillStyle=col;hudX.fill();
+      hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,sx,sy+27);
+    }else{
+      // behind you: arrow at the screen edge telling you which way to turn
+      const ang=Math.atan2(t.x-fp.x,t.z-fp.z)-fp.yaw;
+      const r=Math.min(w,h)*0.3, ax=w/2+Math.sin(ang)*r, ay=h*0.5-Math.cos(ang)*r;
+      hudX.translate(ax,ay);hudX.rotate(ang);
+      hudX.fillStyle=col;hudX.beginPath();hudX.moveTo(0,-15);hudX.lineTo(10,9);hudX.lineTo(0,3);hudX.lineTo(-10,9);hudX.closePath();hudX.fill();
+      hudX.rotate(-ang);
+      hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,0,24);
+    }
+    hudX.restore();
+  }
 }
 // ---------- on-foot update ----------
 function updateInterior(dt){
   const I=getInterior(curVenue.key);
   let mf=0,ms=0;
-  if(keys['KeyW']||keys['ArrowUp'])mf+=1;
-  if(keys['KeyS']||keys['ArrowDown'])mf-=1;
-  if(keys['KeyA']||keys['ArrowLeft'])ms-=1;
-  if(keys['KeyD']||keys['ArrowRight'])ms+=1;
-  if(keys['KeyQ'])fp.yaw+=1.9*dt;
-  if(keys['KeyE'])fp.yaw-=1.9*dt;
+  if(keys['KeyW'])mf+=1;
+  if(keys['KeyS'])mf-=1;
+  if(keys['KeyA'])ms-=1;
+  if(keys['KeyD'])ms+=1;
+  // LOOK: arrows and Q/E turn, arrows up/down (and R/V) pitch — plus mouse-look, so you can properly
+  // look up at the lanterns and down at the counter like the flight view
+  if(keys['ArrowLeft']||keys['KeyQ'])fp.yaw+=2.0*dt;
+  if(keys['ArrowRight']||keys['KeyE'])fp.yaw-=2.0*dt;
+  if(keys['ArrowUp']||keys['KeyR'])fp.pitch+=1.5*dt;
+  if(keys['ArrowDown']||keys['KeyV'])fp.pitch-=1.5*dt;
+  if(fp.mdx||fp.mdy){fp.yaw-=fp.mdx*0.0028;fp.pitch-=fp.mdy*0.0028;fp.mdx=0;fp.mdy=0;}
+  fp.pitch=Math.max(-1.15,Math.min(1.15,fp.pitch)); // clamp so you can look at the ceiling and the floor
   const spd=3.1;
   const nx=fp.x+(-Math.sin(fp.yaw)*mf+Math.cos(fp.yaw)*ms)*spd*dt;
   const nz=fp.z+(-Math.cos(fp.yaw)*mf-Math.sin(fp.yaw)*ms)*spd*dt;
@@ -6390,12 +6491,18 @@ function updateInterior(dt){
   const dTalk=Math.hypot(fp.x-I.talk.x,fp.z-I.talk.z);
   const dExit=Math.hypot(fp.x-I.exit.x,fp.z-I.exit.z);
   const tp=document.getElementById('taskPanel');
-  if(dTalk<1.9&&!curVenue.visited)tp.textContent='PRESS F — TALK TO THE OWNER';
-  else if(dTalk<1.9)tp.textContent='"'+curVenue.line+'"';
-  else if(dExit<2.0)tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';
-  else tp.textContent=curVenue.name+' '+curVenue.jp+' — LOOK AROUND (F at the counter, X to leave)';
-  if(keys['KeyF']&&dTalk<1.9)talkToOwner();
-  if(keys['KeyX']&&dExit<2.0)exitVenue();
+  dlgCool=Math.max(0,dlgCool-dt);
+  if(dlgLines){
+    tp.textContent='';
+    if(keys['KeyF']&&dlgCool<=0){advanceDialog();dlgCool=0.32;keys['KeyF']=false;}
+  }else{
+    if(dTalk<2.4&&!curVenue.visited)tp.textContent='▶ PRESS F — TALK TO THE OWNER (they know where your crew is)';
+    else if(dTalk<2.4)tp.textContent='You already have this lead. Check the INTEL panel outside.';
+    else if(dExit<2.2)tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';
+    else tp.textContent=curVenue.name+' '+curVenue.jp+' — walk to the counter (F to talk) · X to leave';
+    if(keys['KeyF']&&dTalk<2.4&&!curVenue.visited&&dlgCool<=0){startDialog(curVenue);keys['KeyF']=false;}
+    if(keys['KeyX']&&dExit<2.2)exitVenue();
+  }
 }
 // ---------- crew pickup / delivery ----------
 function updateCrewRescue(){
