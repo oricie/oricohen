@@ -5284,9 +5284,9 @@ function buildRoadAxis(majorsAt,avoid){
       roads.push({p, w: wr<0.14?20 : wr<0.5?7 : 13, major:false}); // occasional avenue, many alleys, some mid streets
     }
     const roll=Math.random();
-    p += roll<0.30 ? (20+Math.random()*16)    // tight alley / side street
-       : roll<0.82 ? (48+Math.random()*46)    // ordinary block
-       :             (104+Math.random()*82);  // big block / open lot
+    p += roll<0.44 ? (16+Math.random()*12)    // tight alley / side street (Tokyo has a LOT of these)
+       : roll<0.88 ? (34+Math.random()*30)    // ordinary block
+       :             (78+Math.random()*56);   // big block / open lot
   }
   return roads.sort((a,b)=>a.p-b.p);
 }
@@ -6937,9 +6937,19 @@ function spawnBuilding(cx,cz,bw,bd,style){
   const grp=new THREE.Group();
   const rm=pickRoof();
   let bh,mat;
-  if(style==='glass'){ bh=80+Math.random()*95; mat=_pickPool(GLASS_POOL); }
-  else if(style==='res'){ bh=6+Math.random()*4; if(Math.random()<0.25)bh=16+Math.random()*10; mat=_pickPool(RES_POOL); }
-  else{ bh=style==='neon'?(14+Math.random()*30):(22+Math.random()*48); mat=_pickPool(FACADE_POOL); }
+  // TOKYO HEIGHT MIX: a 3-storey shophouse sits right against a 20-storey block. Each style spans a
+  // wide range and occasionally throws a spike, so skylines are jagged instead of uniformly medium.
+  if(style==='glass'){ bh=70+Math.random()*110; if(Math.random()<0.18)bh=190+Math.random()*90; mat=_pickPool(GLASS_POOL); }
+  else if(style==='res'){
+    const r=Math.random();
+    bh = r<0.42 ? (7+Math.random()*7) : r<0.8 ? (18+Math.random()*20) : (44+Math.random()*34);
+    mat=_pickPool(RES_POOL);
+  }else{
+    const r=Math.random();
+    if(style==='neon') bh = r<0.4 ? (11+Math.random()*13) : r<0.85 ? (26+Math.random()*30) : (62+Math.random()*46);
+    else               bh = r<0.32 ? (14+Math.random()*16) : r<0.82 ? (34+Math.random()*40) : (84+Math.random()*66);
+    mat=_pickPool(FACADE_POOL);
+  }
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
@@ -6958,7 +6968,10 @@ function spawnBuilding(cx,cz,bw,bd,style){
     antXf.push({x:cx,y:topY+7,z:cz});
     warnXf.push({x:cx,y:topY+14.5,z:cz});
   }
-  if(style==='neon'||style==='mixed'){
+  // EVERY building gets ground-floor frontage and signage — in Tokyo even office towers and apartment
+  // blocks have lit shops and signs at street level. Previously only 'neon'/'mixed' did, which left
+  // whole wards (glass Shinjuku/Ginza, residential Asakusa) as bare untextured boxes.
+  {
     const sfi=Math.floor(Math.random()*STOREFRONT_VARIANT_COUNT);
     [[bd/2+0.15,0],[-bd/2-0.15,Math.PI]].forEach(o=>{
       const zc=o[0], ry=o[1], fs=zc>=0?1:-1, wz=cz+zc; // fs = outward normal; wz = world-z of the face
@@ -6985,6 +6998,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
     });
     addNeonSigns(grp,bw,bd,Math.min(bh,46),cx,cz);
     if(style==='neon'||style==='mixed')addBillboard(grp,bw,bd,bh,cx,cz);
+    else if(Math.random()<0.35)addBillboard(grp,bw,bd,bh,cx,cz); // some ads on towers/apartments too
     if(Math.random()<(style==='neon'?0.3:0.15)){
       const tank=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.6,3,8),woodMat);tank.position.y=bh+3.6;grp.add(tank);
       const cone=new THREE.Mesh(new THREE.ConeGeometry(1.7,1.3,8),new THREE.MeshLambertMaterial({color:0x3d3a36}));cone.position.y=bh+5.8;grp.add(cone);
@@ -7024,6 +7038,10 @@ function spawnBuilding(cx,cz,bw,bd,style){
 // the Palace, low-rise old-town Asakusa, bayside Minato. wardAt() also drives the live map readout.
 const TOWER={x:-450,z:440};
 const PALACE={x:-90,z:-30,r:155}; // Imperial Palace grounds (used to keep buildings + their details out)
+// Landing plazas for the enterable venues. Declared here (before the district loop) so the city keeps
+// these plots CLEAR — otherwise buildings spawn straight on top of the helipads and you cannot land.
+const VENUE_SPOTS=[{x:-250,z:-90},{x:190,z:140},{x:-60,z:-330}];
+const VENUE_CLEAR=26;
 const WARDS=[
   {name:'CHIYODA',   jp:'千代田区', style:'cbd',   test:(x,z)=>Math.hypot(x+90,z+30)<300},          // Palace + govt/business towers
   {name:'SHINJUKU',  jp:'新宿区',   style:'cbd',   test:(x,z)=>x<-440},                              // skyscraper west
@@ -7063,6 +7081,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   if(Math.abs(cx-riverCX(cz))<RIVER_HW+24)continue; // keep the meandering river channel clear of buildings
   if(cz>SEA_Z0-24)continue;                          // no buildings over the bay (and no orphaned details there)
   if(Math.hypot(cx-PALACE.x,cz-PALACE.z)<PALACE.r+18)continue; // no buildings on the Palace grounds
+  if(VENUE_SPOTS.some(vs=>Math.hypot(cx-vs.x,cz-vs.z)<VENUE_CLEAR+16))continue; // keep the helipads clear
   const d=districtOf(cx,cz);
   if(d==='park'&&!railBlocked(z0,z1)){makePark(x0,x1,z0,z1);continue;}
   if(d==='cbd'&&!railBlocked(z0,z1)){
@@ -9540,6 +9559,16 @@ function drawTacMap(now){
     }
     tacC.restore();
   });
+  // venue landing pads — cyan H markers so you can navigate to one from the map
+  VENUES.forEach(v=>{
+    if(v.visited)return;
+    const dx=(v.x-heli.position.x)*scale,dz=(v.z-heli.position.z)*scale;
+    const cl=Math.max(-TAC/2+6,Math.min(TAC/2-6,dx)),cd=Math.max(-TAC/2+6,Math.min(TAC/2-6,dz));
+    tacC.strokeStyle='#5ff2ff';tacC.lineWidth=1.6;
+    tacC.beginPath();tacC.arc(cl,cd,5.5,0,7);tacC.stroke();
+    tacC.fillStyle='#5ff2ff';tacC.font='bold 8px monospace';tacC.textAlign='center';tacC.textBaseline='middle';
+    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);tacC.fillText('H',0,0.5);tacC.restore();
+  });
   // objective
   if(hostage){
     const dx=(hostage.pos.x-heli.position.x)*scale,dz=(hostage.pos.z-heli.position.z)*scale;
@@ -9893,6 +9922,36 @@ function drawHUD(now){
     hudX.fillStyle=HUD_RED;hudX.font='bold 12px monospace';hudX.textAlign='center';
     hudX.fillText('◆ HULL CRITICAL ◆',cx,h*0.66);
   }
+  // ---- WAYPOINT: screen marker + off-screen arrow to the current objective (venue pad or crew) ----
+  if(started&&!gameOver&&!missionDone){
+    let tgt=null,label='',col=HUD_CYAN;
+    const kc=CREW.filter(c=>c.found&&!c.rescued&&!c.aboard);
+    if(aboard.length&&window.__navyShip){tgt=window.__navyShip.padPos.clone();label='NAVY SHIP';col='#7dff6a';}
+    else if(kc.length){let bd=1e9;kc.forEach(c=>{const d=Math.hypot(heli.position.x-c.x,heli.position.z-c.z);if(d<bd){bd=d;tgt=new THREE.Vector3(c.x,3,c.z);label=c.id;}});col='#7dff6a';}
+    else{const v=VENUES.find(v2=>!v2.visited);if(v){tgt=new THREE.Vector3(v.x,12,v.z);label='LAND · '+v.name;}}
+    if(tgt){
+      const dist=Math.round(Math.hypot(heli.position.x-tgt.x,heli.position.z-tgt.z));
+      const sp=project(tgt);
+      hudX.save();
+      if(sp.on&&sp.x>30&&sp.x<w-30&&sp.y>60&&sp.y<h-60){
+        hudX.strokeStyle=col;hudX.lineWidth=2;
+        hudX.beginPath();hudX.arc(sp.x,sp.y,15,0,7);hudX.stroke();
+        hudX.beginPath();hudX.moveTo(sp.x,sp.y-22);hudX.lineTo(sp.x-6,sp.y-32);hudX.lineTo(sp.x+6,sp.y-32);hudX.closePath();hudX.fillStyle=col;hudX.fill();
+        hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;
+        hudX.fillText(label+'  '+dist+'m',sp.x,sp.y+30);
+      }else{
+        // off screen: pin an arrow to the edge pointing the way
+        const ang=Math.atan2(tgt.x-heli.position.x,tgt.z-heli.position.z)-yaw;
+        const r=Math.min(w,h)*0.33, ax=cx+Math.sin(ang)*r, ay=h*0.45-Math.cos(ang)*r;
+        hudX.translate(ax,ay);hudX.rotate(ang);
+        hudX.fillStyle=col;hudX.beginPath();hudX.moveTo(0,-16);hudX.lineTo(11,10);hudX.lineTo(0,4);hudX.lineTo(-11,10);hudX.closePath();hudX.fill();
+        hudX.rotate(-ang);
+        hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;
+        hudX.fillText(label+'  '+dist+'m',0,26);
+      }
+      hudX.restore();
+    }
+  }
   // TSD label under tac map already in DOM; draw its radar frame glow via CSS
   drawTacMap(now);
 }
@@ -10100,13 +10159,13 @@ const CREW=[
   {id:'DOC',   name:'"DOC" SHIMIZU',   role:'ENGINEER',  x:-140, z: 420, found:false, rescued:false},
 ];
 const VENUES=[
-  {key:'sushi', name:'SUSHI KANDA',  jp:'鮨 かんだ',  x:-250, z:-90,  visited:false,
+  {key:'sushi', name:'SUSHI KANDA',  jp:'鮨 かんだ',  x:VENUE_SPOTS[0].x, z:VENUE_SPOTS[0].z, visited:false,
    line:'The owner slides a napkin across the counter — two of your crew, marked in pen.',
    reveals:['KAZE','MIKO'], reward:'MAP + 2 CREW LOCATIONS'},
-  {key:'fish',  name:'UOGASHI MARKET',jp:'魚河岸',    x: 190, z: 140, visited:false,
+  {key:'fish',  name:'UOGASHI MARKET',jp:'魚河岸',    x:VENUE_SPOTS[1].x, z:VENUE_SPOTS[1].z, visited:false,
    line:'The fishmonger has been listening to the harbour radio all night. He knows where two more are.',
    reveals:['BULL','REI'], reward:'HYDRA + HELLFIRE RESUPPLY'},
-  {key:'denki', name:'DENKI-DO 1989',jp:'電気堂',     x: -60, z:-330, visited:false,
+  {key:'denki', name:'DENKI-DO 1989',jp:'電気堂',     x:VENUE_SPOTS[2].x, z:VENUE_SPOTS[2].z, visited:false,
    line:'The old man rebuilds a scanner from parts and hands it over — it picks up your last crewman.',
    reveals:['DOC'], reward:'NAPALM + SCANNER'},
 ];
@@ -10412,19 +10471,63 @@ const interiorCache={};
 function getInterior(key){ if(!interiorCache[key])interiorCache[key]=INTERIOR_BUILDERS[key](); return interiorCache[key]; }
 // ---------- venue markers in the city (landing pad + lit doorway) ----------
 function buildVenueMarkers(){
+  // belt-and-braces: remove anything that still overlaps a pad (landmarks/props placed after the
+  // district loop), so the helipad is always visibly clear ground
+  for(let i=buildings.length-1;i>=0;i--){
+    const b=buildings[i];
+    if(VENUE_SPOTS.some(vs=>Math.hypot(b.m.position.x-vs.x,b.m.position.z-vs.z)<VENUE_CLEAR)){scene.remove(b.m);buildings.splice(i,1);}
+  }
+  // A real, unmistakable helipad: painted H circle, corner brackets, a ring of touchdown lights, a
+  // wide light column and a floating name board — plus animated chevrons that walk DOWN the beam.
+  const padTex=tex((c,w,h)=>{
+    c.fillStyle='#07202c';c.fillRect(0,0,w,h);
+    c.strokeStyle='#5ff2ff';c.lineWidth=10;c.beginPath();c.arc(w/2,h/2,w*0.40,0,7);c.stroke();
+    c.lineWidth=5;c.globalAlpha=0.6;c.beginPath();c.arc(w/2,h/2,w*0.47,0,7);c.stroke();c.globalAlpha=1;
+    c.fillStyle='#eafcff';
+    const bw2=w*0.075,bh2=h*0.34,gap=w*0.13;                       // the H
+    c.fillRect(w/2-gap-bw2/2,h/2-bh2/2,bw2,bh2);
+    c.fillRect(w/2+gap-bw2/2,h/2-bh2/2,bw2,bh2);
+    c.fillRect(w/2-gap,h/2-bw2*0.55,gap*2,bw2*1.1);
+    c.strokeStyle='#ffd24a';c.lineWidth=6;                          // corner brackets
+    [[0.12,0.12,1,1],[0.88,0.12,-1,1],[0.12,0.88,1,-1],[0.88,0.88,-1,-1]].forEach(([fx,fy,sx,sy])=>{
+      const x=w*fx,y=h*fy,L=w*0.1;
+      c.beginPath();c.moveTo(x,y+sy*L);c.lineTo(x,y);c.lineTo(x+sx*L,y);c.stroke();
+    });
+    c.fillStyle='#ffd24a';c.font=`bold ${Math.round(h*0.075)}px monospace`;c.textAlign='center';c.textBaseline='middle';
+    c.fillText('LAND HERE',w/2,h*0.80);
+  },256,256);
   VENUES.forEach(v=>{
     const g=new THREE.Group();g.position.set(v.x,0,v.z);
-    const ring=new THREE.Mesh(new THREE.RingGeometry(6.5,8.2,32),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.55,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
-    ring.rotation.x=-Math.PI/2;ring.position.y=0.12;g.add(ring);
-    const pad=new THREE.Mesh(new THREE.CircleGeometry(6.4,28),new THREE.MeshBasicMaterial({color:0x0a2a38,transparent:true,opacity:0.5,depthWrite:false}));
-    pad.rotation.x=-Math.PI/2;pad.position.y=0.1;g.add(pad);
-    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,26,10,1,true),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.1,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-    beam.position.y=13;g.add(beam);
-    const sign=new THREE.Mesh(new THREE.PlaneGeometry(7,3.2),new THREE.MeshBasicMaterial({map:tex((c,w,h)=>{
-      c.fillStyle='#0a0710';c.fillRect(0,0,w,h);drawSignFace(c,4,4,w-8,h-8,'#ffd24a',false);
-    },256,128),transparent:true}));
-    sign.position.set(0,7.5,0);g.add(sign);
-    v.marker=g;v.sign=sign;scene.add(g);
+    const pad=new THREE.Mesh(new THREE.PlaneGeometry(17,17),new THREE.MeshBasicMaterial({map:padTex,transparent:true,depthWrite:false}));
+    pad.rotation.x=-Math.PI/2;pad.position.y=0.12;pad.renderOrder=3;g.add(pad);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(8.4,9.6,40),new THREE.MeshBasicMaterial({color:0x5ff2ff,transparent:true,opacity:0.7,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
+    ring.rotation.x=-Math.PI/2;ring.position.y=0.16;g.add(ring);
+    // ring of touchdown lights around the pad
+    const tdl=[];
+    for(let i=0;i<12;i++){
+      const a=i/12*Math.PI*2;
+      const l=new THREE.Mesh(new THREE.SphereGeometry(0.34,7,6),new THREE.MeshBasicMaterial({color:0x7ff6ff}));
+      l.position.set(Math.cos(a)*9.0,0.35,Math.sin(a)*9.0);g.add(l);tdl.push(l);
+    }
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(3.4,8.0,54,16,1,true),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    beam.position.y=27;g.add(beam);
+    // chevrons that march downward, pointing at the pad
+    const chev=[];
+    const chevMat=new THREE.MeshBasicMaterial({color:0x9ff8ff,transparent:true,opacity:0.85,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false});
+    for(let i=0;i<4;i++){
+      const sh=new THREE.Shape();sh.moveTo(-3.4,1.5);sh.lineTo(0,-1.5);sh.lineTo(3.4,1.5);sh.lineTo(2.4,2.3);sh.lineTo(0,0.2);sh.lineTo(-2.4,2.3);
+      const m=new THREE.Mesh(new THREE.ShapeGeometry(sh),chevMat);
+      m.rotation.x=-Math.PI/2;m.position.y=8+i*9;g.add(m);chev.push(m);
+    }
+    const board=new THREE.Mesh(new THREE.PlaneGeometry(13,5.6),new THREE.MeshBasicMaterial({map:tex((c,w,h)=>{
+      c.fillStyle='#06121a';c.fillRect(0,0,w,h);
+      c.strokeStyle='#5ff2ff';c.lineWidth=5;c.strokeRect(4,4,w-8,h-8);
+      c.fillStyle='#eafcff';c.font=`bold ${Math.round(h*0.26)}px monospace`;c.textAlign='center';c.textBaseline='middle';
+      c.fillText(v.name,w/2,h*0.36);
+      c.fillStyle='#ffd24a';c.font=`bold ${Math.round(h*0.3)}px ${MINCHO}`;c.fillText(v.jp,w/2,h*0.68);
+    },256,128),transparent:true,depthWrite:false}));
+    board.position.set(0,15,0);g.add(board);
+    v.marker=g;v.board=board;v.chev=chev;v.tdl=tdl;v.ring=ring;scene.add(g);
   });
 }
 buildVenueMarkers();
@@ -11295,6 +11398,19 @@ function loop(now){
     heli.visible=!cockpitMode;
     drawDashMFD();
     updateCrewRescue();
+    // animate the landing pads: chevrons march down the beam, lights chase around the ring, the name
+    // board always faces the pilot — so a pad reads as "land here" from any approach
+    VENUES.forEach(v=>{
+      if(!v.marker||!v.marker.visible)return;
+      v.board.lookAt(cam.position);
+      const t=now/1000;
+      v.chev.forEach((c,i)=>{
+        let y=8+((i*9)-(t*11)%36+36)%36;
+        c.position.y=y;c.material.opacity=0.25+0.6*(1-y/44);
+      });
+      v.tdl.forEach((l,i)=>{ l.material.color.setHex(((Math.floor(t*7)+i)%12===0)?0xffffff:0x7ff6ff); });
+      v.ring.material.opacity=0.45+0.3*Math.sin(t*3);
+    });
     const tp=document.getElementById('taskPanel');
     const nv=nearestVenue();
     if(nv&&!nv.visited)tp.textContent='PRESS E — GO INSIDE '+nv.name+' '+nv.jp;
