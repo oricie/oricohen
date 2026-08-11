@@ -2044,7 +2044,18 @@ for(let i=0;i<NEON_VARIANT_COUNT;i++){
   const txt=kanji[Math.floor(Math.random()*kanji.length)];
   neonMats.push({m:new THREE.MeshBasicMaterial({map:neonTex(txt,col,shape,frameStyle)}),c:new THREE.Color(col),shape});
 }
-const pulseSigns=[];
+const pulseSigns=[]; // {mat,ph,fast} — POOLED glow materials, one per neon colour, each on its own phase
+const _glowPool=new Map();
+function glowPoolFor(col){
+  const key=col.getHexString();
+  let m=_glowPool.get(key);
+  if(!m){
+    m=new THREE.MeshBasicMaterial({color:col.clone(),transparent:true,opacity:.06,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+    _glowPool.set(key,m);
+    pulseSigns.push({mat:m,ph:Math.random()*7,fast:Math.random()<.35});
+  }
+  return m;
+}
 // small ring-buffer of recently-picked sign variants so signs on neighbouring buildings
 // (processed back-to-back by the district loop) don't repeat the same texture
 const recentSignPicks=[];
@@ -2080,7 +2091,8 @@ const neonCageTubeXf=[],neonCageBarXf=[],neonJunctionXf=[],neonWirePts=[];
 function addNeonSigns(grp,bw,bd,bh,cx,cz){
   // 2-3 signs per building, occasionally a 4th (ROUND-4: "loved, add a few more" — kept rare so
   // draw calls stay in the same ballpark as before)
-  const count=2+Math.floor(Math.random()*2)+(Math.random()<0.22?1:0);
+  // scale with height: a 280u tower needs far more signage than a 12u shophouse or it reads blank
+  const count=Math.min(9,2+Math.floor(bh/26)+Math.floor(Math.random()*2)+(Math.random()<0.22?1:0));
   for(let i=0;i<count;i++){
     const nm=pickSignVariant();
     let sh,sw;
@@ -2103,11 +2115,13 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
       else{sign.rotation.y=Math.PI/2;sign.position.set(bw*0.3*(Math.random()-.5)*2,3+sh/2+Math.random()*(bh-sh-6),side*(bd/2+0.3));}
     }
     grp.add(sign);
-    const glow=new THREE.Mesh(new THREE.PlaneGeometry(sw*1.3,sh*1.08),
-      new THREE.MeshBasicMaterial({color:nm.c,transparent:true,opacity:.06,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    // PERF: the glow halo used to mint a NEW material per sign, so none of them could ever be merged —
+    // with signage now scaling up on tall towers that alone cost thousands of draw calls. Glows now
+    // share a small pool keyed by neon colour (each pool entry pulses on its own phase), so the merge
+    // pass fuses every halo of a given colour into one mesh.
+    const glow=new THREE.Mesh(new THREE.PlaneGeometry(sw*1.3,sh*1.08),glowPoolFor(nm.c));
     glow.position.copy(sign.position);glow.rotation.copy(sign.rotation);
     grp.add(glow);
-    pulseSigns.push({m:sign,g:glow,ph:Math.random()*7,fast:Math.random()<.35});
 
     // physical weathered cage: 4 corner tubes + 2 front cage bars + a junction box + (sometimes) a sagging wire
     if(cx!==undefined){
@@ -2636,13 +2650,31 @@ const groundPoolXf=[]; // {x,z,s,c:[r,g,b]}
 // fuse thousands of buildings down to a handful of draw calls.
 const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const fac=facades[i%facades.length];
+  if(fac.map){fac.map.wrapS=fac.map.wrapT=THREE.RepeatWrapping;fac.map.needsUpdate=true;}
+  if(fac.normal){fac.normal.wrapS=fac.normal.wrapT=THREE.RepeatWrapping;fac.normal.needsUpdate=true;}
   const m=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
   m.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0]});
   a.push(m);} return a;})();
+glassT.wrapS=glassT.wrapT=THREE.RepeatWrapping;glassT.needsUpdate=true;
 const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++)a.push(new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.12+Math.random()*0.08,metalness:0.2,envMapIntensity:1.7,clearcoat:0.4,clearcoatRoughness:0.2}));return a;})();
-const RES_POOL=resFacades.map(t=>new THREE.MeshLambertMaterial({map:t}));
+const RES_POOL=resFacades.map(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;return new THREE.MeshLambertMaterial({map:t});});
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
+// Facade UVs are 0..1 per box face, so a tall tower stretched ONE window grid over its whole height —
+// which reads as a blank slab. Repeat the grid per ~`unit` metres instead, per face, so window rows
+// stay a constant size on a 12u shophouse and a 280u tower alike.
+function scaleFacadeUVs(geo,bw,bh,bd,unit){
+  const uv=geo.attributes.uv; if(!uv||uv.count<24)return;
+  const ux=Math.max(1,Math.round(bw/unit)), uz=Math.max(1,Math.round(bd/unit)), uy=Math.max(1,Math.round(bh/unit));
+  for(let i=0;i<24;i++){
+    let su,sv;
+    if(i<8){su=uz;sv=uy;}          // +X / -X faces
+    else if(i<16){su=ux;sv=uz;}    // +Y / -Y (roof / underside)
+    else{su=ux;sv=uy;}             // +Z / -Z faces
+    uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);
+  }
+  uv.needsUpdate=true;
+}
 function spawnBuilding(cx,cz,bw,bd,style){
   const grp=new THREE.Group();
   const rm=pickRoof();
@@ -2660,7 +2692,9 @@ function spawnBuilding(cx,cz,bw,bd,style){
     else               bh = r<0.32 ? (14+Math.random()*16) : r<0.82 ? (34+Math.random()*40) : (84+Math.random()*66);
     mat=_pickPool(FACADE_POOL);
   }
-  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
+  const boxGeo=new THREE.BoxGeometry(bw,bh,bd);
+  scaleFacadeUVs(boxGeo,bw,bh,bd,14); // keep window rows a constant real size instead of stretching one grid over a 280u tower
+  const box=new THREE.Mesh(boxGeo,mat); // single material -> mergeable
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
   cap.position.y=bh+0.1;cap.receiveShadow=true;grp.add(cap);
@@ -2751,7 +2785,7 @@ const PALACE={x:-90,z:-30,r:155}; // Imperial Palace grounds (used to keep build
 // Landing plazas for the enterable venues. Declared here (before the district loop) so the city keeps
 // these plots CLEAR — otherwise buildings spawn straight on top of the helipads and you cannot land.
 const VENUE_SPOTS=[{x:-250,z:-90},{x:190,z:140},{x:-60,z:-330}];
-const VENUE_CLEAR=26;
+const VENUE_CLEAR=15; // small plot: the pad is tucked between buildings, a tighter approach
 const WARDS=[
   {name:'CHIYODA',   jp:'千代田区', style:'cbd',   test:(x,z)=>Math.hypot(x+90,z+30)<300},          // Palace + govt/business towers
   {name:'SHINJUKU',  jp:'新宿区',   style:'cbd',   test:(x,z)=>x<-440},                              // skyscraper west
@@ -2791,7 +2825,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   if(Math.abs(cx-riverCX(cz))<RIVER_HW+24)continue; // keep the meandering river channel clear of buildings
   if(cz>SEA_Z0-24)continue;                          // no buildings over the bay (and no orphaned details there)
   if(Math.hypot(cx-PALACE.x,cz-PALACE.z)<PALACE.r+18)continue; // no buildings on the Palace grounds
-  if(VENUE_SPOTS.some(vs=>Math.hypot(cx-vs.x,cz-vs.z)<VENUE_CLEAR+16))continue; // keep the helipads clear
+  if(VENUE_SPOTS.some(vs=>Math.hypot(cx-vs.x,cz-vs.z)<VENUE_CLEAR+6))continue; // keep just enough room for the pad
   const d=districtOf(cx,cz);
   if(d==='park'&&!railBlocked(z0,z1)){makePark(x0,x1,z0,z1);continue;}
   if(d==='cbd'&&!railBlocked(z0,z1)){
@@ -5270,8 +5304,8 @@ function drawTacMap(now){
     tacC.restore();
   });
   // venue landing pads — cyan H markers so you can navigate to one from the map
-  VENUES.forEach(v=>{
-    if(v.visited)return;
+  VENUES.forEach((v,vi)=>{
+    if(v.visited||vi!==stage)return;
     const dx=(v.x-heli.position.x)*scale,dz=(v.z-heli.position.z)*scale;
     const cl=Math.max(-TAC/2+6,Math.min(TAC/2-6,dx)),cd=Math.max(-TAC/2+6,Math.min(TAC/2-6,dz));
     tacC.strokeStyle='#5ff2ff';tacC.lineWidth=1.6;
@@ -5638,7 +5672,7 @@ function drawHUD(now){
     const kc=CREW.filter(c=>c.found&&!c.rescued&&!c.aboard);
     if(aboard.length&&window.__navyShip){tgt=window.__navyShip.padPos.clone();label='NAVY SHIP';col='#7dff6a';}
     else if(kc.length){let bd=1e9;kc.forEach(c=>{const d=Math.hypot(heli.position.x-c.x,heli.position.z-c.z);if(d<bd){bd=d;tgt=new THREE.Vector3(c.x,3,c.z);label=c.id;}});col='#7dff6a';}
-    else{const v=VENUES.find(v2=>!v2.visited);if(v){tgt=new THREE.Vector3(v.x,12,v.z);label='LAND · '+v.name;}}
+    else{const v=activeVenue();if(v){tgt=new THREE.Vector3(v.x,12,v.z);label='LAND · '+v.name;}}
     if(tgt){
       const dist=Math.round(Math.hypot(heli.position.x-tgt.x,heli.position.z-tgt.z));
       const sp=project(tgt);
@@ -5893,6 +5927,30 @@ const VENUES=[
    reveals:['DOC'], reward:'NAPALM + SCANNER'},
 ];
 let interiorMode=false, curVenue=null, aboard=[], missionDone=false;
+// ONE OBJECTIVE AT A TIME. The night runs in stages: find the stage's shop -> get the lead ->
+// recover the crew it named -> only then does the next shop light up. Never two goals at once.
+let stage=0;
+function activeVenue(){const v=VENUES[stage];return (v&&!v.visited)?v:null;}
+function stagePendingCrew(){
+  const v=VENUES[stage];if(!v||!v.visited)return [];
+  return v.reveals.map(id=>CREW.find(m=>m.id===id)).filter(c=>c&&!c.rescued);
+}
+function refreshStageMarkers(){
+  VENUES.forEach((v,i)=>{ if(v.marker)v.marker.visible=(i===stage&&!v.visited); });
+}
+function checkStageProgress(){
+  const v=VENUES[stage];
+  if(!v||!v.visited)return;
+  if(stagePendingCrew().length===0){
+    stage++;
+    refreshStageMarkers();
+    const nv=VENUES[stage];
+    if(nv){
+      flashMsg('NEW LEAD — '+nv.name+' '+nv.jp,'#3fe0ff');
+      comRadio('COMMAND: NEXT CONTACT IS '+nv.name+'. A NEW PAD IS MARKED ON YOUR MAP.');
+    }
+  }
+}
 const fp={x:0,z:6,yaw:Math.PI,pitch:0,bob:0,mdx:0,mdy:0}; // on-foot player state (mdx/mdy = mouse look delta)
 addEventListener('mousemove',e=>{ if(interiorMode){fp.mdx+=e.movementX||0;fp.mdy+=e.movementY||0;} });
 addEventListener('click',()=>{ if(interiorMode&&document.pointerLockElement!==document.body){document.body.requestPointerLock&&document.body.requestPointerLock();} });
@@ -6245,18 +6303,18 @@ function buildVenueMarkers(){
   },256,256);
   VENUES.forEach(v=>{
     const g=new THREE.Group();g.position.set(v.x,0,v.z);
-    const pad=new THREE.Mesh(new THREE.PlaneGeometry(17,17),new THREE.MeshBasicMaterial({map:padTex,transparent:true,depthWrite:false}));
+    const pad=new THREE.Mesh(new THREE.PlaneGeometry(12,12),new THREE.MeshBasicMaterial({map:padTex,transparent:true,depthWrite:false}));
     pad.rotation.x=-Math.PI/2;pad.position.y=0.12;pad.renderOrder=3;g.add(pad);
-    const ring=new THREE.Mesh(new THREE.RingGeometry(8.4,9.6,40),new THREE.MeshBasicMaterial({color:0x5ff2ff,transparent:true,opacity:0.7,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const ring=new THREE.Mesh(new THREE.RingGeometry(5.9,6.8,36),new THREE.MeshBasicMaterial({color:0x5ff2ff,transparent:true,opacity:0.7,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
     ring.rotation.x=-Math.PI/2;ring.position.y=0.16;g.add(ring);
     // ring of touchdown lights around the pad
     const tdl=[];
     for(let i=0;i<12;i++){
       const a=i/12*Math.PI*2;
       const l=new THREE.Mesh(new THREE.SphereGeometry(0.34,7,6),new THREE.MeshBasicMaterial({color:0x7ff6ff}));
-      l.position.set(Math.cos(a)*9.0,0.35,Math.sin(a)*9.0);g.add(l);tdl.push(l);
+      l.position.set(Math.cos(a)*6.4,0.35,Math.sin(a)*6.4);g.add(l);tdl.push(l);
     }
-    const beam=new THREE.Mesh(new THREE.CylinderGeometry(3.4,8.0,54,16,1,true),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(2.4,5.6,54,16,1,true),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
     beam.position.y=27;g.add(beam);
     // chevrons that march downward, pointing at the pad
     const chev=[];
@@ -6275,9 +6333,11 @@ function buildVenueMarkers(){
     },256,128),transparent:true,depthWrite:false}));
     board.position.set(0,15,0);g.add(board);
     v.marker=g;v.board=board;v.chev=chev;v.tdl=tdl;v.ring=ring;scene.add(g);
+    g.visible=false; // revealed by refreshStageMarkers() — one objective at a time
   });
 }
 buildVenueMarkers();
+refreshStageMarkers();
 // ---------- crew beacons in the city ----------
 const crewBeaconMat=new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
 function revealCrew(id){
@@ -6305,24 +6365,24 @@ function renderIntelLog(){
     if(c.aboard){html+='<span class="cw">'+c.id+' — ABOARD, fly to the ship</span><br>';return;}
     html+='<span class="cw">'+c.id+'</span> ('+c.role+')<br>&nbsp;&nbsp;'+c.where+'<br>&nbsp;&nbsp;<b>'+compassTo(c.x,c.z)+'</b><br>';
   });
-  const un=VENUES.filter(v=>!v.visited);
-  if(un.length)html+='<br><b>NO LEAD YET</b><br>&nbsp;&nbsp;Ask at '+un.map(v=>v.name).join(', ')+'.';
+  const av=activeVenue();
+  if(av)html+='<br><b>NEXT LEAD</b><br>&nbsp;&nbsp;Land at '+av.name+' '+av.jp+'.';
   el.innerHTML=html;
 }
 function objectiveText(){
   if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
-  if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — FERRY TO THE NAVY SHIP IN THE BAY';
-  const nextV=VENUES.find(v=>!v.visited);
-  const known=CREW.filter(c=>c.found&&!c.rescued);
-  if(known.length)return 'CREW LOCATED: '+known.map(c=>c.id).join(', ')+' — LAND ON THE GREEN BEACON';
-  if(nextV)return 'NO LEADS — LAND ON THE CYAN PAD AT '+nextV.name+' AND GO INSIDE (E)';
+  if(aboard.length)return 'STEP '+(stage+1)+' — CREW ABOARD ('+aboard.length+'), FERRY TO THE NAVY SHIP IN THE BAY';
+  const pend=stagePendingCrew();
+  if(pend.length)return 'STEP '+(stage+1)+' — FIND '+pend.map(c=>c.id).join(' & ')+': land on the GREEN beacon';
+  const v=activeVenue();
+  if(v)return 'STEP '+(stage+1)+' — LAND ON THE CYAN PAD AT '+v.name+' '+v.jp+' AND PRESS E';
   return 'SCANNING FOR CREW...';
 }
 // ---------- enter / exit interiors ----------
 function nearestVenue(){
-  let best=null,bd=1e9;
-  VENUES.forEach(v=>{const d=Math.hypot(heli.position.x-v.x,heli.position.z-v.z);if(d<bd){bd=d;best=v;}});
-  return (bd<11&&heli.position.y<11)?best:null;
+  const v=activeVenue(); if(!v)return null;             // only the current stage's shop can be entered
+  const d=Math.hypot(heli.position.x-v.x,heli.position.z-v.z);
+  return (d<11&&heli.position.y<11)?v:null;
 }
 function enterVenue(v){
   if(interiorMode)return;
@@ -6494,7 +6554,10 @@ function updateInterior(dt){
   dlgCool=Math.max(0,dlgCool-dt);
   if(dlgLines){
     tp.textContent='';
-    if(keys['KeyF']&&dlgCool<=0){advanceDialog();dlgCool=0.32;keys['KeyF']=false;}
+    // advance with F, the arrow keys, Enter or Space — whichever the player reaches for
+    const adv=keys['KeyF']||keys['ArrowRight']||keys['ArrowDown']||keys['Enter']||keys['Space'];
+    if(adv&&dlgCool<=0){advanceDialog();dlgCool=0.28;
+      ['KeyF','ArrowRight','ArrowDown','Enter','Space'].forEach(k=>keys[k]=false);}
   }else{
     if(dTalk<2.4&&!curVenue.visited)tp.textContent='▶ PRESS F — TALK TO THE OWNER (they know where your crew is)';
     else if(dTalk<2.4)tp.textContent='You already have this lead. Check the INTEL panel outside.';
@@ -6530,6 +6593,7 @@ function updateCrewRescue(){
         comRadio('COMMAND: EVERY LAST ONE OF THEM IS ON THE DECK. OUTSTANDING NIGHT, PILOT.');
         addScore(10000);
       }else comRadio('COMMAND: THEY ARE SAFE. '+crewRemaining()+' STILL OUT THERE.');
+      checkStageProgress();
     }
   }
 }
@@ -6611,7 +6675,8 @@ function resetRunState(){
   if(interiorMode)exitVenue();
   CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
   VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
-  aboard=[];missionDone=false;
+  aboard=[];missionDone=false;stage=0;
+  if(typeof refreshStageMarkers==='function')refreshStageMarkers();
   {const el=document.getElementById('intelLog');if(el){el.innerHTML='';el.style.display='none';}}
   missionLine='OPERATION — RECOVER THE CREW';
   yaw=0;vSpeed=0;pitch=0;roll=0;shake=0;
@@ -6927,7 +6992,7 @@ function loop(now){
     pulseSigns.forEach(s=>{
       s.ph+=dt*(s.fast?14:3);
       const v=s.fast?(Math.random()<0.06?0.2:1):(0.75+0.25*Math.sin(s.ph));
-      s.g.material.opacity=0.05*v*__altFade;
+      s.mat.opacity=0.05*v*__altFade;
     });
     warmGlowMat.opacity=__altFade;
     poolGlowMat.opacity=__altFade;
@@ -7306,7 +7371,7 @@ function loop(now){
     pulseSigns.forEach(s=>{
       s.ph+=dt*(s.fast?14:3);
       const v=s.fast?(Math.random()<0.06?0.2:1):(0.75+0.25*Math.sin(s.ph));
-      s.g.material.opacity=0.2*v;
+      s.mat.opacity=0.2*v;
     });
     screenT+=dt;
     if(screenT>0.5){bigScreens.forEach(bs=>bs.draw(now/1600));screenT=0;}
