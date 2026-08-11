@@ -4579,7 +4579,10 @@ const compositeMat=new THREE.ShaderMaterial({
 const postQuad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),brightMat);
 postScene.add(postQuad);
 function renderPost(){
-  renderer.setRenderTarget(sceneRT);renderer.render(scene,cam);
+  // the active scene/camera pair — swapped to an interior room when the pilot goes inside on foot,
+  // so interiors get the same bloom/tone pipeline as the city
+  const _s=window.__RS||scene, _c=window.__RC||cam;
+  renderer.setRenderTarget(sceneRT);renderer.render(_s,_c);
   postQuad.material=brightMat;brightMat.uniforms.tDiffuse.value=sceneRT.texture;
   renderer.setRenderTarget(brightRT);renderer.render(postScene,postCam);
   postQuad.material=blurMat;
@@ -10084,6 +10087,350 @@ function spawnWaveEnemies(){
   if(wave>=3&&!window.__bossAlive&&!window.__bossDead)setTimeout(()=>{if(!gameOver)spawnBossBoat();},4000);
 }
 
+// ================= ONE NIGHT IN TOKYO — crew rescue campaign + on-foot interiors =================
+// The pilot must recover a whole downed crew scattered across Tokyo. Their locations aren't known:
+// you land at real Tokyo places (a sushi counter, the fish market, an '89 electronics shop), go INSIDE
+// on foot, talk to the owner, and come out with intel, a map, or a weapon. Rescue every crew member
+// and ferry them to the Navy ship to finish the night.
+const CREW=[
+  {id:'KAZE',  name:'"KAZE" HAYASHI',  role:'CO-PILOT',  x:-360, z:120,  found:false, rescued:false},
+  {id:'MIKO',  name:'"MIKO" TANAKA',   role:'GUNNER',    x: 250, z:-300, found:false, rescued:false},
+  {id:'BULL',  name:'"BULL" OKADA',    role:'CREW CHIEF',x:-520, z:-330, found:false, rescued:false},
+  {id:'REI',   name:'"REI" NAKAMURA',  role:'MEDIC',     x: 330, z: 300, found:false, rescued:false},
+  {id:'DOC',   name:'"DOC" SHIMIZU',   role:'ENGINEER',  x:-140, z: 420, found:false, rescued:false},
+];
+const VENUES=[
+  {key:'sushi', name:'SUSHI KANDA',  jp:'鮨 かんだ',  x:-250, z:-90,  visited:false,
+   line:'The owner slides a napkin across the counter — two of your crew, marked in pen.',
+   reveals:['KAZE','MIKO'], reward:'MAP + 2 CREW LOCATIONS'},
+  {key:'fish',  name:'UOGASHI MARKET',jp:'魚河岸',    x: 190, z: 140, visited:false,
+   line:'The fishmonger has been listening to the harbour radio all night. He knows where two more are.',
+   reveals:['BULL','REI'], reward:'HYDRA + HELLFIRE RESUPPLY'},
+  {key:'denki', name:'DENKI-DO 1989',jp:'電気堂',     x: -60, z:-330, visited:false,
+   line:'The old man rebuilds a scanner from parts and hands it over — it picks up your last crewman.',
+   reveals:['DOC'], reward:'NAPALM + SCANNER'},
+];
+let interiorMode=false, curVenue=null, aboard=[], missionDone=false;
+const fp={x:0,z:6,yaw:Math.PI,pitch:0,bob:0}; // on-foot player state
+// DEDICATED interior camera. The flight camera is a CHILD of the city scene, and three.js only calls
+// updateMatrixWorld() on a camera whose parent is null — reusing it for a different scene left it with
+// a stale world matrix (rendering from the wrong place, i.e. a black screen). This one is unparented.
+const fpCam=new THREE.PerspectiveCamera(72,W()/H(),0.08,120);
+// ---- shared interior materials (kept small; interiors are built once and cached) ----
+// NOTE: this renderer's point lights fall off steeply (decay 2) and the scene is tone-mapped, so
+// interior surfaces carry a modest self-lit emissive term too — without it a small room reads black.
+const _inMat=(color,rough,metal,emis)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal||0,emissive:emis!==undefined?emis:color,emissiveIntensity:emis!==undefined?0.4:0.09});
+const IN_WOOD=_inMat(0x8a5f38,0.85,0.02);
+const IN_WOOD_D=_inMat(0x53341f,0.9,0);
+const IN_WALL=_inMat(0x9d8c6e,0.95,0);
+const IN_FLOOR=_inMat(0x4a3826,0.9,0);
+const IN_TILE=_inMat(0x6b757a,0.6,0.05);
+const IN_CONC=_inMat(0x53585c,0.95,0);
+const IN_STEEL=_inMat(0x717a80,0.45,0.6);
+const IN_DARK=_inMat(0x24262c,0.7,0.3);
+const IN_GLASS=new THREE.MeshStandardMaterial({color:0xbfe6ff,transparent:true,opacity:0.22,roughness:0.05,metalness:0.1});
+const IN_ICE=new THREE.MeshStandardMaterial({color:0xd8ecf5,roughness:0.35,emissive:0x2f4a58,emissiveIntensity:0.45});
+const IN_FOAM=_inMat(0xaeb7bb,1,0);
+function inBox(w,h,d,mat,x,y,z,ry){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);if(ry)m.rotation.y=ry;return m;}
+// generous intensity/range: point lights here use decay 2, so a "normal" intensity dies within a metre
+function inLight(col,int,dist,x,y,z){const l=new THREE.PointLight(col,int*1.9,dist*1.5,1.6);l.position.set(x,y,z);return l;}
+// a simple standing person (shopkeeper) — readable at interior scale
+function inPerson(colTop,colBottom,x,z,ry){
+  const g=new THREE.Group();
+  const skin=new THREE.MeshStandardMaterial({color:0xe8c9a8,roughness:0.7});
+  g.add(inBox(0.5,0.75,0.28,new THREE.MeshStandardMaterial({color:colTop,roughness:0.85}),0,1.28,0));
+  g.add(inBox(0.44,0.7,0.26,new THREE.MeshStandardMaterial({color:colBottom,roughness:0.9}),0,0.62,0));
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.17,12,10),skin);head.position.y=1.8;g.add(head);
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.18,12,8,0,Math.PI*2,0,Math.PI*0.6),new THREE.MeshStandardMaterial({color:0x1a1614,roughness:0.9}));hair.position.y=1.83;g.add(hair);
+  [-1,1].forEach(s=>g.add(inBox(0.13,0.62,0.15,new THREE.MeshStandardMaterial({color:colTop,roughness:0.85}),s*0.31,1.3,0)));
+  g.position.set(x,0,z);g.rotation.y=ry||0;
+  return g;
+}
+// ---------- INTERIOR BUILDERS ----------
+function buildSushi(){
+  const s=new THREE.Scene();s.background=new THREE.Color(0x14100c);s.fog=new THREE.Fog(0x14100c,14,30);
+  const W=9,D=11;
+  s.add(inBox(W,0.2,D,IN_FLOOR,0,-0.1,0));
+  s.add(inBox(W,3.4,0.2,IN_WALL,0,1.7,-D/2));                      // back wall
+  [-1,1].forEach(k=>s.add(inBox(0.2,3.4,D,IN_WALL,k*W/2,1.7,0)));  // sides
+  s.add(inBox(W,0.2,D,new THREE.MeshStandardMaterial({color:0x2a211a,roughness:1}),0,3.4,0)); // ceiling
+  // hinoki counter + glass neta case
+  s.add(inBox(6.4,0.16,1.5,IN_WOOD,0,1.05,-2.2));
+  s.add(inBox(6.4,1.0,1.4,IN_WOOD_D,0,0.5,-2.2));
+  s.add(inBox(6.2,0.5,0.5,IN_GLASS,0,1.4,-2.62));
+  // neta (fish on the case) — small colour blocks
+  const neta=[0xff8a7a,0xffd0a0,0xf25f5f,0xffe3b0,0xe86a8a,0xf9a76c,0xfff0d0,0xd94f6a];
+  for(let i=0;i<12;i++){
+    const m=new THREE.MeshStandardMaterial({color:neta[i%neta.length],roughness:0.5});
+    s.add(inBox(0.26,0.1,0.16,m,-2.7+i*0.48,1.2,-2.62));
+  }
+  // stools
+  for(let i=0;i<5;i++){const st=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.24,0.1,12),IN_WOOD_D);st.position.set(-2.4+i*1.2,0.72,-0.9);s.add(st);
+    s.add(inBox(0.1,0.72,0.1,IN_DARK,-2.4+i*1.2,0.36,-0.9));}
+  // sake bottles on a back shelf
+  s.add(inBox(6.0,0.1,0.4,IN_WOOD,0,2.1,-D/2+0.35));
+  const bot=[0xdfe8ee,0x9fd6a0,0xe0c98a,0xcfe3ef,0xbfa27a];
+  for(let i=0;i<14;i++){const b=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,0.4,8),new THREE.MeshStandardMaterial({color:bot[i%bot.length],roughness:0.35}));b.position.set(-2.8+i*0.43,2.35,-D/2+0.35);s.add(b);}
+  // hanging chochin + warm lights
+  for(let i=0;i<3;i++){
+    const ch=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),new THREE.MeshBasicMaterial({color:0xff6a3a}));
+    ch.scale.y=1.35;ch.position.set(-2.6+i*2.6,2.85,0.6);s.add(ch);
+    s.add(inLight(0xffb060,0.55,9,-2.6+i*2.6,2.6,0.6));
+  }
+  s.add(new THREE.AmbientLight(0xffd9b0,0.34));
+  // noren + exit door at +z
+  s.add(inBox(3.0,0.7,0.08,new THREE.MeshStandardMaterial({color:0x1d3f6b,roughness:0.9}),0,2.5,D/2-0.3));
+  s.add(inBox(2.6,2.2,0.14,new THREE.MeshStandardMaterial({color:0x2a1a10,roughness:0.9}),0,1.1,D/2-0.1));
+  const chef=inPerson(0xf2f0e8,0x2b2b30,0,-3.5,0);s.add(chef);
+  return {scene:s,talk:{x:0,z:-1.4},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
+          counter:{x0:-3.2,x1:3.2,z0:-3.0,z1:-1.4}};
+}
+function buildFish(){
+  const s=new THREE.Scene();s.background=new THREE.Color(0x0d1216);s.fog=new THREE.Fog(0x0d1216,16,34);
+  const W=12,D=13;
+  s.add(inBox(W,0.2,D,IN_TILE,0,-0.1,0));
+  s.add(inBox(W,4.2,0.2,IN_CONC,0,2.1,-D/2));
+  [-1,1].forEach(k=>s.add(inBox(0.2,4.2,D,IN_CONC,k*W/2,2.1,0)));
+  s.add(inBox(W,0.2,D,IN_CONC,0,4.2,0));
+  // fluorescent strips (cold market light)
+  for(let i=0;i<3;i++){
+    s.add(inBox(6.5,0.12,0.34,new THREE.MeshBasicMaterial({color:0xeaf6ff}),0,4.0,-3.6+i*3.6));
+    s.add(inLight(0xcfe6ff,0.42,15,0,3.7,-3.6+i*3.6));
+  }
+  s.add(new THREE.AmbientLight(0xb8cfe0,0.42));
+  // styrofoam crates with ice + fish, in market rows
+  const fishCol=[0xb9c6cf,0xd8a0a8,0x8fa8b8,0xe0b48a,0xa8b8c8,0xcf8f8f];
+  for(let r=0;r<3;r++)for(let c=0;c<4;c++){
+    const bx=-4.2+c*2.8, bz=-3.4+r*3.2;
+    s.add(inBox(2.3,0.62,1.9,IN_FOAM,bx,0.31,bz));
+    s.add(inBox(2.05,0.16,1.65,IN_ICE,bx,0.66,bz));
+    for(let f=0;f<4;f++){
+      const fm=new THREE.MeshStandardMaterial({color:fishCol[(r*4+c+f)%fishCol.length],roughness:0.35,metalness:0.15});
+      const fish=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,7),fm);
+      fish.scale.set(2.1,0.55,0.75);fish.position.set(bx-0.65+f*0.44,0.74,bz+(f%2?0.3:-0.3));
+      fish.rotation.y=(f%2?0.2:-0.25);s.add(fish);
+    }
+  }
+  // hanging scale + rail
+  s.add(inBox(0.12,0.12,D-2,IN_STEEL,3.6,3.4,0));
+  const scale=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.2,14),IN_STEEL);scale.position.set(3.6,2.7,1.2);s.add(scale);
+  s.add(inBox(0.05,0.7,0.05,IN_STEEL,3.6,3.05,1.2));
+  // hand truck + crates stack by the wall
+  s.add(inBox(1.0,0.08,0.7,IN_STEEL,-5.0,0.06,4.4));
+  s.add(inBox(0.08,1.5,0.7,IN_STEEL,-5.45,0.8,4.4));
+  for(let i=0;i<4;i++)s.add(inBox(1.9,0.55,1.5,IN_FOAM,4.4,0.28+i*0.56,-4.6));
+  // exit roller door at +z
+  s.add(inBox(3.4,2.6,0.16,IN_STEEL,0,1.3,D/2-0.1));
+  const monger=inPerson(0x1f4f7a,0x22262b,-1.2,-4.6,0.2);s.add(monger);
+  return {scene:s,talk:{x:-1.2,z:-3.2},exit:{x:0,z:D/2-1.3},bounds:{x:W/2-0.8,z:D/2-0.8},
+          counter:null};
+}
+function buildDenki(){
+  const s=new THREE.Scene();s.background=new THREE.Color(0x0a0a10);s.fog=new THREE.Fog(0x0a0a10,13,28);
+  const W=8.5,D=13;
+  s.add(inBox(W,0.2,D,new THREE.MeshStandardMaterial({color:0x2b2b33,roughness:0.85}),0,-0.1,0));
+  s.add(inBox(W,3.6,0.2,IN_DARK,0,1.8,-D/2));
+  [-1,1].forEach(k=>s.add(inBox(0.2,3.6,D,IN_DARK,k*W/2,1.8,0)));
+  s.add(inBox(W,0.2,D,IN_DARK,0,3.6,0));
+  // floor-to-ceiling shelving on both walls, crammed with CRTs and decks (Akihabara junk-shop)
+  const crtScreens=[0x2ad0ff,0x39e08a,0xffd23a,0xff5a8a,0xb07aff,0xeaf6ff];
+  [-1,1].forEach(side=>{
+    for(let lvl=0;lvl<4;lvl++){
+      const y=0.55+lvl*0.82;
+      s.add(inBox(1.5,0.08,D-1.2,IN_STEEL,side*(W/2-0.85),y-0.28,0));
+      for(let i=0;i<7;i++){
+        const z=-5.2+i*1.7;
+        s.add(inBox(1.05,0.62,1.0,IN_DARK,side*(W/2-0.85),y,z));                          // CRT body
+        const col=crtScreens[(lvl*7+i+(side>0?3:0))%crtScreens.length];
+        const scr=inBox(0.06,0.44,0.74,new THREE.MeshBasicMaterial({color:col}),side*(W/2-1.4),y,z);
+        s.add(scr);
+        if((lvl+i)%3===0)s.add(inLight(col,0.5,4.2,side*(W/2-1.9),y,z));                  // screen glow
+      }
+    }
+  });
+  // hanging price tags (yellow/red 80s pop)
+  for(let i=0;i<10;i++){
+    const c=i%2?0xffe14d:0xff3b3b;
+    s.add(inBox(0.5,0.3,0.03,new THREE.MeshBasicMaterial({color:c}),(i%2?-1:1)*(W/2-2.1),3.05,-5+i*1.1));
+  }
+  // centre bargain bin of cassettes/radios
+  s.add(inBox(2.2,0.7,3.2,IN_STEEL,0,0.35,1.6));
+  const junk=[0x2a2f36,0x50565e,0x8a8f96,0x1f242a];
+  for(let i=0;i<22;i++)s.add(inBox(0.3+Math.random()*0.25,0.16,0.22+Math.random()*0.2,new THREE.MeshStandardMaterial({color:junk[i%junk.length],roughness:0.6,metalness:0.4}),
+    (Math.random()-0.5)*1.7,0.78,1.6+(Math.random()-0.5)*2.6,Math.random()*3));
+  // fluorescent + neon shop sign glow
+  for(let i=0;i<3;i++){
+    s.add(inBox(4.2,0.1,0.26,new THREE.MeshBasicMaterial({color:0xf2f8ff}),0,3.42,-4+i*4));
+    s.add(inLight(0xdfeeff,0.4,12,0,3.2,-4+i*4));
+  }
+  s.add(new THREE.AmbientLight(0x9fb4d0,0.3));
+  s.add(inBox(2.6,2.2,0.14,IN_DARK,0,1.1,D/2-0.1)); // exit
+  const owner=inPerson(0x6a6f52,0x2f3238,0,-4.8,0);s.add(owner);
+  s.add(inBox(2.4,1.0,0.9,IN_STEEL,0,0.5,-4.0));   // service counter
+  return {scene:s,talk:{x:0,z:-3.0},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
+          counter:{x0:-1.2,x1:1.2,z0:-4.5,z1:-3.5}};
+}
+const INTERIOR_BUILDERS={sushi:buildSushi,fish:buildFish,denki:buildDenki};
+const interiorCache={};
+function getInterior(key){ if(!interiorCache[key])interiorCache[key]=INTERIOR_BUILDERS[key](); return interiorCache[key]; }
+// ---------- venue markers in the city (landing pad + lit doorway) ----------
+function buildVenueMarkers(){
+  VENUES.forEach(v=>{
+    const g=new THREE.Group();g.position.set(v.x,0,v.z);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(6.5,8.2,32),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.55,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
+    ring.rotation.x=-Math.PI/2;ring.position.y=0.12;g.add(ring);
+    const pad=new THREE.Mesh(new THREE.CircleGeometry(6.4,28),new THREE.MeshBasicMaterial({color:0x0a2a38,transparent:true,opacity:0.5,depthWrite:false}));
+    pad.rotation.x=-Math.PI/2;pad.position.y=0.1;g.add(pad);
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,26,10,1,true),new THREE.MeshBasicMaterial({color:0x3fe0ff,transparent:true,opacity:0.1,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    beam.position.y=13;g.add(beam);
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(7,3.2),new THREE.MeshBasicMaterial({map:tex((c,w,h)=>{
+      c.fillStyle='#0a0710';c.fillRect(0,0,w,h);drawSignFace(c,4,4,w-8,h-8,'#ffd24a',false);
+    },256,128),transparent:true}));
+    sign.position.set(0,7.5,0);g.add(sign);
+    v.marker=g;v.sign=sign;scene.add(g);
+  });
+}
+buildVenueMarkers();
+// ---------- crew beacons in the city ----------
+const crewBeaconMat=new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+function revealCrew(id){
+  const c=CREW.find(m=>m.id===id); if(!c||c.found)return;
+  c.found=true;
+  const g=new THREE.Group();g.position.set(c.x,0,c.z);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(3.4,4.6,26),crewBeaconMat);ring.rotation.x=-Math.PI/2;ring.position.y=0.14;g.add(ring);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,34,10,1,true),new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.13,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+  beam.position.y=17;g.add(beam);
+  const fig=inPerson(0x2f5a3a,0x22252a,0,0,0);fig.scale.setScalar(1.15);g.add(fig);
+  const gl=new THREE.PointLight(0x9dffb0,1.1,26,2);gl.position.y=2.4;g.add(gl);
+  c.marker=g;scene.add(g);
+}
+function crewRemaining(){return CREW.filter(c=>!c.rescued).length;}
+function objectiveText(){
+  if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
+  if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — FERRY TO THE NAVY SHIP IN THE BAY';
+  const nextV=VENUES.find(v=>!v.visited);
+  const known=CREW.filter(c=>c.found&&!c.rescued);
+  if(known.length)return 'CREW LOCATED: '+known.map(c=>c.id).join(', ')+' — LAND ON THE GREEN BEACON';
+  if(nextV)return 'NO LEADS — LAND ON THE CYAN PAD AT '+nextV.name+' AND GO INSIDE (E)';
+  return 'SCANNING FOR CREW...';
+}
+// ---------- enter / exit interiors ----------
+function nearestVenue(){
+  let best=null,bd=1e9;
+  VENUES.forEach(v=>{const d=Math.hypot(heli.position.x-v.x,heli.position.z-v.z);if(d<bd){bd=d;best=v;}});
+  return (bd<11&&heli.position.y<11)?best:null;
+}
+function enterVenue(v){
+  if(interiorMode)return;
+  interiorMode=true;curVenue=v;
+  const I=getInterior(v.key);
+  fp.x=I.exit.x;fp.z=I.exit.z-1.2;fp.yaw=0;fp.pitch=0; // face INTO the room (-Z), not at the exit wall
+  fpCam.aspect=W()/H();fpCam.updateProjectionMatrix();
+  window.__RS=I.scene;window.__RC=fpCam;
+  for(const k in keys)keys[k]=false; // don't carry the E press into the on-foot look control
+  cockpitGroup.visible=false;
+  flashMsg('▼ ENTERING '+v.name+' '+v.jp,'#3fe0ff');
+  document.getElementById('help').style.opacity=.75;
+  document.getElementById('help').textContent='ON FOOT — WASD/arrows to walk · look with Q/E · stand at the counter and press F to talk · press X to leave';
+}
+function exitVenue(){
+  if(!interiorMode)return;
+  interiorMode=false;curVenue=null;
+  window.__RS=null;window.__RC=null;
+  for(const k in keys)keys[k]=false; // don't carry the X press into the throttle toggle
+  document.getElementById('help').textContent='STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract';
+  flashMsg('▲ BACK IN THE COCKPIT','#3ef');
+}
+function talkToOwner(){
+  const v=curVenue; if(!v||v.visited)return;
+  v.visited=true;
+  v.reveals.forEach(revealCrew);
+  if(v.key==='fish'){ammo[1]=Math.min(80,ammo[1]+40);ammo[2]=Math.min(20,ammo[2]+8);}
+  if(v.key==='denki'){ammo[3]=Math.min(10,ammo[3]+5);ammo[2]=Math.min(20,ammo[2]+4);}
+  updAmmoUI();
+  if(v.marker)v.marker.visible=false;
+  flashMsg(v.reward,'#ffe14d');
+  comRadio('INTEL: '+v.line);
+  addScore(750);
+}
+// On-foot HUD: the flight instruments (tapes, reticle, weapon rack) make no sense indoors, so this
+// draws a minimal ground panel — where you are, who you're looking for, and the controls.
+function drawFootHUD(now){
+  const dpr=DPR();hudX.setTransform(dpr,0,0,dpr,0,0);
+  const w=W(),h=H();hudX.clearRect(0,0,w,h);
+  const pw=Math.min(360,w-24);
+  hudPanel(10,10,pw,66);
+  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 13px');
+  hudX.fillText('ON FOOT — '+(curVenue?curVenue.name:''),21,32);
+  hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
+  hudX.fillText(curVenue?curVenue.jp:'',21,50);
+  const left=CREW.filter(c=>!c.rescued).length;
+  hudX.fillStyle=HUD_CYAN;hudX.fillText('CREW STILL MISSING: '+left+'/'+CREW.length,21,66);
+  // subtle centre dot so the player has an aim/interaction reference
+  hudX.strokeStyle='rgba(141,255,159,.5)';hudX.lineWidth=1.2;
+  hudX.beginPath();hudX.arc(w/2,h*0.5,3.5,0,7);hudX.stroke();
+}
+// ---------- on-foot update ----------
+function updateInterior(dt){
+  const I=getInterior(curVenue.key);
+  let mf=0,ms=0;
+  if(keys['KeyW']||keys['ArrowUp'])mf+=1;
+  if(keys['KeyS']||keys['ArrowDown'])mf-=1;
+  if(keys['KeyA']||keys['ArrowLeft'])ms-=1;
+  if(keys['KeyD']||keys['ArrowRight'])ms+=1;
+  if(keys['KeyQ'])fp.yaw+=1.9*dt;
+  if(keys['KeyE'])fp.yaw-=1.9*dt;
+  const spd=3.1;
+  const nx=fp.x+(-Math.sin(fp.yaw)*mf+Math.cos(fp.yaw)*ms)*spd*dt;
+  const nz=fp.z+(-Math.cos(fp.yaw)*mf-Math.sin(fp.yaw)*ms)*spd*dt;
+  const inCounter=(x,z)=>I.counter&&x>I.counter.x0-0.35&&x<I.counter.x1+0.35&&z>I.counter.z0-0.35&&z<I.counter.z1+0.35;
+  if(Math.abs(nx)<I.bounds.x&&!inCounter(nx,fp.z))fp.x=nx;
+  if(Math.abs(nz)<I.bounds.z&&!inCounter(fp.x,nz))fp.z=nz;
+  if(mf||ms)fp.bob+=dt*9;
+  fpCam.position.set(fp.x,1.62+Math.sin(fp.bob)*0.035,fp.z);
+  fpCam.rotation.set(fp.pitch,fp.yaw,0,'YXZ');
+  fpCam.updateMatrixWorld(true);
+  // prompts
+  const dTalk=Math.hypot(fp.x-I.talk.x,fp.z-I.talk.z);
+  const dExit=Math.hypot(fp.x-I.exit.x,fp.z-I.exit.z);
+  const tp=document.getElementById('taskPanel');
+  if(dTalk<1.9&&!curVenue.visited)tp.textContent='PRESS F — TALK TO THE OWNER';
+  else if(dTalk<1.9)tp.textContent='"'+curVenue.line+'"';
+  else if(dExit<2.0)tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';
+  else tp.textContent=curVenue.name+' '+curVenue.jp+' — LOOK AROUND (F at the counter, X to leave)';
+  if(keys['KeyF']&&dTalk<1.9)talkToOwner();
+  if(keys['KeyX']&&dExit<2.0)exitVenue();
+}
+// ---------- crew pickup / delivery ----------
+function updateCrewRescue(){
+  if(interiorMode)return;
+  CREW.forEach(c=>{
+    if(c.rescued||!c.found||c.aboard)return;
+    if(Math.hypot(heli.position.x-c.x,heli.position.z-c.z)<13&&heli.position.y<14){
+      c.aboard=true;aboard.push(c);
+      if(c.marker){scene.remove(c.marker);c.marker=null;}
+      flashMsg(c.id+' ABOARD — '+c.role,'#7dff6a');
+      comRadio('CREW: '+c.name+' IS ABOARD. '+(crewRemaining()-aboard.length>0?'KEEP LOOKING.':'THAT IS EVERYONE — GET THEM HOME.'));
+      addScore(1200);
+    }
+  });
+  if(aboard.length&&window.__navyShip){
+    const P=window.__navyShip.padPos;
+    if(Math.hypot(heli.position.x-P.x,heli.position.z-P.z)<26&&heli.position.y<34){
+      aboard.forEach(c=>{c.rescued=true;c.aboard=false;});
+      const n=aboard.length;aboard=[];
+      addScore(2000*n);
+      flashMsg(n+' CREW DELIVERED  +'+(2000*n),'#ffe14d');
+      if(crewRemaining()===0){
+        missionDone=true;
+        flashMsg('OPERATION COMPLETE — ALL CREW HOME','#7dff6a');
+        comRadio('COMMAND: EVERY LAST ONE OF THEM IS ON THE DECK. OUTSTANDING NIGHT, PILOT.');
+        addScore(10000);
+      }else comRadio('COMMAND: THEY ARE SAFE. '+crewRemaining()+' STILL OUT THERE.');
+    }
+  }
+}
+
 // ---------- LOOP ----------
 // ---------- META: start screen, restart, persistence, shared leaderboard ----------
 let started=false,streak=0,streakT=0,mult=1,bestScore=0,pilotName='PILOT';
@@ -10092,8 +10439,10 @@ const ov=document.createElement('div');
 ov.style.cssText='position:absolute;inset:0;background:rgba(6,4,18,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:60;font-family:Courier New,monospace;color:#fff;text-align:center;gap:12px;padding:20px;';
 ov.innerHTML=`
   <div class="logo"><span class="logo-main">NEON<em>TOKYO</em></span><span class="logo-jp">ネオン東京</span></div>
-  <div style="font-size:14px;color:#35e0ff;text-shadow:0 0 10px #35e0ff;letter-spacing:6px;font-family:'Bahnschrift','Arial Narrow',sans-serif;font-weight:700;margin-top:2px">OPERATION · BLACK DRAGON</div>
-  <div style="max-width:540px;font-size:11.5px;color:#d6ecff;line-height:1.65;opacity:.92">The <b style="color:#ff5a7a">黒龍会 — Black Dragon syndicate</b>, fused with a rogue army faction, has seized hostages across Neon Tokyo. Fly low, extract every survivor to the Navy ship in the bay — and shoot your way through the syndicate's <b style="color:#ff8a8a">gunships</b> and the oyabun's <b style="color:#ff8a8a">flagship gunboat</b>.</div>
+  <div style="font-size:14px;color:#35e0ff;text-shadow:0 0 10px #35e0ff;letter-spacing:6px;font-family:'Bahnschrift','Arial Narrow',sans-serif;font-weight:700;margin-top:2px">ONE NIGHT IN TOKYO</div>
+  <div style="max-width:560px;font-size:11.5px;color:#d6ecff;line-height:1.7;opacity:.94">Your crew went down over Tokyo and scattered. Nobody knows where they are — but the city does.
+  <br><b style="color:#3fe0ff">Land on a cyan pad and press E to go inside on foot</b>: a sushi counter in Kanda, the Uogashi fish market, a 1989 電気堂 electronics shop. Talk to the owners; they trade you <b style="color:#ffd24a">intel, maps and ordnance</b>.
+  <br>Find all five, fly them to the Navy ship — and get past the <b style="color:#ff8a8a">黒龍会 Black Dragon</b> gunships on the way.</div>
   <div id="ovStats" style="font-size:13px;color:#cfc;line-height:1.7"></div>
   <input id="pName" maxlength="10" placeholder="CALLSIGN" style="background:#0c0a18;border:1px solid #35e0ff;color:#fff;padding:8px 12px;font-family:inherit;font-size:14px;text-align:center;border-radius:6px;width:180px;pointer-events:auto">
   <button id="startBtn" style="background:#ff2f8f;border:none;color:#fff;padding:14px 44px;font-size:18px;font-weight:bold;font-family:inherit;border-radius:8px;cursor:pointer;pointer-events:auto;box-shadow:0 0 24px rgba(255,47,143,.6)">TAKE OFF</button>
@@ -10155,7 +10504,12 @@ function resetRunState(){
   activeLights.forEach(rec=>{clearTimeout(rec.to);scene.remove(rec.l);});activeLights.length=0;
   if(hostage){scene.remove(hostage.m);hostage=null;}
   hp=100;score=0;kills=0;wave=1;missionLevel=1;streak=0;mult=1;
-  missionLine='MISSION 1 — RESCUE HOSTAGE';
+  // ---- reset the ONE NIGHT IN TOKYO campaign ----
+  if(interiorMode)exitVenue();
+  CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
+  VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
+  aboard=[];missionDone=false;
+  missionLine='OPERATION — RECOVER THE CREW';
   yaw=0;vSpeed=0;pitch=0;roll=0;shake=0;
   heli.position.set(0,45,120);heli.visible=true;
   document.getElementById('msg').style.display='none';
@@ -10251,6 +10605,12 @@ function loop(now){
   requestAnimationFrame(loop);
   const dt=Math.min((now-last)/1000,0.05);last=now;
   if((__frame++&1)===0)renderer.shadowMap.needsUpdate=true; // refresh shadows every 2nd frame (see setup)
+  if(!gameOver&&interiorMode){ // ON FOOT inside a venue — the city sim is paused while you're indoors
+    updateInterior(dt);
+    drawFootHUD(now);
+    renderPost();
+    return;
+  }
   if(!gameOver){
     let turn=0,climb=0;
     if(keys['ArrowLeft']||keys['KeyA'])turn+=1;
@@ -10797,10 +11157,13 @@ function loop(now){
     cockpitGroup.visible=cockpitMode;
     heli.visible=!cockpitMode;
     drawDashMFD();
+    updateCrewRescue();
     const tp=document.getElementById('taskPanel');
-    if(hostage&&hostage.state==='pad')tp.textContent='SURVIVOR ABOARD — FERRY OUT TO THE NAVY SHIP IN THE BAY, TIME CRITICAL';
-    else if(hostage&&hostage.state==='seek')tp.textContent='SURVIVOR BEACON DETECTED — FLY LOW AND EXTRACT';
-    else tp.textContent='SCANNING SECTOR FOR SURVIVORS...';
+    const nv=nearestVenue();
+    if(nv&&!nv.visited)tp.textContent='PRESS E — GO INSIDE '+nv.name+' '+nv.jp;
+    else if(nv)tp.textContent=nv.name+' — ALREADY SPOKE TO THE OWNER';
+    else tp.textContent=objectiveText();
+    if(nv&&!nv.visited&&keys['KeyE'])enterVenue(nv);
     drawHUD(now);
     radarTexMFD.needsUpdate=true;horizonTexMFD.needsUpdate=true;tacTexMFD.needsUpdate=true;
     engTexMFD.needsUpdate=true;wpnTexMFD.needsUpdate=true;
@@ -10836,6 +11199,7 @@ function loop(now){
 requestAnimationFrame(loop);
 onresize=()=>{
   renderer.setSize(W(),H());cam.aspect=W()/H();cam.updateProjectionMatrix();
+  fpCam.aspect=W()/H();fpCam.updateProjectionMatrix();
   sizeHUD();
   bw=Math.floor(W()/3);bh=Math.floor(H()/3);
   bw2=Math.max(2,Math.floor(bw/2));bh2=Math.max(2,Math.floor(bh/2));
