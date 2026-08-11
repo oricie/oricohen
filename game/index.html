@@ -5799,12 +5799,113 @@ const fpCam=new THREE.PerspectiveCamera(72,W()/H(),0.08,120);
 // NOTE: this renderer's point lights fall off steeply (decay 2) and the scene is tone-mapped, so
 // interior surfaces carry a modest self-lit emissive term too — without it a small room reads black.
 const _inMat=(color,rough,metal,emis)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal||0,emissive:emis!==undefined?emis:color,emissiveIntensity:emis!==undefined?0.4:0.09});
-const IN_WOOD=_inMat(0x8a5f38,0.85,0.02);
-const IN_WOOD_D=_inMat(0x53341f,0.9,0);
-const IN_WALL=_inMat(0x9d8c6e,0.95,0);
-const IN_FLOOR=_inMat(0x4a3826,0.9,0);
-const IN_TILE=_inMat(0x6b757a,0.6,0.05);
-const IN_CONC=_inMat(0x53585c,0.95,0);
+// ---- INTERIOR SURFACE TEXTURES (period-accurate, same canvas approach as the city signage) ----
+// hinoki/keyaki plank grain: warm boards with visible seams, knots and wear
+function inWoodTex(base,dark,planks){return tex((g,w,h)=>{
+  g.fillStyle=base;g.fillRect(0,0,w,h);
+  const ph=h/(planks||6);
+  for(let p=0;p<(planks||6);p++){
+    const y=p*ph;
+    g.fillStyle=`rgba(0,0,0,${0.05+Math.random()*0.06})`;g.fillRect(0,y,w,ph);
+    g.strokeStyle=dark;g.lineWidth=2;g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();       // plank seam
+    for(let i=0;i<26;i++){ // grain lines
+      g.strokeStyle=`rgba(60,34,16,${0.05+Math.random()*0.16})`;g.lineWidth=0.7+Math.random();
+      const gy=y+2+Math.random()*(ph-4);
+      g.beginPath();g.moveTo(0,gy);g.bezierCurveTo(w*0.3,gy+(Math.random()-.5)*5,w*0.7,gy+(Math.random()-.5)*5,w,gy);g.stroke();
+    }
+    if(Math.random()<0.5){ // knot
+      const kx=Math.random()*w,ky=y+ph*0.5;
+      for(let r=6;r>0;r--){g.strokeStyle=`rgba(70,40,18,${0.1+r*0.03})`;g.lineWidth=1.1;g.beginPath();g.ellipse(kx,ky,r*1.8,r*1.1,0.3,0,7);g.stroke();}
+    }
+  }
+},256,256,true);}
+// glazed wall tile with grout — market/kitchen surface
+function inTileTex(base,grout,cols){return tex((g,w,h)=>{
+  g.fillStyle=grout;g.fillRect(0,0,w,h);
+  const n=cols||8,c=w/n;
+  for(let x=0;x<n;x++)for(let y=0;y<n;y++){
+    const sh=0.9+Math.random()*0.2;
+    g.fillStyle=base;g.globalAlpha=sh;g.fillRect(x*c+1.5,y*c+1.5,c-3,c-3);g.globalAlpha=1;
+    g.fillStyle='rgba(255,255,255,.10)';g.fillRect(x*c+1.5,y*c+1.5,c-3,2.5);           // glaze highlight
+    if(Math.random()<0.18){g.fillStyle='rgba(40,50,45,.16)';g.fillRect(x*c+2,y*c+c*0.55,c-4,c*0.4);} // grime
+  }
+},256,256,true);}
+// noren curtain: dyed indigo cloth with the shop name in white
+function inNorenTex(txt,cloth){return tex((g,w,h)=>{
+  g.fillStyle=cloth||'#1d3f6b';g.fillRect(0,0,w,h);
+  for(let i=0;i<40;i++){g.fillStyle=`rgba(255,255,255,${Math.random()*0.05})`;g.fillRect(Math.random()*w,Math.random()*h,w*0.3,2);}
+  // split panels
+  g.fillStyle='rgba(0,0,0,.5)';[0.33,0.66].forEach(f=>g.fillRect(w*f-2,h*0.25,4,h));
+  const chars=[...txt];
+  const s=Math.min(h*0.42,w/chars.length*0.9);
+  chars.forEach((c,i)=>_outlineText(g,c,(w/chars.length)*(i+.5),h*0.5,s,MINCHO,'#f6f2e8','#0b1a2e',Math.max(2,s*0.07)));
+},256,128);}
+// sushi-ya wall menu strips (品書き): vertical kanji on pale wood tags
+function inMenuTex(){return tex((g,w,h)=>{
+  g.fillStyle='#20160e';g.fillRect(0,0,w,h);
+  const items=['鮪','鮭','海老','穴子','雲丹','帆立','鰤','烏賊','玉子','鯛'];
+  const cols=5,cw=w/cols;
+  for(let i=0;i<cols;i++){
+    g.fillStyle='#e8dcc0';g.fillRect(i*cw+5,6,cw-10,h-12);
+    g.strokeStyle='#b9a880';g.lineWidth=1.5;g.strokeRect(i*cw+5,6,cw-10,h-12);
+    const it=items[Math.floor(Math.random()*items.length)];
+    _outlineText(g,it,i*cw+cw/2,h*0.34,h*0.3,MINCHO,'#1a1208','#e8dcc0',1);
+    g.fillStyle='#8a2418';g.font=`bold ${Math.round(h*0.16)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText('¥'+(200+Math.floor(Math.random()*8)*100),i*cw+cw/2,h*0.72);
+  }
+},512,128);}
+// CRT display: colour bars / test pattern / static — what an '89 shop wall actually showed
+function inCrtTex(kind){return tex((g,w,h)=>{
+  if(kind===0){ // SMPTE-ish colour bars
+    const bars=['#c0c0c0','#c0c000','#00c0c0','#00c000','#c000c0','#c00000','#0000c0'];
+    bars.forEach((c,i)=>{g.fillStyle=c;g.fillRect(i*w/bars.length,0,w/bars.length+1,h*0.72);});
+    g.fillStyle='#101018';g.fillRect(0,h*0.72,w,h*0.28);
+    g.fillStyle='#e8e8f0';g.font=`bold ${Math.round(h*0.16)}px monospace`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText('NTSC',w/2,h*0.86);
+  }else if(kind===1){ // static snow
+    g.fillStyle='#0a0a0c';g.fillRect(0,0,w,h);
+    for(let i=0;i<2600;i++){const v=Math.random()*255|0;g.fillStyle=`rgb(${v},${v},${v})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  }else if(kind===2){ // demo loop: gradient + kana
+    const gd=g.createLinearGradient(0,0,w,h);gd.addColorStop(0,'#1b2f8a');gd.addColorStop(1,'#8a1b6a');
+    g.fillStyle=gd;g.fillRect(0,0,w,h);
+    _glowText(g,'デモ',w/2,h*0.45,h*0.34,GOTHIC,'#ffffff',12);
+    g.fillStyle='#ffe14d';g.font=`bold ${Math.round(h*0.13)}px ${GOTHIC}`;g.textAlign='center';g.fillText('新発売',w/2,h*0.78);
+  }else{ // broadcast: news-ish bars
+    g.fillStyle='#0d1626';g.fillRect(0,0,w,h);
+    g.fillStyle='#2a4a8a';g.fillRect(0,h*0.62,w,h*0.2);
+    g.fillStyle='#e8eef8';g.fillRect(w*0.08,h*0.2,w*0.3,h*0.32);
+    g.fillStyle='#ffd24a';g.font=`bold ${Math.round(h*0.12)}px ${GOTHIC}`;g.textAlign='left';g.textBaseline='middle';
+    g.fillText('東京',w*0.45,h*0.34);
+  }
+  ledScanlines(g,w,h,0.22); // CRT scanlines on every variant
+},128,96);}
+// hand-lettered fish price sign on card
+function inPriceTex(){return tex((g,w,h)=>{
+  g.fillStyle='#f4ead2';g.fillRect(0,0,w,h);
+  g.strokeStyle='#2a2418';g.lineWidth=3;g.strokeRect(2,2,w-4,h-4);
+  const fish=['本鮪','鰤','鯖','秋刀魚','平目','蛸','帆立','鮭'];
+  _outlineText(g,fish[Math.floor(Math.random()*fish.length)],w*0.5,h*0.36,h*0.34,MINCHO,'#141008','#f4ead2',1);
+  g.fillStyle='#c01818';g.font=`bold ${Math.round(h*0.3)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+  g.fillText('¥'+(300+Math.floor(Math.random()*20)*100),w*0.5,h*0.74);
+},128,96);}
+// 80s electronics ad poster
+function inAdPosterTex(){return tex((g,w,h)=>{
+  const hue=Math.random()*360;
+  const gd=g.createLinearGradient(0,0,0,h);gd.addColorStop(0,`hsl(${hue},70%,26%)`);gd.addColorStop(1,`hsl(${hue},70%,10%)`);
+  g.fillStyle=gd;g.fillRect(0,0,w,h);
+  drawSignFace(g,6,6,w-12,h*0.62,'#35e0ff',false);
+  g.fillStyle='#ffe14d';g.font=`bold ${Math.round(h*0.1)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+  g.fillText('¥'+(9800+Math.floor(Math.random()*40)*1000),w/2,h*0.78);
+  g.fillStyle='#fff';g.font=`${Math.round(h*0.06)}px ${GOTHIC}`;g.fillText('新品・保証付',w/2,h*0.9);
+  ledScanlines(g,w,h,0.1);
+},128,192);}
+const _mapMat=(t,rough,metal,rx,ry)=>{if(rx||ry){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx||1,ry||1);}return new THREE.MeshStandardMaterial({map:t,roughness:rough,metalness:metal||0,emissive:0xffffff,emissiveMap:t,emissiveIntensity:0.14});};
+const IN_WOOD=_mapMat(inWoodTex('#a8763f','#5c3a1c',6),0.82,0.02,2,1);
+const IN_WOOD_D=_mapMat(inWoodTex('#6b431f','#3a2210',5),0.9,0,2,1);
+const IN_WALL=_mapMat(inWoodTex('#b9a179','#8a7454',9),0.95,0,1,1);
+const IN_FLOOR=_mapMat(inWoodTex('#5e422a','#33200f',7),0.9,0,5,5);
+const IN_TILE=_mapMat(inTileTex('#7d8a8e','#3f484c',8),0.55,0.06,4,3);
+const IN_CONC=_mapMat(inTileTex('#5a6064','#3a4044',5),0.95,0,3,2);
 const IN_STEEL=_inMat(0x717a80,0.45,0.6);
 const IN_DARK=_inMat(0x24262c,0.7,0.3);
 const IN_GLASS=new THREE.MeshStandardMaterial({color:0xbfe6ff,transparent:true,opacity:0.22,roughness:0.05,metalness:0.1});
@@ -5850,16 +5951,26 @@ function buildSushi(){
   s.add(inBox(6.0,0.1,0.4,IN_WOOD,0,2.1,-D/2+0.35));
   const bot=[0xdfe8ee,0x9fd6a0,0xe0c98a,0xcfe3ef,0xbfa27a];
   for(let i=0;i<14;i++){const b=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,0.4,8),new THREE.MeshStandardMaterial({color:bot[i%bot.length],roughness:0.35}));b.position.set(-2.8+i*0.43,2.35,-D/2+0.35);s.add(b);}
-  // hanging chochin + warm lights
+  // wall menu strips (品書き) behind the counter — hand-written neta + prices
+  for(let i=0;i<2;i++){
+    const mn=new THREE.Mesh(new THREE.PlaneGeometry(3.9,0.95),new THREE.MeshBasicMaterial({map:inMenuTex()}));
+    mn.position.set(-1.6+i*3.2,2.72,-D/2+0.24);s.add(mn);
+  }
+  // hanging chochin (printed paper lantern) + warm lights
+  const chTex=tex((g,w,h)=>{g.fillStyle='#e2452a';g.fillRect(0,0,w,h);
+    for(let r=0;r<9;r++){g.fillStyle='rgba(0,0,0,.16)';g.fillRect(0,r*h/9,w,2);}
+    _outlineText(g,'鮨',w/2,h*0.5,h*0.42,MINCHO,'#1a0d08','#f6ead8',3);},64,64);
+  const chMat=new THREE.MeshBasicMaterial({map:chTex});
   for(let i=0;i<3;i++){
-    const ch=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),new THREE.MeshBasicMaterial({color:0xff6a3a}));
-    ch.scale.y=1.35;ch.position.set(-2.6+i*2.6,2.85,0.6);s.add(ch);
+    const ch=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.62,12),chMat);
+    ch.position.set(-2.6+i*2.6,2.85,0.6);s.add(ch);
     s.add(inLight(0xffb060,0.55,9,-2.6+i*2.6,2.6,0.6));
   }
   s.add(new THREE.AmbientLight(0xffd9b0,0.34));
-  // noren + exit door at +z
-  s.add(inBox(3.0,0.7,0.08,new THREE.MeshStandardMaterial({color:0x1d3f6b,roughness:0.9}),0,2.5,D/2-0.3));
-  s.add(inBox(2.6,2.2,0.14,new THREE.MeshStandardMaterial({color:0x2a1a10,roughness:0.9}),0,1.1,D/2-0.1));
+  // noren (dyed shop curtain) + exit door at +z
+  const noren=new THREE.Mesh(new THREE.PlaneGeometry(3.0,0.8),new THREE.MeshBasicMaterial({map:inNorenTex('かんだ'),side:THREE.DoubleSide}));
+  noren.position.set(0,2.45,D/2-0.32);noren.rotation.y=Math.PI;s.add(noren);
+  s.add(inBox(2.6,2.2,0.14,IN_WOOD_D,0,1.1,D/2-0.1));
   const chef=inPerson(0xf2f0e8,0x2b2b30,0,-3.5,0);s.add(chef);
   return {scene:s,talk:{x:0,z:-1.4},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
           counter:{x0:-3.2,x1:3.2,z0:-3.0,z1:-1.4}};
@@ -5890,6 +6001,20 @@ function buildFish(){
       fish.rotation.y=(f%2?0.2:-0.25);s.add(fish);
     }
   }
+  // hand-lettered price cards propped on the crates
+  for(let r=0;r<3;r++)for(let c=0;c<4;c++){
+    if((r+c)%2)continue;
+    const card=new THREE.Mesh(new THREE.PlaneGeometry(0.85,0.62),new THREE.MeshBasicMaterial({map:inPriceTex(),side:THREE.DoubleSide}));
+    card.position.set(-4.2+c*2.8,0.95,-3.4+r*3.2-0.98);card.rotation.x=-0.3;s.add(card);
+  }
+  // market banner across the back wall
+  const banner=new THREE.Mesh(new THREE.PlaneGeometry(7.5,1.25),new THREE.MeshBasicMaterial({map:tex((g,w,h)=>{
+    g.fillStyle='#0f2e46';g.fillRect(0,0,w,h);
+    g.strokeStyle='#e8eef2';g.lineWidth=4;g.strokeRect(5,5,w-10,h-10);
+    _outlineText(g,'魚河岸 市場',w*0.5,h*0.46,h*0.42,MINCHO,'#f4f8fb','#08202f',3);
+    g.fillStyle='#ffd24a';g.font=`bold ${Math.round(h*0.2)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText('鮮魚・貝・干物',w*0.5,h*0.8);},256,64)}));
+  banner.position.set(0,3.1,-D/2+0.2);s.add(banner);
   // hanging scale + rail
   s.add(inBox(0.12,0.12,D-2,IN_STEEL,3.6,3.4,0));
   const scale=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.2,14),IN_STEEL);scale.position.set(3.6,2.7,1.2);s.add(scale);
@@ -5911,8 +6036,9 @@ function buildDenki(){
   s.add(inBox(W,3.6,0.2,IN_DARK,0,1.8,-D/2));
   [-1,1].forEach(k=>s.add(inBox(0.2,3.6,D,IN_DARK,k*W/2,1.8,0)));
   s.add(inBox(W,0.2,D,IN_DARK,0,3.6,0));
-  // floor-to-ceiling shelving on both walls, crammed with CRTs and decks (Akihabara junk-shop)
-  const crtScreens=[0x2ad0ff,0x39e08a,0xffd23a,0xff5a8a,0xb07aff,0xeaf6ff];
+  // floor-to-ceiling shelving on both walls, crammed with CRTs showing real test patterns
+  const crtMats=[0,1,2,3,0,1,2].map(k=>new THREE.MeshBasicMaterial({map:inCrtTex(k)}));
+  const crtGlow=[0xbfc8d8,0x9aa0a8,0x6a7ad0,0x3a5a90,0xbfc8d8,0x9aa0a8,0x6a7ad0];
   [-1,1].forEach(side=>{
     for(let lvl=0;lvl<4;lvl++){
       const y=0.55+lvl*0.82;
@@ -5920,17 +6046,28 @@ function buildDenki(){
       for(let i=0;i<7;i++){
         const z=-5.2+i*1.7;
         s.add(inBox(1.05,0.62,1.0,IN_DARK,side*(W/2-0.85),y,z));                          // CRT body
-        const col=crtScreens[(lvl*7+i+(side>0?3:0))%crtScreens.length];
-        const scr=inBox(0.06,0.44,0.74,new THREE.MeshBasicMaterial({color:col}),side*(W/2-1.4),y,z);
-        s.add(scr);
-        if((lvl+i)%3===0)s.add(inLight(col,0.5,4.2,side*(W/2-1.9),y,z));                  // screen glow
+        const mi=(lvl*7+i+(side>0?3:0))%crtMats.length;
+        // screen sits clearly PROUD of the CRT body's inner face (body spans to W/2-0.85∓0.525),
+        // otherwise it z-fights with the case and vanishes
+        const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.74,0.46),crtMats[mi]);
+        scr.position.set(side*(W/2-1.44),y,z);scr.rotation.y=side>0?-Math.PI/2:Math.PI/2;s.add(scr);
+        if((lvl+i)%3===0)s.add(inLight(crtGlow[mi],0.34,4.2,side*(W/2-1.9),y,z));         // screen glow
       }
     }
   });
-  // hanging price tags (yellow/red 80s pop)
+  // hanging price tags with real ¥ numbers (80s pop card stock)
+  const tagTex=k=>tex((g,w,h)=>{g.fillStyle=k?'#ffe14d':'#ff3b3b';g.fillRect(0,0,w,h);
+    g.fillStyle=k?'#1a1408':'#fff';g.font=`bold ${Math.round(h*0.46)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText('¥'+(2980+Math.floor(Math.random()*30)*1000),w/2,h*0.38);
+    g.font=`bold ${Math.round(h*0.28)}px ${GOTHIC}`;g.fillText(k?'特価':'半額',w/2,h*0.76);},64,40);
   for(let i=0;i<10;i++){
-    const c=i%2?0xffe14d:0xff3b3b;
-    s.add(inBox(0.5,0.3,0.03,new THREE.MeshBasicMaterial({color:c}),(i%2?-1:1)*(W/2-2.1),3.05,-5+i*1.1));
+    const tg=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.38),new THREE.MeshBasicMaterial({map:tagTex(i%2),side:THREE.DoubleSide}));
+    tg.position.set((i%2?-1:1)*(W/2-2.1),3.05,-5+i*1.1);tg.rotation.y=(i%2?1:-1)*0.35;s.add(tg);
+  }
+  // wall ad posters above the counter
+  for(let i=0;i<2;i++){
+    const po=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.9),new THREE.MeshBasicMaterial({map:inAdPosterTex()}));
+    po.position.set(-1.5+i*3.0,2.3,-D/2+0.2);s.add(po);
   }
   // centre bargain bin of cassettes/radios
   s.add(inBox(2.2,0.7,3.2,IN_STEEL,0,0.35,1.6));
