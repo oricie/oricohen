@@ -10028,6 +10028,55 @@ function drawHUD(now){
 // Story: the Black Dragon (黒龍会) yakuza syndicate, fused with a rogue JSDF faction, has seized the
 // hostages. They send armed gunships to stop the extraction, and the oyabun's flagship gunboat prowls
 // the bay. Both fire back at the player and must be shot down.
+// ---- INTERIOR AMBIENCE: a low-key plucked koto/shamisen figure over a soft room tone. Starts when
+// you step inside, fades out when you leave, and ducks the helicopter rotor bed while indoors. ----
+let inAmb=null;
+const KOTO_SCALE=[0,2,3,7,9,12,14,15,19]; // hirajoshi-ish minor pentatonic, semitone offsets
+function startInteriorMusic(kind){
+  if(!AC||inAmb)return;
+  try{
+    const out=AC.createGain();out.gain.value=0;out.connect(AC.destination);
+    out.gain.linearRampToValueAtTime(kind==='fish'?0.05:0.085,AC.currentTime+1.6);
+    // warm room tone
+    const drone=AC.createOscillator();drone.type='sine';drone.frequency.value=kind==='denki'?98:73.4;
+    const dg=AC.createGain();dg.gain.value=0.055;
+    const dlp=AC.createBiquadFilter();dlp.type='lowpass';dlp.frequency.value=320;
+    drone.connect(dg);dg.connect(dlp);dlp.connect(out);drone.start();
+    // gentle plucked motif
+    const root=kind==='denki'?196:146.83;
+    let idx=0;
+    const pluck=()=>{
+      if(!inAmb)return;
+      const st=KOTO_SCALE[Math.floor(Math.random()*KOTO_SCALE.length)];
+      const f=root*Math.pow(2,st/12)*(Math.random()<0.25?2:1);
+      const o=AC.createOscillator();o.type=kind==='denki'?'square':'triangle';o.frequency.value=f;
+      const g2=AC.createGain();g2.gain.value=0;
+      const bp=AC.createBiquadFilter();bp.type='lowpass';bp.frequency.value=kind==='denki'?1800:2600;
+      o.connect(bp);bp.connect(g2);g2.connect(out);
+      const t0=AC.currentTime;
+      g2.gain.setValueAtTime(0,t0);
+      g2.gain.linearRampToValueAtTime(kind==='denki'?0.05:0.09,t0+0.012);   // sharp pluck attack
+      g2.gain.exponentialRampToValueAtTime(0.0008,t0+(kind==='denki'?0.9:1.9));
+      o.start(t0);o.stop(t0+2.1);
+      idx++;
+      const gap=(idx%4===0?1500:750)+Math.random()*900;
+      inAmb.timer=setTimeout(pluck,gap);
+    };
+    inAmb={out,drone,timer:null};
+    inAmb.timer=setTimeout(pluck,420);
+    if(rotorGainNode)rotorGainNode.gain.linearRampToValueAtTime(0.012,AC.currentTime+0.8); // muffle the rotor indoors
+  }catch(e){}
+}
+function stopInteriorMusic(){
+  if(!inAmb)return;
+  const a=inAmb;inAmb=null;
+  try{
+    clearTimeout(a.timer);
+    a.out.gain.linearRampToValueAtTime(0,AC.currentTime+0.5);
+    setTimeout(()=>{try{a.drone.stop();a.out.disconnect();}catch(e){}},700);
+    if(rotorGainNode)rotorGainNode.gain.linearRampToValueAtTime(0.10,AC.currentTime+0.9);
+  }catch(e){}
+}
 function comRadio(text){
   const sub=document.getElementById('radioSub');
   if(sub){sub.textContent=text;sub.style.opacity=1;clearTimeout(window.__subTimeout2);window.__subTimeout2=setTimeout(()=>{sub.style.opacity=0;},4600);}
@@ -10401,6 +10450,28 @@ const IN_FOAM=_inMat(0xaeb7bb,1,0);
 function inBox(w,h,d,mat,x,y,z,ry){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);if(ry)m.rotation.y=ry;return m;}
 // generous intensity/range: point lights here use decay 2, so a "normal" intensity dies within a metre
 function inLight(col,int,dist,x,y,z){const l=new THREE.PointLight(col,int*1.9,dist*1.5,1.6);l.position.set(x,y,z);return l;}
+// REAL HUMAN shopkeeper: reuse the rigged humanoid GLTF that survivors use, with its idle animation,
+// so the person behind the counter is an actual character rather than a box with a ball on top.
+// Falls back to the blocky stand-in only if the model hasn't loaded yet.
+const interiorMixers=[];
+function inHuman(x,z,ry,tint){
+  if(!(humanoidModelReady&&humanoidTemplate))return null;
+  const g=new THREE.Group();
+  const model=THREE.SkeletonUtils.clone(humanoidTemplate);
+  applyHumanoidMaterialVariant(model,survivorMatVariants);
+  if(tint)model.traverse(o=>{if(o.isMesh&&o.material&&o.material.color){o.material=o.material.clone();o.material.color.lerp(new THREE.Color(tint),0.45);}});
+  const scale=1.78/humanoidNaturalHeight; // real human height in interior metres
+  model.scale.setScalar(scale);
+  model.rotation.y=HUMANOID_BASE_YAW;
+  g.add(model);
+  if(survivorIdleClip){
+    const mixer=new THREE.AnimationMixer(model);
+    mixer.clipAction(survivorIdleClip).setLoop(THREE.LoopRepeat,Infinity).play();
+    interiorMixers.push(mixer);
+  }
+  g.position.set(x,0,z);g.rotation.y=ry||0;
+  return g;
+}
 // a simple standing person (shopkeeper) — readable at interior scale
 function inPerson(colTop,colBottom,x,z,ry){
   const g=new THREE.Group();
@@ -10456,14 +10527,38 @@ function buildSushi(){
   for(let i=0;i<3;i++){
     const ch=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.62,12),chMat);
     ch.position.set(-2.6+i*2.6,2.85,0.6);s.add(ch);
-    s.add(inLight(0xffb060,0.55,9,-2.6+i*2.6,2.6,0.6));
+    s.add(inLight(0xffa858,0.5,9,-2.6+i*2.6,2.6,0.6));
   }
-  s.add(new THREE.AmbientLight(0xffd9b0,0.34));
+  s.add(new THREE.AmbientLight(0xffc98e,0.20));
+  s.add(new THREE.HemisphereLight(0xffcf9a,0x2a1a10,0.28)); // warm sky / dark floor bounce = real depth
+  // ---- counter dressing: neta on rice, soy dishes, cups, chopstick rests, oshibori, a sake flask ----
+  const riceM=_inMat(0xf4efe4,0.75,0), sauceM=_inMat(0x1c1410,0.35,0.1), cupM=_inMat(0xe8e2d2,0.5,0);
+  const netaC=[0xd94f4f,0xf08a5a,0xe8b96a,0xf2d9b0,0xd2607e,0xc94a3a];
+  for(let i=0;i<8;i++){
+    const px=-2.7+i*0.78, pz=-1.72;
+    s.add(inBox(0.34,0.05,0.26,riceM,px,1.16,pz));                                   // geta plate
+    for(let k=0;k<2;k++){
+      s.add(inBox(0.13,0.07,0.1,riceM,px-0.07+k*0.14,1.22,pz));                      // rice
+      const nm2=_inMat(netaC[(i+k)%netaC.length],0.42,0.05);
+      s.add(inBox(0.15,0.035,0.115,nm2,px-0.07+k*0.14,1.27,pz));                      // neta
+    }
+    if(i%2===0){const d=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.065,0.035,10),sauceM);d.position.set(px+0.3,1.17,pz+0.2);s.add(d);}
+    if(i%3===0){const c=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.042,0.085,10),cupM);c.position.set(px-0.28,1.2,pz+0.24);s.add(c);}
+    s.add(inBox(0.2,0.022,0.03,IN_WOOD_D,px,1.16,pz+0.34));                          // chopstick rest
+  }
+  // oshibori (rolled towels) + a tokkuri flask on the counter
+  for(let i=0;i<4;i++){const t=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.16,8),_inMat(0xeef2f4,0.9,0));
+    t.rotation.z=Math.PI/2;t.position.set(-2.2+i*1.5,1.17,-0.95);s.add(t);}
+  const tokkuri=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.11,0.2,10),_inMat(0xdfe6ea,0.4,0));
+  tokkuri.position.set(1.1,1.24,-1.0);s.add(tokkuri);
+  // wasabi/gari tubs behind the case, and a hanging towel on the back shelf
+  s.add(inBox(0.24,0.12,0.2,_inMat(0x8fbf5a,0.6,0),-1.0,1.32,-2.9));
+  s.add(inBox(0.24,0.12,0.2,_inMat(0xf0c8cf,0.6,0), 1.0,1.32,-2.9));
   // noren (dyed shop curtain) + exit door at +z
   const noren=new THREE.Mesh(new THREE.PlaneGeometry(3.0,0.8),new THREE.MeshBasicMaterial({map:inNorenTex('かんだ'),side:THREE.DoubleSide}));
   noren.position.set(0,2.45,D/2-0.32);noren.rotation.y=Math.PI;s.add(noren);
   s.add(inBox(2.6,2.2,0.14,IN_WOOD_D,0,1.1,D/2-0.1));
-  const chef=inPerson(0xf2f0e8,0x2b2b30,0,-3.5,0);s.add(chef);
+  const chef=inHuman(0,-3.9,0,0xf2f0e8)||inPerson(0xf2f0e8,0x2b2b30,0,-3.9,0);s.add(chef);
   return {scene:s,talk:{x:0,z:-1.4},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
           counter:{x0:-3.2,x1:3.2,z0:-3.0,z1:-1.4}};
 }
@@ -10517,7 +10612,7 @@ function buildFish(){
   for(let i=0;i<4;i++)s.add(inBox(1.9,0.55,1.5,IN_FOAM,4.4,0.28+i*0.56,-4.6));
   // exit roller door at +z
   s.add(inBox(3.4,2.6,0.16,IN_STEEL,0,1.3,D/2-0.1));
-  const monger=inPerson(0x1f4f7a,0x22262b,-1.2,-4.6,0.2);s.add(monger);
+  const monger=inHuman(-1.2,-4.6,0.2,0x1f4f7a)||inPerson(0x1f4f7a,0x22262b,-1.2,-4.6,0.2);s.add(monger);
   return {scene:s,talk:{x:-1.2,z:-3.2},exit:{x:0,z:D/2-1.3},bounds:{x:W/2-0.8,z:D/2-0.8},
           counter:null};
 }
@@ -10590,7 +10685,7 @@ function buildDenki(){
   }
   s.add(new THREE.AmbientLight(0x9fb4d0,0.3));
   s.add(inBox(2.6,2.2,0.14,IN_DARK,0,1.1,D/2-0.1)); // exit
-  const owner=inPerson(0x6a6f52,0x2f3238,0,-4.8,0);s.add(owner);
+  const owner=inHuman(0,-4.8,0,0x6a6f52)||inPerson(0x6a6f52,0x2f3238,0,-4.8,0);s.add(owner);
   s.add(inBox(2.4,1.0,0.9,IN_STEEL,0,0.5,-4.0));   // service counter
   return {scene:s,talk:{x:0,z:-3.0},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
           counter:{x0:-1.2,x1:1.2,z0:-4.5,z1:-3.5}};
@@ -10718,9 +10813,10 @@ function enterVenue(v){
   for(const k in keys)keys[k]=false; // don't carry the E press into the on-foot look control
   cockpitGroup.visible=false;
   {const el=document.getElementById('intelLog');if(el)el.style.display='none';}
+  startAudio();startInteriorMusic(v.key);
   flashMsg('▼ ENTERING '+v.name+' '+v.jp,'#3fe0ff');
   document.getElementById('help').style.opacity=.75;
-  document.getElementById('help').textContent='ON FOOT — WASD to walk · MOUSE or arrows to look up/down/around · F to talk at the counter · X to leave';
+  document.getElementById('help').textContent='ON FOOT — ARROWS: up/down walk, left/right turn · MOUSE to look around · F to talk at the counter · X to leave';
 }
 function exitVenue(){
   if(!interiorMode)return;
@@ -10730,6 +10826,7 @@ function exitVenue(){
   window.__RS=null;window.__RC=null;
   for(const k in keys)keys[k]=false; // don't carry the X press into the throttle toggle
   document.getElementById('help').textContent='STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract';
+  stopInteriorMusic();
   renderIntelLog();
   flashMsg('▲ BACK IN THE COCKPIT','#3ef');
 }
@@ -10848,17 +10945,19 @@ function drawFootHUD(now){
 // ---------- on-foot update ----------
 function updateInterior(dt){
   const I=getInterior(curVenue.key);
+  // ARROW-KEY NAVIGATION (classic first-person): UP/DOWN walk forward and back, LEFT/RIGHT turn.
+  // WASD still works for strafing, and the mouse looks around freely (including up and down).
   let mf=0,ms=0;
-  if(keys['KeyW'])mf+=1;
-  if(keys['KeyS'])mf-=1;
+  if(keys['ArrowUp']||keys['KeyW'])mf+=1;
+  if(keys['ArrowDown']||keys['KeyS'])mf-=1;
+  if(keys['ArrowLeft'])fp.yaw+=2.1*dt;
+  if(keys['ArrowRight'])fp.yaw-=2.1*dt;
   if(keys['KeyA'])ms-=1;
   if(keys['KeyD'])ms+=1;
-  // LOOK: arrows and Q/E turn, arrows up/down (and R/V) pitch — plus mouse-look, so you can properly
-  // look up at the lanterns and down at the counter like the flight view
-  if(keys['ArrowLeft']||keys['KeyQ'])fp.yaw+=2.0*dt;
-  if(keys['ArrowRight']||keys['KeyE'])fp.yaw-=2.0*dt;
-  if(keys['ArrowUp']||keys['KeyR'])fp.pitch+=1.5*dt;
-  if(keys['ArrowDown']||keys['KeyV'])fp.pitch-=1.5*dt;
+  if(keys['KeyQ'])fp.yaw+=2.1*dt;
+  if(keys['KeyE'])fp.yaw-=2.1*dt;
+  if(keys['KeyR'])fp.pitch+=1.5*dt;
+  if(keys['KeyV'])fp.pitch-=1.5*dt;
   if(fp.mdx||fp.mdy){fp.yaw-=fp.mdx*0.0028;fp.pitch-=fp.mdy*0.0028;fp.mdx=0;fp.mdy=0;}
   fp.pitch=Math.max(-1.15,Math.min(1.15,fp.pitch)); // clamp so you can look at the ceiling and the floor
   const spd=3.1;
@@ -10867,6 +10966,7 @@ function updateInterior(dt){
   const inCounter=(x,z)=>I.counter&&x>I.counter.x0-0.35&&x<I.counter.x1+0.35&&z>I.counter.z0-0.35&&z<I.counter.z1+0.35;
   if(Math.abs(nx)<I.bounds.x&&!inCounter(nx,fp.z))fp.x=nx;
   if(Math.abs(nz)<I.bounds.z&&!inCounter(fp.x,nz))fp.z=nz;
+  for(let i=0;i<interiorMixers.length;i++)interiorMixers[i].update(dt); // shopkeeper idle animation
   if(mf||ms)fp.bob+=dt*9;
   fpCam.position.set(fp.x,1.62+Math.sin(fp.bob)*0.035,fp.z);
   fpCam.rotation.set(fp.pitch,fp.yaw,0,'YXZ');
