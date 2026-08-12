@@ -70,21 +70,18 @@
   #dlgTxt .item  { color:var(--ui-warn); font-weight:bold; }
   #dlgTxt .place { color:var(--ui); font-weight:bold; }
   #dlgHint { font-size:var(--t-micro); letter-spacing:.1em; color:var(--ui-dim); text-align:right; margin-top:var(--s2); }
-  #intelLog { right:var(--s3); top:168px; width:262px; font-size:var(--t-body); line-height:1.55; color:var(--ui-hi);
-    padding:var(--s2) 10px; display:none;
-    max-height:calc(100vh - 168px - 252px);      /* clears ARMAMENT above, cluster below */
-    overflow-y:auto; scrollbar-width:thin; }
+  #intelLog { right:var(--s3); top:168px; width:max-content; color:var(--ui-hi);
+    padding:5px 6px; display:none; }
   #intelLog b { color:var(--ui); letter-spacing:.14em; }
-  #intelLog .ros { display:flex; flex-direction:column; gap:var(--s1); margin-top:var(--s2); }
-  #intelLog .cm { display:flex; align-items:center; gap:var(--s2);
-    background:rgba(95,242,255,.05); border:1px solid var(--ui-faint); padding:3px 5px; }
-  #intelLog .cm.unk { opacity:.42; filter:grayscale(1); }      /* not yet located */
-  #intelLog .cm img { width:34px; height:34px; display:block; image-rendering:pixelated; }
-  #intelLog .cmi { display:flex; flex-direction:column; line-height:1.25; flex:1; min-width:0; }
-  #intelLog .cmi b { font-size:var(--t-label); letter-spacing:.1em; }
-  #intelLog .rl { font-size:var(--t-micro); color:var(--ui-dim); }
-  #intelLog .pk { font-size:var(--t-micro); color:var(--ui-warn); }
-  #intelLog .st { font-size:8px; letter-spacing:.1em; padding:2px 4px; border:1px solid currentColor; white-space:nowrap; }
+  #intelLog .ros { display:flex; flex-direction:row; gap:3px; margin-top:4px; }
+  #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; width:46px;
+    background:rgba(95,242,255,.05); border:1px solid var(--ui-faint); padding:2px; }
+  #intelLog .cm.unk { opacity:.40; filter:grayscale(1); }      /* not yet located */
+  #intelLog .cm img { width:36px; height:36px; display:block; image-rendering:pixelated; }
+  #intelLog .cmi { display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+  #intelLog .cmi b { font-size:8px; letter-spacing:.06em; }
+  #intelLog .rl, #intelLog .pk { display:none; }               /* shown in the hoist panel instead */
+  #intelLog .st { font-size:7px; letter-spacing:.06em; padding:1px 2px; border:1px solid currentColor; white-space:nowrap; }
   #intelLog .st-mis { color:var(--ui-dim); }
   #intelLog .st-loc { color:var(--ui); }
   #intelLog .st-ab  { color:var(--ui-warn); }
@@ -169,13 +166,13 @@
     /* Compact has no room for a full dossier beside the command stack and the fire
        button, so it degrades to a narrow avatar strip: face, callsign, status. The
        lead text and perk line are dropped — they are still read out over the radio. */
-    #intelLog { top:152px; width:96px; font-size:var(--t-micro); line-height:1.3; padding:4px;
-      max-height:calc(100vh - 152px - 132px); }
-    #intelLog .cm { flex-direction:column; gap:1px; padding:2px; text-align:center; }
-    #intelLog .cm img { width:30px; height:30px; }
-    #intelLog .cmi { align-items:center; }
-    #intelLog .rl, #intelLog .pk, #intelLog .lead { display:none; }
-    #intelLog .st { font-size:7px; padding:1px 2px; }
+    #intelLog { top:150px; padding:2px 3px; }
+    #intelLog > b { display:none; }          /* no room for a header at this size */
+    #intelLog .ros { margin-top:0; gap:2px; }
+    #intelLog .cm { width:30px; padding:1px; gap:1px; }
+    #intelLog .cm img { width:24px; height:24px; }
+    #intelLog .cmi { display:none; }
+    #intelLog .st { font-size:6px; padding:0 1px; }
     #help { display:none; }
   }
   /* ---- NEON TITLE WORDMARK ---- */
@@ -206,7 +203,7 @@
 <div class="hud" id="help">STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK</div>
 
 <div class="hud" id="tacwrap">
-  <div id="tacTitle">TSD · GRID SHINJUKU-EAST</div>
+  <div id="tacTitle">TSD · TOKYO 東京</div>
   <canvas id="tacmap" width="158" height="158"></canvas>
 </div>
 
@@ -7240,22 +7237,17 @@ function renderIntelLog(){
   el.style.display='block';
   // A dossier, not a list: face, rank and what each one is worth, so the player can
   // see at a glance who is still out there and why they want them back.
-  let html='<b>CREW DOSSIER</b><div class="ros">';
+  let html='<b style="font-size:9px">CREW</b><div class="ros">';
   CREW.forEach(c=>{
     const st=crewStatus(c);
     const cls=c.rescued?'st-home':c.aboard?'st-ab':c.found?'st-loc':'st-mis';
-    html+='<div class="cm'+(c.found?'':' unk')+'">'
+    const brg=(c.found&&!c.rescued&&!c.aboard)?compassTo(c.x,c.z):'';
+    html+='<div class="cm'+(c.found?'':' unk')+'" title="'+c.rank+' '+c.name+' — '+c.role+' — '+c.perk+'">'
        +  '<img src="'+crewAvatarURL(c)+'" alt="">'
-       +  '<div class="cmi"><b>'+c.rank+' '+c.call+'</b>'
-       +  '<span class="rl">'+c.role+'</span>'
-       +  '<span class="pk">'+c.perk+'</span></div>'
-       +  '<span class="st '+cls+'">'+st+'</span></div>';
-    if(c.found&&!c.rescued&&!c.aboard)
-      html+='<div class="lead">'+c.where+'<br><b>'+compassTo(c.x,c.z)+'</b></div>';
+       +  '<div class="cmi"><b>'+c.call+'</b></div>'
+       +  '<span class="st '+cls+'">'+(brg||st)+'</span></div>';
   });
   html+='</div>';
-  const av=activeVenue();
-  if(av)html+='<div class="lead"><b>NEXT LEAD</b><br>Land at '+av.name+' '+av.jp+'</div>';
   el.innerHTML=html;
 }
 // Two levels of objective text, deliberately different lengths:
