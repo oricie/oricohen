@@ -5,66 +5,152 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>TOKIO NEON — HELI RESCUE</title>
 <style>
+  /* ============================================================================
+     HUD DESIGN TOKENS — the single source of truth for the whole instrument set.
+     One turquoise scanner palette, one type scale, one 4px spacing grid. The
+     canvas HUD mirrors these exactly in the JS `UI` object (see drawHUD section):
+     change a value here and change it there, and nowhere else.
+     ========================================================================== */
+  :root {
+    /* palette: turquoise on near-black, with three signal colours and nothing else */
+    --ui:        #5ff2ff;                  /* primary turquoise — structure, labels, ticks */
+    --ui-hi:     #e8feff;                  /* bright readouts — the numbers you actually read */
+    --ui-dim:    rgba(95,242,255,.46);     /* secondary text, minor ticks */
+    --ui-faint:  rgba(95,242,255,.15);     /* grid lines, inactive chrome */
+    --ui-warn:   #ffc23a;                  /* caution / selected weapon */
+    --ui-alert:  #ff3b52;                  /* threat / critical only */
+    --ui-ok:     #46e08a;                  /* healthy / positive only */
+    /* surfaces */
+    --ui-fill:   rgba(1,12,18,.74);        /* standard panel ground — dark enough to read over neon */
+    --ui-solid:  rgba(1,12,18,.90);        /* panels that must stay readable over neon */
+    --ui-line:   rgba(95,242,255,.38);     /* the one hairline border weight */
+    --ui-glow:   0 0 6px rgba(95,242,255,.45);
+    /* type — mono, uppercase, letterspaced. Four sizes, no more. */
+    --f: 'Courier New',monospace;
+    --t-micro: 9px;                        /* unit suffixes, sub-labels */
+    --t-label: 10px;                       /* field names, headers */
+    --t-body:  11px;                       /* prose: objectives, dialogue */
+    --t-val:   14px;                       /* numeric readouts */
+    /* spacing: 4px grid */
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  }
   * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
-  body { overflow:hidden; background:#000; font-family:'Courier New',monospace; }
+  body { overflow:hidden; background:#000; font-family:var(--f); }
   #c { display:block; }
   #hud { position:absolute; inset:0; pointer-events:none; z-index:6; }
   #vignette { position:absolute; inset:0; pointer-events:none; z-index:4;
     background:radial-gradient(ellipse at center, transparent 50%, rgba(6,4,18,.55) 100%); }
   #grain { position:absolute; inset:0; pointer-events:none; opacity:.05; mix-blend-mode:overlay; z-index:4;
     background-image:repeating-conic-gradient(#000 0 .0001%, #fff 0 .0002%); background-size:180px 180px; }
-  .hud { position:absolute; color:#9dffb0; text-shadow:0 0 4px rgba(120,255,150,.6); user-select:none; pointer-events:none; z-index:8; font-family:'Courier New',monospace; }
-  #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:bold; text-align:center; display:none; color:#ff4040; text-shadow:0 0 12px #f00; width:90%; letter-spacing:2px; }
-  #radioSub { bottom:130px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; color:#ffd27a; text-shadow:0 0 6px #000; opacity:0; transition:opacity .4s; letter-spacing:.5px; }
-  #taskPanel { bottom:104px; left:50%; transform:translateX(-50%); max-width:560px; text-align:center; font-size:10.5px; line-height:1.5; letter-spacing:.5px; color:#cfe9ff;
-    background:rgba(3,12,6,.5); border:1px solid rgba(157,255,176,.35); padding:7px 14px; }
+  .hud { position:absolute; color:var(--ui); text-shadow:var(--ui-glow); user-select:none; pointer-events:none; z-index:8; font-family:var(--f); }
+  /* ONE panel chrome for every DOM panel: hairline border, translucent ground, and a
+     bracketed pair of opposite corners — the scanner-frame motif, nothing else. */
+  .panel { background:var(--ui-fill); border:1px solid var(--ui-line); }
+  .panel::before, .panel::after { content:''; position:absolute; width:9px; height:9px; pointer-events:none; }
+  .panel::before { top:-1px; left:-1px; border-top:2px solid var(--ui); border-left:2px solid var(--ui); }
+  .panel::after  { bottom:-1px; right:-1px; border-bottom:2px solid var(--ui); border-right:2px solid var(--ui); }
+  /* shared micro-label: the "SYS: ONLINE" voice used for every field name */
+  .lbl { font-size:var(--t-label); letter-spacing:.14em; color:var(--ui-dim); text-transform:uppercase; }
+
+  #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:26px; font-weight:bold; text-align:center; display:none;
+    color:var(--ui-hi); text-shadow:0 0 14px var(--ui); width:90%; letter-spacing:.16em; }
+  /* Bottom command stack: radio line above the command box, in one column. Widths are
+     capped so 210px stays clear each side — TSD on the left, control cluster on the right. */
+  #cmdStack { bottom:104px; left:50%; transform:translateX(-50%);
+    width:min(560px, calc(100vw - 420px)); display:flex; flex-direction:column; align-items:center; gap:var(--s2); }
+  #radioSub { max-width:100%; text-align:center; font-size:var(--t-body);
+    color:var(--ui-warn); text-shadow:0 0 6px #000; opacity:0; transition:opacity .4s; letter-spacing:.06em; }
+  #taskPanel { max-width:100%; text-align:center;
+    font-size:var(--t-body); line-height:1.55; letter-spacing:.08em; color:var(--ui-hi); padding:var(--s2) var(--s4); }
+  #taskPanel:empty { display:none; }            /* no empty bordered box while a dialogue is up */
   #dialog { left:50%; bottom:96px; transform:translateX(-50%); width:min(680px,88vw); display:none;
-    background:rgba(3,12,6,.86); border:1px solid rgba(157,255,176,.35); padding:10px 16px 9px; z-index:12;
-    box-shadow:0 0 26px rgba(0,0,0,.7); }
-  #dlgWho { font-size:10px; letter-spacing:1px; color:#8dff9f; margin-bottom:5px; }
-  #dlgTxt { font-size:12px; line-height:1.6; color:#cfe9ff; min-height:42px; }
-  #dlgTxt .item { color:#ffd24a; font-weight:bold; }
-  #dlgTxt .place { color:#7dff6a; font-weight:bold; }
-  #dlgHint { font-size:10px; color:rgba(157,255,176,.7); text-align:right; margin-top:6px; }
-  #intelLog { right:12px; top:96px; width:270px; font-size:10.5px; line-height:1.5; color:#cfe9ff; background:rgba(3,12,6,.5); border:1px solid rgba(157,255,176,.35); padding:7px 10px; display:none; }
-  #intelLog b { color:#8dff9f; letter-spacing:1px; }
-  #intelLog .cw { color:#ffd24a; }
-  #intelLog .done { color:#6a7a70; text-decoration:line-through; }
-  #help { bottom:6px; left:50%; transform:translateX(-50%); font-size:10px; opacity:.65; text-align:center; width:95%; transition:opacity 1.2s; }
-  #tacwrap { bottom:14px; left:12px; display:flex; flex-direction:column; gap:0; }
-  #tacTitle { font-size:10px; letter-spacing:2px; color:#9dffb0; background:rgba(3,12,6,.7); border:1px solid rgba(157,255,176,.4); border-bottom:none; padding:2px 6px; width:max-content; }
-  #tacmap { background:#02120a; border:1px solid rgba(157,255,176,.4); box-shadow:inset 0 0 14px rgba(0,0,0,.9), 0 0 10px rgba(60,255,120,.12); }
-  /* ---- HELI CONTROL CLUSTER: metallic MFD-style tactical controls ---- */
+    background:var(--ui-solid); padding:var(--s3) var(--s4) 10px; z-index:12; box-shadow:0 0 26px rgba(0,0,0,.7); }
+  #dlgWho { font-size:var(--t-label); letter-spacing:.14em; color:var(--ui); margin-bottom:var(--s1); text-transform:uppercase; }
+  #dlgTxt { font-size:var(--t-body); line-height:1.65; color:var(--ui-hi); min-height:42px; }
+  #dlgTxt .item  { color:var(--ui-warn); font-weight:bold; }
+  #dlgTxt .place { color:var(--ui); font-weight:bold; }
+  #dlgHint { font-size:var(--t-micro); letter-spacing:.1em; color:var(--ui-dim); text-align:right; margin-top:var(--s2); }
+  #intelLog { right:var(--s3); top:96px; width:272px; font-size:var(--t-body); line-height:1.55; color:var(--ui-hi);
+    padding:var(--s2) 10px; display:none; }
+  #intelLog b { color:var(--ui); letter-spacing:.14em; }
+  #intelLog .cw { color:var(--ui-warn); }
+  #intelLog .done { color:var(--ui-dim); text-decoration:line-through; }
+  #help { bottom:var(--s2); left:50%; transform:translateX(-50%); font-size:var(--t-micro); letter-spacing:.06em;
+    color:var(--ui-dim); opacity:.8; text-align:center; width:95%; transition:opacity 1.2s; text-shadow:0 0 4px #000; }
+  /* TSD — the scanner. Title bar sits flush on top of the map, one continuous frame. */
+  #tacwrap { bottom:var(--s4); left:var(--s3); display:flex; flex-direction:column; }
+  #tacTitle { font-size:var(--t-label); letter-spacing:.16em; color:var(--ui); background:var(--ui-solid);
+    border:1px solid var(--ui-line); border-bottom:none; padding:3px var(--s2); width:max-content; min-width:148px; }
+  #tacmap { background:#00090e; border:1px solid var(--ui-line);
+    box-shadow:inset 0 0 18px rgba(0,0,0,.9), 0 0 12px rgba(95,242,255,.14); }
+  /* ---- HELI CONTROL CLUSTER ----------------------------------------------------
+     One right-edge control column on a strict pitch, with the fire button as the
+     only round, only red element. Geometry lives in these four vars so the whole
+     cluster moves and rescales together instead of drifting per-button. */
+  :root { --btn:60px; --btn-pitch:68px; --col:138px; --edge:20px; --floor:48px; }
   .tbtn { position:absolute; pointer-events:auto; user-select:none; -webkit-user-select:none; z-index:9;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; color:#7fe0ff;
-    font-family:'Bahnschrift','DIN Alternate','Arial Narrow',sans-serif; font-weight:700; letter-spacing:1.5px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; color:var(--ui);
+    font-family:var(--f); font-weight:700; letter-spacing:.14em;
     cursor:pointer; -webkit-tap-highlight-color:transparent;
     transition:transform .08s ease, box-shadow .15s ease, filter .15s ease; }
-  .tbtn .ic { font-size:19px; line-height:1; filter:drop-shadow(0 0 5px currentColor); }
-  .tbtn .lb { font-size:8.5px; opacity:.9; }
-  .tbtn:active { transform:scale(.92); }
-  .mfd { width:62px; height:62px; border-radius:13px;
-    background:linear-gradient(158deg, rgba(22,44,60,.92), rgba(6,13,22,.94));
-    border:1px solid rgba(120,220,255,.5);
-    box-shadow:inset 0 1px 0 rgba(180,240,255,.22), inset 0 0 15px rgba(0,44,66,.5), 0 4px 10px rgba(0,0,0,.5), 0 0 13px rgba(60,200,255,.12); }
-  .mfd::before { content:''; position:absolute; inset:4px; border-radius:9px; border:1px solid rgba(120,220,255,.14); pointer-events:none; }
-  .mfd:hover { filter:brightness(1.15); box-shadow:inset 0 1px 0 rgba(180,240,255,.3), inset 0 0 16px rgba(0,60,90,.6), 0 4px 12px rgba(0,0,0,.6), 0 0 20px rgba(70,210,255,.32); }
-  .mfd.on { color:#8bffbe; border-color:rgba(140,255,190,.9); box-shadow:inset 0 0 16px rgba(0,70,40,.5), 0 0 22px rgba(90,255,150,.45); }
+  .tbtn .ic { font-size:18px; line-height:1; filter:drop-shadow(0 0 5px currentColor); }
+  .tbtn .lb { font-size:var(--t-micro); opacity:.92; }
+  .tbtn:active { transform:scale(.93); }
+  /* square-ish MFD key: flat panel ground, hairline edge, bracketed top-left corner */
+  .mfd { width:var(--btn); height:var(--btn); border-radius:4px;
+    background:var(--ui-solid); border:1px solid var(--ui-line);
+    box-shadow:inset 0 0 14px rgba(0,40,54,.55), 0 0 10px rgba(95,242,255,.10); }
+  .mfd::before { content:''; position:absolute; top:3px; left:3px; width:8px; height:8px;
+    border-top:2px solid var(--ui); border-left:2px solid var(--ui); opacity:.55; pointer-events:none; }
+  .mfd:hover { filter:brightness(1.18); box-shadow:inset 0 0 16px rgba(0,54,74,.6), 0 0 18px rgba(95,242,255,.3); }
+  .mfd.on { color:var(--ui-hi); border-color:var(--ui);
+    background:rgba(12,52,64,.92); box-shadow:inset 0 0 16px rgba(0,86,110,.6), 0 0 20px rgba(95,242,255,.42); }
   #stick-zone { position:absolute; left:0; bottom:0; width:45%; height:55%; pointer-events:auto; z-index:7; }
-  #stick-base { position:absolute; width:110px; height:110px; border-radius:50%; border:2px solid rgba(157,255,176,.4); background:rgba(6,18,10,.3); display:none; z-index:9; }
-  #stick-knob { position:absolute; width:48px; height:48px; border-radius:50%; background:rgba(157,255,176,.45); display:none; z-index:9; }
-  #camBtn { right:150px; bottom:204px; }
-  #wpnBtn { right:150px; bottom:60px; }
-  #stopBtn { right:150px; bottom:132px; }
-  #fireBtn { right:24px; bottom:56px; width:106px; height:106px; border-radius:50%; color:#ff8080;
-    background:radial-gradient(circle at 50% 36%, rgba(96,18,22,.96), rgba(34,5,9,.97));
-    border:2px solid rgba(255,96,96,.85);
-    box-shadow:inset 0 0 24px rgba(255,70,70,.32), 0 0 30px rgba(255,40,60,.42), 0 6px 16px rgba(0,0,0,.6); }
-  #fireBtn .ic { font-size:26px; }
-  #fireBtn .lb { font-size:11px; letter-spacing:3px; }
-  #fireBtn::before { content:''; position:absolute; inset:8px; border-radius:50%; border:2px dashed rgba(255,120,120,.42); animation:fireRing 9s linear infinite; pointer-events:none; }
-  #fireBtn:active { filter:brightness(1.25); box-shadow:inset 0 0 30px rgba(255,90,90,.55), 0 0 42px rgba(255,50,70,.75); }
+  #stick-base { position:absolute; width:110px; height:110px; border-radius:50%; border:1px solid var(--ui-line);
+    background:rgba(1,12,18,.34); display:none; z-index:9; box-shadow:0 0 12px rgba(95,242,255,.12); }
+  #stick-knob { position:absolute; width:46px; height:46px; border-radius:50%; background:rgba(95,242,255,.30);
+    border:1px solid var(--ui); display:none; z-index:9; box-shadow:0 0 14px rgba(95,242,255,.4); }
+  /* the column, bottom-up: WPN, HVR, CAM — all on one pitch, flush with the fire button's floor */
+  #wpnBtn  { right:var(--col); bottom:var(--floor); }
+  #stopBtn { right:var(--col); bottom:calc(var(--floor) + var(--btn-pitch)); }
+  #camBtn  { right:var(--col); bottom:calc(var(--floor) + var(--btn-pitch) * 2); }
+  #fireBtn { right:var(--edge); bottom:var(--floor); width:104px; height:104px; border-radius:50%; color:#ff9aa6;
+    background:radial-gradient(circle at 50% 36%, rgba(88,14,24,.96), rgba(26,4,10,.97));
+    border:1px solid rgba(255,59,82,.85);
+    box-shadow:inset 0 0 24px rgba(255,59,82,.28), 0 0 26px rgba(255,59,82,.34), 0 6px 16px rgba(0,0,0,.6); }
+  #fireBtn::before { content:''; position:absolute; inset:7px; border-radius:50%; border:1px dashed rgba(255,120,134,.4);
+    animation:fireRing 9s linear infinite; pointer-events:none; }
+  #fireBtn .ic { font-size:24px; }
+  #fireBtn .lb { font-size:var(--t-label); letter-spacing:.28em; }
+  #fireBtn:active { filter:brightness(1.25); box-shadow:inset 0 0 30px rgba(255,59,82,.5), 0 0 40px rgba(255,59,82,.7); }
+  /* ---- ON-FOOT MODE: swap the flight cluster for the two controls that mean something
+     indoors, and drop the city tactical map, which shows nothing useful from inside. */
+  .foot { display:none; }
+  body.on-foot .foot { display:flex; }
+  body.on-foot #fireBtn, body.on-foot #camBtn, body.on-foot #wpnBtn,
+  body.on-foot #stopBtn, body.on-foot #tacwrap { display:none; }
+  #talkBtn { right:var(--col); bottom:var(--floor); }
+  #exitBtn { right:var(--edge); bottom:var(--floor); }
   @keyframes fireRing { to { transform:rotate(360deg); } }
+  /* ---- COMPACT: phones and short windows ------------------------------------
+     Everything here is an override of the four cluster vars plus a few panel
+     positions. At 560x420 the column overlapped the altitude tape and the TSD
+     ran into the command box; this lays the keys out along the bottom instead. */
+  @media (max-width:620px), (max-height:520px) {
+    :root { --btn:48px; --btn-pitch:56px; --col:106px; --edge:12px; --floor:36px; }
+    #fireBtn { width:82px; height:82px; }
+    #fireBtn .lb { font-size:var(--t-micro); letter-spacing:.2em; }
+    #wpnBtn  { right:var(--col); bottom:var(--floor); }
+    #stopBtn { right:calc(var(--col) + var(--btn-pitch)); bottom:var(--floor); }
+    #camBtn  { right:calc(var(--col) + var(--btn-pitch) * 2); bottom:var(--floor); }
+    #tacwrap { transform:scale(.66); transform-origin:bottom left; bottom:6px; left:6px; }
+    #cmdStack { bottom:148px; width:min(340px,74vw); gap:var(--s1); }   /* clears the scaled TSD */
+    #taskPanel { font-size:var(--t-micro); padding:6px 10px; }
+    #radioSub { font-size:var(--t-micro); }
+    #dialog { bottom:132px; width:min(440px,92vw); padding:9px 12px 8px; }
+    #intelLog { top:150px; width:190px; font-size:var(--t-micro); line-height:1.45; }
+    #help { display:none; }
+  }
   /* ---- NEON TITLE WORDMARK ---- */
   .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
   .logo-main { font-family:'Arial Black',Impact,sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; font-style:italic;
@@ -76,7 +162,6 @@
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
     filter:drop-shadow(0 0 16px #ff2f8f); }
   .logo-jp { font-family:'Hiragino Kaku Gothic Pro','Yu Gothic','Noto Sans JP','MS Gothic',sans-serif; font-weight:700; font-size:19px; letter-spacing:8px; color:#ffd84d; text-shadow:0 0 12px #ff9e2e; padding-left:8px; }
-  #cockpit { display:none; }
 </style>
 </head>
 <body>
@@ -85,15 +170,17 @@
 <canvas id="hud"></canvas>
 
 <div class="hud" id="msg"></div>
-<div class="hud" id="radioSub">RADIO</div>
-<div class="hud" id="taskPanel">STANDBY</div>
-<div class="hud" id="intelLog"></div>
-<div class="hud" id="dialog"><div id="dlgWho"></div><div id="dlgTxt"></div><div id="dlgHint">▼ press F to continue</div></div>
-<div class="hud" id="help">STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract</div>
+<div class="hud" id="cmdStack">
+  <div id="radioSub">RADIO</div>
+  <div class="panel" id="taskPanel">STANDBY</div>
+</div>
+<div class="hud panel" id="intelLog"></div>
+<div class="hud panel" id="dialog"><div id="dlgWho"></div><div id="dlgTxt"></div><div id="dlgHint">▼ press F to continue</div></div>
+<div class="hud" id="help">STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK</div>
 
 <div class="hud" id="tacwrap">
   <div id="tacTitle">TSD · GRID SHINJUKU-EAST</div>
-  <canvas id="tacmap" width="140" height="140"></canvas>
+  <canvas id="tacmap" width="158" height="158"></canvas>
 </div>
 
 <div id="stick-zone"></div>
@@ -102,25 +189,9 @@
 <div class="tbtn mfd" id="camBtn"><span class="ic">◎</span><span class="lb">CAM</span></div>
 <div class="tbtn mfd" id="wpnBtn"><span class="ic">◈</span><span class="lb">WPN</span></div>
 <div class="tbtn mfd" id="stopBtn" onpointerdown="window.__throttleTarget=(window.__throttleTarget===undefined||window.__throttleTarget>0.5)?0:1;event.preventDefault();"><span class="ic">⇅</span><span class="lb">HVR</span></div>
+<div class="tbtn mfd foot" id="talkBtn"><span class="ic">☰</span><span class="lb">TALK</span></div>
+<div class="tbtn mfd foot" id="exitBtn"><span class="ic">⤴</span><span class="lb">EXIT</span></div>
 
-<div id="cockpit">
-  <div id="frame"></div>
-  <div id="glass-glare"></div>
-  <div id="dash">
-    <div class="gauge"><canvas id="radar" width="110" height="110"></canvas>RADAR</div>
-    <div class="digital">
-      <span class="lbl">ALT</span> <span id="d-alt">0</span> m<br>
-      <span class="lbl">SPD</span> <span id="d-spd">0</span> km/h<br>
-      <span class="lbl">HDG</span> <span id="d-hdg">000</span>°
-    </div>
-    <div class="gauge"><canvas id="horizon" width="110" height="110"></canvas>ATTITUDE</div>
-    <div class="digital">
-      <span class="lbl">WPN</span> <span id="d-wpn">MINIGUN</span><br>
-      <span class="lbl">AMMO</span> <span id="d-ammo">∞</span><br>
-      <span id="warn">⚠ HOSTILES</span>
-    </div>
-  </div>
-</div>
 
 <script>
 if(!window.storage){window.storage={_m:{},get(k){return Promise.resolve(this._m[k]?{value:this._m[k]}:null);},set(k,v){this._m[k]=v;return Promise.resolve();}};}
@@ -674,7 +745,7 @@ function startAudio(){
       const click=AC.createOscillator();click.type='square';click.frequency.value=1800;
       const cg=AC.createGain();cg.gain.setValueAtTime(0.03,AC.currentTime+dur);cg.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur+0.04);
       click.connect(cg);cg.connect(AC.destination);click.start(AC.currentTime+dur);click.stop(AC.currentTime+dur+0.05);
-      const lines=['COMMAND: SYNDICATE GUNSHIPS INBOUND, STAY SHARP','COMMAND: SURVIVOR BEACON ACTIVE, PROCEED','COMMAND: BLACK DRAGON JAMMING OUR RADIO, WATCH THE SKIES','COMMAND: GOOD HUNTING OUT THERE, PILOT','COMMAND: EXTRACTION ZONE STANDING BY','COMMAND: THE OYABUN WANTS THESE HOSTAGES — DENY HIM'];
+      const lines=['COMMAND: SYNDICATE GUNSHIPS INBOUND, STAY SHARP','COMMAND: WORK THE SHOPS — THE LOCALS KNOW WHERE YOUR CREW IS','COMMAND: BLACK DRAGON JAMMING OUR RADIO, WATCH THE SKIES','COMMAND: GOOD HUNTING OUT THERE, PILOT','COMMAND: NAVY SHIP IS HOLDING STATION IN THE BAY','COMMAND: FIVE OF OURS ARE DOWN THERE — BRING THEM ALL HOME'];
       const sub=document.getElementById('radioSub');
       if(sub){
         const line=lines[Math.floor(Math.random()*lines.length)];
@@ -4287,11 +4358,16 @@ const cautionLabelTex=tex((g,w,h)=>{
   g.fillStyle='#c7ccd2';g.font='bold 8px monospace';g.textAlign='center';
   g.fillText('MASTER CAUTION',w/2,h/2+3);
 },140,20);
+// MASTER CAUTION annunciator. It used to sit at x=0, z=-1.365 — directly in front of the
+// centre tactical MFD at z=-1.44 — so it punched a dead red rectangle through the middle of
+// the map in every cockpit shot. Moved into the empty bay between the attitude and tac
+// screens, and wired to hull state so it behaves like an annunciator instead of dead geometry.
+const CAUTION_X=-0.43;
 const cautionLabel=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.024),new THREE.MeshBasicMaterial({map:cautionLabelTex,transparent:true}));
-cautionLabel.position.set(0,-0.395,-1.365);cautionLabel.rotation.x=-0.22;
+cautionLabel.position.set(CAUTION_X,-0.395,-1.365);cautionLabel.rotation.x=-0.22;
 cockpitGroup.add(cautionLabel);
 const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.06,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
-cautionLight.position.set(0,-0.445,-1.365);cautionLight.rotation.x=-0.22;
+cautionLight.position.set(CAUTION_X,-0.445,-1.365);cautionLight.rotation.x=-0.22;
 cockpitGroup.add(cautionLight);
 
 // ---- round gauges (mechanical backups) ----
@@ -4433,7 +4509,7 @@ function kd(e){keys[e.code]=true;startAudio();
   if(e.code==='Digit1')setWpn(0);if(e.code==='Digit2')setWpn(1);
   if(e.code==='Digit3')setWpn(2);if(e.code==='Digit4')setWpn(3);
   if(e.code==='KeyC')cockpitMode=!cockpitMode;
-  if(e.code==='KeyX'){window.__throttleTarget=(window.__throttleTarget===undefined||window.__throttleTarget>0.5)?0:1;flashMsg(window.__throttleTarget?'THROTTLE UP':'FULL STOP','#3ef');}
+  if(e.code==='KeyX'){window.__throttleTarget=(window.__throttleTarget===undefined||window.__throttleTarget>0.5)?0:1;flashMsg(window.__throttleTarget?'THROTTLE UP':'FULL STOP',UI.ui);}
   if(e.code.startsWith('Arrow')||e.code==='Space')e.preventDefault();
 }
 function ku(e){keys[e.code]=false;}
@@ -4468,6 +4544,15 @@ fb.addEventListener('pointerdown',e=>{fireHeld=true;e.preventDefault();});
 fb.addEventListener('pointerup',()=>fireHeld=false);
 fb.addEventListener('pointercancel',()=>fireHeld=false);
 document.getElementById('camBtn').addEventListener('pointerdown',e=>{cockpitMode=!cockpitMode;e.preventDefault();});
+const HELP_FLY='STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK';
+const HELP_FOOT='ON FOOT — ARROWS walk and turn · MOUSE look · F talk at the counter · X leave';
+{ // on-foot buttons drive the same keys the keyboard does, so there is one code path
+  const tb=document.getElementById('talkBtn'), xb=document.getElementById('exitBtn');
+  tb.addEventListener('pointerdown',e=>{keys['KeyF']=true;fp.click=true;e.preventDefault();});
+  tb.addEventListener('pointerup',()=>{keys['KeyF']=false;});
+  xb.addEventListener('pointerdown',e=>{keys['KeyX']=true;e.preventDefault();});
+  xb.addEventListener('pointerup',()=>{keys['KeyX']=false;});
+}
 document.getElementById('wpnBtn').addEventListener('pointerdown',e=>{setWpn((wpn+1)%4);e.preventDefault();});
 
 // ---------- STATE ----------
@@ -4483,7 +4568,7 @@ const CRUISE=30;
 const LOCK_TIME=0.45; // seconds of steady acquisition before a target is confirmed LOCKED
 
 // ---------- HOSTAGE / MISSION ----------
-let missionLevel=1,hostage=null,missionLine='MISSION 1 — RESCUE HOSTAGE';
+let missionLevel=1,hostage=null,deliverCountdown=null;
 const hostageMat=new THREE.MeshLambertMaterial({color:0xff9933});
 // Build a survivor figure from the shared humanoid model: natural tint, idle pose,
 // several bones procedurally driven on top of the Idle clip for continuous "alive" motion —
@@ -4635,7 +4720,7 @@ function spawnHostage(){
   {
     const sub=document.getElementById('radioSub');
     if(sub){
-      const line=rooftop?'COMMAND: SURVIVOR ON ROOFTOP, SECTOR MARKED':'COMMAND: SURVIVOR BEACON ACTIVE, PROCEED';
+      const line=rooftop?'COMMAND: CREWMAN ON A ROOFTOP, SECTOR MARKED':'COMMAND: CREWMAN LOCATED — BEACON IS LIVE';
       sub.textContent=line;
       sub.style.opacity=1;
       clearTimeout(window.__subTimeout);
@@ -4715,7 +4800,7 @@ function rescueHostage(){
       scene.remove(rescuedMesh);
     }
     addScore(500);
-    flashMsg('SURVIVOR ABOARD — FLY OUT TO THE NAVY SHIP IN THE BAY!','#3ef');
+    flashMsg('SURVIVOR ABOARD — FLY OUT TO THE NAVY SHIP IN THE BAY!',UI.ok);
     sfx(0.4,0.25,800,1000);
     missionTimer=80;
     spawnPad();
@@ -4723,7 +4808,7 @@ function rescueHostage(){
     const bonus=Math.round(missionTimer)*15;
     addScore(1000+bonus);
     hp=Math.min(100,hp+15);
-    flashMsg('HOSTAGE DELIVERED! +'+(1000+bonus)+(bonus>0?' TIME BONUS':''),'#3f8');
+    flashMsg('HOSTAGE DELIVERED! +'+(1000+bonus)+(bonus>0?' TIME BONUS':''),UI.ok);
     sfx(0.5,0.3,900,1200);
     scene.remove(hostage.m);
     hostage=null;
@@ -5198,7 +5283,9 @@ function blood(pos){
 }
 function flashMsg(t,color){
   const m=document.getElementById('msg');
-  m.textContent=t;m.style.display='block';m.style.color=color;
+  const col=color||UI.ui;
+  m.textContent=t;m.style.display='block';m.style.color=col;
+  m.style.textShadow='0 0 14px '+col;      // glow tracks the message colour, not a fixed red
   setTimeout(()=>{if(!gameOver)m.style.display='none';},2200);
 }
 
@@ -5211,48 +5298,99 @@ const hudX=hudCv.getContext('2d');
 const DPR=()=>Math.min(devicePixelRatio||1,2);
 function sizeHUD(){hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());}
 sizeHUD();
-const HUD_G='#8dff9f',HUD_DIM='rgba(141,255,159,.34)',HUD_FAINT='rgba(141,255,159,.14)',
-      HUD_AMBER='#ffc23a',HUD_RED='#ff4d4d',HUD_CYAN='#39e6ff';
-// unified HUD typography + panel chrome — matches the #taskPanel command box (translucent dark-green
-// fill, thin green border) so every readout reads as one cohesive instrument set, plus corner ticks.
-const HUD_FONT='"Courier New",monospace';
-const HF=spec=>spec+' '+HUD_FONT;
-// ONE HUD STYLE, taken from the INTEL panel: flat translucent dark-green ground, a single thin green
-// hairline border, no corner brackets, and a "◆ TITLE" header in green caps. Every panel on the
-// canvas HUD and in the DOM uses this so the whole interface reads as one instrument set.
-const HUD_FILL='rgba(3,12,6,.5)', HUD_LINE='rgba(157,255,176,.35)';
-function hudPanel(x,y,w,h){
-  hudX.fillStyle=HUD_FILL;hudX.fillRect(x,y,w,h);
-  hudX.strokeStyle=HUD_LINE;hudX.lineWidth=1;hudX.strokeRect(x+0.5,y+0.5,w-1,h-1);
+// ============================================================================
+// HUD DESIGN TOKENS — mirrors the CSS :root block at the top of the file exactly.
+// Every colour, size and gap in the canvas HUD, the TSD and the cockpit MFDs comes
+// from here. No literal colours below this line.
+// ============================================================================
+const UI={
+  ui:'#5ff2ff', hi:'#e8feff',
+  dim:'rgba(95,242,255,.46)', faint:'rgba(95,242,255,.15)',
+  warn:'#ffc23a', alert:'#ff3b52', ok:'#46e08a',
+  fill:'rgba(1,12,18,.74)', solid:'rgba(1,12,18,.92)', line:'rgba(95,242,255,.38)',
+  ink:'#00090e',                                     // scanner ground
+  font:'"Courier New",monospace',
+  micro:9, label:10, body:11, val:14,                // the four type sizes
+  M:12, GUT:8, PAD:10, ROW:16,                       // margin, gutter, panel padding, row pitch
+};
+// Back-compat aliases: a handful of call sites elsewhere still reference these names.
+const HUD_G=UI.ui,HUD_DIM=UI.dim,HUD_FAINT=UI.faint,
+      HUD_AMBER=UI.warn,HUD_RED=UI.alert,HUD_CYAN=UI.ui;
+const HUD_FONT=UI.font;
+const HF=spec=>spec+' '+UI.font;
+const T=(px,bold)=>(bold?'bold ':'')+px+'px '+UI.font;
+
+// ---- ONE panel chrome, used by every panel on the canvas HUD ----
+// Hairline border on a translucent ground, plus a bracketed pair of opposite corners
+// (the scanner-frame motif from the reference panel). `title` draws a flush header rule.
+function hudPanel(x,y,w,h,title){
+  hudX.fillStyle=UI.fill;hudX.fillRect(x,y,w,h);
+  hudX.strokeStyle=UI.line;hudX.lineWidth=1;hudX.strokeRect(x+0.5,y+0.5,w-1,h-1);
+  const c=9;
+  hudX.strokeStyle=UI.ui;hudX.lineWidth=2;
+  hudX.beginPath();                                     // top-left bracket
+  hudX.moveTo(x+1,y+c);hudX.lineTo(x+1,y+1);hudX.lineTo(x+c,y+1);
+  hudX.moveTo(x+w-1,y+h-c);hudX.lineTo(x+w-1,y+h-1);hudX.lineTo(x+w-c,y+h-1); // bottom-right
+  hudX.stroke();hudX.lineWidth=1;
+  if(title){
+    hudX.textAlign='left';hudX.textBaseline='alphabetic';
+    hudX.fillStyle=UI.ui;hudX.font=T(UI.label,true);
+    hudX.fillText(title,x+UI.PAD,y+15);
+    hudX.strokeStyle=UI.faint;                          // rule under the header
+    hudX.beginPath();hudX.moveTo(x+UI.PAD,y+21.5);hudX.lineTo(x+w-UI.PAD,y+21.5);hudX.stroke();
+  }
 }
-function hudHeader(txt,x,y){
-  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 10px');
-  hudX.fillText('◆ '+txt,x,y);
+// key: value row — the single readout primitive. Label left in dim, value right in bright.
+function hudRow(x,y,w,label,value,valColor,valSize){
+  hudX.textAlign='left';hudX.fillStyle=UI.dim;hudX.font=T(UI.label);
+  hudX.fillText(label,x,y);
+  hudX.textAlign='right';hudX.fillStyle=valColor||UI.hi;hudX.font=T(valSize||UI.val,true);
+  hudX.fillText(value,x+w,y);
+  hudX.textAlign='left';
+}
+// segmented bar — the ▮▮▮▮|||| meter from the reference panel. Reads at a glance, no text needed.
+function hudBar(x,y,w,h,frac,color,segs){
+  const n=segs||14, gap=2, sw=(w-(n-1)*gap)/n, lit=Math.round(THREE.MathUtils.clamp(frac,0,1)*n);
+  for(let i=0;i<n;i++){
+    hudX.fillStyle=i<lit?color:UI.faint;
+    hudX.fillRect(x+i*(sw+gap),y,sw,h);
+  }
 }
 const _pv=new THREE.Vector3();
 function project(v){_pv.copy(v).project(cam);return {x:(_pv.x*0.5+0.5)*W(),y:(-_pv.y*0.5+0.5)*H(),on:_pv.z<1&&_pv.z>-1};}
 
-// --- tactical situation display (bottom-left DOM canvas, 140px) ---
-const TAC=140;
+// --- TACTICAL SITUATION DISPLAY (bottom-left) ---------------------------------
+// Styled as the scanner panel: turquoise on near-black, graduated bezel, concentric
+// range rings, a slow sweep, and red triangles for hostiles. North-up, heli fixed
+// at centre. Also drawn as a texture onto the 3D cockpit dash, so it stays
+// self-contained — no reliance on the page's CSS.
+const TAC=158;
 function drawTacMap(now){
-  const range=300,scale=TAC/(range*2);
-  // live district readout: retitle the TSD and flash a banner when the pilot crosses into a new ward
+  const range=300, scale=TAC/(range*2), C=TAC/2;
+  // live district readout: retitle the TSD and flash a banner on crossing into a new ward
   { const wd=wardAt(heli.position.x,heli.position.z);
     if(wd.name!==window.__curWard){
       window.__curWard=wd.name;
       const tt=document.getElementById('tacTitle');if(tt)tt.textContent='TSD · '+wd.name+' '+wd.jp;
-      if(started&&!gameOver)flashMsg('◄ '+wd.name+' '+wd.jp+' ►','#8fd9ff');
+      if(started&&!gameOver)flashMsg('◄ '+wd.name+' '+wd.jp+' ►',UI.ui);
     }
   }
+  const FOOT=13;                                   // footer strip for the range/orientation labels
   tacC.clearRect(0,0,TAC,TAC);
-  tacC.fillStyle='rgba(2,16,9,.72)';tacC.fillRect(0,0,TAC,TAC);
-  tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4);tacC.clip();
-  tacC.strokeStyle=HUD_FAINT;tacC.lineWidth=1;
-  for(let g=0;g<=TAC;g+=14){tacC.beginPath();tacC.moveTo(g,0);tacC.lineTo(g,TAC);tacC.stroke();tacC.beginPath();tacC.moveTo(0,g);tacC.lineTo(TAC,g);tacC.stroke();}
-  // north-up map: rotate world by yaw so heli icon always points up
-  tacC.translate(TAC/2,TAC/2);tacC.rotate(yaw);
+  tacC.fillStyle=UI.ink;tacC.fillRect(0,0,TAC,TAC);
+  tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4-FOOT);tacC.clip();
+
+  // reference grid — wide and very faint; the range rings carry distance, not this
+  tacC.strokeStyle='rgba(95,242,255,.07)';tacC.lineWidth=1;
+  for(let g=0;g<=TAC;g+=22){
+    tacC.beginPath();tacC.moveTo(g,0);tacC.lineTo(g,TAC);tacC.stroke();
+    tacC.beginPath();tacC.moveTo(0,g);tacC.lineTo(TAC,g);tacC.stroke();
+  }
+
+  // ---- world layer: north-up, rotated by yaw so the heli icon always points up ----
+  tacC.translate(C,C);tacC.rotate(yaw);
   // roads
-  tacC.strokeStyle='rgba(141,255,159,.20)';
+  tacC.strokeStyle='rgba(95,242,255,.20)';
   laneRoads.z.concat(ROADS_Z.filter(r=>r.major)).forEach(r=>{
     const dz=(r.p-heli.position.z)*scale;if(Math.abs(dz)>TAC)return;
     tacC.lineWidth=r.major?2:1;tacC.beginPath();tacC.moveTo(-TAC,dz);tacC.lineTo(TAC,dz);tacC.stroke();
@@ -5261,230 +5399,320 @@ function drawTacMap(now){
     const dx=(r.p-heli.position.x)*scale;if(Math.abs(dx)>TAC)return;
     tacC.lineWidth=r.major?2:1;tacC.beginPath();tacC.moveTo(dx,-TAC);tacC.lineTo(dx,TAC);tacC.stroke();
   });
-  // Sumida river — meandering band that follows riverCX()
-  tacC.strokeStyle='rgba(40,110,150,.6)';tacC.lineWidth=Math.max(3,RIVER_HW*2*scale);tacC.lineCap='round';
+  // Sumida river — meandering band following riverCX()
+  tacC.strokeStyle='rgba(40,150,190,.55)';tacC.lineWidth=Math.max(3,RIVER_HW*2*scale);tacC.lineCap='round';
   tacC.beginPath();
   for(let z=heli.position.z-range*1.6,first=true;z<heli.position.z+range*1.6;z+=26){
     const dx=(riverCX(z)-heli.position.x)*scale,dz=(z-heli.position.z)*scale;
     if(first){tacC.moveTo(dx,dz);first=false;}else tacC.lineTo(dx,dz);
   }
   tacC.stroke();tacC.lineCap='butt';
-  // Imperial Palace — moat ring + green grounds landmark
+  // Imperial Palace — moat ring + grounds
   if(window.__palace){
     const P=window.__palace,pdx=(P.x-heli.position.x)*scale,pdz=(P.z-heli.position.z)*scale,pr=P.r*scale;
-    tacC.fillStyle='rgba(40,110,80,.28)';tacC.beginPath();tacC.arc(pdx,pdz,pr*0.76,0,7);tacC.fill();
-    tacC.strokeStyle='rgba(90,200,130,.55)';tacC.lineWidth=1.5;tacC.beginPath();tacC.arc(pdx,pdz,pr,0,7);tacC.stroke();
+    tacC.fillStyle='rgba(70,224,138,.07)';tacC.beginPath();tacC.arc(pdx,pdz,pr*0.76,0,7);tacC.fill();
+    tacC.strokeStyle='rgba(70,224,138,.22)';tacC.lineWidth=1;tacC.beginPath();tacC.arc(pdx,pdz,pr,0,7);tacC.stroke();
   }
-  // buildings
-  tacC.fillStyle='rgba(120,150,140,.28)';
+  // building footprints
+  tacC.fillStyle='rgba(95,242,255,.11)';
   buildings.forEach(b=>{
     const dx=(b.m.position.x-heli.position.x)*scale,dz=(b.m.position.z-heli.position.z)*scale;
-    if(Math.abs(dx)>TAC/2||Math.abs(dz)>TAC/2)return;
+    if(Math.abs(dx)>C||Math.abs(dz)>C)return;
     const sz=Math.max(1.4,b.w*scale*0.6);tacC.fillRect(dx-sz/2,dz-sz/2,sz,sz);
   });
-  // threats — zombies: small red/orange squares
+  // ground hostiles — small red ticks
   zombies.forEach(z=>{
     const dx=(z.m.position.x-heli.position.x)*scale,dz=(z.m.position.z-heli.position.z)*scale;
-    if(Math.abs(dx)>TAC/2||Math.abs(dz)>TAC/2)return;
-    tacC.fillStyle=z.big?'#ff8a2a':'#ff3b3b';
+    if(Math.abs(dx)>C||Math.abs(dz)>C)return;
+    tacC.fillStyle=z.big?UI.warn:UI.alert;
     const s2=z.big?4:2.6;tacC.fillRect(dx-s2/2,dz-s2/2,s2,s2);
   });
-  // enemy aircraft / boss — distinct hostile markers (magenta diamonds, boss = pulsing red ring)
+  // air/naval hostiles — red warning triangles, clamped to the bezel so off-map threats still read
+  const tri=(x,y,r)=>{tacC.beginPath();tacC.moveTo(x,y-r);tacC.lineTo(x+r*0.92,y+r*0.66);tacC.lineTo(x-r*0.92,y+r*0.66);tacC.closePath();};
   enemies.forEach(e=>{
     const dx=(e.m.position.x-heli.position.x)*scale,dz=(e.m.position.z-heli.position.z)*scale;
-    const cl=Math.max(-TAC/2+5,Math.min(TAC/2-5,dx)),cd=Math.max(-TAC/2+5,Math.min(TAC/2-5,dz)); // clamp to edge so off-map threats still show
-    tacC.save();tacC.translate(cl,cd);
-    if(e.boss){
-      const pl=5+Math.sin(now/170)*1.6;
-      tacC.strokeStyle='#ff2f2f';tacC.lineWidth=2;tacC.beginPath();tacC.arc(0,0,pl,0,7);tacC.stroke();
-      tacC.fillStyle='#ff5a5a';tacC.beginPath();tacC.arc(0,0,2,0,7);tacC.fill();
-    }else{
-      tacC.rotate(Math.PI/4);
-      tacC.fillStyle='#ff2fa0';tacC.fillRect(-3,-3,6,6);
-      tacC.strokeStyle='#ffd0e8';tacC.lineWidth=1;tacC.strokeRect(-3,-3,6,6);
-    }
+    const cl=Math.max(-C+6,Math.min(C-6,dx)),cd=Math.max(-C+6,Math.min(C-6,dz));
+    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);   // keep triangles upright
+    const r=e.boss?6.5:5;
+    tacC.fillStyle=UI.alert;tri(0,0,r);tacC.fill();
+    tacC.strokeStyle='#ffffff';tacC.lineWidth=1;tri(0,0,r);tacC.stroke();
+    if(e.boss){tacC.strokeStyle=UI.alert;tacC.lineWidth=1.4;
+      tacC.beginPath();tacC.arc(0,0,r+3+Math.sin(now/170)*1.2,0,7);tacC.stroke();}
     tacC.restore();
   });
-  // venue landing pads — cyan H markers so you can navigate to one from the map
+  // active venue pad — the sushi/market/electronics stop you're heading for
   VENUES.forEach((v,vi)=>{
     if(v.visited||vi!==stage)return;
     const dx=(v.x-heli.position.x)*scale,dz=(v.z-heli.position.z)*scale;
-    const cl=Math.max(-TAC/2+6,Math.min(TAC/2-6,dx)),cd=Math.max(-TAC/2+6,Math.min(TAC/2-6,dz));
-    tacC.strokeStyle='#5ff2ff';tacC.lineWidth=1.6;
-    tacC.beginPath();tacC.arc(cl,cd,5.5,0,7);tacC.stroke();
-    tacC.fillStyle='#5ff2ff';tacC.font='bold 8px monospace';tacC.textAlign='center';tacC.textBaseline='middle';
-    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);tacC.fillText('H',0,0.5);tacC.restore();
+    const cl=Math.max(-C+7,Math.min(C-7,dx)),cd=Math.max(-C+7,Math.min(C-7,dz));
+    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);
+    const pl=0.5+0.5*Math.sin(now/260);
+    tacC.strokeStyle=UI.ui;tacC.lineWidth=1.6;
+    tacC.beginPath();tacC.arc(0,0,5.5,0,7);tacC.stroke();
+    tacC.globalAlpha=0.35+0.45*pl;                        // gentle pulse marks it as the live goal
+    tacC.beginPath();tacC.arc(0,0,8.5,0,7);tacC.stroke();
+    tacC.globalAlpha=1;
+    tacC.fillStyle=UI.hi;tacC.font='bold 8px '+UI.font;tacC.textAlign='center';tacC.textBaseline='middle';
+    tacC.fillText('H',0,0.5);
+    tacC.restore();
   });
-  // objective
+  // located crew still on the ground — green, the thing you're actually collecting
+  CREW.forEach(c=>{
+    if(!c.found||c.rescued||c.aboard)return;
+    const dx=(c.x-heli.position.x)*scale,dz=(c.z-heli.position.z)*scale;
+    const cl=Math.max(-C+6,Math.min(C-6,dx)),cd=Math.max(-C+6,Math.min(C-6,dz));
+    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);
+    tacC.fillStyle=UI.ok;tacC.beginPath();tacC.arc(0,0,2.6,0,7);tacC.fill();
+    tacC.strokeStyle=UI.ok;tacC.lineWidth=1;
+    tacC.beginPath();tacC.arc(0,0,5.5+Math.sin(now/300)*1.2,0,7);tacC.stroke();
+    tacC.restore();
+  });
+  // legacy hostage objective marker
   if(hostage){
     const dx=(hostage.pos.x-heli.position.x)*scale,dz=(hostage.pos.z-heli.position.z)*scale;
-    const col=hostage.state==='pad'?HUD_CYAN:'#3fffa0';
-    const pulse=4+Math.sin(now/220)*1.6;
-    const cl=Math.max(-TAC/2+6,Math.min(TAC/2-6,dx)),cd=Math.max(-TAC/2+6,Math.min(TAC/2-6,dz));
+    const col=hostage.state==='pad'?UI.ui:UI.ok, pulse=4+Math.sin(now/220)*1.6;
+    const cl=Math.max(-C+6,Math.min(C-6,dx)),cd=Math.max(-C+6,Math.min(C-6,dz));
     tacC.strokeStyle=col;tacC.fillStyle=col;tacC.lineWidth=1.5;
     tacC.beginPath();tacC.arc(cl,cd,pulse,0,7);tacC.stroke();
     tacC.beginPath();tacC.arc(cl,cd,1.6,0,7);tacC.fill();
   }
   tacC.restore();
-  // heli icon (always up)
-  tacC.save();tacC.translate(TAC/2,TAC/2);
-  tacC.fillStyle='#eaffea';tacC.beginPath();tacC.moveTo(0,-7);tacC.lineTo(5,6);tacC.lineTo(0,3);tacC.lineTo(-5,6);tacC.closePath();tacC.fill();
+
+  // ---- fixed overlay: rings, sweep, bezel, own-ship ----
+  tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4-FOOT);tacC.clip();
+  // range rings — the primary distance cue, so a step above the grid in weight
+  tacC.strokeStyle='rgba(95,242,255,.26)';tacC.lineWidth=1;
+  [TAC*0.17,TAC*0.31,TAC*0.45].forEach(r=>{tacC.beginPath();tacC.arc(C,C,r,0,7);tacC.stroke();});
+  // sweep — a soft turquoise wedge, the one moving element
+  const sweep=(now/2600)%(Math.PI*2);
+  const sg=tacC.createLinearGradient(C,C,C+Math.cos(sweep)*C,C+Math.sin(sweep)*C);
+  sg.addColorStop(0,'rgba(95,242,255,0)');sg.addColorStop(1,'rgba(95,242,255,.45)');
+  tacC.strokeStyle=sg;tacC.lineWidth=2;
+  tacC.beginPath();tacC.moveTo(C,C);tacC.lineTo(C+Math.cos(sweep)*C,C+Math.sin(sweep)*C);tacC.stroke();
   tacC.restore();
-  // range rings + N marker
-  tacC.strokeStyle=HUD_DIM;tacC.lineWidth=1;
-  tacC.beginPath();tacC.arc(TAC/2,TAC/2,TAC*0.5-4,0,7);tacC.stroke();
-  tacC.beginPath();tacC.arc(TAC/2,TAC/2,TAC*0.28,0,7);tacC.stroke();
-  tacC.save();tacC.translate(TAC/2,TAC/2);tacC.rotate(yaw);
-  tacC.fillStyle=HUD_G;tacC.font='bold 9px monospace';tacC.textAlign='center';tacC.fillText('N',0,-TAC*0.5+11);
+  // own-ship: always pointing up
+  tacC.fillStyle=UI.hi;
+  tacC.beginPath();tacC.moveTo(C,C-7);tacC.lineTo(C+5,C+6);tacC.lineTo(C,C+3);tacC.lineTo(C-5,C+6);tacC.closePath();tacC.fill();
+  // graduated bezel — major tick every 30°, minor every 10°
+  tacC.save();tacC.translate(C,C);
+  for(let a=0;a<360;a+=10){
+    const major=a%30===0, rad=a*Math.PI/180;
+    tacC.strokeStyle=major?UI.dim:UI.faint;tacC.lineWidth=1;
+    const r0=C-3-FOOT/2, r1=r0-(major?6:3);
+    tacC.beginPath();
+    tacC.moveTo(Math.sin(rad)*r0,-Math.cos(rad)*r0);
+    tacC.lineTo(Math.sin(rad)*r1,-Math.cos(rad)*r1);
+    tacC.stroke();
+  }
+  tacC.rotate(yaw);
+  tacC.fillStyle=UI.ui;tacC.font='bold 9px '+UI.font;tacC.textAlign='center';tacC.textBaseline='alphabetic';
+  tacC.fillText('N',0,-C+15+FOOT/2);
   tacC.restore();
-  tacC.strokeStyle=HUD_DIM;tacC.strokeRect(1,1,TAC-2,TAC-2);
+  // range label + frame with corner brackets
+  tacC.fillStyle='rgba(1,12,18,.9)';tacC.fillRect(2,TAC-2-FOOT,TAC-4,FOOT);
+  tacC.strokeStyle=UI.faint;tacC.lineWidth=1;
+  tacC.beginPath();tacC.moveTo(2,TAC-2-FOOT+0.5);tacC.lineTo(TAC-2,TAC-2-FOOT+0.5);tacC.stroke();
+  tacC.fillStyle=UI.dim;tacC.font='8px '+UI.font;tacC.textAlign='left';tacC.textBaseline='middle';
+  tacC.fillText('RNG '+range+'m',6,TAC-2-FOOT/2);
+  tacC.textAlign='right';tacC.fillText('N-UP',TAC-6,TAC-2-FOOT/2);
+  tacC.textBaseline='alphabetic';
+  tacC.strokeStyle=UI.line;tacC.lineWidth=1;tacC.strokeRect(1.5,1.5,TAC-3,TAC-3);
+  tacC.strokeStyle=UI.ui;tacC.lineWidth=2;
+  const k=9;
+  tacC.beginPath();
+  tacC.moveTo(2,2+k);tacC.lineTo(2,2);tacC.lineTo(2+k,2);
+  tacC.moveTo(TAC-2,TAC-2-k);tacC.lineTo(TAC-2,TAC-2);tacC.lineTo(TAC-2-k,TAC-2);
+  tacC.stroke();tacC.lineWidth=1;
 }
 
-// --- cockpit MFD offscreen draws (radar sweep + attitude ball) ---
+// --- COCKPIT MFD offscreen draws ----------------------------------------------
+// Four instrument faces textured onto the 3D dash. Same tokens, same motifs as the
+// main HUD (turquoise chrome, segmented meters, red triangles for hostiles) so
+// looking down at the dash reads as the same instrument set as looking through it.
+function mfdFrame(ctx,size,title){
+  ctx.clearRect(0,0,size,size);
+  ctx.fillStyle=UI.ink;ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle=UI.line;ctx.lineWidth=1;ctx.strokeRect(1.5,1.5,size-3,size-3);
+  ctx.strokeStyle=UI.ui;ctx.lineWidth=2;const k=7;
+  ctx.beginPath();
+  ctx.moveTo(2,2+k);ctx.lineTo(2,2);ctx.lineTo(2+k,2);
+  ctx.moveTo(size-2,size-2-k);ctx.lineTo(size-2,size-2);ctx.lineTo(size-2-k,size-2);
+  ctx.stroke();ctx.lineWidth=1;
+  if(title){
+    ctx.fillStyle=UI.ui;ctx.font='bold 9px '+UI.font;ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    ctx.fillText(title,6,13);
+    ctx.strokeStyle=UI.faint;ctx.beginPath();ctx.moveTo(6,17.5);ctx.lineTo(size-6,17.5);ctx.stroke();
+  }
+}
 function drawDashMFD(){
-  radarC.clearRect(0,0,110,110);
-  radarC.strokeStyle='#0a4';radarC.beginPath();radarC.arc(55,55,50,0,7);radarC.stroke();
-  radarC.beginPath();radarC.arc(55,55,28,0,7);radarC.stroke();
-  const sweep=(performance.now()/700)%(Math.PI*2);
+  const now=performance.now();
+  // MASTER CAUTION: dark when healthy, steady amber when hurt, flashing red when critical
+  if(cautionLight){
+    const c=hp<30?((now/220|0)%2?0xff3b52:0x2a0308):hp<60?0x6a4a08:0x220000;
+    cautionLight.material.color.setHex(c);
+  }
+  // ---- RADAR: sweep + contacts ----
+  mfdFrame(radarC,110,null);
+  radarC.strokeStyle=UI.faint;radarC.lineWidth=1;
+  [50,34,18].forEach(r=>{radarC.beginPath();radarC.arc(55,55,r,0,7);radarC.stroke();});
+  radarC.beginPath();radarC.moveTo(5,55);radarC.lineTo(105,55);radarC.moveTo(55,5);radarC.lineTo(55,105);radarC.stroke();
+  const sweep=(now/2200)%(Math.PI*2);
   const grad=radarC.createLinearGradient(55,55,55+Math.cos(sweep)*50,55+Math.sin(sweep)*50);
-  grad.addColorStop(0,'rgba(0,255,100,0)');grad.addColorStop(1,'rgba(0,255,100,.5)');
+  grad.addColorStop(0,'rgba(95,242,255,0)');grad.addColorStop(1,'rgba(95,242,255,.5)');
   radarC.strokeStyle=grad;radarC.lineWidth=3;
   radarC.beginPath();radarC.moveTo(55,55);radarC.lineTo(55+Math.cos(sweep)*50,55+Math.sin(sweep)*50);radarC.stroke();
   radarC.lineWidth=1;
   zombies.forEach(z=>{
     const dx=z.m.position.x-heli.position.x,dz=z.m.position.z-heli.position.z;
     const d=Math.sqrt(dx*dx+dz*dz);if(d>320)return;
-    const a=Math.atan2(dx,-dz)-yaw;const rr=d/320*50;
-    radarC.fillStyle=z.big?'#f80':'#f33';
-    radarC.fillRect(55+Math.sin(a)*rr-2,55-Math.cos(a)*rr-2,z.big?5:3,z.big?5:3);
+    const a=Math.atan2(dx,-dz)-yaw, rr=d/320*50;
+    radarC.fillStyle=z.big?UI.warn:UI.alert;
+    const s=z.big?5:3;
+    radarC.fillRect(55+Math.sin(a)*rr-s/2,55-Math.cos(a)*rr-s/2,s,s);
   });
-  enemies.forEach(e=>{ // enemy aircraft/boss = magenta/red diamonds
+  enemies.forEach(e=>{                                  // red triangles, matching the TSD
     const dx=e.m.position.x-heli.position.x,dz=e.m.position.z-heli.position.z;
     const d=Math.sqrt(dx*dx+dz*dz);if(d>340)return;
-    const a=Math.atan2(dx,-dz)-yaw,rr=Math.min(50,d/320*50),px=55+Math.sin(a)*rr,py=55-Math.cos(a)*rr,s=e.boss?6:4;
-    radarC.save();radarC.translate(px,py);radarC.rotate(Math.PI/4);
-    radarC.fillStyle=e.boss?'#ff2f2f':'#ff2fa0';radarC.fillRect(-s/2,-s/2,s,s);radarC.restore();
+    const a=Math.atan2(dx,-dz)-yaw, rr=Math.min(50,d/320*50);
+    const px=55+Math.sin(a)*rr, py=55-Math.cos(a)*rr, r=e.boss?6:4.5;
+    radarC.fillStyle=UI.alert;
+    radarC.beginPath();radarC.moveTo(px,py-r);radarC.lineTo(px+r*0.92,py+r*0.66);radarC.lineTo(px-r*0.92,py+r*0.66);radarC.closePath();
+    radarC.fill();radarC.strokeStyle='#fff';radarC.stroke();
   });
-  radarC.fillStyle='#0f0';radarC.fillRect(53,53,4,4);
-  horC.clearRect(0,0,110,110);horC.save();
+  radarC.fillStyle=UI.hi;radarC.fillRect(53,53,4,4);
+  radarC.fillStyle=UI.dim;radarC.font='7px '+UI.font;radarC.textAlign='center';
+  radarC.fillText('RADAR 320m',55,104);
+
+  // ---- ATTITUDE: artificial horizon ----
+  horC.clearRect(0,0,110,110);
+  horC.save();
   horC.beginPath();horC.arc(55,55,50,0,7);horC.clip();
   horC.translate(55,55);horC.rotate(-roll*1.5);
   const py=pitch*160;
-  horC.fillStyle='#2a2668';horC.fillRect(-80,-110+py,160,110);
-  horC.fillStyle='#5a3c50';horC.fillRect(-80,py,160,110);
-  horC.strokeStyle='#fff';horC.beginPath();horC.moveTo(-60,py);horC.lineTo(60,py);horC.stroke();
+  horC.fillStyle='#0a2c3a';horC.fillRect(-80,-110+py,160,110);   // sky: deep teal
+  horC.fillStyle='#04141b';horC.fillRect(-80,py,160,110);        // ground: near-black
+  horC.strokeStyle=UI.ui;horC.lineWidth=1.4;
+  horC.beginPath();horC.moveTo(-60,py);horC.lineTo(60,py);horC.stroke();
+  horC.strokeStyle=UI.faint;horC.lineWidth=1;                    // pitch ladder
+  for(let p=-40;p<=40;p+=20){ if(!p)continue;
+    horC.beginPath();horC.moveTo(-16,py+p);horC.lineTo(16,py+p);horC.stroke(); }
   horC.restore();
-  horC.strokeStyle='#ff0';horC.lineWidth=2;
-  horC.beginPath();horC.moveTo(30,55);horC.lineTo(48,55);horC.moveTo(62,55);horC.lineTo(80,55);horC.stroke();horC.lineWidth=1;
+  horC.strokeStyle=UI.line;horC.lineWidth=1;horC.beginPath();horC.arc(55,55,50,0,7);horC.stroke();
+  horC.strokeStyle=UI.warn;horC.lineWidth=2;                     // fixed aircraft reference
+  horC.beginPath();horC.moveTo(30,55);horC.lineTo(48,55);horC.moveTo(62,55);horC.lineTo(80,55);horC.stroke();
+  horC.fillStyle=UI.warn;horC.fillRect(54,54,2,2);horC.lineWidth=1;
 
-  // ENG/SYS mini-MFD
-  engC.clearRect(0,0,100,100);
-  engC.fillStyle='#070a08';engC.fillRect(0,0,100,100);
-  engC.strokeStyle='#173028';engC.strokeRect(1,1,98,98);
-  engC.fillStyle='#7fffb0';engC.font='bold 9px monospace';engC.textAlign='left';
-  engC.fillText('ENG / SYS',6,12);
-  barGauge(engC,12,20,14,55,(96+Math.sin(performance.now()/500)*3)/110,'#3ef2a0','RPM');
-  barGauge(engC,38,20,14,55,hp/100,hp<30?'#ff5050':'#3ef2a0','HULL');
-  barGauge(engC,64,20,14,55,(window.__throttle!==undefined?window.__throttle:1),'#ffd24a','THR');
-  engC.fillStyle='#9be8c8';engC.font='7px monospace';engC.textAlign='left';
-  engC.fillText('OIL  OK',6,92);engC.fillText('HYD  OK',56,92);
+  // ---- ENG / SYS ----
+  mfdFrame(engC,100,'ENG / SYS');
+  vBar(engC,14,24,13,50,(96+Math.sin(now/500)*3)/110,UI.ui,'RPM');
+  vBar(engC,44,24,13,50,hp/100,hp>60?UI.ok:hp>30?UI.warn:UI.alert,'HULL');
+  vBar(engC,74,24,13,50,(window.__throttle!==undefined?window.__throttle:1),UI.ui,'THR');
+  engC.fillStyle=UI.dim;engC.font='7px '+UI.font;engC.textAlign='left';
+  engC.fillText('OIL OK',6,94);engC.textAlign='right';engC.fillText('HYD OK',94,94);
 
-  // WPN status mini-MFD
-  wpnC.clearRect(0,0,100,100);
-  wpnC.fillStyle='#0a0705';wpnC.fillRect(0,0,100,100);
-  wpnC.strokeStyle='#3a2010';wpnC.strokeRect(1,1,98,98);
-  wpnC.fillStyle='#ffb060';wpnC.font='bold 9px monospace';wpnC.textAlign='left';
-  wpnC.fillText('WPN STATUS',6,12);
-  const wNames=['MINIGUN','HYDRA70','HLFIRE','NAPALM'];
-  wNames.forEach((nm,i)=>{
-    const y=26+i*17,sel=i===wpn;
-    wpnC.fillStyle=sel?'#ffd24a':'#8a8f96';wpnC.font=(sel?'bold ':'')+'8px monospace';wpnC.textAlign='left';
-    wpnC.fillText((sel?'> ':'  ')+nm,6,y);
-    const am=ammo[i]===Infinity?'INF':ammo[i];
-    wpnC.textAlign='right';wpnC.fillText(String(am),94,y);
+  // ---- WPN STATUS ----
+  mfdFrame(wpnC,100,'WPN STATUS');
+  ['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'].forEach((nm,i)=>{
+    const y=31+i*15, sel=i===wpn;
+    if(sel){wpnC.fillStyle='rgba(255,194,58,.14)';wpnC.fillRect(4,y-9,92,13);}
+    wpnC.fillStyle=sel?UI.warn:(ammo[i]<=0?'rgba(255,59,82,.55)':UI.dim);
+    wpnC.font=(sel?'bold ':'')+'8px '+UI.font;wpnC.textAlign='left';
+    wpnC.fillText(nm,7,y);
+    wpnC.textAlign='right';wpnC.fillText(ammo[i]===Infinity?'INF':String(ammo[i]),93,y);
   });
 }
-function barGauge(ctx,x,y,w,h,frac,color,label){
-  ctx.strokeStyle='#3a3f46';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
-  ctx.fillStyle='#0a0c0e';ctx.fillRect(x,y,w,h);
-  const fh=h*THREE.MathUtils.clamp(frac,0,1);
-  ctx.fillStyle=color;ctx.fillRect(x,y+h-fh,w,fh);
-  ctx.fillStyle='#8fffde';ctx.font='7px monospace';ctx.textAlign='center';
+// vertical segmented gauge — the dash cousin of hudBar()
+function vBar(ctx,x,y,w,h,frac,color,label){
+  const n=10, gap=2, sh=(h-(n-1)*gap)/n, lit=Math.round(THREE.MathUtils.clamp(frac,0,1)*n);
+  for(let i=0;i<n;i++){
+    ctx.fillStyle=i<lit?color:UI.faint;
+    ctx.fillRect(x,y+h-sh-i*(sh+gap),w,sh);
+  }
+  ctx.fillStyle=UI.dim;ctx.font='7px '+UI.font;ctx.textAlign='center';
   ctx.fillText(label,x+w/2,y+h+9);
 }
 
-// --- vertical measuring tape (airspeed / altitude) ---
+// --- vertical measuring tape (airspeed left / altitude right) ---
+// Ticks in a clipped band, then a value box with a caret pointing at the current reading.
 function tape(cx,cy,h,val,step,unit,side,warnLow){
-  const x=hudX;
+  const x=hudX,L=side==='L';
   x.save();x.beginPath();x.rect(cx-30,cy-h/2,60,h);x.clip();
-  x.strokeStyle=HUD_DIM;x.fillStyle=HUD_G;x.font='10px monospace';
-  x.textAlign=side==='L'?'right':'left';
-  const pxPer=h/(step*5); // show ~5 steps across the tape
+  x.font=T(UI.label);x.textAlign=L?'right':'left';
+  const pxPer=h/(step*5);                        // ~5 steps visible across the tape
   const base=Math.round(val/step)*step;
   for(let k=-4;k<=4;k++){
     const tv=base+k*step;if(tv<0)continue;
-    const y=cy+(val-tv)*pxPer;
-    const major=tv%(step*5)===0;
-    x.strokeStyle=major?HUD_DIM:HUD_FAINT;x.lineWidth=1;
+    const y=cy+(val-tv)*pxPer, major=tv%(step*5)===0;
+    x.strokeStyle=major?UI.dim:UI.faint;x.lineWidth=1;
     x.beginPath();
-    if(side==='L'){x.moveTo(cx+30,y);x.lineTo(cx+30-(major?14:8),y);}
-    else{x.moveTo(cx-30,y);x.lineTo(cx-30+(major?14:8),y);}
+    if(L){x.moveTo(cx+30,y);x.lineTo(cx+30-(major?14:8),y);}
+    else {x.moveTo(cx-30,y);x.lineTo(cx-30+(major?14:8),y);}
     x.stroke();
-    if(major){x.fillStyle=HUD_DIM;x.fillText(tv,side==='L'?cx+12:cx-12,y+3.5);}
+    if(major){x.fillStyle=UI.dim;x.fillText(tv,L?cx+12:cx-12,y+3.5);}
   }
   x.restore();
-  // current-value box + caret
-  x.strokeStyle=HUD_G;x.lineWidth=1.4;
-  const bw=46,bh=17,by=cy-bh/2;
-  const bx=side==='L'?cx-30:cx-16;
-  x.fillStyle='rgba(3,14,7,.82)';x.fillRect(bx,by,bw,bh);
-  x.strokeRect(bx,by,bw,bh);
-  const caret=side==='L'?bx+bw:bx;
-  x.beginPath();x.moveTo(caret,cy);x.lineTo(caret+(side==='L'?7:-7),cy-5);x.lineTo(caret+(side==='L'?7:-7),cy+5);x.closePath();
-  x.fillStyle='rgba(3,14,7,.82)';x.fill();x.stroke();
-  x.fillStyle=(warnLow&&val<warnLow)?HUD_AMBER:'#eaffea';x.font='bold 13px monospace';x.textAlign='center';
+  // value box + caret
+  const bw=46,bh=17,by=cy-bh/2,bx=L?cx-30:cx-16;
+  x.fillStyle=UI.solid;x.fillRect(bx,by,bw,bh);
+  x.strokeStyle=UI.ui;x.lineWidth=1.4;x.strokeRect(bx,by,bw,bh);
+  const caret=L?bx+bw:bx, tip=caret+(L?7:-7);
+  x.beginPath();x.moveTo(caret,cy);x.lineTo(tip,cy-5);x.lineTo(tip,cy+5);x.closePath();
+  x.fillStyle=UI.solid;x.fill();x.stroke();
+  x.fillStyle=(warnLow&&val<warnLow)?UI.warn:UI.hi;x.font=T(13,true);x.textAlign='center';
   x.fillText(String(Math.round(val)).padStart(3,'0'),bx+bw/2,cy+4.5);
-  x.fillStyle=HUD_DIM;x.font='8px monospace';x.textAlign='center';x.fillText(unit,cx,cy-h/2-5);
+  x.fillStyle=UI.dim;x.font=T(UI.micro);x.fillText(unit,cx,cy-h/2-5);
+  x.lineWidth=1;
 }
 
-// --- heading tape (top) ---
+// --- heading tape (top centre) ---
 function headingTape(cx,y,w,hdg){
   const x=hudX;
   x.save();x.beginPath();x.rect(cx-w/2,y-2,w,28);x.clip();
-  const pxPer=w/90; // ±45° visible
-  x.font='10px monospace';x.textAlign='center';
+  x.font=T(UI.label);x.textAlign='center';
+  const pxPer=w/90;                              // ±45° visible
   for(let d=-60;d<=60;d+=5){
     const hv=((Math.round(hdg/5)*5+d)%360+360)%360;
-    const sx=cx+(d-(hdg-Math.round(hdg/5)*5))*pxPer;
-    const major=hv%15===0;
-    x.strokeStyle=major?HUD_DIM:HUD_FAINT;x.lineWidth=1;
+    const sx=cx+(d-(hdg-Math.round(hdg/5)*5))*pxPer, major=hv%15===0;
+    x.strokeStyle=major?UI.dim:UI.faint;x.lineWidth=1;
     x.beginPath();x.moveTo(sx,y+16);x.lineTo(sx,y+16-(major?9:5));x.stroke();
     if(major){
       const lbl=hv===0?'N':hv===90?'E':hv===180?'S':hv===270?'W':String(hv/10|0).padStart(2,'0');
-      x.fillStyle=HUD_DIM;x.fillText(lbl,sx,y+8);
+      x.fillStyle=UI.dim;x.fillText(lbl,sx,y+8);
     }
   }
   x.restore();
-  // center caret + heading readout
-  x.fillStyle=HUD_G;x.beginPath();x.moveTo(cx,y+17);x.lineTo(cx-5,y+24);x.lineTo(cx+5,y+24);x.closePath();x.fill();
-  x.strokeStyle=HUD_G;x.lineWidth=1.3;x.fillStyle='rgba(3,14,7,.82)';
-  x.fillRect(cx-20,y-16,40,15);x.strokeRect(cx-20,y-16,40,15);
-  x.fillStyle='#eaffea';x.font='bold 12px monospace';x.textAlign='center';
+  x.fillStyle=UI.ui;x.beginPath();x.moveTo(cx,y+17);x.lineTo(cx-5,y+24);x.lineTo(cx+5,y+24);x.closePath();x.fill();
+  x.fillStyle=UI.solid;x.fillRect(cx-20,y-16,40,15);
+  x.strokeStyle=UI.ui;x.lineWidth=1.3;x.strokeRect(cx-20,y-16,40,15);
+  x.fillStyle=UI.hi;x.font=T(12,true);x.textAlign='center';
   x.fillText(String(Math.round(hdg)).padStart(3,'0'),cx,y-4);
+  x.lineWidth=1;
 }
 
 let hudFlash=0;
+// ============================================================================
+// drawHUD — laid out on one grid, in five zones, drawn in a fixed order:
+//   TL: FLIGHT status   TC: heading + objective   TR: ARMAMENT
+//   centre: reticle, velocity vector, speed/alt tapes, target lock
+//   world-anchored: waypoint marker and off-screen arrow
+// In cockpit view the TL/TR panels are suppressed — the 3D dash MFDs already carry
+// hull, throttle and the weapon rack, and drawing both was the doubled-up readout.
+// ============================================================================
 function drawHUD(now){
   const dpr=DPR();hudX.setTransform(dpr,0,0,dpr,0,0);
   const w=W(),h=H();hudX.clearRect(0,0,w,h);
+  hudX.textBaseline='alphabetic';
   const cx=w/2,cy=h*0.45;
   const spdK=Math.round(CRUISE*(window.__throttle||1)*3.6);
   const alt=heli.position.y;
   const hdg=((-yaw*180/Math.PI)%360+360)%360;
   const compact=w<620;
+  const M=UI.M;
+  const thr=window.__throttle!==undefined?window.__throttle:1;
+  const LK=window.__lock, guidedWpn=(wpn===1||wpn===2);
 
-  // ---- boresight reticle ----
-  hudX.strokeStyle=HUD_G;hudX.lineWidth=1.4;
+  // ---------------- CENTRE: boresight reticle ----------------
+  hudX.strokeStyle=UI.ui;hudX.lineWidth=1.4;
   hudX.beginPath();hudX.arc(cx,cy,15,0,7);hudX.stroke();
   hudX.beginPath();
   hudX.moveTo(cx-26,cy);hudX.lineTo(cx-15,cy);
@@ -5492,188 +5720,141 @@ function drawHUD(now){
   hudX.moveTo(cx,cy-26);hudX.lineTo(cx,cy-15);
   hudX.moveTo(cx,cy+15);hudX.lineTo(cx,cy+22);
   hudX.stroke();
-  hudX.fillStyle=HUD_G;hudX.fillRect(cx-1,cy-1,2,2);
-  // flight-path / velocity dot from turn+climb
-  hudX.strokeStyle=HUD_DIM;hudX.lineWidth=1;
+  hudX.fillStyle=UI.ui;hudX.fillRect(cx-1,cy-1,2,2);
+  // velocity vector from turn + climb
+  hudX.strokeStyle=UI.dim;hudX.lineWidth=1;
   const fpx=cx+(roll*90),fpy=cy-(pitch*120)+40;
   hudX.beginPath();hudX.arc(fpx,fpy,4,0,7);hudX.stroke();
-  hudX.beginPath();hudX.moveTo(fpx-8,fpy);hudX.lineTo(fpx-4,fpy);hudX.moveTo(fpx+4,fpy);hudX.lineTo(fpx+8,fpy);hudX.moveTo(fpx,fpy-4);hudX.lineTo(fpx,fpy-8);hudX.stroke();
+  hudX.beginPath();
+  hudX.moveTo(fpx-8,fpy);hudX.lineTo(fpx-4,fpy);hudX.moveTo(fpx+4,fpy);hudX.lineTo(fpx+8,fpy);
+  hudX.moveTo(fpx,fpy-4);hudX.lineTo(fpx,fpy-8);hudX.stroke();
 
-  // ---- tapes framing the reticle ----
-  const tapeH=Math.min(190,h*0.34);
-  tape(cx-118,cy,tapeH,spdK,20,'KPH','L',null);
-  tape(cx+118,cy,tapeH,alt,20,'ALT M','R',20);
+  // ---------------- CENTRE: tapes + heading ----------------
+  const tapeH=compact?Math.min(150,h*0.30):Math.min(190,h*0.34);
+  const tapeOff=compact?Math.max(84,w*0.17):118;   // narrow screens: keep tapes clear of the buttons
+  tape(cx-tapeOff,cy,tapeH,spdK,20,'KPH','L',null);
+  tape(cx+tapeOff,cy,tapeH,alt,20,'ALT M','R',20);
+  headingTape(cx,M+18,Math.min(440,w*0.5),hdg);
 
-  // ---- heading tape (top center) ----
-  headingTape(cx,30,Math.min(440,w*0.5),hdg);
+  // ---------------- TOP-LEFT: flight status ----------------
+  if(!cockpitMode){
+    const pw=compact?184:210, ph=(mult>1?106:90);
+    hudPanel(M,M,pw,ph,compact?'FLIGHT':'FLIGHT · '+pilotName.toUpperCase());
+    const ix=M+UI.PAD, iw=pw-UI.PAD*2;
+    let iy=M+38;
+    hudRow(ix,iy,iw,'SCORE',String(score));iy+=UI.ROW;
+    // kills, with a brief warm pop on each new one (replaces the old giant duplicate box)
+    const pop=Math.max(0,1-(now-killPopT)/700);
+    hudRow(ix,iy,iw,'KILLS',String(kills),pop>0?UI.warn:UI.hi);
+    if(pop>0.05){
+      hudX.strokeStyle='rgba(255,194,58,'+pop.toFixed(2)+')';hudX.lineWidth=1.4;
+      hudX.strokeRect(ix-3,iy-12,iw+6,17);hudX.lineWidth=1;
+    }
+    iy+=UI.ROW;
+    if(mult>1){
+      hudX.fillStyle=UI.warn;hudX.font=T(UI.body,true);hudX.textAlign='left';
+      hudX.fillText('x'+mult.toFixed(1)+' COMBO · '+streak,ix,iy);iy+=UI.ROW;
+    }
+    // hull: segmented meter, colour is the only status signal
+    const hcol=hp>60?UI.ui:hp>30?UI.warn:UI.alert;
+    hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);hudX.textAlign='left';hudX.fillText('HULL',ix,iy);
+    hudX.fillStyle=hcol;hudX.textAlign='right';hudX.fillText(Math.max(0,Math.round(hp))+'%',ix+iw,iy);
+    hudBar(ix,iy+4,iw,6,Math.max(0,hp)/100,hcol);
+    hudX.textAlign='left';
+  }
 
-  // ---- top-left panel: identity, score, health, combat status ----
-  const plW=compact?168:214, plX=10, plY=10;
-  const plH=(mult>1?96:80);
-  hudPanel(plX,plY,plW,plH);
-  const lx=plX+10;let ly=plY+16;
-  hudHeader((compact?'AH-7 · ':'APACHE-7 · ')+pilotName+(compact?'  W'+wave:''),lx,ly);ly+=17;
-  hudX.textAlign='left';hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
-  hudX.fillText('SCORE',lx,ly);hudX.fillText('KILLS',lx+108,ly);
-  hudX.fillStyle='#eaffea';hudX.font=HF('bold 14px');
-  hudX.fillText(String(score),lx+46,ly);hudX.fillText(String(kills),lx+152,ly);ly+=17;
-  if(mult>1){hudX.fillStyle=HUD_AMBER;hudX.font=HF('bold 11px');hudX.fillText('x'+mult.toFixed(1)+' COMBO · '+streak,lx,ly);ly+=15;}
-  // integrity (health) bar
-  const bw=plW-22,bh=11;
-  hudX.strokeStyle=HUD_DIM;hudX.lineWidth=1;hudX.strokeRect(lx,ly,bw,bh);
-  const frac=Math.max(0,hp)/100;
-  const hcol=hp>60?'#3fe07a':hp>30?'#ffc23a':'#ff4d4d';
-  hudX.fillStyle=hcol;hudX.fillRect(lx+1,ly+1,(bw-2)*frac,bh-2);
-  for(let g=1;g<5;g++){hudX.strokeStyle=HUD_FAINT;hudX.beginPath();hudX.moveTo(lx+bw*g/5,ly);hudX.lineTo(lx+bw*g/5,ly+bh);hudX.stroke();}
-  hudX.fillStyle=HUD_DIM;hudX.font=HF('9px');hudX.textAlign='left';hudX.fillText('HULL',lx,ly+bh+9);
-  hudX.fillStyle=hcol;hudX.textAlign='right';hudX.fillText(Math.max(0,Math.round(hp))+'%',lx+bw,ly+bh+9);
-  hudX.textAlign='left';
-
-  // ---- wave + mission: centered pill under the heading tape (matches the command box) ----
-  if(!compact){
-    hudX.font=HF('bold 15px');const wvT='WAVE '+wave;
-    hudX.font=HF('11px');const wm=Math.max(hudX.measureText(missionLine).width, 120);
-    const mpW=Math.min(w*0.6,wm+40),mpX=cx-mpW/2,mpY=50,mpH=38;
+  // ---------------- TOP-CENTRE: current objective ----------------
+  if(!compact&&!cockpitMode){
+    const headline=missionHeadline();
+    hudX.font=T(UI.body,true);
+    const mpW=Math.min(w*0.56,Math.max(hudX.measureText(headline).width+44,200));
+    const mpX=cx-mpW/2, mpY=M+40, mpH=32;
     hudPanel(mpX,mpY,mpW,mpH);
     hudX.textAlign='center';
-    hudX.fillStyle=HUD_G;hudX.font=HF('bold 10px');hudX.fillText('◆ WAVE '+wave,cx,mpY+15);
-    hudX.fillStyle=HUD_CYAN;hudX.font=HF('10.5px');hudX.fillText(missionLine,cx,mpY+30);
+    hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);
+    hudX.fillText('OBJECTIVE',cx,mpY+12);
+    hudX.fillStyle=UI.hi;hudX.font=T(UI.body,true);
+    hudX.fillText(headline,cx,mpY+25);
+    hudX.textAlign='left';
   }
 
-  // ---- top-right panel: weapon rack + throttle ----
-  const fs=compact?11:12, rackW=compact?132:158, prW=rackW+22, prX=w-10-prW, prY=10;
-  const prH=4*(compact?18:20)+44;
-  hudPanel(prX,prY,prW,prH);
-  hudHeader('ARMAMENT',prX+10,prY+16);
-  const rx=prX+prW-11;let ry=prY+34;
-  hudX.textAlign='right';
-  const names=compact?['MINIGN','HYDRA','HLFIRE','NAPALM']:['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'];
-  for(let k=0;k<4;k++){
-    const sel=k===wpn;
-    const am=ammo[k]===Infinity?'∞':ammo[k];
-    hudX.font=HF((sel?'bold ':'')+fs+'px');
-    if(sel){hudX.fillStyle='rgba(255,194,58,.14)';hudX.fillRect(prX+5,ry-12,prW-10,18);hudX.strokeStyle=HUD_AMBER;hudX.lineWidth=1;hudX.strokeRect(prX+5,ry-12,prW-10,18);}
-    hudX.fillStyle=sel?HUD_AMBER:(ammo[k]<=0?'rgba(255,80,80,.5)':HUD_DIM);
-    hudX.textAlign='left';hudX.fillText('['+(k+1)+'] '+names[k],prX+11,ry);
-    hudX.textAlign='right';hudX.fillText(String(am),rx,ry);
-    ry+=compact?18:20;
+  // ---------------- TOP-RIGHT: armament ----------------
+  if(!cockpitMode){
+    const pw=compact?162:184, px=w-M-pw, py=M;
+    const rowH=compact?17:18;
+    const ph=30+4*rowH+40+(guidedWpn?16:0);
+    hudPanel(px,py,pw,ph,'ARMAMENT');
+    const ix=px+UI.PAD, iw=pw-UI.PAD*2;
+    let iy=py+38;
+    const names=compact?['MINIGN','HYDRA','HLFIRE','NAPALM']:['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'];
+    for(let k=0;k<4;k++){
+      const sel=k===wpn, out=ammo[k]<=0;
+      if(sel){
+        hudX.fillStyle='rgba(255,194,58,.13)';hudX.fillRect(px+4,iy-12,pw-8,rowH);
+        hudX.strokeStyle=UI.warn;hudX.strokeRect(px+4.5,iy-11.5,pw-9,rowH-1);
+      }
+      hudX.font=T(compact?10:11,sel);
+      hudX.fillStyle=sel?UI.warn:out?'rgba(255,59,82,.55)':UI.dim;
+      hudX.textAlign='left';hudX.fillText('['+(k+1)+'] '+names[k],ix,iy);
+      hudX.textAlign='right';hudX.fillText(ammo[k]===Infinity?'∞':String(ammo[k]),ix+iw,iy);
+      iy+=rowH;
+    }
+    iy+=6;
+    // throttle: same segmented meter as hull, so the two read as one family
+    hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);hudX.textAlign='left';hudX.fillText('THR',ix,iy);
+    hudX.textAlign='right';hudX.fillStyle=thr<0.15?UI.warn:UI.ui;
+    hudX.fillText(thr<0.15?'HOVER':(Math.round(thr*100)+'%'),ix+iw,iy);
+    hudBar(ix,iy+4,iw,6,thr,thr<0.15?UI.warn:UI.ui);
+    iy+=22;
+    if(guidedWpn){
+      const st=LK&&LK.locked?'LOCKED':(LK&&LK.target?'ACQUIRING':'NO TARGET');
+      hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);hudX.textAlign='left';hudX.fillText('TRACK',ix,iy);
+      hudX.textAlign='right';hudX.font=T(UI.label,true);
+      hudX.fillStyle=st==='LOCKED'?UI.alert:st==='ACQUIRING'?UI.warn:UI.dim;
+      hudX.fillText(st,ix+iw,iy);
+    }
+    hudX.textAlign='left';
   }
-  // throttle bar under weapon rack
-  const thr=window.__throttle!==undefined?window.__throttle:1;
-  const tgx=prX+11,tgy=ry+2,tgw=prW-22,tgh=9;
-  hudX.strokeStyle=HUD_DIM;hudX.lineWidth=1;hudX.strokeRect(tgx,tgy,tgw,tgh);
-  hudX.fillStyle=thr<0.15?'#ff6a6a':'#5fff8f';hudX.fillRect(tgx+1,tgy+1,(tgw-2)*Math.max(0,Math.min(1,thr)),tgh-2);
-  hudX.fillStyle=HUD_DIM;hudX.font=HF('9px');hudX.textAlign='left';hudX.fillText('THR',tgx,tgy+tgh+9);
-  hudX.textAlign='right';hudX.fillText(thr<0.15?'HOVER':(Math.round(thr*100)+'%'),tgx+tgw,tgy+tgh+9);
-  hudX.textAlign='left';
 
-  // ---- target lock box: acquire -> lock flow ----
-  const LK=window.__lock;
-  const guidedWpn=wpn===1||wpn===2;
+  // ---------------- CENTRE: target lock, acquire -> lock ----------------
   if(LK&&LK.target&&LK.target.hp>0){
     const tp=LK.target.m.position.clone();tp.y+=LK.target.big?4:2;
     const sp=project(tp);
     const rng=Math.round(heli.position.distanceTo(LK.target.m.position));
     if(sp.on){
-      const locked=LK.locked;const col=locked?HUD_RED:HUD_AMBER;
+      const locked=LK.locked, col=locked?UI.alert:UI.warn;
       const sz=locked?24:30-Math.min(6,LK.t*15);
       hudX.strokeStyle=col;hudX.lineWidth=1.6;
       if(locked){
-        // corner brackets = confirmed lock
         const c=8;
         [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([ux,uy])=>{
           hudX.beginPath();
-          hudX.moveTo(sp.x+ux*sz, sp.y+uy*sz-uy*c);hudX.lineTo(sp.x+ux*sz, sp.y+uy*sz);hudX.lineTo(sp.x+ux*sz-ux*c, sp.y+uy*sz);
+          hudX.moveTo(sp.x+ux*sz,sp.y+uy*sz-uy*c);hudX.lineTo(sp.x+ux*sz,sp.y+uy*sz);hudX.lineTo(sp.x+ux*sz-ux*c,sp.y+uy*sz);
           hudX.stroke();
         });
-        hudX.fillStyle=col;hudX.font='bold 10px monospace';hudX.textAlign='center';
-        if((now/120|0)%2)hudX.fillText(guidedWpn?'● LOCKED — FIRE':'● LOCKED',sp.x,sp.y+sz+13);
-        hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';
-        hudX.fillText('RNG '+rng+'m',sp.x,sp.y-sz-6);
+        hudX.textAlign='center';
+        if((now/120|0)%2){hudX.fillStyle=col;hudX.font=T(UI.label,true);hudX.fillText(guidedWpn?'LOCKED — FIRE':'LOCKED',sp.x,sp.y+sz+14);}
+        hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);hudX.fillText('RNG '+rng+'m',sp.x,sp.y-sz-6);
       }else{
-        // rotating box = acquiring, fills in as LK.t approaches LOCK_TIME
         hudX.save();hudX.translate(sp.x,sp.y);hudX.rotate(now/500);
         hudX.strokeRect(-sz/2,-sz/2,sz,sz);hudX.restore();
-        hudX.fillStyle=col;hudX.font='9px monospace';hudX.textAlign='center';
-        const pct=Math.min(99,Math.round(LK.t/LOCK_TIME*100));
-        hudX.fillText('ACQUIRING '+pct+'%',sp.x,sp.y+sz+2);
+        hudX.fillStyle=col;hudX.font=T(UI.micro);hudX.textAlign='center';
+        hudX.fillText('ACQUIRING '+Math.min(99,Math.round(LK.t/LOCK_TIME*100))+'%',sp.x,sp.y+sz+2);
       }
-    }
-  }else if(guidedWpn&&(now/260|0)%2){
-    hudX.fillStyle=HUD_DIM;hudX.font='9px monospace';hudX.textAlign='center';
-    hudX.fillText('NO TARGET',cx,cy+40);
-  }
-  // compact tracking-status readout under the weapon rack (visible even off-screen)
-  let ry2=tgy+tgh+24;
-  if(guidedWpn){
-    hudX.textAlign='right';hudX.font='bold 10px monospace';
-    const st=LK&&LK.locked?'LOCKED':(LK&&LK.target?'ACQUIRING':'NO TARGET');
-    hudX.fillStyle=st==='LOCKED'?HUD_RED:st==='ACQUIRING'?HUD_AMBER:HUD_DIM;
-    hudX.fillText('TRACK: '+st,rx,ry2);
-    ry2+=16;
-  }
-
-  // ---- prominent KILLS readout, with a pop/flash on each new kill ----
-  {
-    const pop=Math.max(0,1-(now-killPopT)/700); // 0..1, decays over 0.7s after a kill
-    const scale=1+pop*0.4;
-    const boxW=94,boxH=40,by=ry2+boxH*0.5;
-    hudX.save();
-    hudX.translate(rx-boxW*0.5,by);
-    hudX.scale(scale,scale);
-    hudX.textAlign='center';
-    hudX.fillStyle=pop>0?`rgba(255,${Math.round(210-140*pop)},${Math.round(60+90*pop)},1)`:HUD_DIM;
-    hudX.font='10px monospace';
-    hudX.fillText('KILLS',0,-10);
-    hudX.fillStyle=pop>0?'#fff6d8':HUD_RED;
-    hudX.font='bold 26px monospace';
-    hudX.fillText(String(kills),0,14);
-    hudX.restore();
-    if(pop>0.05){
-      hudX.strokeStyle=`rgba(255,180,90,${pop})`;hudX.lineWidth=1.4;
-      hudX.strokeRect(rx-boxW,ry2,boxW,boxH);
-    }
-    ry2+=boxH+6;
-  }
-
-  // ---- projected objective marker in the world ----
-  if(hostage){
-    const hp2=hostage.pos.clone();hp2.y+=hostage.rooftop?2:6;
-    const sp=project(hp2);
-    const dHoriz=Math.hypot(heli.position.x-hostage.pos.x,heli.position.z-hostage.pos.z);
-    const col=hostage.state==='pad'?HUD_CYAN:'#3fffa0';
-    if(sp.on){
-      hudX.strokeStyle=col;hudX.fillStyle=col;hudX.lineWidth=1.4;
-      hudX.beginPath();hudX.moveTo(sp.x,sp.y-9);hudX.lineTo(sp.x+8,sp.y);hudX.lineTo(sp.x,sp.y+9);hudX.lineTo(sp.x-8,sp.y);hudX.closePath();hudX.stroke();
-      hudX.font='10px monospace';hudX.textAlign='center';
-      hudX.fillText((hostage.state==='pad'?'LZ ':'SURVIVOR ')+Math.round(dHoriz)+'m',sp.x,sp.y-14);
-    }else{
-      // off-screen chevron toward objective
-      const ang=Math.atan2(sp.y-cy,sp.x-cx)+(_pv.z>1?Math.PI:0);
-      const ex=cx+Math.cos(ang)*Math.min(w,h)*0.32,ey=cy+Math.sin(ang)*Math.min(w,h)*0.32;
-      hudX.save();hudX.translate(ex,ey);hudX.rotate(ang);
-      hudX.fillStyle=col;hudX.beginPath();hudX.moveTo(10,0);hudX.lineTo(-6,-7);hudX.lineTo(-6,7);hudX.closePath();hudX.fill();hudX.restore();
-      hudX.fillStyle=col;hudX.font='10px monospace';hudX.textAlign='center';
-      hudX.fillText(Math.round(dHoriz)+'m',ex,ey-12);
+      hudX.lineWidth=1;hudX.textAlign='left';
     }
   }
 
-  // ---- threat warning ----
-  const threat=zombies.some(z=>z.m.position.distanceTo(heli.position)<30);
-  if(threat&&(now/220|0)%2){
-    hudX.fillStyle=HUD_RED;hudX.font='bold 13px monospace';hudX.textAlign='center';
-    hudX.fillText('⚠ HOSTILES CLOSE',cx,h*0.62);
-  }
-  if(hp<30&&hp>0&&(now/200|0)%2){
-    hudX.fillStyle=HUD_RED;hudX.font='bold 12px monospace';hudX.textAlign='center';
-    hudX.fillText('◆ HULL CRITICAL ◆',cx,h*0.66);
-  }
-  // ---- WAYPOINT: screen marker + off-screen arrow to the current objective (venue pad or crew) ----
+  // ---------------- WORLD-ANCHORED: waypoint to the live objective ----------------
   if(started&&!gameOver&&!missionDone){
-    let tgt=null,label='',col=HUD_CYAN;
+    let tgt=null,label='',col=UI.ui;
     const kc=CREW.filter(c=>c.found&&!c.rescued&&!c.aboard);
-    if(aboard.length&&window.__navyShip){tgt=window.__navyShip.padPos.clone();label='NAVY SHIP';col='#7dff6a';}
-    else if(kc.length){let bd=1e9;kc.forEach(c=>{const d=Math.hypot(heli.position.x-c.x,heli.position.z-c.z);if(d<bd){bd=d;tgt=new THREE.Vector3(c.x,3,c.z);label=c.id;}});col='#7dff6a';}
+    if(aboard.length&&window.__navyShip){tgt=window.__navyShip.padPos.clone();label='NAVY SHIP';col=UI.ok;}
+    else if(kc.length){
+      let bd=1e9;
+      kc.forEach(c=>{const d=Math.hypot(heli.position.x-c.x,heli.position.z-c.z);if(d<bd){bd=d;tgt=new THREE.Vector3(c.x,3,c.z);label=c.id;}});
+      col=UI.ok;
+    }
     else{const v=activeVenue();if(v){tgt=new THREE.Vector3(v.x,12,v.z);label='LAND · '+v.name;}}
     if(tgt){
       const dist=Math.round(Math.hypot(heli.position.x-tgt.x,heli.position.z-tgt.z));
@@ -5682,23 +5863,35 @@ function drawHUD(now){
       if(sp.on&&sp.x>30&&sp.x<w-30&&sp.y>60&&sp.y<h-60){
         hudX.strokeStyle=col;hudX.lineWidth=2;
         hudX.beginPath();hudX.arc(sp.x,sp.y,15,0,7);hudX.stroke();
-        hudX.beginPath();hudX.moveTo(sp.x,sp.y-22);hudX.lineTo(sp.x-6,sp.y-32);hudX.lineTo(sp.x+6,sp.y-32);hudX.closePath();hudX.fillStyle=col;hudX.fill();
-        hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;
+        hudX.beginPath();hudX.moveTo(sp.x,sp.y-22);hudX.lineTo(sp.x-6,sp.y-32);hudX.lineTo(sp.x+6,sp.y-32);hudX.closePath();
+        hudX.fillStyle=col;hudX.fill();
+        hudX.font=T(UI.label,true);hudX.textAlign='center';hudX.fillStyle=col;
         hudX.fillText(label+'  '+dist+'m',sp.x,sp.y+30);
       }else{
-        // off screen: pin an arrow to the edge pointing the way
         const ang=Math.atan2(tgt.x-heli.position.x,tgt.z-heli.position.z)-yaw;
-        const r=Math.min(w,h)*0.33, ax=cx+Math.sin(ang)*r, ay=h*0.45-Math.cos(ang)*r;
+        const r=Math.min(w,h)*0.33, ax=cx+Math.sin(ang)*r, ay=cy-Math.cos(ang)*r;
         hudX.translate(ax,ay);hudX.rotate(ang);
         hudX.fillStyle=col;hudX.beginPath();hudX.moveTo(0,-16);hudX.lineTo(11,10);hudX.lineTo(0,4);hudX.lineTo(-11,10);hudX.closePath();hudX.fill();
         hudX.rotate(-ang);
-        hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;
+        hudX.font=T(UI.label,true);hudX.textAlign='center';hudX.fillStyle=col;
         hudX.fillText(label+'  '+dist+'m',0,26);
       }
-      hudX.restore();
+      hudX.restore();hudX.lineWidth=1;hudX.textAlign='left';
     }
   }
-  // TSD label under tac map already in DOM; draw its radar frame glow via CSS
+
+  // ---------------- CAUTION STACK: one column, one place to look ----------------
+  // Warnings stack downward from a fixed line under the reticle instead of each
+  // picking its own y — so two firing at once no longer collide.
+  let cauY=h*0.63;
+  const caution=(txt,col)=>{
+    hudX.fillStyle=col;hudX.font=T(UI.body,true);hudX.textAlign='center';
+    hudX.fillText(txt,cx,cauY);cauY+=18;hudX.textAlign='left';
+  };
+  if(zombies.some(z=>z.m.position.distanceTo(heli.position)<30)&&(now/220|0)%2)caution('⚠ HOSTILES CLOSE',UI.alert);
+  if(hp<30&&hp>0&&(now/200|0)%2)caution('⚠ HULL CRITICAL',UI.alert);
+  if(guidedWpn&&!(LK&&LK.target)&&(now/260|0)%2)caution('NO TARGET',UI.dim);
+
   drawTacMap(now);
 }
 
@@ -5876,7 +6069,7 @@ function spawnBossBoat(){
   scene.add(bb.g);
   enemies.push({m:bb.g,turret:bb.turret,kind:'boat',hp:1400,spd:5,fireCd:2.4,fireRate:2.2,score:5000,t:0,boss:true});
   window.__bossAlive=true;
-  flashMsg('黒龍会 FLAGSHIP INBOUND — SINK THE OYABUN’S GUNBOAT','#ff5a2a');
+  flashMsg('黒龍会 FLAGSHIP INBOUND — SINK THE OYABUN’S GUNBOAT',UI.alert);
   comRadio('COMMAND: THE BLACK DRAGON OYABUN IS ON THAT GUNBOAT. SINK IT AND END THE SYNDICATE.');
 }
 function updateEnemies(dt,now){
@@ -5887,8 +6080,8 @@ function updateEnemies(dt,now){
       if(e.kind==='boat'){for(let k=0;k<6;k++)setTimeout(()=>{if(!gameOver)explode(e.m.position.clone().add(new THREE.Vector3((Math.random()-.5)*20,4+Math.random()*8,(Math.random()-.5)*40)),12,0,true);},k*180);}
       scene.remove(e.m);enemies.splice(i,1);
       kills++;bumpStreak();killPopT=now;addScore(e.score||400);
-      if(e.boss){window.__bossAlive=false;flashMsg('BOSS DOWN — 黒龍会 SYNDICATE CRIPPLED! +5000','#ffe14d');comRadio('COMMAND: FLAGSHIP DESTROYED. OUTSTANDING WORK, PILOT — THE HOSTAGES HAVE A CHANCE NOW.');}
-      else flashMsg('ENEMY GUNSHIP DOWN','#3ef');
+      if(e.boss){window.__bossAlive=false;flashMsg('BOSS DOWN — 黒龍会 SYNDICATE CRIPPLED! +5000',UI.warn);comRadio('COMMAND: FLAGSHIP DESTROYED. OUTSTANDING WORK, PILOT — THE HOSTAGES HAVE A CHANCE NOW.');}
+      else flashMsg('ENEMY GUNSHIP DOWN',UI.ui);
       continue;
     }
     e.t+=dt;
@@ -5924,7 +6117,7 @@ function updateHostileBullets(dt,now){
     let hit=false;
     if(!gameOver&&heli.visible&&distToSeg(heli.position,prev,b.m.position)<b.r+2.4){
       hp-=b.dmg;shake=Math.min(1,shake+(b.boat?0.8:0.42));hit=true;
-      flashMsg(b.boat?'DIRECT HIT!':'TAKING FIRE','#f66');sfx(0.22,0.2,190,120);
+      flashMsg(b.boat?'DIRECT HIT!':'TAKING FIRE',UI.alert);sfx(0.22,0.2,190,120);
       if(hp<=0){hp=0;endRun();}
     }
     if(b.m.position.y<=0.2)hit=true;
@@ -5999,7 +6192,7 @@ function checkStageProgress(){
     refreshStageMarkers();
     const nv=VENUES[stage];
     if(nv){
-      flashMsg('NEW LEAD — '+nv.name+' '+nv.jp,'#3fe0ff');
+      flashMsg('NEW LEAD — '+nv.name+' '+nv.jp,UI.ui);
       comRadio('COMMAND: NEXT CONTACT IS '+nv.name+'. A NEW PAD IS MARKED ON YOUR MAP.');
     }
   }
@@ -6614,7 +6807,7 @@ function renderIntelLog(){
   const known=CREW.filter(c=>c.found);
   if(!known.length||interiorMode){el.style.display='none';return;}
   el.style.display='block';
-  let html='<b>◆ INTEL — CREW LOCATIONS</b><br>';
+  let html='<b>INTEL — CREW LOCATIONS</b><br>';
   known.forEach(c=>{
     if(c.rescued){html+='<span class="done">'+c.id+' — recovered</span><br>';return;}
     if(c.aboard){html+='<span class="cw">'+c.id+' — ABOARD, fly to the ship</span><br>';return;}
@@ -6623,6 +6816,20 @@ function renderIntelLog(){
   const av=activeVenue();
   if(av)html+='<br><b>NEXT LEAD</b><br>&nbsp;&nbsp;Land at '+av.name+' '+av.jp+'.';
   el.innerHTML=html;
+}
+// Two levels of objective text, deliberately different lengths:
+//   missionHeadline() -> the short label in the HUD's top-centre pill
+//   objectiveText()   -> the full instruction in the bottom command box
+// Showing the same sentence in both is what made the old HUD feel doubled-up.
+function missionHeadline(){
+  if(missionDone)return 'OPERATION COMPLETE';
+  if(deliverCountdown)return deliverCountdown;                 // timed delivery overrides
+  if(aboard.length)return 'FERRY '+aboard.length+' CREW TO NAVY SHIP';
+  const pend=stagePendingCrew();
+  if(pend.length)return 'RECOVER '+pend.map(c=>c.id).join(' & ');
+  const v=activeVenue();
+  if(v)return 'STEP '+(stage+1)+'/'+VENUES.length+' · '+v.name;
+  return 'SCANNING FOR CREW';
 }
 function objectiveText(){
   if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
@@ -6641,7 +6848,7 @@ function nearestVenue(){
 }
 function enterVenue(v){
   if(interiorMode)return;
-  interiorMode=true;curVenue=v;
+  interiorMode=true;curVenue=v;document.body.classList.add('on-foot');
   const I=getInterior(v.key);
   fp.x=I.exit.x;fp.z=I.exit.z-1.2;fp.yaw=0;fp.pitch=0;fp.mdx=0;fp.mdy=0;dlgLines=null; // face INTO the room (-Z), not at the exit wall
   fpCam.aspect=W()/H();fpCam.updateProjectionMatrix();
@@ -6650,22 +6857,22 @@ function enterVenue(v){
   cockpitGroup.visible=false;
   {const el=document.getElementById('intelLog');if(el)el.style.display='none';}
   startAudio();startInteriorMusic(v.key);
-  flashMsg('▼ ENTERING '+v.name+' '+v.jp,'#3fe0ff');
+  flashMsg('▼ ENTERING '+v.name+' '+v.jp,UI.ui);
   document.getElementById('help').style.opacity=.75;
-  document.getElementById('help').textContent='ON FOOT — ARROWS: up/down walk, left/right turn · MOUSE to look around · F to talk at the counter · X to leave';
+  document.getElementById('help').textContent=HELP_FOOT;
 }
 function exitVenue(){
   if(!interiorMode)return;
   if(pendingGive)takeGive();      // don't soft-lock the stage if you walk out mid-handover
-  interiorMode=false;curVenue=null;
+  interiorMode=false;curVenue=null;document.body.classList.remove('on-foot');
   dlgLines=null;{const d=document.getElementById('dialog');if(d)d.style.display='none';}
   if(document.exitPointerLock)document.exitPointerLock();
   window.__RS=null;window.__RC=null;
   for(const k in keys)keys[k]=false; // don't carry the X press into the throttle toggle
-  document.getElementById('help').textContent='STEER: WASD / arrows / left stick · FIRE: space / red button · 1-4 or WPN weapon · C or CAM cockpit view · X or HVR hover · fly low over the beacon to extract';
+  document.getElementById('help').textContent=HELP_FLY;
   stopInteriorMusic();
   renderIntelLog();
-  flashMsg('▲ BACK IN THE COCKPIT','#3ef');
+  flashMsg('▲ BACK IN THE COCKPIT',UI.ui);
 }
 // ---- SHOPKEEPER DIALOGUE: the owner actually talks to you, hands over a map, and states in plain
 // words where each crew member is. Advance with F. The reward lands on the "receive" line. ----
@@ -6714,7 +6921,7 @@ let pendingGive=null;
 function offerGive(){
   const I=getInterior(curVenue.key);
   if(I.map&&!curVenue.visited){pendingGive=curVenue;I.map.g.visible=true;
-    flashMsg('▶ THEY PUT IT DOWN ON THE COUNTER — GO AND TAKE IT','#ffe14d');sfx(0.18,0.1,540);}
+    flashMsg('▶ THEY PUT IT DOWN ON THE COUNTER — GO AND TAKE IT',UI.warn);sfx(0.18,0.1,540);}
   else talkToOwner();
 }
 function takeGive(){
@@ -6722,7 +6929,7 @@ function takeGive(){
   const v=pendingGive;pendingGive=null;
   const I=getInterior(v.key); if(I.map)I.map.g.visible=false;
   const prev=curVenue; curVenue=v; talkToOwner(); curVenue=prev;
-  flashMsg('✔ '+v.reward+' — ADDED TO YOUR MAP','#7dff6a');sfx(0.3,0.16,880);
+  flashMsg('✔ '+v.reward+' — ADDED TO YOUR MAP',UI.ok);sfx(0.3,0.16,880);
 }
 function advanceDialog(){
   if(!dlgLines)return;
@@ -6739,7 +6946,7 @@ function talkToOwner(){
   if(v.key==='denki'){ammo[3]=Math.min(10,ammo[3]+5);ammo[2]=Math.min(20,ammo[2]+4);}
   updAmmoUI();
   if(v.marker)v.marker.visible=false;
-  flashMsg(v.reward,'#ffe14d');
+  flashMsg(v.reward,UI.warn);
   comRadio('INTEL: '+v.line);
   // spell the leads out in words, one line each, so the player is told exactly where to look
   v.reveals.forEach((id,i)=>{
@@ -6754,15 +6961,16 @@ function talkToOwner(){
 function drawFootHUD(now){
   const dpr=DPR();hudX.setTransform(dpr,0,0,dpr,0,0);
   const w=W(),h=H();hudX.clearRect(0,0,w,h);
-  const pw=Math.min(360,w-24);
-  hudPanel(10,10,pw,66);
-  hudHeader('ON FOOT — '+(curVenue?curVenue.name:''),20,28);
-  hudX.textAlign='left';hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
-  hudX.fillText(curVenue?curVenue.jp:'',21,50);
+  hudX.textBaseline='alphabetic';
+  const pw=Math.min(360,w-24), M=UI.M;
+  hudPanel(M,M,pw,68,'ON FOOT — '+(curVenue?curVenue.name:''));
+  hudX.textAlign='left';hudX.font=T(UI.label);hudX.fillStyle=UI.dim;
+  hudX.fillText(curVenue?curVenue.jp:'',M+UI.PAD,M+38);
   const left=CREW.filter(c=>!c.rescued).length;
-  hudX.fillStyle=HUD_CYAN;hudX.fillText('CREW STILL MISSING: '+left+'/'+CREW.length,21,66);
+  hudX.fillStyle=UI.hi;hudX.font=T(UI.body,true);
+  hudX.fillText('CREW STILL MISSING: '+left+'/'+CREW.length,M+UI.PAD,M+56);
   // subtle centre dot so the player has an aim/interaction reference
-  hudX.strokeStyle='rgba(141,255,159,.5)';hudX.lineWidth=1.2;
+  hudX.strokeStyle=UI.dim;hudX.lineWidth=1.2;
   hudX.beginPath();hudX.arc(w/2,h*0.5,3.5,0,7);hudX.stroke();
   // GUIDE MARKER: project the counter (or the exit, once you have the lead) so you always know where
   // to walk inside — the rooms are small but it should never be a hunt
@@ -6774,13 +6982,13 @@ function drawFootHUD(now){
     const v=wp.clone().project(fpCam);
     const on=v.z>-1&&v.z<1;
     const sx=(v.x*0.5+0.5)*w, sy=(-v.y*0.5+0.5)*h;
-    const col=goTalk?'#ffd24a':'#8dff9f', lbl=goTalk?'OWNER — press F':'EXIT — press X';
+    const col=goTalk?UI.warn:UI.ui, lbl=goTalk?'OWNER — PRESS F':'EXIT — PRESS X';
     hudX.save();
     if(on&&sx>40&&sx<w-40&&sy>70&&sy<h-90){
       hudX.strokeStyle=col;hudX.lineWidth=2;
       hudX.beginPath();hudX.arc(sx,sy,13,0,7);hudX.stroke();
       hudX.beginPath();hudX.moveTo(sx,sy-19);hudX.lineTo(sx-5,sy-28);hudX.lineTo(sx+5,sy-28);hudX.closePath();hudX.fillStyle=col;hudX.fill();
-      hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,sx,sy+27);
+      hudX.font=T(UI.body,true);hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,sx,sy+27);
     }else{
       // behind you: arrow at the screen edge telling you which way to turn
       const ang=Math.atan2(t.x-fp.x,t.z-fp.z)-fp.yaw;
@@ -6788,7 +6996,7 @@ function drawFootHUD(now){
       hudX.translate(ax,ay);hudX.rotate(ang);
       hudX.fillStyle=col;hudX.beginPath();hudX.moveTo(0,-15);hudX.lineTo(10,9);hudX.lineTo(0,3);hudX.lineTo(-10,9);hudX.closePath();hudX.fill();
       hudX.rotate(-ang);
-      hudX.font=HF('bold 11px');hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,0,24);
+      hudX.font=T(UI.body,true);hudX.textAlign='center';hudX.fillStyle=col;hudX.fillText(lbl,0,24);
     }
     hudX.restore();
   }
@@ -6863,7 +7071,7 @@ function updateCrewRescue(){
     if(Math.hypot(heli.position.x-c.x,heli.position.z-c.z)<13&&heli.position.y<14){
       c.aboard=true;aboard.push(c);
       if(c.marker){scene.remove(c.marker);c.marker=null;}
-      flashMsg(c.id+' ABOARD — '+c.role,'#7dff6a');
+      flashMsg(c.id+' ABOARD — '+c.role,UI.ok);
       comRadio('CREW: '+c.name+' IS ABOARD. '+(crewRemaining()-aboard.length>0?'KEEP LOOKING.':'THAT IS EVERYONE — GET THEM HOME.'));
       addScore(1200);
     }
@@ -6874,10 +7082,10 @@ function updateCrewRescue(){
       aboard.forEach(c=>{c.rescued=true;c.aboard=false;});
       const n=aboard.length;aboard=[];
       addScore(2000*n);
-      flashMsg(n+' CREW DELIVERED  +'+(2000*n),'#ffe14d');
+      flashMsg(n+' CREW DELIVERED  +'+(2000*n),UI.warn);
       if(crewRemaining()===0){
         missionDone=true;
-        flashMsg('OPERATION COMPLETE — ALL CREW HOME','#7dff6a');
+        flashMsg('OPERATION COMPLETE — ALL CREW HOME',UI.ok);
         comRadio('COMMAND: EVERY LAST ONE OF THEM IS ON THE DECK. OUTSTANDING NIGHT, PILOT.');
         addScore(10000);
       }else comRadio('COMMAND: THEY ARE SAFE. '+crewRemaining()+' STILL OUT THERE.');
@@ -6905,7 +7113,7 @@ ov.innerHTML=`
   <div style="font-size:9px;opacity:.5">leaderboard scores are shared with other players of this game</div>`;
 document.body.appendChild(ov);
 const comboEl=document.createElement('div');
-comboEl.style.cssText='position:absolute;top:22%;left:50%;transform:translate(-50%,-50%);font-size:26px;font-weight:bold;color:#ffe14d;text-shadow:0 0 14px #ffb02e;opacity:0;transition:opacity .25s;pointer-events:none;z-index:40;font-family:Courier New,monospace;';
+comboEl.style.cssText='position:absolute;top:22%;left:50%;transform:translate(-50%,-50%);font-size:24px;font-weight:bold;letter-spacing:.12em;color:var(--ui-warn);text-shadow:0 0 14px var(--ui-warn);opacity:0;transition:opacity .25s;pointer-events:none;z-index:40;font-family:var(--f);';
 document.body.appendChild(comboEl);
 async function loadMeta(){
   try{const r=await window.storage.get('heli-meta');
@@ -6966,7 +7174,7 @@ function resetRunState(){
   aboard=[];missionDone=false;stage=0;
   if(typeof refreshStageMarkers==='function')refreshStageMarkers();
   {const el=document.getElementById('intelLog');if(el){el.innerHTML='';el.style.display='none';}}
-  missionLine='OPERATION — RECOVER THE CREW';
+  deliverCountdown=null;
   yaw=0;vSpeed=0;pitch=0;roll=0;shake=0;
   heli.position.set(0,45,120);heli.visible=true;
   document.getElementById('msg').style.display='none';
@@ -7103,7 +7311,7 @@ function loop(now){
         hp-=8;shake=Math.min(1,shake+.6);
         const push=new THREE.Vector3(p.x-bp.x,0,p.z-bp.z).normalize().multiplyScalar(4);
         heli.position.add(push);heli.position.y=Math.min(180,b.h+4);
-        flashMsg('COLLISION!','#f66');sfx(0.4,0.35,200);
+        flashMsg('COLLISION!',UI.alert);sfx(0.4,0.35,200);
       }
     });
     // hostage pickup / delivery check
@@ -7111,11 +7319,14 @@ function loop(now){
       const dHoriz=Math.hypot(heli.position.x-hostage.pos.x,heli.position.z-hostage.pos.z);
       if(dHoriz<14&&heli.position.y<hostage.pos.y+10)rescueHostage();
     }
+    // Timed-delivery countdown. This used to overwrite missionLine unconditionally with
+    // "MISSION n — RESCUE HOSTAGE", which clobbered the crew-campaign headline on every
+    // frame and left the pre-rebrand text on the HUD for the whole run.
     if(hostage&&hostage.state==='pad'){
       missionTimer=Math.max(0,missionTimer-dt);
-      missionLine='MISSION '+missionLevel+' — DELIVER '+Math.ceil(missionTimer)+'s'+(missionTimer<=0?' (NO BONUS)':'');
+      deliverCountdown='DELIVER '+Math.ceil(missionTimer)+'s'+(missionTimer<=0?' — NO BONUS':'');
     }else{
-      missionLine='MISSION '+missionLevel+' — RESCUE HOSTAGE';
+      deliverCountdown=null;
     }
     for(let i=0;i<4;i++)cd[i]-=dt;
     if(keys['Space']||fireHeld)fire();
