@@ -10,19 +10,13 @@
   .hud { position:absolute; color:#9dffb0; text-shadow:0 0 4px rgba(120,255,150,.6); user-select:none; pointer-events:none; z-index:8; font-family:'Courier New',monospace; }
   #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:28px; font-weight:bold; text-align:center; display:none; color:#ff4040; text-shadow:0 0 12px #f00; width:90%; letter-spacing:2px; }
   #radioSub { bottom:130px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; color:#ffd27a; text-shadow:0 0 6px #000; opacity:0; transition:opacity .4s; letter-spacing:.5px; }
-  #taskPanel { bottom:104px; left:50%; transform:translateX(-50%); max-width:520px; text-align:center; font-size:12px; letter-spacing:1px; color:#9dffb0; border:1px solid rgba(157,255,176,.35); padding:5px 16px;
-    --tc:rgba(157,255,176,.85);
-    background:
-      linear-gradient(var(--tc),var(--tc)) 0 0/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 0/2px 9px no-repeat,
-      linear-gradient(var(--tc),var(--tc)) 100% 0/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 0/2px 9px no-repeat,
-      linear-gradient(var(--tc),var(--tc)) 0 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 0 100%/2px 9px no-repeat,
-      linear-gradient(var(--tc),var(--tc)) 100% 100%/9px 2px no-repeat, linear-gradient(var(--tc),var(--tc)) 100% 100%/2px 9px no-repeat,
-      rgba(3,12,6,.5); }
+  #taskPanel { bottom:104px; left:50%; transform:translateX(-50%); max-width:560px; text-align:center; font-size:10.5px; line-height:1.5; letter-spacing:.5px; color:#cfe9ff;
+    background:rgba(3,12,6,.5); border:1px solid rgba(157,255,176,.35); padding:7px 14px; }
   #dialog { left:50%; bottom:96px; transform:translateX(-50%); width:min(680px,88vw); display:none;
-    background:rgba(6,14,10,.9); border:1px solid rgba(157,255,176,.5); padding:12px 18px 10px; z-index:12;
+    background:rgba(3,12,6,.86); border:1px solid rgba(157,255,176,.35); padding:10px 16px 9px; z-index:12;
     box-shadow:0 0 26px rgba(0,0,0,.7); }
-  #dlgWho { font-size:11px; letter-spacing:2px; color:#ffd24a; margin-bottom:6px; }
-  #dlgTxt { font-size:14px; line-height:1.6; color:#eafff0; min-height:46px; }
+  #dlgWho { font-size:10px; letter-spacing:1px; color:#8dff9f; margin-bottom:5px; }
+  #dlgTxt { font-size:12px; line-height:1.6; color:#cfe9ff; min-height:42px; }
   #dlgTxt .item { color:#ffd24a; font-weight:bold; }
   #dlgTxt .place { color:#7dff6a; font-weight:bold; }
   #dlgHint { font-size:10px; color:rgba(157,255,176,.7); text-align:right; margin-top:6px; }
@@ -9544,12 +9538,17 @@ const HUD_G='#8dff9f',HUD_DIM='rgba(141,255,159,.34)',HUD_FAINT='rgba(141,255,15
 // fill, thin green border) so every readout reads as one cohesive instrument set, plus corner ticks.
 const HUD_FONT='"Courier New",monospace';
 const HF=spec=>spec+' '+HUD_FONT;
+// ONE HUD STYLE, taken from the INTEL panel: flat translucent dark-green ground, a single thin green
+// hairline border, no corner brackets, and a "◆ TITLE" header in green caps. Every panel on the
+// canvas HUD and in the DOM uses this so the whole interface reads as one instrument set.
+const HUD_FILL='rgba(3,12,6,.5)', HUD_LINE='rgba(157,255,176,.35)';
 function hudPanel(x,y,w,h){
-  hudX.fillStyle='rgba(3,12,6,.5)';hudX.fillRect(x,y,w,h);
-  hudX.strokeStyle='rgba(157,255,176,.35)';hudX.lineWidth=1;hudX.strokeRect(x+0.5,y+0.5,w-1,h-1);
-  hudX.strokeStyle='rgba(157,255,176,.85)';hudX.lineWidth=1.4;const c=7;
-  [[x+0.5,y+0.5,1,1],[x+w-0.5,y+0.5,-1,1],[x+0.5,y+h-0.5,1,-1],[x+w-0.5,y+h-0.5,-1,-1]].forEach(([px,py,sx,sy])=>{
-    hudX.beginPath();hudX.moveTo(px,py+sy*c);hudX.lineTo(px,py);hudX.lineTo(px+sx*c,py);hudX.stroke();});
+  hudX.fillStyle=HUD_FILL;hudX.fillRect(x,y,w,h);
+  hudX.strokeStyle=HUD_LINE;hudX.lineWidth=1;hudX.strokeRect(x+0.5,y+0.5,w-1,h-1);
+}
+function hudHeader(txt,x,y){
+  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 10px');
+  hudX.fillText('◆ '+txt,x,y);
 }
 const _pv=new THREE.Vector3();
 function project(v){_pv.copy(v).project(cam);return {x:(_pv.x*0.5+0.5)*W(),y:(-_pv.y*0.5+0.5)*H(),on:_pv.z<1&&_pv.z>-1};}
@@ -9833,10 +9832,9 @@ function drawHUD(now){
   const plW=compact?168:214, plX=10, plY=10;
   const plH=(mult>1?96:80);
   hudPanel(plX,plY,plW,plH);
-  const lx=plX+11;let ly=plY+20;
-  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 13px');
-  hudX.fillText((compact?'AH-7 · ':'APACHE-7 · ')+pilotName+(compact?'  W'+wave:''),lx,ly);ly+=18;
-  hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
+  const lx=plX+10;let ly=plY+16;
+  hudHeader((compact?'AH-7 · ':'APACHE-7 · ')+pilotName+(compact?'  W'+wave:''),lx,ly);ly+=17;
+  hudX.textAlign='left';hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
   hudX.fillText('SCORE',lx,ly);hudX.fillText('KILLS',lx+108,ly);
   hudX.fillStyle='#eaffea';hudX.font=HF('bold 14px');
   hudX.fillText(String(score),lx+46,ly);hudX.fillText(String(kills),lx+152,ly);ly+=17;
@@ -9859,15 +9857,16 @@ function drawHUD(now){
     const mpW=Math.min(w*0.6,wm+40),mpX=cx-mpW/2,mpY=50,mpH=38;
     hudPanel(mpX,mpY,mpW,mpH);
     hudX.textAlign='center';
-    hudX.fillStyle=HUD_G;hudX.font=HF('bold 14px');hudX.fillText('WAVE '+wave,cx,mpY+16);
-    hudX.fillStyle=HUD_CYAN;hudX.font=HF('11px');hudX.fillText(missionLine,cx,mpY+30);
+    hudX.fillStyle=HUD_G;hudX.font=HF('bold 10px');hudX.fillText('◆ WAVE '+wave,cx,mpY+15);
+    hudX.fillStyle=HUD_CYAN;hudX.font=HF('10.5px');hudX.fillText(missionLine,cx,mpY+30);
   }
 
   // ---- top-right panel: weapon rack + throttle ----
   const fs=compact?11:12, rackW=compact?132:158, prW=rackW+22, prX=w-10-prW, prY=10;
-  const prH=4*(compact?18:20)+30;
+  const prH=4*(compact?18:20)+44;
   hudPanel(prX,prY,prW,prH);
-  const rx=prX+prW-11;let ry=prY+20;
+  hudHeader('ARMAMENT',prX+10,prY+16);
+  const rx=prX+prW-11;let ry=prY+34;
   hudX.textAlign='right';
   const names=compact?['MINIGN','HYDRA','HLFIRE','NAPALM']:['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'];
   for(let k=0;k<4;k++){
@@ -10035,6 +10034,8 @@ const KOTO_SCALE=[0,2,3,7,9,12,14,15,19]; // hirajoshi-ish minor pentatonic, sem
 function startInteriorMusic(kind){
   if(!AC||inAmb)return;
   try{
+    if(AC.state==='suspended')AC.resume();   // context starts suspended until a gesture — without this the score is silent
+
     const out=AC.createGain();out.gain.value=0;out.connect(AC.destination);
     out.gain.linearRampToValueAtTime(kind==='fish'?0.05:0.085,AC.currentTime+1.6);
     // warm room tone
@@ -10326,7 +10327,7 @@ function checkStageProgress(){
 }
 const fp={x:0,z:6,yaw:Math.PI,pitch:0,bob:0,mdx:0,mdy:0}; // on-foot player state (mdx/mdy = mouse look delta)
 addEventListener('mousemove',e=>{ if(interiorMode){fp.mdx+=e.movementX||0;fp.mdy+=e.movementY||0;} });
-addEventListener('click',()=>{ if(interiorMode&&document.pointerLockElement!==document.body){document.body.requestPointerLock&&document.body.requestPointerLock();} });
+addEventListener('click',()=>{ if(interiorMode)fp.click=true; if(interiorMode&&document.pointerLockElement!==document.body){document.body.requestPointerLock&&document.body.requestPointerLock();} });
 // DEDICATED interior camera. The flight camera is a CHILD of the city scene, and three.js only calls
 // updateMatrixWorld() on a camera whose parent is null — reusing it for a different scene left it with
 // a stale world matrix (rendering from the wrong place, i.e. a black screen). This one is unparented.
@@ -10354,7 +10355,7 @@ function inWoodTex(base,dark,planks){return tex((g,w,h)=>{
       for(let r=6;r>0;r--){g.strokeStyle=`rgba(70,40,18,${0.1+r*0.03})`;g.lineWidth=1.1;g.beginPath();g.ellipse(kx,ky,r*1.8,r*1.1,0.3,0,7);g.stroke();}
     }
   }
-},256,256,true);}
+},512,512,true);}
 // glazed wall tile with grout — market/kitchen surface
 function inTileTex(base,grout,cols){return tex((g,w,h)=>{
   g.fillStyle=grout;g.fillRect(0,0,w,h);
@@ -10365,7 +10366,7 @@ function inTileTex(base,grout,cols){return tex((g,w,h)=>{
     g.fillStyle='rgba(255,255,255,.10)';g.fillRect(x*c+1.5,y*c+1.5,c-3,2.5);           // glaze highlight
     if(Math.random()<0.18){g.fillStyle='rgba(40,50,45,.16)';g.fillRect(x*c+2,y*c+c*0.55,c-4,c*0.4);} // grime
   }
-},256,256,true);}
+},512,512,true);}
 // noren curtain: dyed indigo cloth with the shop name in white
 function inNorenTex(txt,cloth){return tex((g,w,h)=>{
   g.fillStyle=cloth||'#1d3f6b';g.fillRect(0,0,w,h);
@@ -10375,7 +10376,7 @@ function inNorenTex(txt,cloth){return tex((g,w,h)=>{
   const chars=[...txt];
   const s=Math.min(h*0.42,w/chars.length*0.9);
   chars.forEach((c,i)=>_outlineText(g,c,(w/chars.length)*(i+.5),h*0.5,s,MINCHO,'#f6f2e8','#0b1a2e',Math.max(2,s*0.07)));
-},256,128);}
+},512,256,true);}
 // sushi-ya wall menu strips (品書き): vertical kanji on pale wood tags
 function inMenuTex(){return tex((g,w,h)=>{
   g.fillStyle='#20160e';g.fillRect(0,0,w,h);
@@ -10389,7 +10390,7 @@ function inMenuTex(){return tex((g,w,h)=>{
     g.fillStyle='#8a2418';g.font=`bold ${Math.round(h*0.16)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
     g.fillText('¥'+(200+Math.floor(Math.random()*8)*100),i*cw+cw/2,h*0.72);
   }
-},512,128);}
+},1024,256,true);}
 // CRT display: colour bars / test pattern / static — what an '89 shop wall actually showed
 function inCrtTex(kind){return tex((g,w,h)=>{
   if(kind===0){ // SMPTE-ish colour bars
@@ -10414,7 +10415,7 @@ function inCrtTex(kind){return tex((g,w,h)=>{
     g.fillText('東京',w*0.45,h*0.34);
   }
   ledScanlines(g,w,h,0.22); // CRT scanlines on every variant
-},128,96);}
+},320,240,true);}
 // hand-lettered fish price sign on card
 function inPriceTex(){return tex((g,w,h)=>{
   g.fillStyle='#f4ead2';g.fillRect(0,0,w,h);
@@ -10423,7 +10424,7 @@ function inPriceTex(){return tex((g,w,h)=>{
   _outlineText(g,fish[Math.floor(Math.random()*fish.length)],w*0.5,h*0.36,h*0.34,MINCHO,'#141008','#f4ead2',1);
   g.fillStyle='#c01818';g.font=`bold ${Math.round(h*0.3)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
   g.fillText('¥'+(300+Math.floor(Math.random()*20)*100),w*0.5,h*0.74);
-},128,96);}
+},320,240,true);}
 // 80s electronics ad poster
 function inAdPosterTex(){return tex((g,w,h)=>{
   const hue=Math.random()*360;
@@ -10434,8 +10435,8 @@ function inAdPosterTex(){return tex((g,w,h)=>{
   g.fillText('¥'+(9800+Math.floor(Math.random()*40)*1000),w/2,h*0.78);
   g.fillStyle='#fff';g.font=`${Math.round(h*0.06)}px ${GOTHIC}`;g.fillText('新品・保証付',w/2,h*0.9);
   ledScanlines(g,w,h,0.1);
-},128,192);}
-const _mapMat=(t,rough,metal,rx,ry)=>{if(rx||ry){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx||1,ry||1);}return new THREE.MeshStandardMaterial({map:t,roughness:rough,metalness:metal||0,emissive:0xffffff,emissiveMap:t,emissiveIntensity:0.14});};
+},320,480,true);}
+const _mapMat=(t,rough,metal,rx,ry)=>{t.anisotropy=renderer.capabilities.getMaxAnisotropy();if(rx||ry){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx||1,ry||1);}return new THREE.MeshStandardMaterial({map:t,roughness:rough,metalness:metal||0,emissive:0xffffff,emissiveMap:t,emissiveIntensity:0.14});};
 const IN_WOOD=_mapMat(inWoodTex('#a8763f','#5c3a1c',6),0.82,0.02,2,1);
 const IN_WOOD_D=_mapMat(inWoodTex('#6b431f','#3a2210',5),0.9,0,2,1);
 const IN_WALL=_mapMat(inWoodTex('#b9a179','#8a7454',9),0.95,0,1,1);
@@ -10445,31 +10446,70 @@ const IN_CONC=_mapMat(inTileTex('#5a6064','#3a4044',5),0.95,0,3,2);
 const IN_STEEL=_inMat(0x717a80,0.45,0.6);
 const IN_DARK=_inMat(0x24262c,0.7,0.3);
 const IN_GLASS=new THREE.MeshStandardMaterial({color:0xbfe6ff,transparent:true,opacity:0.22,roughness:0.05,metalness:0.1});
-const IN_ICE=new THREE.MeshStandardMaterial({color:0xd8ecf5,roughness:0.35,emissive:0x2f4a58,emissiveIntensity:0.45});
+const IN_ICE=new THREE.MeshStandardMaterial({color:0xbcd6e2,roughness:0.35,emissive:0x22343e,emissiveIntensity:0.3});
 const IN_FOAM=_inMat(0xaeb7bb,1,0);
 function inBox(w,h,d,mat,x,y,z,ry){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);if(ry)m.rotation.y=ry;return m;}
 // generous intensity/range: point lights here use decay 2, so a "normal" intensity dies within a metre
 function inLight(col,int,dist,x,y,z){const l=new THREE.PointLight(col,int*1.9,dist*1.5,1.6);l.position.set(x,y,z);return l;}
-// REAL HUMAN shopkeeper: reuse the rigged humanoid GLTF that survivors use, with its idle animation,
-// so the person behind the counter is an actual character rather than a box with a ball on top.
-// Falls back to the blocky stand-in only if the model hasn't loaded yet.
-const interiorMixers=[];
-function inHuman(x,z,ry,tint){
-  if(!(humanoidModelReady&&humanoidTemplate))return null;
+// SHOPKEEPER FIGURES. The rigged GLTF in this game is an ARMOURED SOLDIER — completely wrong behind
+// a sushi counter — so each shop gets a purpose-built character in the right clothes instead: a
+// sushi itamae in whites with a hachimaki, a fishmonger in rubber apron and cap, an old shop owner
+// in a work coat. Built from rounded primitives with real human proportions, and gently animated.
+const interiorMixers=[], interiorActors=[];
+function inShopkeeper(kind,x,z,ry){
   const g=new THREE.Group();
-  const model=THREE.SkeletonUtils.clone(humanoidTemplate);
-  applyHumanoidMaterialVariant(model,survivorMatVariants);
-  if(tint)model.traverse(o=>{if(o.isMesh&&o.material&&o.material.color){o.material=o.material.clone();o.material.color.lerp(new THREE.Color(tint),0.45);}});
-  const scale=1.78/humanoidNaturalHeight; // real human height in interior metres
-  model.scale.setScalar(scale);
-  model.rotation.y=HUMANOID_BASE_YAW;
-  g.add(model);
-  if(survivorIdleClip){
-    const mixer=new THREE.AnimationMixer(model);
-    mixer.clipAction(survivorIdleClip).setLoop(THREE.LoopRepeat,Infinity).play();
-    interiorMixers.push(mixer);
+  const skin=_inMat(0xe7c39c,0.72,0);
+  const hair=_inMat(0x191412,0.9,0);
+  let coat,lower,capCol,apron;
+  if(kind==='itamae'){ coat=_inMat(0xe6e2d6,0.9,0); lower=_inMat(0x2b2f36,0.9,0); capCol=0xeae6da; apron=_inMat(0x1b2838,0.92,0); }
+  else if(kind==='monger'){ coat=_inMat(0x2f6f9e,0.85,0); lower=_inMat(0x22262b,0.9,0); capCol=0xdfe7ec; apron=_inMat(0xb9c6cc,0.7,0.1); }
+  else { coat=_inMat(0x7d7a5c,0.88,0); lower=_inMat(0x33363c,0.9,0); capCol=0x8a8770; apron=null; }
+  const H=1.76;
+  // legs
+  [-1,1].forEach(s=>{const l=new THREE.Mesh(_capsuleGeo(0.085,0.62,10),lower);
+    l.position.set(s*0.11,0.42,0);g.add(l);});
+  // torso: tapered, slightly rounded
+  const torso=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.235,0.62,14),coat);
+  torso.position.y=1.08;torso.scale.z=0.72;g.add(torso);
+  const shoulders=new THREE.Mesh(new THREE.SphereGeometry(0.235,14,10),coat);
+  shoulders.scale.set(1,0.55,0.72);shoulders.position.y=1.38;g.add(shoulders);
+  // apron / front panel
+  if(apron){const ap=new THREE.Mesh(new THREE.BoxGeometry(0.40,0.56,0.045),apron);ap.position.set(0,0.90,0.16);g.add(ap);
+    const bib=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.26,0.04),apron);bib.position.set(0,1.28,0.155);g.add(bib);
+    [-1,1].forEach(k=>{const str=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.17,0.025),apron);str.position.set(k*0.095,1.395,0.115);str.rotation.z=k*0.13;g.add(str);});
+    const tie=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.045,0.06),apron);tie.position.set(0,1.16,0.14);g.add(tie);}
+  // arms angled forward as if working at the counter
+  [-1,1].forEach(s=>{
+    const up=new THREE.Mesh(new THREE.CylinderGeometry(0.058,0.052,0.3,8),coat);
+    up.position.set(s*0.245,1.19,0.02);up.rotation.z=s*0.22;up.rotation.x=-0.35;g.add(up);
+    const fore=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.045,0.3,8),coat);
+    fore.position.set(s*0.28,0.97,0.2);fore.rotation.x=-0.95;g.add(fore);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.055,10,8),skin);
+    hand.position.set(s*0.29,0.9,0.35);g.add(hand);
+  });
+  // neck + head
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.062,0.1,10),skin);neck.position.y=1.45;g.add(neck);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.115,16,14),skin);
+  head.scale.set(1,1.14,0.94);head.position.y=1.6;g.add(head);
+  // hair / cap
+  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(0.121,16,12,0,Math.PI*2,0,Math.PI*0.50),hair);
+  hairCap.scale.set(1,1.1,0.96);hairCap.position.y=1.615;g.add(hairCap);
+  if(kind==='itamae'){ // hachimaki headband — sits on the forehead, ABOVE the brows
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.1225,0.1225,0.046,18),_inMat(capCol,0.85,0));
+    band.position.y=1.652;g.add(band);
+    const knot=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.04,0.06),_inMat(capCol,0.85,0));knot.position.set(0,1.652,-0.128);g.add(knot);
+  }else{ // cap
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(0.128,14,10,0,Math.PI*2,0,Math.PI*0.5),_inMat(capCol,0.85,0));
+    cap.position.y=1.635;g.add(cap);
+    const brim=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.02,0.1),_inMat(capCol,0.85,0));brim.position.set(0,1.63,0.11);g.add(brim);
   }
+  // simple face so it reads as a person, not a mannequin
+  [-1,1].forEach(s=>{const e=new THREE.Mesh(new THREE.SphereGeometry(0.013,8,6),_inMat(0x140f0c,0.5,0));e.position.set(s*0.042,1.573,0.105);g.add(e);});
+  const brow=_inMat(0x1b1512,0.8,0);
+  [-1,1].forEach(s=>{const bwm=new THREE.Mesh(new THREE.BoxGeometry(0.036,0.008,0.012),brow);bwm.position.set(s*0.043,1.600,0.105);g.add(bwm);});
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(0.016,0.03,6),skin);nose.rotation.x=Math.PI/2;nose.position.set(0,1.556,0.108);g.add(nose);
   g.position.set(x,0,z);g.rotation.y=ry||0;
+  interiorActors.push({g,torso,head,ph:Math.random()*6}); // breathing / small work motion
   return g;
 }
 // a simple standing person (shopkeeper) — readable at interior scale
@@ -10483,6 +10523,97 @@ function inPerson(colTop,colBottom,x,z,ry){
   [-1,1].forEach(s=>g.add(inBox(0.13,0.62,0.15,new THREE.MeshStandardMaterial({color:colTop,roughness:0.85}),s*0.31,1.3,0)));
   g.position.set(x,0,z);g.rotation.y=ry||0;
   return g;
+}
+
+// ---- REAL SUSHI. Nigiri is a rounded finger of rice with a slice of neta draped over it — the
+// silhouette IS the tell, so a cube reads as a cube no matter what colour it is. These are built
+// from capsules at close to life size (a nigiri is about 7cm long) and share materials so the
+// whole counter still merges down to a handful of draw calls.
+const SUSHI_NETA=[
+  {n:'maguro', c:0x9e242f},  // tuna
+  {n:'salmon', c:0xe4652c},
+  {n:'hamachi',c:0xdcb877},
+  {n:'ebi',    c:0xe4705f},  // prawn — kept clearly pinker than the rice
+  {n:'tai',    c:0xdcc3b4},  // sea bream
+  {n:'ika',    c:0xd6d4c2},  // squid
+  {n:'tamago', c:0xe0aa2c}   // sweet omelette
+];
+const RICE_MAT=_inMat(0xf6f2e7,0.6,0);
+const NORI_MAT=_inMat(0x1a231c,0.8,0.03);
+const _netaMats=new Map();
+function netaMat(c){let m=_netaMats.get(c);if(!m){m=new THREE.MeshStandardMaterial({color:c,roughness:0.26,metalness:0.05,emissive:c,emissiveIntensity:0.06});_netaMats.set(c,m);}return m;}
+// capsule geometry, lathed by hand: this three build has no CapsuleGeometry and a flat-ended
+// cylinder reads as a peg, not a finger of rice. Cached — the counter reuses a handful of sizes.
+const _capGeos=new Map();
+function _capsuleGeo(r,len,seg){
+  const k=r+'|'+len+'|'+(seg||10); let g=_capGeos.get(k); if(g)return g;
+  const pts=[],N=6;
+  for(let i=0;i<=N;i++){const a=-Math.PI/2+(i/N)*(Math.PI/2);pts.push(new THREE.Vector2(Math.cos(a)*r,-len/2+Math.sin(a)*r));}
+  for(let i=0;i<=N;i++){const a=(i/N)*(Math.PI/2);pts.push(new THREE.Vector2(Math.cos(a)*r, len/2+Math.sin(a)*r));}
+  g=new THREE.LatheGeometry(pts,seg||10); _capGeos.set(k,g); return g;
+}
+function _cap(r,len,mat){return new THREE.Mesh(_capsuleGeo(r,len),mat);}
+function nigiri(x,y,z,ry,spec){
+  const g=new THREE.Group();
+  const rice=_cap(0.019,0.040,RICE_MAT);            // rotate the capsule so it lies along X
+  rice.rotation.z=Math.PI/2;rice.scale.set(0.86,1,0.92);rice.position.y=0.017;g.add(rice);
+  const neta=_cap(0.0215,0.046,netaMat(spec.c));
+  neta.rotation.z=Math.PI/2;neta.scale.set(0.46,1,1.14); // squash radially into a draped slice
+  neta.position.set(0,0.036,0.001);g.add(neta);
+  if(spec.n==='tamago'||spec.n==='ika'){             // nori band across the middle
+    const band=new THREE.Mesh(new THREE.BoxGeometry(0.009,0.046,0.056),NORI_MAT);
+    band.position.y=0.021;g.add(band);
+  }
+  g.position.set(x,y,z);g.rotation.y=ry||0;
+  return g;
+}
+function maki(x,y,z,fill){
+  const g=new THREE.Group();
+  const nori=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,0.028,14),NORI_MAT);nori.position.y=0.015;g.add(nori);
+  const rice=new THREE.Mesh(new THREE.CylinderGeometry(0.0235,0.0235,0.032,14),RICE_MAT);rice.position.y=0.015;g.add(rice);
+  const core=new THREE.Mesh(new THREE.CylinderGeometry(0.0075,0.0075,0.034,8),netaMat(fill));core.position.y=0.015;g.add(core);
+  g.position.set(x,y,z);return g;
+}
+// geta — the little wooden plank sushi is served on
+function getaBoard(x,y,z,w,d){
+  const g=new THREE.Group();
+  g.add(inBox(w,0.016,d,IN_WOOD_D,0,0.026,0));
+  [-1,1].forEach(k=>g.add(inBox(0.028,0.026,d,IN_WOOD_D,k*(w/2-0.055),0.013,0)));
+  g.position.set(x,y,z);return g;
+}
+// ---- THE MAP, AS AN ACTUAL OBJECT. The owner puts it down on the counter and you walk up and
+// take it, rather than it teleporting into the HUD.
+function inMapTex(){return tex((g,w,h)=>{
+  g.fillStyle='#e9dfc4';g.fillRect(0,0,w,h);
+  for(let i=0;i<1200;i++){g.fillStyle=`rgba(120,96,58,${Math.random()*0.06})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);} // paper tooth
+  g.strokeStyle='#9b8a63';g.lineWidth=2;
+  for(let x=1;x<9;x++){g.beginPath();g.moveTo(x*w/9,0);g.lineTo(x*w/9,h);g.stroke();}
+  for(let y=1;y<6;y++){g.beginPath();g.moveTo(0,y*h/6);g.lineTo(w,y*h/6);g.stroke();}
+  g.strokeStyle='#6d5c39';g.lineWidth=5;g.beginPath();g.moveTo(0,h*0.53);g.lineTo(w,h*0.46);g.stroke();
+  g.strokeStyle='#7ba7bf';g.lineWidth=13;g.beginPath();
+  g.moveTo(w*0.62,0);g.bezierCurveTo(w*0.5,h*0.35,w*0.78,h*0.62,w*0.6,h);g.stroke();                 // the river
+  g.fillStyle='#3a3020';g.textAlign='center';g.textBaseline='middle';
+  [['渋谷',0.17,0.25],['新宿',0.28,0.72],['秋葉原',0.79,0.28],['銀座',0.85,0.8]].forEach(a=>{
+    g.font=`bold ${Math.round(h*0.085)}px ${MINCHO}`;g.fillText(a[0],w*a[1],h*a[2]);});
+  g.strokeStyle='#c0231f';g.lineWidth=5;
+  [[0.2,0.36],[0.77,0.4]].forEach(a=>{const cx=w*a[0],cy=h*a[1];
+    g.beginPath();g.moveTo(cx-13,cy-13);g.lineTo(cx+13,cy+13);g.moveTo(cx+13,cy-13);g.lineTo(cx-13,cy+13);g.stroke();
+    g.beginPath();g.arc(cx,cy,22,0,7);g.stroke();});
+  g.fillStyle='#8a2418';g.font=`bold ${Math.round(h*0.07)}px ${GOTHIC}`;g.textAlign='left';g.textBaseline='top';
+  g.fillText('神田 · KANDA DISTRICT',12,10);
+  g.strokeStyle='rgba(90,72,44,.35)';g.lineWidth=2;[0.33,0.66].forEach(f=>{g.beginPath();g.moveTo(w*f,0);g.lineTo(w*f,h);g.stroke();});
+},512,340,true);}
+function inMapProp(x,y,z,ry){
+  const t=inMapTex();
+  const paper=new THREE.MeshStandardMaterial({map:t,roughness:0.92,emissive:0xffffff,emissiveMap:t,emissiveIntensity:0.34,side:THREE.DoubleSide});
+  const g=new THREE.Group();
+  const sheet=new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.24),paper);sheet.rotation.x=-Math.PI/2;g.add(sheet);
+  const flap=new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.11),paper);                        // one edge folded up
+  flap.position.set(0,0.03,-0.118);flap.rotation.x=-Math.PI/2+0.62;g.add(flap);
+  const glow=new THREE.Mesh(new THREE.PlaneGeometry(0.56,0.42),new THREE.MeshBasicMaterial({color:0xffe14d,transparent:true,opacity:0.22,depthWrite:false}));
+  glow.rotation.x=-Math.PI/2;glow.position.y=-0.005;g.add(glow);
+  g.position.set(x,y,z);g.rotation.y=ry||0;g.visible=false;
+  return {g,glow,baseY:y};
 }
 // ---------- INTERIOR BUILDERS ----------
 function buildSushi(){
@@ -10501,11 +10632,16 @@ function buildSushi(){
   s.add(inBox(6.4,0.16,1.5,IN_WOOD,0,1.05,-2.2));
   s.add(inBox(6.4,1.0,1.4,IN_WOOD_D,0,0.5,-2.2));
   s.add(inBox(6.2,0.5,0.5,IN_GLASS,0,1.4,-2.62));
-  // neta (fish on the case) — small colour blocks
-  const neta=[0xff8a7a,0xffd0a0,0xf25f5f,0xffe3b0,0xe86a8a,0xf9a76c,0xfff0d0,0xd94f6a];
-  for(let i=0;i<12;i++){
-    const m=new THREE.MeshStandardMaterial({color:neta[i%neta.length],roughness:0.5});
-    s.add(inBox(0.26,0.1,0.16,m,-2.7+i*0.48,1.2,-2.62));
+  // neta case: saku loins on a bed of ice with slices fanned in front, the way a real case is dressed
+  for(let i=0;i<10;i++){
+    const sp=SUSHI_NETA[i%SUSHI_NETA.length], px=-2.6+i*0.57;
+    const loin=_cap(0.042,0.15,netaMat(sp.c));
+    loin.rotation.z=Math.PI/2;loin.scale.set(0.6,1,0.88);loin.position.set(px,1.20,-2.72);s.add(loin);
+    for(let k=0;k<3;k++){
+      const sl=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.007,0.048),netaMat(sp.c));
+      sl.position.set(px-0.05+k*0.05,1.175+k*0.005,-2.54);sl.rotation.y=0.22;s.add(sl);
+    }
+    s.add(inBox(0.46,0.022,0.28,IN_ICE,px,1.152,-2.68));
   }
   // stools
   for(let i=0;i<5;i++){const st=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.24,0.1,12),IN_WOOD_D);st.position.set(-2.4+i*1.2,0.72,-0.9);s.add(st);
@@ -10522,29 +10658,47 @@ function buildSushi(){
   // hanging chochin (printed paper lantern) + warm lights
   const chTex=tex((g,w,h)=>{g.fillStyle='#e2452a';g.fillRect(0,0,w,h);
     for(let r=0;r<9;r++){g.fillStyle='rgba(0,0,0,.16)';g.fillRect(0,r*h/9,w,2);}
-    _outlineText(g,'鮨',w/2,h*0.5,h*0.42,MINCHO,'#1a0d08','#f6ead8',3);},64,64);
+    _outlineText(g,'鮨',w/2,h*0.5,h*0.42,MINCHO,'#1a0d08','#f6ead8',3);},256,256,true);
   const chMat=new THREE.MeshBasicMaterial({map:chTex});
   for(let i=0;i<3;i++){
     const ch=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.62,12),chMat);
     ch.position.set(-2.6+i*2.6,2.85,0.6);s.add(ch);
-    s.add(inLight(0xffa858,0.5,9,-2.6+i*2.6,2.6,0.6));
+    s.add(inLight(0xffa858,0.24,8,-2.6+i*2.6,2.6,0.6));
   }
-  s.add(new THREE.AmbientLight(0xffc98e,0.20));
-  s.add(new THREE.HemisphereLight(0xffcf9a,0x2a1a10,0.28)); // warm sky / dark floor bounce = real depth
-  // ---- counter dressing: neta on rice, soy dishes, cups, chopstick rests, oshibori, a sake flask ----
-  const riceM=_inMat(0xf4efe4,0.75,0), sauceM=_inMat(0x1c1410,0.35,0.1), cupM=_inMat(0xe8e2d2,0.5,0);
-  const netaC=[0xd94f4f,0xf08a5a,0xe8b96a,0xf2d9b0,0xd2607e,0xc94a3a];
-  for(let i=0;i<8;i++){
-    const px=-2.7+i*0.78, pz=-1.72;
-    s.add(inBox(0.34,0.05,0.26,riceM,px,1.16,pz));                                   // geta plate
-    for(let k=0;k<2;k++){
-      s.add(inBox(0.13,0.07,0.1,riceM,px-0.07+k*0.14,1.22,pz));                      // rice
-      const nm2=_inMat(netaC[(i+k)%netaC.length],0.42,0.05);
-      s.add(inBox(0.15,0.035,0.115,nm2,px-0.07+k*0.14,1.27,pz));                      // neta
-    }
-    if(i%2===0){const d=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.065,0.035,10),sauceM);d.position.set(px+0.3,1.17,pz+0.2);s.add(d);}
-    if(i%3===0){const c=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.042,0.085,10),cupM);c.position.set(px-0.28,1.2,pz+0.24);s.add(c);}
-    s.add(inBox(0.2,0.022,0.03,IN_WOOD_D,px,1.16,pz+0.34));                          // chopstick rest
+  s.add(new THREE.AmbientLight(0xffc98e,0.16));
+  s.add(new THREE.HemisphereLight(0xffcf9a,0x2a1a10,0.24)); // warm sky / dark floor bounce = real depth
+  // ---- THREE-POINT LIGHTING, the way a sushi bar is actually lit. A hard warm KEY straight down
+  // onto the hinoki counter (the counter is the whole point of the room), a soft BACKDROP wash up
+  // the back wall so the itamae reads in relief instead of as a silhouette, and a cool FRONT FILL
+  // drifting in from the street door so faces aren't caves.
+  const keyL=new THREE.SpotLight(0xffe2b4,0.95,13,0.78,0.65,1.5);
+  keyL.position.set(0,3.02,-1.5);keyL.target.position.set(0,1.05,-2.4);s.add(keyL);s.add(keyL.target);
+  const backL=new THREE.SpotLight(0xffc98a,0.55,11,1.0,0.9,1.6);
+  backL.position.set(0,3.08,-D/2+1.5);backL.target.position.set(0,1.5,-D/2+0.1);s.add(backL);s.add(backL.target);
+  s.add(inLight(0xffdcae,0.12,8,0,2.05,-4.85));                     // practical behind the chef
+  const fillL=new THREE.DirectionalLight(0xbdd2ff,0.14);
+  fillL.position.set(0.8,2.3,D/2);fillL.target.position.set(0,1.35,-2.4);s.add(fillL);s.add(fillL.target);
+  // warm cove strip washing the top of the back wall — gives the room a ceiling, not a lid
+  const cove=new THREE.Mesh(new THREE.BoxGeometry(W-0.6,0.09,0.16),new THREE.MeshBasicMaterial({color:0x9a6a3e}));
+  cove.position.set(0,3.06,-D/2+0.24);s.add(cove);
+  // ---- counter dressing: geta boards of nigiri, maki, gari and wasabi, soy dishes, cups ----
+  const sauceM=_inMat(0x1c1410,0.35,0.1), cupM=_inMat(0xe8e2d2,0.5,0);
+  const gariM=_inMat(0xf3c6ce,0.55,0), wasabiM=_inMat(0x8fbf5a,0.5,0);
+  for(let i=0;i<5;i++){
+    const px=-2.5+i*1.26, pz=-1.74, top=1.14;
+    s.add(getaBoard(px,top,pz,0.52,0.3));
+    const a=SUSHI_NETA[(i*2)%SUSHI_NETA.length], b=SUSHI_NETA[(i*2+3)%SUSHI_NETA.length];
+    s.add(nigiri(px-0.13,top+0.034,pz-0.04,0.05,a));
+    s.add(nigiri(px+0.02,top+0.034,pz-0.04,-0.04,b));
+    s.add(nigiri(px-0.06,top+0.034,pz+0.07,0.09,SUSHI_NETA[(i+5)%SUSHI_NETA.length]));
+    for(let k=0;k<3;k++)s.add(maki(px+0.17+ (k%2)*0.055,top+0.034,pz+0.02-Math.floor(k/2)*0.055,SUSHI_NETA[(i+k)%SUSHI_NETA.length].c));
+    const gari=new THREE.Mesh(new THREE.SphereGeometry(0.034,10,8),gariM);gari.scale.y=0.42;gari.position.set(px+0.2,top+0.04,pz+0.1);s.add(gari);
+    const wsb=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.03,8),wasabiM);wsb.position.set(px-0.2,top+0.042,pz+0.1);s.add(wsb);
+    if(i%2===0){const d=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.043,0.024,12),sauceM);d.position.set(px+0.36,1.155,pz+0.2);s.add(d);}
+    if(i%2===1){const c=new THREE.Mesh(new THREE.CylinderGeometry(0.031,0.024,0.055,12),cupM);c.position.set(px-0.34,1.175,pz+0.24);s.add(c);}
+    s.add(inBox(0.2,0.022,0.03,IN_WOOD_D,px,1.15,pz+0.36));                          // chopstick rest
+    for(let k=0;k<2;k++){const ch=new THREE.Mesh(new THREE.CylinderGeometry(0.005,0.004,0.22,5),IN_WOOD);
+      ch.rotation.x=Math.PI/2;ch.position.set(px-0.012+k*0.024,1.175,pz+0.44);s.add(ch);}
   }
   // oshibori (rolled towels) + a tokkuri flask on the counter
   for(let i=0;i<4;i++){const t=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.16,8),_inMat(0xeef2f4,0.9,0));
@@ -10558,9 +10712,10 @@ function buildSushi(){
   const noren=new THREE.Mesh(new THREE.PlaneGeometry(3.0,0.8),new THREE.MeshBasicMaterial({map:inNorenTex('かんだ'),side:THREE.DoubleSide}));
   noren.position.set(0,2.45,D/2-0.32);noren.rotation.y=Math.PI;s.add(noren);
   s.add(inBox(2.6,2.2,0.14,IN_WOOD_D,0,1.1,D/2-0.1));
-  const chef=inHuman(0,-3.9,0,0xf2f0e8)||inPerson(0xf2f0e8,0x2b2b30,0,-3.9,0);s.add(chef);
+  const chef=inShopkeeper('itamae',0,-3.25,0);s.add(chef);
+  const mp=inMapProp(0.62,1.155,-1.6,0.22);s.add(mp.g);
   return {scene:s,talk:{x:0,z:-1.4},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
-          counter:{x0:-3.2,x1:3.2,z0:-3.0,z1:-1.4}};
+          map:mp,mapPos:{x:0.62,z:-1.6},counter:{x0:-3.2,x1:3.2,z0:-3.0,z1:-1.4}};
 }
 function buildFish(){
   const s=new THREE.Scene();s.background=new THREE.Color(0x0d1216);s.fog=new THREE.Fog(0x0d1216,16,34);
@@ -10572,7 +10727,7 @@ function buildFish(){
   // fluorescent strips (cold market light)
   for(let i=0;i<3;i++){
     s.add(inBox(6.5,0.12,0.34,new THREE.MeshBasicMaterial({color:0xeaf6ff}),0,4.0,-3.6+i*3.6));
-    s.add(inLight(0xcfe6ff,0.42,15,0,3.7,-3.6+i*3.6));
+    s.add(inLight(0xcfe6ff,0.20,13,0,3.7,-3.6+i*3.6));
   }
   s.add(new THREE.AmbientLight(0xb8cfe0,0.42));
   // styrofoam crates with ice + fish, in market rows
@@ -10612,9 +10767,10 @@ function buildFish(){
   for(let i=0;i<4;i++)s.add(inBox(1.9,0.55,1.5,IN_FOAM,4.4,0.28+i*0.56,-4.6));
   // exit roller door at +z
   s.add(inBox(3.4,2.6,0.16,IN_STEEL,0,1.3,D/2-0.1));
-  const monger=inHuman(-1.2,-4.6,0.2,0x1f4f7a)||inPerson(0x1f4f7a,0x22262b,-1.2,-4.6,0.2);s.add(monger);
+  const monger=inShopkeeper('monger',-1.2,-4.6,0.2);s.add(monger);
+  const mp=inMapProp(-1.2,1.06,-3.05,0.1);s.add(mp.g);
   return {scene:s,talk:{x:-1.2,z:-3.2},exit:{x:0,z:D/2-1.3},bounds:{x:W/2-0.8,z:D/2-0.8},
-          counter:null};
+          map:mp,mapPos:{x:-1.2,z:-3.05},counter:null};
 }
 function buildDenki(){
   const s=new THREE.Scene();s.background=new THREE.Color(0x0a0a10);s.fog=new THREE.Fog(0x0a0a10,13,28);
@@ -10685,10 +10841,11 @@ function buildDenki(){
   }
   s.add(new THREE.AmbientLight(0x9fb4d0,0.3));
   s.add(inBox(2.6,2.2,0.14,IN_DARK,0,1.1,D/2-0.1)); // exit
-  const owner=inHuman(0,-4.8,0,0x6a6f52)||inPerson(0x6a6f52,0x2f3238,0,-4.8,0);s.add(owner);
+  const owner=inShopkeeper('owner',0,-4.8,0);s.add(owner);
   s.add(inBox(2.4,1.0,0.9,IN_STEEL,0,0.5,-4.0));   // service counter
+  const mp=inMapProp(0,1.02,-3.62,0.14);s.add(mp.g);
   return {scene:s,talk:{x:0,z:-3.0},exit:{x:0,z:D/2-1.2},bounds:{x:W/2-0.7,z:D/2-0.7},
-          counter:{x0:-1.2,x1:1.2,z0:-4.5,z1:-3.5}};
+          map:mp,mapPos:{x:0,z:-3.62},counter:{x0:-1.2,x1:1.2,z0:-4.5,z1:-3.5}};
 }
 const INTERIOR_BUILDERS={sushi:buildSushi,fish:buildFish,denki:buildDenki};
 const interiorCache={};
@@ -10820,6 +10977,7 @@ function enterVenue(v){
 }
 function exitVenue(){
   if(!interiorMode)return;
+  if(pendingGive)takeGive();      // don't soft-lock the stage if you walk out mid-handover
   interiorMode=false;curVenue=null;
   dlgLines=null;{const d=document.getElementById('dialog');if(d)d.style.display='none';}
   if(document.exitPointerLock)document.exitPointerLock();
@@ -10872,9 +11030,24 @@ function startDialog(v){
   if(!dlgLines){talkToOwner();return;}
   showDialog();
 }
+let pendingGive=null;
+// the owner sets the map/chart down in front of you instead of it teleporting into the HUD
+function offerGive(){
+  const I=getInterior(curVenue.key);
+  if(I.map&&!curVenue.visited){pendingGive=curVenue;I.map.g.visible=true;
+    flashMsg('▶ THEY PUT IT DOWN ON THE COUNTER — GO AND TAKE IT','#ffe14d');sfx(0.18,0.1,540);}
+  else talkToOwner();
+}
+function takeGive(){
+  if(!pendingGive)return;
+  const v=pendingGive;pendingGive=null;
+  const I=getInterior(v.key); if(I.map)I.map.g.visible=false;
+  const prev=curVenue; curVenue=v; talkToOwner(); curVenue=prev;
+  flashMsg('✔ '+v.reward+' — ADDED TO YOUR MAP','#7dff6a');sfx(0.3,0.16,880);
+}
 function advanceDialog(){
   if(!dlgLines)return;
-  if(dlgLines[dlgIdx].give)talkToOwner();       // reward + reveals land on the "RECEIVED" line
+  if(dlgLines[dlgIdx].give)offerGive();          // reward + reveals land when you pick the item up
   dlgIdx++;
   if(dlgIdx>=dlgLines.length){dlgLines=null;document.getElementById('dialog').style.display='none';return;}
   showDialog();
@@ -10904,9 +11077,8 @@ function drawFootHUD(now){
   const w=W(),h=H();hudX.clearRect(0,0,w,h);
   const pw=Math.min(360,w-24);
   hudPanel(10,10,pw,66);
-  hudX.textAlign='left';hudX.fillStyle=HUD_G;hudX.font=HF('bold 13px');
-  hudX.fillText('ON FOOT — '+(curVenue?curVenue.name:''),21,32);
-  hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
+  hudHeader('ON FOOT — '+(curVenue?curVenue.name:''),20,28);
+  hudX.textAlign='left';hudX.font=HF('10px');hudX.fillStyle=HUD_DIM;
   hudX.fillText(curVenue?curVenue.jp:'',21,50);
   const left=CREW.filter(c=>!c.rescued).length;
   hudX.fillStyle=HUD_CYAN;hudX.fillText('CREW STILL MISSING: '+left+'/'+CREW.length,21,66);
@@ -10967,6 +11139,11 @@ function updateInterior(dt){
   if(Math.abs(nx)<I.bounds.x&&!inCounter(nx,fp.z))fp.x=nx;
   if(Math.abs(nz)<I.bounds.z&&!inCounter(fp.x,nz))fp.z=nz;
   for(let i=0;i<interiorMixers.length;i++)interiorMixers[i].update(dt); // shopkeeper idle animation
+  if(I.map&&I.map.g.visible){                                            // pulse the item you can pick up
+    const t=performance.now();
+    I.map.glow.material.opacity=0.15+0.15*Math.sin(t*0.005);
+    I.map.g.position.y=I.map.baseY+Math.sin(t*0.0032)*0.007;
+  }
   if(mf||ms)fp.bob+=dt*9;
   fpCam.position.set(fp.x,1.62+Math.sin(fp.bob)*0.035,fp.z);
   fpCam.rotation.set(fp.pitch,fp.yaw,0,'YXZ');
@@ -10982,7 +11159,15 @@ function updateInterior(dt){
     const adv=keys['KeyF']||keys['ArrowRight']||keys['ArrowDown']||keys['Enter']||keys['Space'];
     if(adv&&dlgCool<=0){advanceDialog();dlgCool=0.28;
       ['KeyF','ArrowRight','ArrowDown','Enter','Space'].forEach(k=>keys[k]=false);}
+  }else if(pendingGive&&I.mapPos){
+    const dMap=Math.hypot(fp.x-I.mapPos.x,fp.z-I.mapPos.z);
+    if(dMap<2.1){
+      tp.textContent='▶ PRESS F (or click it) — TAKE THE MAP FROM THE COUNTER';
+      if((keys['KeyF']||fp.click)&&dlgCool<=0){takeGive();keys['KeyF']=false;fp.click=false;dlgCool=0.3;}
+    }else tp.textContent='▶ THE MAP IS ON THE COUNTER — WALK UP AND TAKE IT';
+    fp.click=false;
   }else{
+    fp.click=false;
     if(dTalk<2.4&&!curVenue.visited)tp.textContent='▶ PRESS F — TALK TO THE OWNER (they know where your crew is)';
     else if(dTalk<2.4)tp.textContent='You already have this lead. Check the INTEL panel outside.';
     else if(dExit<2.2)tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';
