@@ -37,7 +37,7 @@
   * { margin:0; padding:0; box-sizing:border-box; touch-action:none; }
   body { overflow:hidden; background:#000; font-family:var(--f); }
   #c { display:block; }
-  #hud { position:absolute; inset:0; pointer-events:none; z-index:6; }
+  #hud { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:6; }
   #vignette { position:absolute; inset:0; pointer-events:none; z-index:4;
     background:radial-gradient(ellipse at center, transparent 50%, rgba(6,4,18,.55) 100%); }
   #grain { position:absolute; inset:0; pointer-events:none; opacity:.05; mix-blend-mode:overlay; z-index:4;
@@ -166,7 +166,7 @@
     /* Compact has no room for a full dossier beside the command stack and the fire
        button, so it degrades to a narrow avatar strip: face, callsign, status. The
        lead text and perk line are dropped — they are still read out over the radio. */
-    #intelLog { top:150px; padding:2px 3px; }
+    #intelLog { top:158px; padding:2px 3px; }   /* clear the armament panel edge */
     #intelLog > b { display:none; }          /* no room for a header at this size */
     #intelLog .ros { margin-top:0; gap:2px; }
     #intelLog .cm { width:30px; padding:1px; gap:1px; }
@@ -4576,7 +4576,7 @@ const W=()=>innerWidth,H=()=>innerHeight;
 // biggest FPS lever on hi-DPI screens. PCF (not PCFSoft) shadows are markedly cheaper to filter.
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,powerPreference:'high-performance'});
 renderer.setSize(W(),H());
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));   // was 1.5: the upscale read as soft next to the HUD
 // device-pixel render size: the scene render target must match the canvas' actual pixel buffer,
 // otherwise the 3D is rendered at 1x (CSS px) and upscaled to the device buffer -> soft/pixelated
 // next to the crisp HUD. RW()/RH() give the true pixel dimensions to size sceneRT with.
@@ -9201,7 +9201,7 @@ function rescueHostage(){
     scene.remove(hostage.m);
     hostage=null;
     missionLevel++;missionTimer=0;
-    setTimeout(()=>{if(!gameOver)spawnHostage();},2600);
+    // (no respawn: the crew chain is the objective, one shop and one crewman at a time)
   }
 }
 
@@ -9397,13 +9397,16 @@ function spawnZombie(big){
 }
 window.__zdbg=()=>({heli,zombies,hostage,rescueHostage,spawnZombie,renderer,scene}); // TEMP DEBUG - remove before final
 window.__setYaw=v=>{yaw=v;}; // TEMP DEBUG - face the chase cam a chosen heading for QA captures
+const MAX_ZOMBIES=7;          // street threat, not a horde: they are set dressing with teeth
 function startWave(){
-  const n=3+wave*2;
-  for(let i=0;i<n;i++)setTimeout(()=>{if(!gameOver)spawnZombie(false);},i*600);
-  for(let i=0;i<Math.floor(wave/2);i++)setTimeout(()=>{if(!gameOver)spawnZombie(true);},3000+i*2000);
-  ammo[1]=Math.min(60,ammo[1]+16);ammo[2]=Math.min(12,ammo[2]+4);ammo[3]=Math.min(5,ammo[3]+1);
+  const alive=zombies.length;
+  const n=Math.max(0,Math.min(3,MAX_ZOMBIES-alive));
+  for(let i=0;i<n;i++)setTimeout(()=>{if(!gameOver&&zombies.length<MAX_ZOMBIES)spawnZombie(false);},i*900);
+  if(wave>=4&&alive<3)setTimeout(()=>{if(!gameOver)spawnZombie(true);},3000);
+  ammo[1]=Math.min(ammoMax[1],ammo[1]+16);ammo[2]=Math.min(ammoMax[2],ammo[2]+4);ammo[3]=Math.min(ammoMax[3],ammo[3]+1);
   updAmmoUI();
-  if(typeof spawnWaveEnemies==='function')spawnWaveEnemies(); // syndicate gunships + boss escalate with the wave
+  // Gunships are NO LONGER tied to waves. They launch when you have crew aboard and
+  // are running for the ship — see startInterception().
 }
 let waveSpawned=0;
 
@@ -9683,8 +9686,11 @@ const horC=horizonCanvasEl.getContext('2d');
 const tacC=tacCanvasEl.getContext('2d');
 const hudCv=document.getElementById('hud');
 const hudX=hudCv.getContext('2d');
-const DPR=()=>Math.min(devicePixelRatio||1,2);
-function sizeHUD(){hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());}
+const DPR=()=>Math.min(devicePixelRatio||1,3);   // match the DOM panels' native crispness
+function sizeHUD(){
+  hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());
+  hudCv.style.width=W()+'px';hudCv.style.height=H()+'px';   // CSS size != backing size
+}
 sizeHUD();
 // ============================================================================
 // HUD DESIGN TOKENS — mirrors the CSS :root block at the top of the file exactly.
@@ -9764,6 +9770,12 @@ function drawTacMap(now){
     }
   }
   const FOOT=13;                                   // footer strip for the range/orientation labels
+  const _tdpr=DPR();
+  if(tacCanvasEl.width!==Math.floor(TAC*_tdpr)){        // (re)back the canvas at device resolution
+    tacCanvasEl.width=tacCanvasEl.height=Math.floor(TAC*_tdpr);
+    tacCanvasEl.style.width=tacCanvasEl.style.height=TAC+'px';
+  }
+  tacC.setTransform(_tdpr,0,0,_tdpr,0,0);               // draw in 158-space, render at DPR
   tacC.clearRect(0,0,TAC,TAC);
   tacC.fillStyle=UI.ink;tacC.fillRect(0,0,TAC,TAC);
   tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4-FOOT);tacC.clip();
@@ -10504,6 +10516,14 @@ function updateEnemies(dt,now){
     if(e.kind==='heli'){
       if(e.rotor)e.rotor.rotation.y+=34*dt;
       if(e.trotor)e.trotor.rotation.x+=48*dt;
+      if(e.leaving){                                   // hunt called off: climb out and go
+        const away=toH.clone().setY(0).normalize().multiplyScalar(-e.spd*1.5*dt);
+        e.m.position.add(away);
+        e.m.position.y+=22*dt;
+        e.m.rotation.y=Math.atan2(e.m.position.x-heli.position.x,e.m.position.z-heli.position.z);
+        if(dist>320||e.m.position.y>190){scene.remove(e.m);enemies.splice(i,1);}
+        continue;
+      }
       const dir=dist>e.standoff?1:(dist<e.standoff*0.7?-1:0);
       const flat=toH.clone().setY(0).normalize();
       e.m.position.add(flat.multiplyScalar(dir*e.spd*dt));
@@ -10542,13 +10562,28 @@ function updateHostileBullets(dt,now){
     }
   }
 }
-// wave director for enemy forces — escalates gunships, brings the boss at wave 3+
-function spawnWaveEnemies(){
-  // top up toward the cap (spawnEnemyHeli itself refuses past MAX_EHELI) — keeps pressure without piling up
-  const alive=enemies.reduce((n,e)=>n+(e.kind==='heli'?1:0),0);
-  const toSpawn=Math.max(0,Math.min(MAX_EHELI,wave+1)-alive);
-  for(let k=0;k<toSpawn;k++)setTimeout(()=>{if(!gameOver)spawnEnemyHeli();},900+k*1600);
-  if(wave>=3&&!window.__bossAlive&&!window.__bossDead)setTimeout(()=>{if(!gameOver)spawnBossBoat();},4000);
+// Interception: launched when a crewman comes off the hoist, stood down once the
+// deck is clear. The flight grows as the night goes on, and the oyabun's flagship
+// comes out for the last run.
+let intercepting=false;
+function startInterception(){
+  if(intercepting||gameOver||missionDone)return;
+  intercepting=true;
+  const recovered=CREW.filter(c=>c.rescued).length;
+  const n=Math.min(MAX_EHELI,1+Math.floor((recovered+1)/2));   // 1 -> 2 -> 3 across the night
+  const last=(recovered+aboard.length)>=CREW.length;           // final run home
+  flashMsg('⚠ GUNSHIPS SCRAMBLED — RUN FOR THE SHIP',UI.alert);
+  comRadio('COMMAND: THEY SAW THE HOIST. '+n+' GUNSHIP'+(n>1?'S':'')+' INBOUND — GET YOUR PEOPLE TO THE DECK.');
+  for(let k=0;k<n;k++)setTimeout(()=>{if(!gameOver&&intercepting)spawnEnemyHeli();},1200+k*2200);
+  if(last&&!window.__bossAlive&&!window.__bossDead)setTimeout(()=>{if(!gameOver&&intercepting)spawnBossBoat();},7000);
+}
+// Deck reached: call off the hunt so the next shop leg is quiet again. Gunships
+// already in the air break off and leave rather than vanishing mid-air.
+function endInterception(){
+  if(!intercepting)return;
+  intercepting=false;
+  enemies.forEach(e=>{ if(e.kind==='heli'&&e.hp>0)e.leaving=true; });
+  if(enemies.some(e=>e.kind==='heli'&&e.hp>0))comRadio('COMMAND: THEY ARE BREAKING OFF. GOOD FLYING.');
 }
 
 // ================= ONE NIGHT IN TOKYO — crew rescue campaign + on-foot interiors =================
@@ -11933,6 +11968,7 @@ function updateCrewRescue(dt){
     if(c.marker){scene.remove(c.marker);c.marker=null;}
     winch.crew=null;winch.t=0;winch.line.visible=false;
     crewBoardT=performance.now();crewBoardWho=c;
+    setTimeout(()=>{if(!gameOver&&aboard.length)startInterception();},2200);   // the sky answers
     flashMsg(c.call+' ABOARD — '+c.perk,UI.ok);
     comRadio('CREW: '+c.rank+' '+c.name+' IS ON THE HOIST. '+c.perkNote.toUpperCase()+'.');
     applyCrewPerks();
@@ -11964,6 +12000,7 @@ function updateCrewDelivery(){
     addScore(2500*n);
     flashMsg(n+' CREW DELIVERED  +'+(2500*n),UI.warn);
     window.__deckState=null;
+    endInterception();
     if(crewRemaining()===0){
       missionDone=true;
       flashMsg('OPERATION COMPLETE — ALL CREW HOME',UI.ok);
@@ -12042,7 +12079,7 @@ function resetRunState(){
   zombies.forEach(z=>scene.remove(z.m));zombies.length=0;
   enemies.forEach(e=>scene.remove(e.m));enemies.length=0;
   hostileBullets.forEach(b=>scene.remove(b.m));hostileBullets.length=0;
-  window.__bossAlive=false;window.__bossDead=false;
+  window.__bossAlive=false;window.__bossDead=false;intercepting=false;
   bullets.forEach(b=>scene.remove(b.m));bullets.length=0;
   explosions.forEach(e=>scene.remove(e.m));explosions.length=0;
   debris.forEach(d=>scene.remove(d.m));debris.length=0;
@@ -12073,7 +12110,7 @@ function startRun(){
   {const hEl=document.getElementById('help');hEl.style.opacity=.65;clearTimeout(window.__helpT);window.__helpT=setTimeout(()=>{hEl.style.opacity=0;},12000);}
   startAudio();
   startWave();
-  spawnHostage();
+  // legacy free-roam hostage objective retired — startRun opens on the first shop instead
   setTimeout(()=>{if(!gameOver)comRadio('COMMAND: FIVE OF YOURS WENT DOWN OVER TOKYO. WORK THE SHOPS, FIND THEM, HOIST THEM OUT — AND WATCH THE SKIES.');},1400);
 }
 async function endRun(){
@@ -12326,7 +12363,7 @@ function loop(now){
       LK.locked=LK.target&&LK.t>=LOCK_TIME;
       if(LK.locked&&!wasLocked)sfx(0.09,0.16,2600,4200); // confirm-lock chirp
     }
-    if(zombies.length===0&&now-waveSpawned>8000){wave++;waveSpawned=now;startWave();}
+    if(zombies.length<3&&now-waveSpawned>26000){wave++;waveSpawned=now;startWave();}
     const vgEl=document.getElementById('vignette');
     if(hp<30&&hp>0){
       const pulse=0.35+0.25*Math.sin(now/220);
