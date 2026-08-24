@@ -4,7 +4,7 @@ import { Editor } from './editor.js';
 import { Viewer } from './viewer.js';
 import { trace, DEFAULT_OPTIONS } from './tracer.js';
 import { autoFurnish } from './builder.js';
-import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, levelAt, clamp, uid } from './geom.js';
+import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, snapIntoPolygons, levelAt, clamp, uid } from './geom.js';
 import * as textures from './textures.js';
 import * as furniture from './furniture.js';
 import { sampleFloorPlan } from './sample.js';
@@ -82,7 +82,8 @@ viewer.onPick = (selection, additive) => {
 };
 
 viewer.onPlace = (type, x, y, level) => {
-  const item = { id: uid('f'), type, x, y, rot: 0, level };
+  const spot = keepInside({ x, y }, level);
+  const item = { id: uid('f'), type, x: spot.point.x, y: spot.point.y, rot: 0, level };
   state.plan.items.push(item);
   viewer.placing = null;
   $$('#furniture-palette button').forEach((b) => b.classList.remove('active'));
@@ -96,8 +97,18 @@ viewer.onPlace = (type, x, y, level) => {
   renderSelection();
   renderStats();
   scheduleAutosave();
-  toast(`${furniture.spec(type).label} placed — drag it, ring turns it, corners resize it`);
+  toast(spot.moved
+    ? `${furniture.spec(type).label} dropped outside the flat — moved it into the nearest room`
+    : `${furniture.spec(type).label} placed — drag it, ring turns it, corners resize it`);
 };
+
+// Furniture belongs in the rooms, not on the lawn.
+function keepInside(point, level) {
+  const polys = (state.plan.rooms || [])
+    .filter((r) => (r.level || 0) === (level || 0))
+    .map((r) => r.poly);
+  return snapIntoPolygons(point, polys, 0.3);
+}
 
 // The gizmo only makes sense for exactly one piece of furniture.
 function syncGizmo() {
@@ -118,8 +129,14 @@ viewer.onItemChange = (id, change) => {
   if (!item) return;
   const level = item.level || 0;
   const offset = (state.plan.levelOffsets || {})[level] || { dx: 0, dy: 0 };
-  if (change.x !== undefined) item.x = change.x - (offset.dx || 0);
-  if (change.y !== undefined) item.y = change.y - (offset.dy || 0);
+  if (change.x !== undefined && change.y !== undefined) {
+    const spot = keepInside(
+      { x: change.x - (offset.dx || 0), y: change.y - (offset.dy || 0) }, level
+    );
+    item.x = spot.point.x;
+    item.y = spot.point.y;
+    if (spot.moved) toast('Kept it inside the flat');
+  }
   if (change.rot !== undefined) item.rot = change.rot;
   if (change.scale !== undefined) {
     if (item.fit) {

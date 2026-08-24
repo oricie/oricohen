@@ -276,3 +276,34 @@ export function levelAt(plan, x, y) {
   const sec = sectionAt(plan, x, y);
   return sec && sec.level != null ? sec.level : 0;
 }
+
+// Keep a point inside the flat. If it is already in one of the polygons it is
+// returned untouched; otherwise it is pulled to the nearest spot just inside
+// the closest one. Dropping a bed on the lawn is never what was meant.
+export function snapIntoPolygons(pt, polys, inset = 0.25) {
+  if (!polys || !polys.length) return { point: pt, moved: false };
+  for (const poly of polys) {
+    if (pointInPolygon(pt, poly)) return { point: pt, moved: false };
+  }
+
+  let best = null;
+  let bestDist = Infinity;
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length; i++) {
+      const a = { x: poly[i][0], y: poly[i][1] };
+      const b = { x: poly[(i + 1) % poly.length][0], y: poly[(i + 1) % poly.length][1] };
+      const hit = closestOnSegment(pt, a, b);
+      if (hit.dist < bestDist) { bestDist = hit.dist; best = { hit, poly }; }
+    }
+  }
+  if (!best) return { point: pt, moved: false };
+
+  // step in from the edge towards the middle of that room
+  const centre = polygonCentroid(best.poly);
+  const away = norm(sub(centre, best.hit.point));
+  const inside = add(best.hit.point, mul(away, inset));
+  return {
+    point: pointInPolygon(inside, best.poly) ? inside : centre,
+    moved: true,
+  };
+}
