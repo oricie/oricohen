@@ -26,6 +26,7 @@ export class Viewer {
     this.velocity = new THREE.Vector3();
     this.onModeChange = () => {};
     this.onPick = () => {};
+    this.onFrame = () => {};
     this.raycaster = new THREE.Raycaster();
 
     this.renderer = new THREE.WebGLRenderer({
@@ -419,6 +420,7 @@ export class Viewer {
     if (this.mode === 'walk') this._move(dt);
     if (this.mode === 'orbit') this.orbit.update();
     this.renderer.render(this.scene, this.camera);
+    if (this.mode === 'walk') this.onFrame(this.camera);
   }
 
   _resize() {

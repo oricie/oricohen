@@ -108,6 +108,19 @@
       <div id="level-list" class="level-list"></div>
     </section>
 
+    <section class="panel">
+      <h2>Saved work</h2>
+      <p id="autosave-stamp" class="hint stamp">Your work is kept in this browser automatically.</p>
+      <div class="row">
+        <input id="project-name" type="text" placeholder="Name this version" aria-label="Project name" />
+        <button id="btn-project-save" type="button">Save</button>
+      </div>
+      <div id="project-list" class="project-list"></div>
+      <p id="storage-note" class="hint"></p>
+      <p class="hint">Stored in this browser only. <strong>Save plan</strong> at the top downloads a
+        file that survives a cleared browser or a different machine.</p>
+    </section>
+
     <section class="panel" id="selection-panel">
       <h2>Selection</h2>
       <div id="selection-body" class="selection-body"></div>
@@ -124,6 +137,7 @@
         <button id="btn-furnish" class="wide" type="button">Auto-furnish from names</button>
         <button id="btn-clear-furniture" class="ghost" type="button">Clear</button>
       </div>
+      <input id="palette-search" type="text" class="search" placeholder="Search furniture…" aria-label="Search furniture" />
       <div id="furniture-palette" class="palette"></div>
     </section>
 
@@ -146,6 +160,7 @@
       <label class="check"><input id="toggle-ceiling" type="checkbox" checked /> Ceilings in walkthrough</label>
       <label class="check"><input id="toggle-night" type="checkbox" /> Night lighting</label>
       <label class="check"><input id="toggle-image" type="checkbox" checked /> Show source image in plan</label>
+      <label class="check"><input id="toggle-minimap" type="checkbox" checked /> Map in walkthrough <kbd>M</kbd></label>
     </section>
 
   </aside>
@@ -191,7 +206,11 @@
         <div class="canvas-wrap">
           <canvas id="view-canvas"></canvas>
           <div id="walk-hint" class="walk-hint" hidden>
-            <strong>W A S D</strong> to move · <strong>Shift</strong> to run · mouse to look · <strong>Esc</strong> to release the cursor
+            <strong>W A S D</strong> to move · <strong>Shift</strong> to run · mouse to look · <strong>M</strong> for the map · <strong>Esc</strong> to release the cursor
+          </div>
+          <div id="minimap" class="minimap" hidden>
+            <canvas id="minimap-canvas"></canvas>
+            <span class="minimap-hint">click to move</span>
           </div>
         </div>
       </div>

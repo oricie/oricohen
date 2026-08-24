@@ -24,6 +24,11 @@ Everything runs client-side. No server, no upload, no build step, no CDN — ope
    a cooker), or place pieces yourself from the palette.
 6. **Walk through it**, or export.
 
+Your work is kept in this browser automatically — close the tab and it comes
+back. *Saved work* in the sidebar also holds named versions you save yourself.
+That storage is per browser, so **Save plan** downloads the file that survives
+a cleared browser or a move to another machine.
+
 ### Tools
 
 | Tool | Key | What it does |
@@ -43,7 +48,25 @@ and hinge side, a room's name, or a piece of furniture's rotation, and delete it
 `Delete` removes the selection from either view.
 
 `1` / `2` / `3` switch between plan, split and 3D. In the walkthrough: `WASD`
-to move, `Shift` to run, mouse to look, `Esc` to release the cursor.
+to move, `Shift` to run, mouse to look, `M` for the map, `Esc` to release the
+cursor. The map in the corner shows the storey you are on, with the rooms,
+the furniture, and your position and field of view on it — click it to move
+straight to a spot.
+
+### Furnishing
+
+The catalogue has around ninety pieces at real retail dimensions, grouped by
+room: seating, tables, storage, beds, a full kitchen (base and wall units,
+island, appliances, extractor), bathrooms (wall-hung WC, vanities, quadrant
+shower, washer), office, kids, outdoor, and a flight of stairs for two-storey
+flats. Search it by name, or press **Auto-furnish from names** to fill every
+room whose name is recognised.
+
+Select any piece and the *Selection* panel offers fabric and wood swatches, so
+a sofa can be sand or navy and a wardrobe oak or black without leaving the app.
+
+The dimensions are the standard sizes furniture is actually made in; no
+retailer's catalogue, branding or product data is used.
 
 ### Several floors on one sheet
 

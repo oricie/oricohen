@@ -8,6 +8,8 @@ import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, levelAt, c
 import * as textures from './textures.js';
 import * as furniture from './furniture.js';
 import { sampleFloorPlan } from './sample.js';
+import { Minimap } from './minimap.js';
+import * as storage from './storage.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -39,6 +41,22 @@ function emptyPlan() {
 
 const editor = new Editor($('#plan-canvas'), state.plan);
 const viewer = new Viewer($('#view-canvas'));
+const minimap = new Minimap($('#minimap-canvas'));
+
+minimap.onTeleport = (x, y) => {
+  if (viewer.mode !== 'walk') return;
+  viewer.walk.object.position.set(x, viewer.walkYBase + 1.65, y);
+};
+
+// the minimap follows the camera while walking
+viewer.onFrame = (camera) => {
+  if (viewer.mode !== 'walk' || $('#minimap').hidden) return;
+  const yaw = Math.atan2(
+    -(camera.matrixWorld.elements[8]),
+    -(camera.matrixWorld.elements[10])
+  );
+  minimap.setPlayer(camera.position.x, camera.position.z, yaw);
+};
 
 editor.addEventListener('change', () => {
   renderRoomList();
@@ -63,6 +81,11 @@ viewer.onPointerLockDenied = () => {
 viewer.onModeChange = (mode) => {
   $$('#view-modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
   $('#walk-hint').hidden = mode !== 'walk';
+  $('#minimap').hidden = mode !== 'walk' || !state.showMinimap;
+  if (mode === 'walk') {
+    minimap.setPlan(state.plan, viewer.walkLevel || 0);
+    minimap.resize();
+  }
 };
 
 function scheduleRebuild() {
@@ -81,6 +104,8 @@ function rebuild3D() {
   if (biggest) viewer.setSpawn(...standingSpot(biggest.poly), biggest.level || 0);
   viewer.setHighlight(keep);
   renderLevels();
+  minimap.setPlan(state.plan, viewer.walkLevel || 0);
+  scheduleAutosave();
 }
 
 // Stand back along the room's long axis and look down it, so the walkthrough
@@ -104,6 +129,7 @@ function standingSpot(poly) {
 async function loadImage(source) {
   const img = source instanceof Image ? source : await fileToImage(source);
   state.image = img;
+  state.packedImage = storage.packImage(img);
   $('#drop-zone').classList.add('has-image');
   $('#image-name').textContent = img.dataset.name || 'sample-plan.png';
   runDetection();
@@ -567,6 +593,19 @@ function renderSelection() {
     });
     rot.addEventListener('change', () => editor.emit());
     field('Rotation', rot);
+
+    if (spec && spec.fabric) {
+      box.appendChild(swatches('Fabric', furniture.FABRICS, item.fabric || 'sand', (key) => {
+        item.fabric = key;
+        editor.emit();
+      }));
+    }
+    box.appendChild(swatches('Wood', furniture.WOODS.map((wo) => ({
+      ...wo, hex: wo.hex !== undefined ? wo.hex : { oak: 0xc08a52, walnut: 0x6b4429, ash: 0xd7c3a5 }[wo.key],
+    })), item.wood || 'oak', (key) => {
+      item.wood = key;
+      editor.emit();
+    }));
   }
 
   const del = document.createElement('button');
@@ -581,6 +620,116 @@ function renderSelection() {
   box.appendChild(del);
 }
 
+// -------------------------------------------------------------- persistence
+
+let autosaveTimer = null;
+function scheduleAutosave() {
+  if (!storage.available()) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    if (!state.plan.walls.length && !state.plan.rooms.length) return;
+    const ok = storage.writeAuto(state.plan, state.packedImage);
+    const stamp = $('#autosave-stamp');
+    if (stamp) {
+      stamp.textContent = ok
+        ? `Saved in this browser at ${new Date().toLocaleTimeString()}`
+        : 'This browser refused to store the plan — use Save plan to download it.';
+    }
+  }, 900);
+}
+
+async function restoreSnapshot(snap, { announce = true } = {}) {
+  state.plan = { ...emptyPlan(), ...snap.plan };
+  state.packedImage = snap.image || null;
+  const img = await storage.unpackImage(snap.image);
+  state.image = img;
+  editor.setPlan(state.plan);
+  editor.setImage(img);
+  editor.fit();
+  $('#wall-height').value = state.plan.wallHeight;
+  $('#wall-material').value = state.plan.wallMaterial || 'wall';
+  if (img) {
+    $('#drop-zone').classList.add('has-image');
+    $('#image-name').textContent = snap.name || 'restored plan';
+  }
+  rebuild3D();
+  renderRoomList();
+  renderStats();
+  renderSelection();
+  if (announce) toast(`Restored “${snap.name || 'Apartment'}”`);
+}
+
+function renderProjects() {
+  const list = $('#project-list');
+  const note = $('#storage-note');
+  if (!storage.available()) {
+    list.innerHTML = '';
+    note.textContent = 'This browser blocks local storage, so nothing is kept here. Use Save plan to download the file.';
+    return;
+  }
+  const saved = storage.list();
+  note.textContent = saved.length
+    ? `${saved.length} saved here · ${(storage.usage() / 1024).toFixed(0)} KB used`
+    : 'Nothing saved in this browser yet.';
+
+  list.innerHTML = '';
+  for (const entry of saved) {
+    const row = document.createElement('div');
+    row.className = 'project-row';
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'project-open';
+    open.innerHTML = `<strong></strong><span></span>`;
+    open.querySelector('strong').textContent = entry.name;
+    open.querySelector('span').textContent =
+      `${entry.rooms} rooms · ${new Date(entry.savedAt).toLocaleDateString()}`;
+    open.addEventListener('click', async () => {
+      const snap = storage.load(entry.id);
+      if (snap) await restoreSnapshot(snap);
+      else toast('That project could not be read back');
+    });
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'project-delete';
+    del.title = `Delete ${entry.name}`;
+    del.textContent = '×';
+    del.addEventListener('click', () => {
+      storage.remove(entry.id);
+      renderProjects();
+      toast(`Deleted “${entry.name}”`);
+    });
+
+    row.append(open, del);
+    list.appendChild(row);
+  }
+}
+
+// A row of colour chips; the chosen one is ringed.
+function swatches(title, options, current, onPick) {
+  const wrap = document.createElement('div');
+  wrap.className = 'swatches';
+  const label = document.createElement('span');
+  label.className = 'swatch-label';
+  label.textContent = title;
+  wrap.appendChild(label);
+  const row = document.createElement('div');
+  row.className = 'swatch-row';
+  for (const opt of options) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `swatch${opt.key === current ? ' active' : ''}`;
+    chip.style.background = `#${(opt.hex ?? 0xcccccc).toString(16).padStart(6, '0')}`;
+    chip.title = opt.label;
+    chip.setAttribute('aria-label', `${title}: ${opt.label}`);
+    chip.addEventListener('click', () => onPick(opt.key));
+    row.appendChild(chip);
+  }
+  wrap.appendChild(row);
+  return wrap;
+}
+
 function renderStats() {
   const p = state.plan;
   const area = (p.rooms || []).reduce((s, r) => s + Math.abs(polygonArea(r.poly)), 0);
@@ -588,17 +737,26 @@ function renderStats() {
     `${p.walls.length} walls · ${p.openings.length} openings · ${p.rooms.length} rooms · ${area.toFixed(1)} m² floor area`;
 }
 
-function renderPalette() {
+function renderPalette(filter = '') {
   const wrap = $('#furniture-palette');
   wrap.innerHTML = '';
+  const needle = filter.trim().toLowerCase();
   const groups = new Map();
   for (const item of furniture.catalog()) {
+    if (needle && !item.label.toLowerCase().includes(needle) &&
+        !(furniture.ROOM_LABELS[item.room] || '').toLowerCase().includes(needle)) continue;
     if (!groups.has(item.room)) groups.set(item.room, []);
     groups.get(item.room).push(item);
   }
-  for (const [room, items] of groups) {
+  if (!groups.size) {
+    wrap.innerHTML = '<p class="empty">Nothing matches that.</p>';
+    return;
+  }
+  for (const room of furniture.ROOM_ORDER) {
+    const items = groups.get(room);
+    if (!items) continue;
     const h = document.createElement('h4');
-    h.textContent = room === 'any' ? 'Extras' : room;
+    h.textContent = furniture.ROOM_LABELS[room] || room;
     wrap.appendChild(h);
     const grid = document.createElement('div');
     grid.className = 'palette-grid';
@@ -606,7 +764,8 @@ function renderPalette() {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = item.label;
-      b.title = `${item.w.toFixed(2)} × ${item.d.toFixed(2)} m`;
+      b.title = `${item.w.toFixed(2)} × ${item.d.toFixed(2)} m${item.mountY ? ' · wall mounted' : ''}`;
+      b.classList.toggle('active', item.key === editor.itemType);
       b.addEventListener('click', () => {
         editor.itemType = item.key;
         setTool('item');
@@ -807,6 +966,27 @@ function bindUI() {
   });
 
   // file actions
+  $('#palette-search').addEventListener('input', (e) => renderPalette(e.target.value));
+
+  $('#btn-project-save').addEventListener('click', () => {
+    const name = ($('#project-name').value || '').trim() || state.plan.name || 'Apartment';
+    state.plan.name = name;
+    const result = storage.save(name, state.plan, state.packedImage);
+    if (result.ok) {
+      $('#project-name').value = '';
+      renderProjects();
+      toast(`Saved “${name}” in this browser`);
+    } else {
+      toast(result.error);
+    }
+  });
+
+  $('#toggle-minimap').addEventListener('change', (e) => {
+    state.showMinimap = e.target.checked;
+    $('#minimap').hidden = !state.showMinimap || viewer.mode !== 'walk';
+    if (state.showMinimap) minimap.resize();
+  });
+
   $('#btn-save').addEventListener('click', () => {
     const data = JSON.stringify({ ...state.plan, savedAt: new Date().toISOString() }, null, 2);
     download(new Blob([data], { type: 'application/json' }), `${state.plan.name || 'apartment'}.plan.json`);
@@ -817,14 +997,9 @@ function bindUI() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      state.plan = { ...emptyPlan(), ...parsed };
-      editor.setPlan(state.plan);
-      editor.fit();
-      $('#wall-height').value = state.plan.wallHeight;
-      $('#wall-material').value = state.plan.wallMaterial || 'wall';
-      rebuild3D();
-      renderRoomList();
-      renderStats();
+      // both a bare plan and a full snapshot (plan + image) are accepted
+      const snap = parsed.format === 'apartment3d/1' ? parsed : { plan: parsed, name: parsed.name };
+      await restoreSnapshot(snap, { announce: false });
       toast('Plan loaded');
     } catch (err) {
       toast(`Could not read that plan: ${err.message}`);
@@ -852,18 +1027,31 @@ function bindUI() {
     if (/input|textarea|select/i.test(e.target.tagName)) return;
     const map = { v: 'select', w: 'wall', d: 'door', n: 'window', b: 'room', f: 'item', e: 'erase', h: 'pan' };
     if (map[e.key]) { setTool(map[e.key]); e.preventDefault(); }
+    if (e.key === 'm') $('#toggle-minimap').click();
     if (e.key === '1') setView('plan');
     if (e.key === '2') setView('split');
     if (e.key === '3') setView('3d');
   });
 }
 
+state.showMinimap = true;
+
 renderPalette();
 bindUI();
 renderSelection();
+renderProjects();
 setView('split');
 setTool('select');
 renderStats();
+
+// Pick up where the last visit left off.
+(async () => {
+  const auto = storage.readAuto();
+  if (auto && auto.plan && (auto.plan.walls || []).length) {
+    await restoreSnapshot(auto, { announce: false });
+    toast('Picked up your last plan from this browser');
+  }
+})();
 
 // expose for the smoke test
 window.__apartment = { state, editor, viewer, loadImage, runDetection, rebuild3D };

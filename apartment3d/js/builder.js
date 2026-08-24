@@ -402,7 +402,7 @@ function buildFurniture(plan) {
   const group = new THREE.Group();
   group.name = 'furniture';
   for (const item of plan.items || []) {
-    const mesh = furniture.build(item.type);
+    const mesh = furniture.build(item.type, item);
     if (!mesh) continue;
     const mountY = mesh.userData.spec.mountY || 0;
     mesh.position.set(item.x, mountY, item.y);
