@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Floor Plan → 3D Apartment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/app.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js",
+    "three/controls/": "./vendor/three/controls/",
+    "three/exporters/": "./vendor/three/exporters/",
+    "three/environments/": "./vendor/three/environments/",
+    "three/utils/": "./vendor/three/utils/"
+  }
+}
+</script>
+</head>
+<body data-view="split">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true">⌂</span>
+    <h1>Floor&nbsp;Plan <em>to</em> 3D&nbsp;Apartment</h1>
+  </div>
+  <div class="topbar-actions">
+    <span id="stats" class="stats"></span>
+    <button id="btn-save" class="ghost" type="button">Save plan</button>
+    <button id="btn-load" class="ghost" type="button">Open plan</button>
+    <input id="load-input" type="file" accept="application/json,.json" hidden />
+    <button id="btn-shot" class="ghost" type="button">Screenshot</button>
+    <button id="btn-glb" class="primary" type="button">Export .glb</button>
+  </div>
+</header>
+
+<main class="shell">
+  <aside class="sidebar">
+
+    <section class="panel">
+      <h2><span class="step">1</span> Floor plan image</h2>
+      <div id="drop-zone" class="drop-zone" tabindex="0" role="button">
+        <strong>Drop an image here</strong>
+        <span>or click to choose — PNG, JPG, screenshot of a PDF</span>
+        <span id="image-name" class="file-name"></span>
+      </div>
+      <input id="file-input" type="file" accept="image/*" hidden />
+      <button id="btn-sample" class="wide ghost" type="button">Load a sample plan</button>
+      <p class="hint">Works best on a clean plan: dark walls, light background, one floor per image.</p>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step">2</span> Detection</h2>
+      <label class="slider">
+        <span>Ink threshold <em id="opt-threshold-value">auto</em></span>
+        <input id="opt-threshold" type="range" min="0" max="240" step="5" value="0" />
+      </label>
+      <label class="slider">
+        <span>Min stroke length <em id="opt-minrun-value">14</em> px</span>
+        <input id="opt-minrun" type="range" min="6" max="40" step="1" value="14" />
+      </label>
+      <label class="slider">
+        <span>Max wall thickness <em id="opt-thickness-value">40</em> px</span>
+        <input id="opt-thickness" type="range" min="8" max="80" step="1" value="40" />
+      </label>
+      <label class="slider">
+        <span>Doorway gap <em id="opt-doorgap-value">90</em> px</span>
+        <input id="opt-doorgap" type="range" min="10" max="200" step="5" value="90" />
+      </label>
+      <button id="btn-detect" class="wide" type="button">Re-detect walls</button>
+      <p class="hint">Raise the minimum stroke length if furniture symbols become walls; raise the doorway gap if doors are missed.</p>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step">3</span> Scale</h2>
+      <label class="field">
+        <span>Overall width of the plan</span>
+        <span class="with-unit"><input id="input-width" type="number" min="1" max="80" step="0.1" value="11" /><em>m</em></span>
+      </label>
+      <p class="hint">Or pick the <strong>Measure</strong> tool and drag along a known dimension.</p>
+      <div id="calib-row" class="calib" hidden>
+        <span>Measured <strong id="calib-measured">—</strong>, should be</span>
+        <span class="with-unit"><input id="calib-real" type="number" min="0.1" step="0.05" /><em>m</em></span>
+        <button id="calib-apply" type="button">Apply</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step">4</span> Rooms &amp; floors</h2>
+      <div id="room-list" class="room-list"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="step">5</span> Furnishing</h2>
+      <div class="row">
+        <button id="btn-furnish" class="wide" type="button">Auto-furnish from names</button>
+        <button id="btn-clear-furniture" class="ghost" type="button">Clear</button>
+      </div>
+      <div id="furniture-palette" class="palette"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Model</h2>
+      <label class="field">
+        <span>Wall height</span>
+        <span class="with-unit"><input id="wall-height" type="number" min="2" max="5" step="0.05" value="2.7" /><em>m</em></span>
+      </label>
+      <label class="field">
+        <span>Wall finish</span>
+        <select id="wall-material">
+          <option value="wall">Painted white</option>
+          <option value="wallWarm">Warm white</option>
+          <option value="concrete">Concrete</option>
+          <option value="brick">Brick</option>
+        </select>
+      </label>
+      <label class="check"><input id="toggle-baseboards" type="checkbox" checked /> Skirting boards</label>
+      <label class="check"><input id="toggle-ceiling" type="checkbox" checked /> Ceilings in walkthrough</label>
+      <label class="check"><input id="toggle-night" type="checkbox" /> Night lighting</label>
+      <label class="check"><input id="toggle-image" type="checkbox" checked /> Show source image in plan</label>
+    </section>
+
+  </aside>
+
+  <section class="stage">
+    <div class="stage-bar">
+      <div id="view-tabs" class="tabs">
+        <button type="button" data-view-tab="plan">Plan</button>
+        <button type="button" data-view-tab="split" class="active">Split</button>
+        <button type="button" data-view-tab="3d">3D</button>
+      </div>
+      <div id="view-modes" class="tabs right">
+        <button type="button" data-mode="orbit" class="active">Dollhouse</button>
+        <button type="button" data-mode="walk">Walk through</button>
+        <button id="btn-frame" type="button" class="ghost">Reset view</button>
+      </div>
+    </div>
+
+    <div class="panes">
+      <div class="pane pane-plan">
+        <div class="canvas-wrap">
+          <canvas id="plan-canvas"></canvas>
+        </div>
+        <div class="toolbar">
+          <button class="tool-btn active" data-tool="select" type="button" title="Select / move (V)">Select</button>
+          <button class="tool-btn" data-tool="wall" type="button" title="Draw wall (W)">Wall</button>
+          <button class="tool-btn" data-tool="door" type="button" title="Add door (D)">Door</button>
+          <button class="tool-btn" data-tool="window" type="button" title="Add window (N)">Window</button>
+          <button class="tool-btn" data-tool="room" type="button" title="Pick room (B)">Room</button>
+          <button class="tool-btn" data-tool="item" type="button" title="Place furniture (F)">Furniture</button>
+          <button class="tool-btn" data-tool="erase" type="button" title="Erase (E)">Erase</button>
+          <button class="tool-btn" data-tool="scale" type="button" title="Measure a known length">Measure</button>
+          <button class="tool-btn" data-tool="pan" type="button" title="Pan (H)">Pan</button>
+        </div>
+      </div>
+
+      <div class="pane pane-3d">
+        <div class="canvas-wrap">
+          <canvas id="view-canvas"></canvas>
+          <div id="walk-hint" class="walk-hint" hidden>
+            <strong>W A S D</strong> to move · <strong>Shift</strong> to run · mouse to look · <strong>Esc</strong> to release the cursor
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="busy" class="busy" hidden><span class="spinner"></span>Working…</div>
+<div id="toast" class="toast" role="status"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

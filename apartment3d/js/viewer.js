@@ -1,0 +1,339 @@
+// The 3D side: renderer, environment, the two camera modes and export.
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/controls/OrbitControls.js';
+import { PointerLockControls } from 'three/controls/PointerLockControls.js';
+import { GLTFExporter } from 'three/exporters/GLTFExporter.js';
+import { RoomEnvironment } from 'three/environments/RoomEnvironment.js';
+import { buildApartment } from './builder.js';
+import { material } from './textures.js';
+
+const EYE_HEIGHT = 1.65;
+const PLAYER_RADIUS = 0.3;
+
+export class Viewer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.mode = 'orbit';
+    this.night = false;
+    this.showCeiling = true;
+    this.apartment = null;
+    this.collision = [];
+    this.clock = new THREE.Clock();
+    this.keys = new Set();
+    this.velocity = new THREE.Vector3();
+    this.onModeChange = () => {};
+
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    this.scene = new THREE.Scene();
+    this.scene.background = skyTexture(false);
+
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envMap;
+    pmrem.dispose();
+
+    this.camera = new THREE.PerspectiveCamera(58, 1, 0.05, 400);
+    this.camera.position.set(8, 9, 12);
+
+    this.orbit = new OrbitControls(this.camera, canvas);
+    this.orbit.enableDamping = true;
+    this.orbit.dampingFactor = 0.08;
+    this.orbit.maxPolarAngle = Math.PI * 0.495;
+    this.orbit.target.set(0, 0, 0);
+
+    this.walk = new PointerLockControls(this.camera, canvas);
+    this.scene.add(this.walk.object);
+
+    this.sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.02;
+    this.scene.add(this.sun, this.sun.target);
+
+    this.hemi = new THREE.HemisphereLight(0xdfeaff, 0x8a7f70, 0.55);
+    this.scene.add(this.hemi);
+
+    this.ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(400, 400),
+      material('grass').clone()
+    );
+    this.ground.material.map.repeat.set(100, 100);
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = -0.04;
+    this.ground.receiveShadow = true;
+    this.scene.add(this.ground);
+
+    this._bindInput();
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+    this.renderer.setAnimationLoop(() => this._tick());
+  }
+
+  // ------------------------------------------------------------- scene data
+
+  setPlan(plan, options = {}) {
+    if (this.apartment) {
+      this.scene.remove(this.apartment.root);
+      disposeTree(this.apartment.root);
+    }
+    this.apartment = buildApartment(plan, { ...options, ceiling: true });
+    this.scene.add(this.apartment.root);
+    this.collision = this.apartment.collision;
+    this.wallHeight = this.apartment.height;
+
+    const box = this.apartment.bounds;
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    this.centre = centre;
+    this.radius = Math.max(size.x, size.z) * 0.5 || 5;
+
+    this.sun.position.set(centre.x + this.radius * 1.4, this.radius * 2.2 + 6, centre.z - this.radius * 1.1);
+    this.sun.target.position.copy(centre);
+    const s = this.sun.shadow.camera;
+    const span = this.radius * 1.9 + 4;
+    s.left = -span; s.right = span; s.top = span; s.bottom = -span;
+    s.near = 0.5; s.far = this.radius * 6 + 40;
+    s.updateProjectionMatrix();
+
+    this.applyCeiling();
+    this.applyLighting();
+    if (this.mode === 'orbit') this.frameAll();
+  }
+
+  frameAll() {
+    if (!this.apartment) return;
+    const r = this.radius;
+    this.orbit.target.copy(this.centre);
+    // steep enough to look over the near walls into the rooms
+    this.camera.position.set(
+      this.centre.x + r * 0.55,
+      this.centre.y + r * 1.85 + 4,
+      this.centre.z + r * 1.05
+    );
+    this.orbit.update();
+  }
+
+  // ------------------------------------------------------------------ modes
+
+  setMode(mode) {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (mode === 'walk') {
+      this.orbit.enabled = false;
+      const start = this.spawnPoint();
+      this.walk.object.position.set(start.x, EYE_HEIGHT, start.z);
+      this.camera.rotation.set(0, 0, 0);
+      this.walk.object.rotation.set(0, this.spawnYaw || 0, 0);
+      this.velocity.set(0, 0, 0);
+      this.walk.lock();
+    } else {
+      this.orbit.enabled = true;
+      if (this.walk.isLocked) this.walk.unlock();
+      this.frameAll();
+    }
+    this.applyCeiling();
+    this.onModeChange(this.mode);
+  }
+
+  spawnPoint() {
+    // stand in the largest room, or the centre of the flat
+    const p = this.spawn || this.centre || new THREE.Vector3();
+    return new THREE.Vector3(p.x, EYE_HEIGHT, p.z);
+  }
+
+  // yaw is measured so that 0 looks towards -z, matching PointerLockControls.
+  setSpawn(x, z, yaw = 0) {
+    this.spawn = new THREE.Vector3(x, EYE_HEIGHT, z);
+    this.spawnYaw = yaw;
+  }
+
+  toggleCeiling(on) {
+    this.showCeiling = on;
+    this.applyCeiling();
+  }
+
+  applyCeiling() {
+    if (!this.apartment) return;
+    const visible = this.mode === 'walk' ? this.showCeiling : false;
+    this.apartment.root.traverse((o) => {
+      if (o.name === 'ceiling') o.visible = visible;
+    });
+  }
+
+  setNight(night) {
+    this.night = night;
+    this.applyLighting();
+  }
+
+  applyLighting() {
+    const night = this.night;
+    this.scene.background = skyTexture(night);
+    this.sun.intensity = night ? 0.12 : 2.6;
+    this.sun.color.set(night ? 0x9fb6e0 : 0xfff3e0);
+    this.hemi.intensity = night ? 0.12 : 0.55;
+    this.hemi.color.set(night ? 0x2a3550 : 0xdfeaff);
+    this.renderer.toneMappingExposure = night ? 1.15 : 1.0;
+    if (this.envMap) this.scene.environment = this.envMap;
+    this.scene.environmentIntensity = night ? 0.12 : 1.0;
+
+    if (!this.apartment) return;
+    this.apartment.root.traverse((o) => {
+      if (o.isPointLight) o.intensity = night ? o.userData.baseIntensity : 0;
+      if (o.material && o.material.emissive && o.material.emissiveIntensity !== undefined &&
+          o.geometry && o.geometry.type === 'CylinderGeometry') {
+        o.material.emissiveIntensity = night ? 1.6 : 0.25;
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------ input
+
+  _bindInput() {
+    const down = (e) => {
+      if (this.mode !== 'walk') return;
+      this.keys.add(e.code);
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+    };
+    const up = (e) => this.keys.delete(e.code);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    this.canvas.addEventListener('click', () => {
+      if (this.mode === 'walk' && !this.walk.isLocked) this.walk.lock();
+    });
+    this.walk.addEventListener('unlock', () => {
+      this.keys.clear();
+      this.velocity.set(0, 0, 0);
+    });
+  }
+
+  _move(dt) {
+    const speed = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) ? 5.2 : 2.4;
+    const dir = new THREE.Vector3();
+    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) dir.z += 1;
+    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) dir.z -= 1;
+    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) dir.x -= 1;
+    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) dir.x += 1;
+
+    const damping = Math.exp(-9 * dt);
+    this.velocity.x *= damping;
+    this.velocity.z *= damping;
+    if (dir.lengthSq() > 0) {
+      dir.normalize().multiplyScalar(speed * 9 * dt);
+      this.velocity.x += dir.x;
+      this.velocity.z += dir.z;
+    }
+
+    const obj = this.walk.object;
+    const before = obj.position.clone();
+    this.walk.moveRight(this.velocity.x * dt);
+    this.walk.moveForward(this.velocity.z * dt);
+    obj.position.y = EYE_HEIGHT;
+    this._resolveCollisions(obj.position, before);
+  }
+
+  _resolveCollisions(p, before) {
+    for (let pass = 0; pass < 3; pass++) {
+      let hit = false;
+      for (const seg of this.collision) {
+        const ax = seg.x1, ay = seg.y1;
+        const bx = seg.x2, by = seg.y2;
+        const dx = bx - ax, dy = by - ay;
+        const l2 = dx * dx + dy * dy;
+        let t = l2 < 1e-9 ? 0 : ((p.x - ax) * dx + (p.z - ay) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const cx = ax + dx * t, cy = ay + dy * t;
+        let ox = p.x - cx, oy = p.z - cy;
+        const d = Math.hypot(ox, oy);
+        const minD = PLAYER_RADIUS + seg.t / 2;
+        if (d < minD) {
+          hit = true;
+          if (d < 1e-6) { ox = p.x - before.x; oy = p.z - before.z; }
+          const l = Math.hypot(ox, oy) || 1;
+          p.x = cx + (ox / l) * minD;
+          p.z = cy + (oy / l) * minD;
+        }
+      }
+      if (!hit) break;
+    }
+  }
+
+  // ------------------------------------------------------------------- loop
+
+  _tick() {
+    const dt = Math.min(0.05, this.clock.getDelta());
+    if (this.mode === 'walk' && this.walk.isLocked) this._move(dt);
+    if (this.mode === 'orbit') this.orbit.update();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  _resize() {
+    const parent = this.canvas.parentElement;
+    if (!parent) return;
+    const w = Math.max(1, parent.clientWidth);
+    const h = Math.max(1, parent.clientHeight);
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  // ----------------------------------------------------------------- output
+
+  screenshot() {
+    this.renderer.render(this.scene, this.camera);
+    return this.canvas.toDataURL('image/png');
+  }
+
+  exportGLB() {
+    return new Promise((resolve, reject) => {
+      if (!this.apartment) return reject(new Error('nothing to export'));
+      new GLTFExporter().parse(
+        this.apartment.root,
+        (result) => resolve(new Blob([result], { type: 'model/gltf-binary' })),
+        (err) => reject(err),
+        { binary: true }
+      );
+    });
+  }
+}
+
+function skyTexture(night) {
+  const c = document.createElement('canvas');
+  c.width = 8;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  if (night) {
+    g.addColorStop(0, '#0b1224');
+    g.addColorStop(0.55, '#1b2740');
+    g.addColorStop(1, '#3a4256');
+  } else {
+    g.addColorStop(0, '#7fa9dd');
+    g.addColorStop(0.5, '#bcd4ea');
+    g.addColorStop(1, '#e8e2d6');
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 8, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  return tex;
+}
+
+function disposeTree(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+  });
+}
