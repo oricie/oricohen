@@ -262,12 +262,17 @@ export class Viewer {
     this.canvas.addEventListener('pointerdown', (e) => {
       this._pressAt = { x: e.clientX, y: e.clientY };
       if (this.mode !== 'orbit' || e.button !== 0) return;
+      if (!this.apartment) return;
       const hit = this.pickAt(e);
       if (!hit || hit.kind !== 'item') return;
       const group = this.itemGroup(hit.id);
       if (!group) return;
 
-      // grabbing furniture moves it; the camera stays put
+      // grabbing furniture moves it; the camera stays put. OrbitControls
+      // listens on the same element, so stop the event reaching it rather
+      // than disabling it mid-gesture and leaving its pointer bookkeeping
+      // out of step.
+      e.stopPropagation();
       this.orbit.enabled = false;
       this.canvas.setPointerCapture(e.pointerId);
       const level = this.levelOf(group);
@@ -284,7 +289,7 @@ export class Viewer {
         startX: e.clientX,
         moved: false,
       };
-    });
+    }, true);
 
     this.canvas.addEventListener('pointermove', (e) => {
       if (!this.item) return;
