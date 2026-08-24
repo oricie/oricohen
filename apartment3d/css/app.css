@@ -439,3 +439,30 @@ button.danger:hover { background: var(--accent-soft); border-color: var(--accent
 }
 .drag-hint strong { color: var(--ink); }
 body[data-view="plan"] .drag-hint { display: none; }
+
+/* --------------------------------------------------------------- sketching */
+
+.sketch-overlay { position: absolute; inset: 0; pointer-events: none; }
+
+.sketch-ask {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: auto minmax(240px, 340px) auto auto;
+  gap: 8px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+  z-index: 5;
+  max-width: min(92%, 760px);
+}
+.sketch-area { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sketch-ask input { width: 100%; }
+.sketch-error, .sketch-examples { grid-column: 1 / -1; margin: 0; font-size: 11px; }
+.sketch-error { color: #a3350a; }
+.sketch-examples { color: var(--ink-soft); }

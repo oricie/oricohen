@@ -90,6 +90,23 @@ view, and tick **only this one** to hide the others while you look around.
 A drawing that is not part of the flat — a site plan, a section, a legend — can
 be set to *Not part of the flat* and it is dropped from the model.
 
+### Sketch and ask
+
+Press **Sketch & ask** above the 3D view, draw a loop around any area, and say
+what should be there:
+
+- *this is a balcony* — names the area and lays the right floor
+- *marble floor* — changes the floor under the loop
+- *put two wall cabinets here* — finds the piece in the catalogue and places it
+- *furnish this as a bedroom* — drops the whole kit in
+- *remove these walls* / *remove the furniture* — clears what is inside the loop
+
+The instruction is read **locally, by matching vocabulary** — there is no model
+call. The published page cannot reach an API (its content policy blocks external
+hosts) and a browser-held API key would be readable by anyone who opened the
+page, so the parser handles the vocabulary directly instead. When it does not
+understand something it says so and suggests a phrasing rather than guessing.
+
 ### Output
 
 - **Export .glb** — the whole flat as a standard glTF binary, opens in Blender,
@@ -103,12 +120,19 @@ be set to *Not part of the flat* and it is dropped from the model.
 
 1. Downscale, greyscale, and threshold the image (Otsu, or a manual value).
    Plans drawn light-on-dark are detected and inverted.
-2. Keep only **long runs** of ink, row by row and column by column. This is what
-   separates walls from text, dimension lines and furniture symbols.
-3. Group runs on neighbouring rows into **bands** — a band is a wall, its
-   thickness is the band's depth. Runs are only merged into a band when they
-   overlap most of the *longer* of the two, so a crossing wall doesn't get
-   swallowed.
+2. Take a **distance transform** of the ink: every ink pixel gets its distance
+   to the nearest background pixel, which is half the local stroke thickness.
+   Keeping only ink thicker than *Thinnest wall* is what separates walls from
+   text, dimension lines, hatching, door swings, room-fill outlines and
+   furniture symbols — a single measurement instead of a pile of heuristics.
+   Thin strokes are kept separately, because that is where stair treads and
+   window symbols live.
+3. Group runs on neighbouring rows into **bands** — a band is a wall. Runs are
+   only merged into a band when they overlap most of the *longer* of the two,
+   so a crossing wall doesn't get swallowed. A band's thickness is the *median*
+   of the distance map along its centre line, not how tall the band is: at a T
+   or a corner the band swells where the other wall meets it, and the median
+   ignores that, so junctions no longer invent walls three times too thick.
 4. Snap coordinates onto shared values, extend segments to their junctions, and
    merge collinear pieces. **A gap between two collinear pieces becomes a
    doorway** — which is exactly what a doorway looks like on a plan.

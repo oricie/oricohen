@@ -16,7 +16,8 @@ import { simplify, rectilinearize, polygonArea, dedupe } from './geom.js';
 export const DEFAULT_OPTIONS = {
   maxSize: 1200,        // longest edge after downscale
   threshold: 0,         // 0 = auto (Otsu), otherwise 1..254
-  minRun: 14,           // px: a stroke must be this long to count as a wall
+  minRun: 10,           // px: a stroke must be this long to be looked at
+  minWallThickness: 5,  // px: anything thinner than this is not a wall
   minWallLength: 26,    // px: drop wall segments shorter than this
   maxWallThickness: 40, // px: bands thicker than this are hatching/solids
   snap: 9,              // px: endpoint + collinear snapping radius
@@ -91,6 +92,62 @@ function otsu(grey) {
   return threshold;
 }
 
+// ------------------------------------------------------------ thickness map
+
+// Chamfer distance transform: every ink pixel gets its distance to the nearest
+// background pixel. On a floor plan that distance IS half the local stroke
+// thickness, which is the one measurement that separates a wall from
+// everything else drawn on the page.
+function distanceTransform(ink, width, height) {
+  const INF = 1e9;
+  const d = new Float32Array(width * height);
+  for (let i = 0; i < d.length; i++) d[i] = ink[i] ? INF : 0;
+  const DIAG = Math.SQRT2;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (d[i] === 0) continue;
+      let v = d[i];
+      if (x > 0) v = Math.min(v, d[i - 1] + 1);
+      if (y > 0) v = Math.min(v, d[i - width] + 1);
+      if (x > 0 && y > 0) v = Math.min(v, d[i - width - 1] + DIAG);
+      if (x < width - 1 && y > 0) v = Math.min(v, d[i - width + 1] + DIAG);
+      d[i] = v;
+    }
+  }
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const i = y * width + x;
+      if (d[i] === 0) continue;
+      let v = d[i];
+      if (x < width - 1) v = Math.min(v, d[i + 1] + 1);
+      if (y < height - 1) v = Math.min(v, d[i + width] + 1);
+      if (x < width - 1 && y < height - 1) v = Math.min(v, d[i + width + 1] + DIAG);
+      if (x > 0 && y < height - 1) v = Math.min(v, d[i + width - 1] + DIAG);
+      d[i] = v;
+    }
+  }
+  return d;
+}
+
+// Ink thick enough to be structural. Text, dimension lines, hatching, door
+// swings, furniture outlines and room-fill borders all fail this test, which
+// is why they stop turning into walls.
+function thickInk(dist, ink, minThickness) {
+  const half = minThickness / 2;
+  const core = new Uint8Array(ink.length);
+  for (let i = 0; i < ink.length; i++) core[i] = dist[i] >= half ? 1 : 0;
+  return core;
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 // -------------------------------------------------------------- wall segments
 
 // Collect horizontal runs of ink per row (or per column when transposed).
@@ -154,15 +211,33 @@ function groupBands(runs, maxThickness) {
   return bands;
 }
 
-function bandsToSegments(bands, horizontal, opts) {
+function bandsToSegments(bands, horizontal, opts, dist, width, height) {
   const segs = [];
   for (const band of bands) {
-    const thickness = band.r1 - band.r0 + 1;
+    const spread = band.r1 - band.r0 + 1;
     const length = band.b - band.a + 1;
     if (length < opts.minWallLength) continue;
-    if (thickness > opts.maxWallThickness) continue;
-    if (thickness > length * 0.9) continue; // blob, not a stroke
+    if (spread > opts.maxWallThickness) continue;
+    if (spread > length * 0.9) continue; // blob, not a stroke
     const centre = (band.r0 + band.r1) / 2;
+
+    // Thickness comes from the distance map along the band's centre line, not
+    // from how tall the band is. At a T or a corner the band swells where the
+    // other wall meets it; the median ignores that, so a junction no longer
+    // invents a wall three times too thick.
+    const samples = [];
+    const step = Math.max(1, Math.floor(length / 40));
+    const row = Math.round(centre);
+    for (let s = band.a; s <= band.b; s += step) {
+      const x = horizontal ? s : row;
+      const y = horizontal ? row : s;
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      const value = dist[y * width + x];
+      if (value > 0) samples.push(value);
+    }
+    const thickness = samples.length ? median(samples) * 2 : spread;
+    if (thickness > opts.maxWallThickness) continue;
+
     segs.push(horizontal
       ? { x1: band.a, y1: centre, x2: band.b, y2: centre, t: thickness, dir: 'h' }
       : { x1: centre, y1: band.a, x2: centre, y2: band.b, t: thickness, dir: 'v' });
@@ -533,19 +608,31 @@ export function detectWalls(mask, opts) {
   const o = { ...DEFAULT_OPTIONS, ...opts };
   const { ink, width, height } = mask;
 
-  const hRuns = runsAlong(ink, width, height, true, o.minRun);
-  const vRuns = runsAlong(ink, width, height, false, o.minRun);
-  const hSegs = bandsToSegments(groupBands(hRuns, o.maxWallThickness), true, o);
-  const vSegs = bandsToSegments(groupBands(vRuns, o.maxWallThickness), false, o);
+  const dist = distanceTransform(ink, width, height);
+  const bands = (source, horizontal) => bandsToSegments(
+    groupBands(runsAlong(source, width, height, horizontal, o.minRun), o.maxWallThickness),
+    horizontal, o, dist, width, height
+  );
 
-  const stairs = findStairs([...hSegs, ...vSegs], o);
-  const tiles = splitIntoTiles(stairs.rest, width, height, o);
+  // Two readings of the page. The gated one keeps only ink thick enough to be
+  // a wall; the raw one keeps everything, because the thin strokes are where
+  // the stair treads and window symbols live.
+  const core = thickInk(dist, ink, o.minWallThickness);
+  const structural = [...bands(core, true), ...bands(core, false)];
+  const strokes = [...bands(ink, true), ...bands(ink, false)];
+
+  const stairs = findStairs(strokes, o);
+  const thin = stairs.rest.filter((seg) => seg.t < o.minWallThickness);
+  const tiles = splitIntoTiles([...structural, ...thin], width, height, o);
   const segments = [];
   const doors = [];
   const sections = [];
 
   tiles.forEach((tile, index) => {
-    const merged = mergeCollinear(absorbParallelPairs(tile.segments, o), o);
+    // Anything still thin after the window pairs are folded is not a wall.
+    const usable = absorbParallelPairs(tile.segments, o)
+      .filter((seg) => seg.glazed || seg.t >= o.minWallThickness * 0.8);
+    const merged = mergeCollinear(usable, o);
     let segs = merged.segments;
     segs.forEach((seg, i) => { seg._i = i; seg.section = index; });
 

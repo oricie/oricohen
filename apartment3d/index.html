@@ -72,8 +72,8 @@
         <input id="opt-threshold" type="range" min="0" max="240" step="5" value="0" />
       </label>
       <label class="slider">
-        <span>Min stroke length <em id="opt-minrun-value">14</em> px</span>
-        <input id="opt-minrun" type="range" min="6" max="40" step="1" value="14" />
+        <span>Thinnest wall <em id="opt-minthick-value">5</em> px</span>
+        <input id="opt-minthick" type="range" min="2" max="24" step="1" value="5" />
       </label>
       <label class="slider">
         <span>Max wall thickness <em id="opt-thickness-value">40</em> px</span>
@@ -84,7 +84,9 @@
         <input id="opt-doorgap" type="range" min="10" max="200" step="5" value="90" />
       </label>
       <button id="btn-detect" class="wide" type="button">Re-detect walls</button>
-      <p class="hint">Raise the minimum stroke length if furniture symbols become walls; raise the doorway gap if doors are missed.</p>
+      <p class="hint">Walls are found by how <em>thick</em> the ink is, so text, dimension
+        lines and furniture symbols are ignored. Raise <strong>Thinnest wall</strong> if
+        light detail still becomes walls; lower it if real partitions go missing.</p>
     </section>
 
     <section class="panel">
@@ -180,6 +182,7 @@
         </span>
         <button type="button" data-mode="orbit" class="active">Dollhouse</button>
         <button type="button" data-mode="walk">Walk through</button>
+        <button id="btn-sketch" type="button">Sketch &amp; ask</button>
         <button id="btn-frame" type="button" class="ghost">Reset view</button>
       </div>
     </div>
@@ -205,7 +208,16 @@
       <div class="pane pane-3d">
         <div class="canvas-wrap">
           <canvas id="view-canvas"></canvas>
-          <div class="drag-hint">Drag furniture to move · <strong>Shift</strong>-drag to turn · <strong>Alt</strong>-drag to resize</div>
+          <svg id="sketch-overlay" class="sketch-overlay"></svg>
+          <div id="sketch-ask" class="sketch-ask" hidden>
+            <span id="sketch-area" class="sketch-area"></span>
+            <input id="sketch-text" type="text" placeholder="What should be here?" aria-label="Instruction for the sketched area" />
+            <button id="sketch-run" type="button" class="primary">Do it</button>
+            <button id="sketch-cancel" type="button" class="ghost">Cancel</button>
+            <p id="sketch-error" class="sketch-error" hidden></p>
+            <p id="sketch-examples" class="sketch-examples"></p>
+          </div>
+          <div class="drag-hint">Drag furniture to move · the <strong>ring</strong> turns it · the <strong>corners</strong> resize it</div>
           <div id="walk-hint" class="walk-hint" hidden>
             <strong>W A S D</strong> to move · <strong>Shift</strong> to run · mouse to look · <strong>M</strong> for the map · <strong>Esc</strong> to release the cursor
           </div>

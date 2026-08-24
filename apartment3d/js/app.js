@@ -10,6 +10,7 @@ import * as furniture from './furniture.js';
 import { sampleFloorPlan } from './sample.js';
 import { Minimap } from './minimap.js';
 import * as storage from './storage.js';
+import * as instruct from './instruct.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -72,9 +73,34 @@ viewer.onPick = (selection, additive) => {
   else editor.selection = selection;
   editor.draw();
   viewer.setHighlight(editor.selected);
+  syncGizmo();
   renderSelection();
   renderRoomList();
 };
+
+viewer.onPlace = (type, x, y, level) => {
+  const item = { id: uid('f'), type, x, y, rot: 0, level };
+  state.plan.items.push(item);
+  viewer.placing = null;
+  $$('#furniture-palette button').forEach((b) => b.classList.remove('active'));
+  editor.selection = { kind: 'item', id: item.id };
+  editor.emit();
+  toast(`Placed ${furniture.spec(type).label} — drag it, or use the ring to turn it`);
+};
+
+// The gizmo only makes sense for exactly one piece of furniture.
+function syncGizmo() {
+  const sel = editor.selection;
+  if (!sel || sel.kind !== 'item' || editor.selected.length !== 1) {
+    viewer.hideGizmo();
+    viewer.gizmoItemId = null;
+    return;
+  }
+  const item = state.plan.items.find((i) => i.id === sel.id);
+  if (!item) return viewer.hideGizmo();
+  viewer.gizmoItemId = item.id;
+  viewer.showGizmo(item, furniture.footprint(item));
+}
 // Furniture dragged in the 3D view writes straight back to the plan.
 viewer.onItemChange = (id, change) => {
   const item = state.plan.items.find((i) => i.id === id);
@@ -96,6 +122,52 @@ viewer.onItemChange = (id, change) => {
   editor.emit();
   renderSelection();
 };
+
+// --- sketch an area, say what goes there ---------------------------------
+
+viewer.onSketchProgress = (points) => {
+  const svg = $('#sketch-overlay');
+  if (!points || points.length < 2) { svg.innerHTML = ''; return; }
+  const rect = viewer.canvas.getBoundingClientRect();
+  const d = points.map((p, i) =>
+    `${i ? 'L' : 'M'}${(p.x - rect.left).toFixed(1)},${(p.y - rect.top).toFixed(1)}`).join(' ');
+  svg.innerHTML = `<path d="${d} Z" fill="rgba(194,65,12,0.12)" stroke="#c2410c" ` +
+                  `stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4" />`;
+};
+
+viewer.onSketch = (poly, level) => {
+  $('#sketch-overlay').innerHTML = '';
+  if (!poly) return;
+  state.sketch = { poly, level };
+  const area = Math.abs(polygonArea(poly.map((p) => [p.x, p.y])));
+  $('#sketch-area').textContent = `${area.toFixed(1)} m² marked`;
+  $('#sketch-ask').hidden = false;
+  $('#sketch-text').value = '';
+  $('#sketch-text').focus();
+};
+
+function runInstruction() {
+  const text = $('#sketch-text').value;
+  if (!state.sketch) return;
+  const result = instruct.apply(state.plan, state.sketch.poly, text, state.sketch.level);
+  if (result.done.length) {
+    editor.emit();
+    toast(result.done.join(', '));
+    closeSketch();
+  } else {
+    $('#sketch-error').textContent = result.missed;
+    $('#sketch-error').hidden = false;
+  }
+}
+
+function closeSketch() {
+  state.sketch = null;
+  $('#sketch-ask').hidden = true;
+  $('#sketch-error').hidden = true;
+  $('#sketch-overlay').innerHTML = '';
+  viewer.setSketching(false);
+  $('#btn-sketch').classList.remove('active');
+}
 
 viewer.onPointerLockDenied = () => {
   $('#walk-hint').innerHTML =
@@ -125,6 +197,7 @@ function rebuild3D() {
     .sort((a, b) => Math.abs(polygonArea(b.poly)) - Math.abs(polygonArea(a.poly)))[0];
   if (biggest) viewer.setSpawn(...standingSpot(biggest.poly), biggest.level || 0);
   viewer.setHighlight(editor.selected);
+  syncGizmo();
   renderLevels();
   minimap.setPlan(state.plan, viewer.walkLevel || 0);
   scheduleAutosave();
@@ -186,6 +259,7 @@ function runDetection() {
       rebuild3D();
       renderRoomList();
       renderStats();
+      setView('3d');
       const windows = state.plan.openings.filter((o) => o.type === 'window').length;
       const doors = state.plan.openings.length - windows;
       const stairs = (result.stairs || []).length;
@@ -849,8 +923,10 @@ function renderPalette(filter = '') {
       b.classList.toggle('active', item.key === editor.itemType);
       b.addEventListener('click', () => {
         editor.itemType = item.key;
-        setTool('item');
+        viewer.placing = item.key;
+        if (currentView !== '3d') setTool('item');
         $$('#furniture-palette button').forEach((x) => x.classList.toggle('active', x === b));
+        if (currentView !== 'plan') toast(`Click in the 3D view to place the ${item.label.toLowerCase()}`);
       });
       grid.appendChild(b);
     }
@@ -955,7 +1031,7 @@ function bindUI() {
   // detection sliders
   const sliders = [
     ['#opt-threshold', 'threshold'],
-    ['#opt-minrun', 'minRun'],
+    ['#opt-minthick', 'minWallThickness'],
     ['#opt-thickness', 'maxWallThickness'],
     ['#opt-doorgap', 'maxDoorGap'],
   ];
@@ -1029,6 +1105,23 @@ function bindUI() {
     viewer.setMode(b.dataset.mode);
   }));
   $('#btn-frame').addEventListener('click', () => { viewer.setMode('orbit'); viewer.frameAll(); });
+
+  $('#btn-sketch').addEventListener('click', () => {
+    const on = !viewer.sketching;
+    viewer.setMode('orbit');
+    if (currentView === 'plan') setView('3d');
+    viewer.setSketching(on);
+    $('#btn-sketch').classList.toggle('active', on);
+    if (on) toast('Draw a loop around an area, then say what should be there');
+    else closeSketch();
+  });
+  $('#sketch-run').addEventListener('click', runInstruction);
+  $('#sketch-cancel').addEventListener('click', closeSketch);
+  $('#sketch-text').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); runInstruction(); }
+    if (e.key === 'Escape') closeSketch();
+  });
+  $('#sketch-examples').textContent = instruct.EXAMPLES.map((e) => `“${e}”`).join('  ·  ');
   $('#isolate-level').addEventListener('change', (e) => {
     const level = e.target.checked ? parseInt($('#walk-level').value, 10) : null;
     viewer.setVisibleLevel(Number.isFinite(level) ? level : null);

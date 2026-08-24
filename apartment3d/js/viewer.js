@@ -28,6 +28,12 @@ export class Viewer {
     this.onPick = () => {};
     this.onFrame = () => {};
     this.onItemChange = () => {};
+    this.onPlace = () => {};
+    this.placing = null;
+    this.sketching = false;
+    this.onSketch = () => {};
+    this.gizmo = null;
+    this.gizmoItemId = null;
     this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.raycaster = new THREE.Raycaster();
 
@@ -97,6 +103,8 @@ export class Viewer {
       disposeTree(this.apartment.root);
     }
     this._highlighted = null;
+    this.hideGizmo();
+    this.plan = plan;
     this.apartment = buildApartment(plan, { ...options, ceiling: true });
     this.scene.add(this.apartment.root);
     this.collision = this.apartment.collision;
@@ -263,7 +271,10 @@ export class Viewer {
       this._pressAt = { x: e.clientX, y: e.clientY };
       if (this.mode !== 'orbit' || e.button !== 0) return;
       if (!this.apartment) return;
-      const hit = this.pickAt(e);
+
+      // a handle on the gizmo wins over everything underneath it
+      const handle = this.gizmo ? this.pickGizmo(e) : null;
+      const hit = handle ? { kind: 'item', id: this.gizmoItemId } : this.pickAt(e);
       if (!hit || hit.kind !== 'item') return;
       const group = this.itemGroup(hit.id);
       if (!group) return;
@@ -281,12 +292,16 @@ export class Viewer {
       this.item = {
         id: hit.id,
         group,
-        mode: e.shiftKey ? 'rotate' : (e.altKey ? 'scale' : 'move'),
+        mode: handle || (e.shiftKey ? 'rotate' : (e.altKey ? 'scale' : 'move')),
         grab: at,
         origin: group.position.clone(),
         rot: group.rotation.y,
         scale: group.scale.x,
         startX: e.clientX,
+        grabRadius: (() => {
+          const at = this.planePoint(e);
+          return at ? Math.max(0.05, Math.hypot(at.x - group.position.x, at.z - group.position.z)) : 1;
+        })(),
         moved: false,
       };
     }, true);
@@ -295,16 +310,24 @@ export class Viewer {
       if (!this.item) return;
       const drag = this.item;
       drag.moved = true;
+      const at = this.planePoint(e);
       if (drag.mode === 'move') {
-        const at = this.planePoint(e);
         if (!at || !drag.grab) return;
         drag.group.position.x = drag.origin.x + (at.x - drag.grab.x);
         drag.group.position.z = drag.origin.z + (at.z - drag.grab.z);
+        if (this.gizmo) this.gizmo.position.set(drag.group.position.x, this.gizmo.position.y, drag.group.position.z);
       } else if (drag.mode === 'rotate') {
-        drag.group.rotation.y = drag.rot + (e.clientX - drag.startX) * 0.012;
+        if (!at) return;
+        const angle = Math.atan2(at.x - drag.origin.x, at.z - drag.origin.z);
+        if (drag.startAngle === undefined) drag.startAngle = angle - drag.rot;
+        drag.group.rotation.y = angle - drag.startAngle;
+        if (this.gizmo) this.gizmo.rotation.y = drag.group.rotation.y;
       } else {
-        const k = Math.max(0.3, Math.min(3, drag.scale * (1 + (e.clientX - drag.startX) * 0.004)));
+        if (!at || !drag.grabRadius) return;
+        const radius = Math.hypot(at.x - drag.origin.x, at.z - drag.origin.z);
+        const k = Math.max(0.3, Math.min(3, drag.scale * (radius / drag.grabRadius)));
         drag.group.scale.setScalar(k);
+        if (this.gizmo) this.gizmo.scale.setScalar(k / drag.scale);
       }
     });
 
@@ -337,6 +360,15 @@ export class Viewer {
         ? Math.hypot(e.clientX - this._pressAt.x, e.clientY - this._pressAt.y)
         : 0;
       if (moved > 4) return;
+      if (this.placing) {
+        const at = this.planePoint(e);
+        if (at) {
+          const level = this.walkLevel || 0;
+          const offset = this.levelOffset(level);
+          this.onPlace(this.placing, at.x - offset.dx, at.z - offset.dy, level);
+          return;
+        }
+      }
       this.onPick(this.pickAt(e), e.shiftKey);
     });
     // Sandboxed frames and touch devices refuse pointer lock; fall back to
@@ -345,6 +377,43 @@ export class Viewer {
       this.pointerLockOk = false;
       this.onPointerLockDenied();
     });
+
+    this.canvas.addEventListener('pointerdown', (e) => {
+      if (!this.sketching || this.mode !== 'orbit' || e.button !== 0) return;
+      e.stopPropagation();
+      this.canvas.setPointerCapture(e.pointerId);
+      const level = this.walkLevel || 0;
+      this.dragPlane.set(new THREE.Vector3(0, 1, 0), -(level * (this.wallHeight || 2.7)));
+      const at = this.planePoint(e);
+      this.lasso = at ? [{ x: at.x, y: at.z }] : [];
+      this.lassoScreen = [{ x: e.clientX, y: e.clientY }];
+    }, true);
+
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!this.lasso) return;
+      const at = this.planePoint(e);
+      if (!at) return;
+      const last = this.lasso[this.lasso.length - 1];
+      if (!last || Math.hypot(at.x - last.x, at.z - last.y) > 0.08) {
+        this.lasso.push({ x: at.x, y: at.z });
+        this.lassoScreen.push({ x: e.clientX, y: e.clientY });
+        this.onSketchProgress(this.lassoScreen);
+      }
+    });
+
+    const endLasso = () => {
+      if (!this.lasso) return;
+      const points = this.lasso;
+      this.lasso = null;
+      this.lassoScreen = null;
+      this.onSketchProgress(null);
+      if (points.length < 4) return this.onSketch(null);
+      const level = this.walkLevel || 0;
+      const offset = this.levelOffset(level);
+      this.onSketch(points.map((p) => ({ x: p.x - offset.dx, y: p.y - offset.dy })), level);
+    };
+    this.canvas.addEventListener('pointerup', endLasso);
+    this.canvas.addEventListener('pointercancel', endLasso);
 
     this.canvas.addEventListener('pointerdown', (e) => {
       if (this.mode !== 'walk' || this.walk.isLocked) return;
@@ -370,6 +439,25 @@ export class Viewer {
   }
 
   onPointerLockDenied() {}
+  onSketchProgress() {}
+
+  setSketching(on) {
+    this.sketching = on;
+    this.orbit.enabled = !on && this.mode === 'orbit';
+    this.canvas.style.cursor = on ? 'crosshair' : '';
+  }
+
+  // Which gizmo handle, if any, is under the cursor.
+  pickGizmo(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hits = this.raycaster.intersectObject(this.gizmo, true);
+    return hits.length ? hits[0].object.userData.gizmo : null;
+  }
 
   // The group in the scene that carries this furniture id.
   itemGroup(id) {
@@ -419,6 +507,56 @@ export class Viewer {
       }
     }
     return null;
+  }
+
+  // A ring to turn the selected piece and four corners to resize it, so the
+  // 3D view needs no modifier keys.
+  showGizmo(item, footprint) {
+    this.hideGizmo();
+    if (!item || !footprint) return;
+    const g = new THREE.Group();
+    g.name = 'gizmo';
+    const r = Math.max(footprint.w, footprint.d) * 0.5 + 0.22;
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xc2410c, transparent: true, opacity: 0.85, depthTest: false,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.028, 8, 40), ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.03;
+    ring.renderOrder = 999;
+    ring.userData.gizmo = 'rotate';
+    g.add(ring);
+
+    const knobMat = new THREE.MeshBasicMaterial({ color: 0xc2410c, depthTest: false });
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const knob = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.11), knobMat);
+        knob.position.set(sx * footprint.w / 2, 0.06, sz * footprint.d / 2);
+        knob.renderOrder = 999;
+        knob.userData.gizmo = 'scale';
+        g.add(knob);
+      }
+    }
+
+    const level = item.level || 0;
+    const offset = this.levelOffset(level);
+    g.position.set(item.x + offset.dx, level * (this.wallHeight || 2.7) + 0.01, item.y + offset.dy);
+    g.rotation.y = item.rot || 0;
+    this.gizmo = g;
+    this.scene.add(g);
+  }
+
+  hideGizmo() {
+    if (!this.gizmo) return;
+    this.scene.remove(this.gizmo);
+    this.gizmo.traverse((o) => o.geometry && o.geometry.dispose());
+    this.gizmo = null;
+  }
+
+  levelOffset(level) {
+    const offsets = (this.plan && this.plan.levelOffsets) || {};
+    return offsets[level] || { dx: 0, dy: 0 };
   }
 
   // Tint whatever is selected so the 3D view agrees with the plan. Takes one
