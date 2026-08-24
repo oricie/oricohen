@@ -210,13 +210,51 @@ export class Viewer {
     const up = (e) => this.keys.delete(e.code);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
+
     this.canvas.addEventListener('click', () => {
-      if (this.mode === 'walk' && !this.walk.isLocked) this.walk.lock();
+      if (this.mode === 'walk' && !this.walk.isLocked && this.pointerLockOk !== false) {
+        try { this.walk.lock(); } catch { this.pointerLockOk = false; }
+      }
     });
+    // Sandboxed frames and touch devices refuse pointer lock; fall back to
+    // dragging the view around, which needs no permission.
+    document.addEventListener('pointerlockerror', () => {
+      this.pointerLockOk = false;
+      this.onPointerLockDenied();
+    });
+
+    this.canvas.addEventListener('pointerdown', (e) => {
+      if (this.mode !== 'walk' || this.walk.isLocked) return;
+      this.look = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      this.canvas.setPointerCapture(e.pointerId);
+    });
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!this.look || e.pointerId !== this.look.id) return;
+      this._turn(e.clientX - this.look.x, e.clientY - this.look.y);
+      this.look.x = e.clientX;
+      this.look.y = e.clientY;
+    });
+    const endLook = (e) => {
+      if (this.look && e.pointerId === this.look.id) this.look = null;
+    };
+    this.canvas.addEventListener('pointerup', endLook);
+    this.canvas.addEventListener('pointercancel', endLook);
+
     this.walk.addEventListener('unlock', () => {
       this.keys.clear();
       this.velocity.set(0, 0, 0);
     });
+  }
+
+  onPointerLockDenied() {}
+
+  _turn(dx, dy) {
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    euler.setFromQuaternion(this.camera.quaternion);
+    euler.y -= dx * 0.0032;
+    euler.x -= dy * 0.0032;
+    euler.x = Math.max(-Math.PI / 2 + 0.02, Math.min(Math.PI / 2 - 0.02, euler.x));
+    this.camera.quaternion.setFromEuler(euler);
   }
 
   _move(dt) {
@@ -274,7 +312,7 @@ export class Viewer {
 
   _tick() {
     const dt = Math.min(0.05, this.clock.getDelta());
-    if (this.mode === 'walk' && this.walk.isLocked) this._move(dt);
+    if (this.mode === 'walk') this._move(dt);
     if (this.mode === 'orbit') this.orbit.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -294,6 +332,11 @@ export class Viewer {
   screenshot() {
     this.renderer.render(this.scene, this.camera);
     return this.canvas.toDataURL('image/png');
+  }
+
+  screenshotBlob() {
+    this.renderer.render(this.scene, this.camera);
+    return new Promise((resolve) => this.canvas.toBlob(resolve, 'image/png'));
   }
 
   exportGLB() {

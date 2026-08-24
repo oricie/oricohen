@@ -48,6 +48,10 @@ editor.addEventListener('change', () => {
 editor.addEventListener('select', () => renderRoomList());
 editor.addEventListener('notice', (e) => toast(e.detail));
 editor.addEventListener('calibrate', (e) => showCalibration(e.detail.measured));
+viewer.onPointerLockDenied = () => {
+  $('#walk-hint').innerHTML =
+    '<strong>W A S D</strong> to move · <strong>Shift</strong> to run · <strong>drag</strong> to look around';
+};
 viewer.onModeChange = (mode) => {
   $$('#view-modes button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
   $('#walk-hint').hidden = mode !== 'walk';
@@ -352,13 +356,40 @@ function busy(on) {
   $('#busy').hidden = !on;
 }
 
-function download(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+// Saving a file works two ways: a plain anchor when the tool is served from
+// its own page, and the host's save prompt when it runs inside a viewer that
+// blocks page-initiated downloads.
+async function download(blob, filename) {
+  const host = window.claude && typeof window.claude.use === 'function'
+    ? await window.claude.use('downloads').catch(() => null)
+    : null;
+
+  if (!host) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return;
+  }
+
+  try {
+    await host.save({ filename, data: blob });
+    toast(`Saved ${filename}`);
+  } catch (err) {
+    const code = err && err.code;
+    if (code === 'declined') return;
+    if (code === 'rejected_extension' || code === 'extension_not_enabled') {
+      toast(`This viewer cannot save ${filename.split('.').pop().toUpperCase()} files. Run the tool from the repository to export it.`);
+      return;
+    }
+    if (code === 'too_large') {
+      toast('That file is too large for the viewer to save (16 MB limit).');
+      return;
+    }
+    toast(`Could not save the file: ${(err && err.message) || code || 'unknown error'}`);
+  }
 }
 
 // --------------------------------------------------------------- events
@@ -499,12 +530,10 @@ function bindUI() {
       busy(false);
     }
   });
-  $('#btn-shot').addEventListener('click', () => {
-    const url = viewer.screenshot();
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'apartment.png';
-    a.click();
+  $('#btn-shot').addEventListener('click', async () => {
+    const blob = await viewer.screenshotBlob();
+    if (blob) download(blob, 'apartment.png');
+    else toast('Could not capture the view');
   });
 
   window.addEventListener('keydown', (e) => {
