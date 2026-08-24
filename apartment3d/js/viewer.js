@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/controls/PointerLockControls.js';
 import { GLTFExporter } from 'three/exporters/GLTFExporter.js';
 import { RoomEnvironment } from 'three/environments/RoomEnvironment.js';
-import { buildApartment } from './builder.js';
+import { buildApartment, buildFurnitureItem } from './builder.js';
 import { material } from './textures.js';
 
 const EYE_HEIGHT = 1.65;
@@ -270,7 +270,7 @@ export class Viewer {
     this.canvas.addEventListener('pointerdown', (e) => {
       this._pressAt = { x: e.clientX, y: e.clientY };
       if (this.mode !== 'orbit' || e.button !== 0) return;
-      if (!this.apartment) return;
+      if (!this.apartment || this.sketching) return;
 
       // a handle on the gizmo wins over everything underneath it
       const handle = this.gizmo ? this.pickGizmo(e) : null;
@@ -489,6 +489,23 @@ export class Viewer {
     this.raycaster.setFromCamera(ndc, this.camera);
     const hits = this.raycaster.intersectObject(this.gizmo, true);
     return hits.length ? hits[0].object.userData.gizmo : null;
+  }
+
+  // Drop one piece into the scene without rebuilding the whole flat.
+  addItem(item) {
+    if (!this.apartment) return null;
+    const level = item.level || 0;
+    const group = this.apartment.root.children.find((c) => c.userData.level === level)
+      || this.apartment.root.children[0];
+    if (!group) return null;
+    const mesh = buildFurnitureItem(item);
+    if (mesh) group.add(mesh);
+    return mesh;
+  }
+
+  removeItem(id) {
+    const mesh = this.itemGroup(id);
+    if (mesh && mesh.parent) mesh.parent.remove(mesh);
   }
 
   // The group in the scene that carries this furniture id.

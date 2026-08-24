@@ -398,28 +398,33 @@ export function autoFurnish(plan) {
   return items;
 }
 
+// One placed piece, positioned and sized. Exported so the viewer can drop a
+// single item into an existing scene.
+export function buildFurnitureItem(item) {
+  const mesh = furniture.build(item.type, item);
+  if (!mesh) return null;
+  const spec = mesh.userData.spec;
+  if (item.fit) {
+    mesh.scale.set(
+      Math.max(0.2, item.fit.w / spec.w),
+      item.fit.h ? item.fit.h / spec.h : 1,
+      Math.max(0.2, item.fit.d / spec.d)
+    );
+  } else if (item.scale && item.scale !== 1) {
+    mesh.scale.setScalar(item.scale);
+  }
+  mesh.position.set(item.x, spec.mountY || 0, item.y);
+  mesh.rotation.y = item.rot || 0;
+  mesh.userData.itemId = item.id;
+  return mesh;
+}
+
 function buildFurniture(plan) {
   const group = new THREE.Group();
   group.name = 'furniture';
   for (const item of plan.items || []) {
-    const mesh = furniture.build(item.type, item);
+    const mesh = buildFurnitureItem(item);
     if (!mesh) continue;
-    const spec = mesh.userData.spec;
-    // a traced staircase carries the size it was found at; furniture the user
-    // resized carries a plain scale
-    if (item.fit) {
-      mesh.scale.set(
-        Math.max(0.2, item.fit.w / spec.w),
-        item.fit.h ? item.fit.h / spec.h : 1,
-        Math.max(0.2, item.fit.d / spec.d)
-      );
-    } else if (item.scale && item.scale !== 1) {
-      mesh.scale.setScalar(item.scale);
-    }
-    const mountY = spec.mountY || 0;
-    mesh.position.set(item.x, mountY, item.y);
-    mesh.rotation.y = item.rot || 0;
-    mesh.userData.itemId = item.id;
     group.add(mesh);
   }
   return group;

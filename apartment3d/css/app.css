@@ -223,8 +223,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, .drop-zone:focu
 .canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
-body[data-view="plan"] .pane-3d { display: none; }
-body[data-view="3d"] .pane-plan { display: none; }
+/* the scene is always the 3D view now */
+.pane-3d { flex: 1; }
 
 .toolbar {
   display: flex;
@@ -438,7 +438,7 @@ button.danger:hover { background: var(--accent-soft); border-color: var(--accent
   pointer-events: none;
 }
 .drag-hint strong { color: var(--ink); }
-body[data-view="plan"] .drag-hint { display: none; }
+
 
 /* --------------------------------------------------------------- sketching */
 
@@ -469,3 +469,93 @@ body[data-view="plan"] .drag-hint { display: none; }
 .palette-grid button { cursor: grab; }
 .palette-grid button:active { cursor: grabbing; }
 .canvas-wrap.drop-target { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+/* =============================== 3D-first layout ========================= */
+
+/* the plan is a panel over the scene, not half the screen */
+.plan-panel {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: min(42vw, 460px);
+  height: min(58vh, 460px);
+  min-width: 260px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(31, 33, 36, 0.2);
+  overflow: hidden;
+  resize: both;
+  z-index: 6;
+}
+.plan-panel .canvas-wrap { flex: 1; min-height: 0; }
+.plan-panel .toolbar { padding: 6px 8px; }
+.plan-panel .tool-btn { padding: 4px 8px; font-size: 11px; }
+
+.plan-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfaf8;
+  flex: none;
+}
+.plan-panel-bar strong { font-size: 12px; }
+.plan-panel-hint { font-size: 11px; color: var(--ink-soft); flex: 1; }
+.plan-panel-bar button {
+  border: none;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1;
+  padding: 2px 6px;
+  color: var(--ink-soft);
+}
+.plan-panel-bar button:hover { color: var(--accent); background: transparent; }
+
+/* collapsible sidebar sections */
+.panel.collapsible > h2 { cursor: pointer; user-select: none; }
+.panel.collapsible > h2::after {
+  content: '';
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.panel.collapsible.open > h2::after { transform: rotate(45deg); }
+.panel.collapsible > *:not(h2) { display: none; }
+.panel.collapsible.open > *:not(h2) { display: revert; }
+.panel.collapsible.open > .row { display: flex; }
+.panel.collapsible.open > .field,
+.panel.collapsible.open > .check { display: flex; }
+.panel.collapsible.open > .slider { display: block; }
+
+/* category chips for the furniture list */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.chips button {
+  padding: 4px 9px;
+  font-size: 11px;
+  border-radius: 999px;
+}
+.chips button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+  opacity: 0.9;
+}
+.drag-ghost.over { background: var(--accent); }

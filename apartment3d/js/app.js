@@ -23,6 +23,9 @@ const state = {
   rebuildTimer: null,
 };
 
+// The structural opening a door sits in, near enough universal.
+const DOORWAY_METRES = 0.9;
+
 function emptyPlan() {
   return {
     version: 1,
@@ -83,9 +86,17 @@ viewer.onPlace = (type, x, y, level) => {
   state.plan.items.push(item);
   viewer.placing = null;
   $$('#furniture-palette button').forEach((b) => b.classList.remove('active'));
+  // put the piece in the scene immediately; waiting on a whole rebuild makes
+  // dropping something feel broken
+  viewer.addItem(item);
   editor.selection = { kind: 'item', id: item.id };
-  editor.emit();
-  toast(`Placed ${furniture.spec(type).label} — drag it, or use the ring to turn it`);
+  editor.draw();
+  viewer.setHighlight(editor.selected);
+  syncGizmo();
+  renderSelection();
+  renderStats();
+  scheduleAutosave();
+  toast(`${furniture.spec(type).label} placed — drag it, ring turns it, corners resize it`);
 };
 
 // The gizmo only makes sense for exactly one piece of furniture.
@@ -125,18 +136,35 @@ viewer.onItemChange = (id, change) => {
 
 // --- sketch an area, say what goes there ---------------------------------
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let sketchPath = null;
+
 viewer.onSketchProgress = (points) => {
   const svg = $('#sketch-overlay');
-  if (!points || points.length < 2) { svg.innerHTML = ''; return; }
+  if (!points || points.length < 2) {
+    if (sketchPath) { sketchPath.remove(); sketchPath = null; }
+    return;
+  }
+  if (!sketchPath) {
+    // createElementNS, not innerHTML: an SVG child has to be in the SVG
+    // namespace or the browser parses it as an unknown HTML element and
+    // nothing is drawn
+    sketchPath = document.createElementNS(SVG_NS, 'path');
+    sketchPath.setAttribute('fill', 'rgba(194,65,12,0.14)');
+    sketchPath.setAttribute('stroke', '#c2410c');
+    sketchPath.setAttribute('stroke-width', '2.5');
+    sketchPath.setAttribute('stroke-linejoin', 'round');
+    sketchPath.setAttribute('stroke-dasharray', '7 5');
+    svg.appendChild(sketchPath);
+  }
   const rect = viewer.canvas.getBoundingClientRect();
   const d = points.map((p, i) =>
     `${i ? 'L' : 'M'}${(p.x - rect.left).toFixed(1)},${(p.y - rect.top).toFixed(1)}`).join(' ');
-  svg.innerHTML = `<path d="${d} Z" fill="rgba(194,65,12,0.12)" stroke="#c2410c" ` +
-                  `stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 4" />`;
+  sketchPath.setAttribute('d', `${d} Z`);
 };
 
 viewer.onSketch = (poly, level) => {
-  $('#sketch-overlay').innerHTML = '';
+  if (sketchPath) { sketchPath.remove(); sketchPath = null; }
   if (!poly) return;
   state.sketch = { poly, level };
   const area = Math.abs(polygonArea(poly.map((p) => [p.x, p.y])));
@@ -164,7 +192,7 @@ function closeSketch() {
   state.sketch = null;
   $('#sketch-ask').hidden = true;
   $('#sketch-error').hidden = true;
-  $('#sketch-overlay').innerHTML = '';
+  if (sketchPath) { sketchPath.remove(); sketchPath = null; }
   viewer.setSketching(false);
   $('#btn-sketch').classList.remove('active');
 }
@@ -260,12 +288,14 @@ function runDetection() {
       rebuild3D();
       renderRoomList();
       renderStats();
-      setView('3d');
+      showPlanPanel(false);
+      collapseSetup();
       const windows = state.plan.openings.filter((o) => o.type === 'window').length;
       const doors = state.plan.openings.length - windows;
       const stairs = (result.stairs || []).length;
-      toast(`Found ${state.plan.walls.length} walls, ${doors} doors, ${windows} windows, ` +
-            `${state.plan.rooms.length} rooms${stairs ? `, ${stairs} staircase${stairs > 1 ? 's' : ''}` : ''}`);
+      toast(`${state.plan.walls.length} walls · ${doors} doors · ${windows} windows · ` +
+            `${state.plan.rooms.length} rooms${stairs ? ` · ${stairs} staircase${stairs > 1 ? 's' : ''}` : ''} — ` +
+            `scaled by ${state.plan.scaledBy}`);
     } catch (err) {
       console.error(err);
       toast(`Detection failed: ${err.message}`);
@@ -291,8 +321,30 @@ function planFromTrace(result) {
   // floors side by side make every room half its real size.
   const widest = clusters.reduce((a, b) => (b.w > a.w ? b : a), clusters[0]);
   const targetWidth = parseFloat($('#input-width').value) || 11;
-  const pxPerMetre = Math.max(4, (widest.w || result.width) / targetWidth);
+  let pxPerMetre = Math.max(4, (widest.w || result.width) / targetWidth);
+  let scaledBy = 'the width you gave';
+
+  // A doorway is the one dimension every plan shares: the structural opening
+  // is about 0.9 m almost everywhere. If several were found, they calibrate
+  // the drawing far better than a guess at its overall width.
+  const gaps = (result.doors || [])
+    .filter((d) => d.type !== 'window')
+    .map((d) => d.width)
+    .sort((a, b) => a - b);
+  if (gaps.length >= 2) {
+    const mid = gaps.length >> 1;
+    const medianGap = gaps.length % 2 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2;
+    const candidate = medianGap / DOORWAY_METRES;
+    const impliedWidth = (widest.w || result.width) / candidate;
+    if (candidate > 4 && impliedWidth > 3 && impliedWidth < 60) {
+      pxPerMetre = candidate;
+      scaledBy = `${gaps.length} doorways`;
+      $('#input-width').value = impliedWidth.toFixed(2);
+    }
+  }
+
   plan.scale = pxPerMetre;
+  plan.scaledBy = scaledBy;
   const toM = (v) => v / pxPerMetre;
 
   const sectionSpan = (index) => {
@@ -936,6 +988,18 @@ function swatches(title, options, current, onPick) {
   return wrap;
 }
 
+// Once a plan is in, the setup steps get out of the way.
+function collapseSetup() {
+  for (const name of ['upload', 'detection', 'scale']) {
+    const panel = document.querySelector(`[data-panel="${name}"]`);
+    if (panel) panel.classList.remove('open');
+  }
+  for (const name of ['furnish', 'selection']) {
+    const panel = document.querySelector(`[data-panel="${name}"]`);
+    if (panel) panel.classList.add('open');
+  }
+}
+
 function renderStats() {
   const p = state.plan;
   const area = (p.rooms || []).reduce((s, r) => s + Math.abs(polygonArea(r.poly)), 0);
@@ -943,54 +1007,105 @@ function renderStats() {
     `${p.walls.length} walls · ${p.openings.length} openings · ${p.rooms.length} rooms · ${area.toFixed(1)} m² floor area`;
 }
 
+let paletteCategory = 'living';
+
 function renderPalette(filter = '') {
+  const chips = $('#palette-cats');
   const wrap = $('#furniture-palette');
-  wrap.innerHTML = '';
   const needle = filter.trim().toLowerCase();
-  const groups = new Map();
-  for (const item of furniture.catalog()) {
-    if (needle && !item.label.toLowerCase().includes(needle) &&
-        !(furniture.ROOM_LABELS[item.room] || '').toLowerCase().includes(needle)) continue;
-    if (!groups.has(item.room)) groups.set(item.room, []);
-    groups.get(item.room).push(item);
+
+  const all = furniture.catalog();
+  const matches = (item) => !needle ||
+    item.label.toLowerCase().includes(needle) ||
+    (furniture.ROOM_LABELS[item.room] || '').toLowerCase().includes(needle);
+
+  // While searching, show every hit; otherwise show one category at a time so
+  // the list stays short enough to read.
+  const rooms = furniture.ROOM_ORDER.filter((r) => all.some((i) => i.room === r));
+  chips.innerHTML = '';
+  chips.hidden = !!needle;
+  for (const room of rooms) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = furniture.ROOM_LABELS[room] || room;
+    chip.classList.toggle('active', room === paletteCategory);
+    chip.addEventListener('click', () => {
+      paletteCategory = room;
+      renderPalette($('#palette-search').value);
+    });
+    chips.appendChild(chip);
   }
-  if (!groups.size) {
+
+  const shown = all.filter((i) => matches(i) && (needle || i.room === paletteCategory));
+  wrap.innerHTML = '';
+  if (!shown.length) {
     wrap.innerHTML = '<p class="empty">Nothing matches that.</p>';
     return;
   }
-  for (const room of furniture.ROOM_ORDER) {
-    const items = groups.get(room);
-    if (!items) continue;
-    const h = document.createElement('h4');
-    h.textContent = furniture.ROOM_LABELS[room] || room;
-    wrap.appendChild(h);
-    const grid = document.createElement('div');
-    grid.className = 'palette-grid';
-    for (const item of items) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.draggable = true;
-      b.dataset.type = item.key;
-      b.textContent = item.label;
-      b.title = `${item.w.toFixed(2)} × ${item.d.toFixed(2)} m${item.mountY ? ' · wall mounted' : ''}`;
-      b.classList.toggle('active', item.key === editor.itemType);
-      b.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', item.key);
-        e.dataTransfer.effectAllowed = 'copy';
-        state.dragging = item.key;
-      });
-      b.addEventListener('dragend', () => { state.dragging = null; });
-      b.addEventListener('click', () => {
-        editor.itemType = item.key;
-        viewer.placing = item.key;
-        if (currentView !== '3d') setTool('item');
-        $$('#furniture-palette button').forEach((x) => x.classList.toggle('active', x === b));
-        if (currentView !== 'plan') toast(`Click in the 3D view to place the ${item.label.toLowerCase()}`);
-      });
-      grid.appendChild(b);
-    }
-    wrap.appendChild(grid);
+  const grid = document.createElement('div');
+  grid.className = 'palette-grid';
+  for (const item of shown) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.type = item.key;
+    b.textContent = item.label;
+    b.title = `${item.w.toFixed(2)} × ${item.d.toFixed(2)} m${item.mountY ? ' · wall mounted' : ''}`;
+    b.classList.toggle('active', item.key === editor.itemType);
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      startPaletteDrag(item, e);
+    });
+    b.addEventListener('click', () => {
+      editor.itemType = item.key;
+      viewer.placing = item.key;
+      $$('#furniture-palette button').forEach((x) => x.classList.toggle('active', x === b));
+      toast(`Click the floor to place the ${item.label.toLowerCase()}, or drag it in`);
+    });
+    grid.appendChild(b);
   }
+  wrap.appendChild(grid);
+}
+
+// Drag a piece out of the list and onto the floor. Plain pointer events, so it
+// behaves the same on a trackpad, a touchscreen and every browser.
+function startPaletteDrag(item, downEvent) {
+  const ghost = document.createElement('div');
+  ghost.className = 'drag-ghost';
+  ghost.textContent = item.label;
+  document.body.appendChild(ghost);
+
+  const canvas = $('#view-canvas');
+  const wrap = canvas.parentElement;
+  let over = false;
+
+  const move = (e) => {
+    ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+    const rect = canvas.getBoundingClientRect();
+    over = e.clientX >= rect.left && e.clientX <= rect.right &&
+           e.clientY >= rect.top && e.clientY <= rect.bottom;
+    wrap.classList.toggle('drop-target', over);
+    ghost.classList.toggle('over', over);
+  };
+
+  const up = (e) => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    ghost.remove();
+    wrap.classList.remove('drop-target');
+    if (!over) return;
+    if (viewer.mode !== 'orbit') viewer.setMode('orbit');
+    const level = viewer.walkLevel || 0;
+    viewer.dragPlane.constant = -(level * (state.plan.wallHeight || 2.7));
+    const at = viewer.planePoint(e);
+    if (!at) return toast('Drop it over the floor of the flat');
+    const offset = (state.plan.levelOffsets || {})[level] || { dx: 0, dy: 0 };
+    viewer.onPlace(item.key, at.x - (offset.dx || 0), at.z - (offset.dy || 0), level);
+  };
+
+  move(downEvent);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
 }
 
 // --------------------------------------------------------------- ui helpers
@@ -998,15 +1113,19 @@ function renderPalette(filter = '') {
 function setTool(tool) {
   editor.setTool(tool);
   $$('.tool-btn').forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
-  // stay in whatever view the user chose; picking a tool is not a request to
-  // move somewhere else
+  if (tool !== 'select' && $('#plan-panel').hidden) showPlanPanel(true);
 }
 
-let currentView = 'split';
-function setView(view) {
-  currentView = view;
-  document.body.dataset.view = view;
-  $$('#view-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.viewTab === view));
+// The 3D view is the scene. The plan is a panel you open when you want to draw
+// or measure something exactly.
+let currentView = '3d';
+function showPlanPanel(on) {
+  $('#plan-panel').hidden = !on;
+  $('#btn-plan-panel').classList.toggle('active', on);
+  if (on) requestAnimationFrame(() => { editor.resize(); editor.fit(); });
+}
+
+function setView() {
   requestAnimationFrame(() => { editor.resize(); viewer._resize(); });
 }
 
@@ -1159,9 +1278,14 @@ function bindUI() {
 
   // tools + views
   $$('.tool-btn').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
-  $$('#view-tabs button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.viewTab)));
-  $$('#view-modes button').forEach((b) => b.addEventListener('click', () => {
-    if (b.dataset.mode === 'walk' && currentView === 'plan') setView('split');
+  $('#btn-plan-panel').addEventListener('click', () => showPlanPanel($('#plan-panel').hidden));
+  $('#plan-close').addEventListener('click', () => showPlanPanel(false));
+
+  // sidebar sections fold away
+  $$('.panel.collapsible > h2').forEach((h) => {
+    h.addEventListener('click', () => h.parentElement.classList.toggle('open'));
+  });
+  $$('#view-modes button[data-mode]').forEach((b) => b.addEventListener('click', () => {
     viewer.setMode(b.dataset.mode);
   }));
   $('#btn-frame').addEventListener('click', () => { viewer.setMode('orbit'); viewer.frameAll(); });
@@ -1169,7 +1293,6 @@ function bindUI() {
   $('#btn-sketch').addEventListener('click', () => {
     const on = !viewer.sketching;
     viewer.setMode('orbit');
-    if (currentView === 'plan') setView('3d');
     viewer.setSketching(on);
     $('#btn-sketch').classList.toggle('active', on);
     if (on) toast('Draw a loop around an area, then say what should be there');
@@ -1287,9 +1410,8 @@ function bindUI() {
     const map = { v: 'select', w: 'wall', d: 'door', n: 'window', b: 'room', f: 'item', e: 'erase', h: 'pan' };
     if (map[e.key]) { setTool(map[e.key]); e.preventDefault(); }
     if (e.key === 'm') $('#toggle-minimap').click();
-    if (e.key === '1') setView('plan');
-    if (e.key === '2') setView('split');
-    if (e.key === '3') setView('3d');
+    if (e.key === 'p') showPlanPanel($('#plan-panel').hidden);
+
   });
 }
 
@@ -1299,7 +1421,6 @@ renderPalette();
 bindUI();
 renderSelection();
 renderProjects();
-setView('split');
 setTool('select');
 renderStats();
 

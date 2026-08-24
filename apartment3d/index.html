@@ -53,8 +53,33 @@
 <main class="shell">
   <aside class="sidebar">
 
-    <section class="panel">
-      <h2><span class="step">1</span> Floor plan image</h2>
+    <section class="panel collapsible open" id="selection-panel" data-panel="selection">
+      <h2>Selection</h2>
+      <div id="selection-body" class="selection-body"></div>
+    </section>
+    <section class="panel collapsible open" data-panel="furnish">
+      <h2>Furnishing</h2>
+      <div class="row">
+        <button id="btn-furnish" class="wide" type="button">Auto-furnish from names</button>
+        <button id="btn-clear-furniture" class="ghost" type="button">Clear</button>
+      </div>
+      <input id="palette-search" type="text" class="search" placeholder="Search furniture…" aria-label="Search furniture" />
+      <div id="palette-cats" class="chips"></div>
+      <div id="furniture-palette" class="palette"></div>
+      <p class="hint">Drag a piece onto the 3D view — or click it, then click the floor.</p>
+    </section>
+    <section class="panel collapsible" data-panel="rooms">
+      <h2>Rooms &amp; floors</h2>
+      <div id="room-list" class="room-list"></div>
+    </section>
+    <section class="panel collapsible open" id="levels-panel" data-panel="levels" hidden>
+      <h2>Floors on this sheet</h2>
+      <p class="hint">More than one drawing was found. Say which floor each one
+        is and they will be stacked instead of standing side by side.</p>
+      <div id="level-list" class="level-list"></div>
+    </section>
+    <section class="panel collapsible open" data-panel="upload">
+      <h2>Floor plan image</h2>
       <div id="drop-zone" class="drop-zone" tabindex="0" role="button">
         <strong>Drop an image here</strong>
         <span>or click to choose — PNG, JPG, screenshot of a PDF</span>
@@ -64,9 +89,8 @@
       <button id="btn-sample" class="wide ghost" type="button">Load a sample plan</button>
       <p class="hint">Works best on a clean plan: dark walls, light background, one floor per image.</p>
     </section>
-
-    <section class="panel">
-      <h2><span class="step">2</span> Detection</h2>
+    <section class="panel collapsible" data-panel="detection">
+      <h2>Detection</h2>
       <label class="slider">
         <span>Ink threshold <em id="opt-threshold-value">auto</em></span>
         <input id="opt-threshold" type="range" min="0" max="240" step="5" value="0" />
@@ -88,29 +112,22 @@
         lines and furniture symbols are ignored. Raise <strong>Thinnest wall</strong> if
         light detail still becomes walls; lower it if real partitions go missing.</p>
     </section>
-
-    <section class="panel">
-      <h2><span class="step">3</span> Scale</h2>
+    <section class="panel collapsible" data-panel="scale">
+      <h2>Scale</h2>
       <label class="field">
         <span>Overall width of the plan</span>
         <span class="with-unit"><input id="input-width" type="number" min="1" max="80" step="0.1" value="11" /><em>m</em></span>
       </label>
-      <p class="hint">Or pick the <strong>Measure</strong> tool and drag along a known dimension.</p>
+      <p class="hint">Detection calibrates itself from the doorways it finds — a doorway is
+        about 0.9 m on any plan — and fills this in. Correct it here if it looks off, or pick
+        the <strong>Measure</strong> tool in the plan panel and drag along a dimension you know.</p>
       <div id="calib-row" class="calib" hidden>
         <span>Measured <strong id="calib-measured">—</strong>, should be</span>
         <span class="with-unit"><input id="calib-real" type="number" min="0.1" step="0.05" /><em>m</em></span>
         <button id="calib-apply" type="button">Apply</button>
       </div>
     </section>
-
-    <section class="panel" id="levels-panel" hidden>
-      <h2>Floors on this sheet</h2>
-      <p class="hint">More than one drawing was found. Say which floor each one
-        is and they will be stacked instead of standing side by side.</p>
-      <div id="level-list" class="level-list"></div>
-    </section>
-
-    <section class="panel">
+    <section class="panel collapsible" data-panel="saved">
       <h2>Saved work</h2>
       <p id="autosave-stamp" class="hint stamp">Your work is kept in this browser automatically.</p>
       <div class="row">
@@ -122,29 +139,7 @@
       <p class="hint">Stored in this browser only. <strong>Save plan</strong> at the top downloads a
         file that survives a cleared browser or a different machine.</p>
     </section>
-
-    <section class="panel" id="selection-panel">
-      <h2>Selection</h2>
-      <div id="selection-body" class="selection-body"></div>
-    </section>
-
-    <section class="panel">
-      <h2><span class="step">4</span> Rooms &amp; floors</h2>
-      <div id="room-list" class="room-list"></div>
-    </section>
-
-    <section class="panel">
-      <h2><span class="step">5</span> Furnishing</h2>
-      <div class="row">
-        <button id="btn-furnish" class="wide" type="button">Auto-furnish from names</button>
-        <button id="btn-clear-furniture" class="ghost" type="button">Clear</button>
-      </div>
-      <input id="palette-search" type="text" class="search" placeholder="Search furniture…" aria-label="Search furniture" />
-      <p class="hint">Drag a piece onto the 3D view, or click it and then click the floor.</p>
-      <div id="furniture-palette" class="palette"></div>
-    </section>
-
-    <section class="panel">
+    <section class="panel collapsible" data-panel="model">
       <h2>Model</h2>
       <label class="field">
         <span>Wall height</span>
@@ -171,10 +166,9 @@
 
   <section class="stage">
     <div class="stage-bar">
-      <div id="view-tabs" class="tabs">
-        <button type="button" data-view-tab="plan">Plan</button>
-        <button type="button" data-view-tab="split" class="active">Split</button>
-        <button type="button" data-view-tab="3d">3D</button>
+      <div class="tabs">
+        <button id="btn-plan-panel" type="button">Plan</button>
+        <button id="btn-sketch" type="button">Sketch &amp; ask</button>
       </div>
       <div id="view-modes" class="tabs right">
         <span id="walk-level-row" class="walk-level" hidden>
@@ -184,33 +178,18 @@
         </span>
         <button type="button" data-mode="orbit" class="active">Dollhouse</button>
         <button type="button" data-mode="walk">Walk through</button>
-        <button id="btn-sketch" type="button">Sketch &amp; ask</button>
         <button id="btn-frame" type="button" class="ghost">Reset view</button>
       </div>
     </div>
 
     <div class="panes">
-      <div class="pane pane-plan">
-        <div class="canvas-wrap">
-          <canvas id="plan-canvas"></canvas>
-        </div>
-        <div class="toolbar">
-          <button class="tool-btn active" data-tool="select" type="button" title="Select / move (V)">Select</button>
-          <button class="tool-btn" data-tool="wall" type="button" title="Draw wall (W)">Wall</button>
-          <button class="tool-btn" data-tool="door" type="button" title="Add door (D)">Door</button>
-          <button class="tool-btn" data-tool="window" type="button" title="Add window (N)">Window</button>
-          <button class="tool-btn" data-tool="room" type="button" title="Pick room (B)">Room</button>
-          <button class="tool-btn" data-tool="item" type="button" title="Place furniture (F)">Furniture</button>
-          <button class="tool-btn" data-tool="erase" type="button" title="Erase (E)">Erase</button>
-          <button class="tool-btn" data-tool="scale" type="button" title="Measure a known length">Measure</button>
-          <button class="tool-btn" data-tool="pan" type="button" title="Pan (H)">Pan</button>
-        </div>
-      </div>
-
       <div class="pane pane-3d">
         <div class="canvas-wrap">
           <canvas id="view-canvas"></canvas>
-          <svg id="sketch-overlay" class="sketch-overlay"></svg>
+          <svg id="sketch-overlay" class="sketch-overlay" width="100%" height="100%"></svg>
+
+          <div class="drag-hint">Drag furniture to move · the <strong>ring</strong> turns it · the <strong>corners</strong> resize it</div>
+
           <div id="sketch-ask" class="sketch-ask" hidden>
             <span id="sketch-area" class="sketch-area"></span>
             <input id="sketch-text" type="text" placeholder="What should be here?" aria-label="Instruction for the sketched area" />
@@ -219,14 +198,33 @@
             <p id="sketch-error" class="sketch-error" hidden></p>
             <p id="sketch-examples" class="sketch-examples"></p>
           </div>
-          <div class="drag-hint">Drag furniture to move · the <strong>ring</strong> turns it · the <strong>corners</strong> resize it</div>
+
           <div id="walk-hint" class="walk-hint" hidden>
             <strong>W A S D</strong> to move · <strong>Shift</strong> to run · mouse to look · <strong>M</strong> for the map · <strong>Esc</strong> to release the cursor
           </div>
+
           <div id="minimap" class="minimap" hidden>
             <canvas id="minimap-canvas"></canvas>
             <span class="minimap-hint">click to move</span>
           </div>
+
+          <aside id="plan-panel" class="plan-panel" hidden>
+            <header class="plan-panel-bar">
+              <strong>Plan</strong>
+              <span class="plan-panel-hint">for precise edits</span>
+              <button id="plan-close" type="button" aria-label="Close the plan">×</button>
+            </header>
+            <div class="canvas-wrap"><canvas id="plan-canvas"></canvas></div>
+            <div class="toolbar">
+              <button class="tool-btn active" data-tool="select" type="button" title="Select / move (V)">Select</button>
+              <button class="tool-btn" data-tool="wall" type="button" title="Draw wall (W)">Wall</button>
+              <button class="tool-btn" data-tool="door" type="button" title="Add door (D)">Door</button>
+              <button class="tool-btn" data-tool="window" type="button" title="Add window (N)">Window</button>
+              <button class="tool-btn" data-tool="room" type="button" title="Pick room (B)">Room</button>
+              <button class="tool-btn" data-tool="erase" type="button" title="Erase (E)">Erase</button>
+              <button class="tool-btn" data-tool="scale" type="button" title="Measure a known length">Measure</button>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
