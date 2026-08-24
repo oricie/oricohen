@@ -18,11 +18,15 @@ export class Viewer {
     this.night = false;
     this.showCeiling = true;
     this.apartment = null;
+    this.walkLevel = 0;
+    this.levels = [0];
     this.collision = [];
     this.clock = new THREE.Clock();
     this.keys = new Set();
     this.velocity = new THREE.Vector3();
     this.onModeChange = () => {};
+    this.onPick = () => {};
+    this.raycaster = new THREE.Raycaster();
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -89,10 +93,18 @@ export class Viewer {
       this.scene.remove(this.apartment.root);
       disposeTree(this.apartment.root);
     }
+    this._highlighted = null;
     this.apartment = buildApartment(plan, { ...options, ceiling: true });
     this.scene.add(this.apartment.root);
     this.collision = this.apartment.collision;
     this.wallHeight = this.apartment.height;
+    this.collisionByLevel = new Map();
+    for (const seg of this.collision) {
+      if (!this.collisionByLevel.has(seg.level)) this.collisionByLevel.set(seg.level, []);
+      this.collisionByLevel.get(seg.level).push(seg);
+    }
+    this.levels = [...this.collisionByLevel.keys()].sort((a, b) => a - b);
+    if (!this.levels.includes(this.walkLevel)) this.walkLevel = this.levels[0] || 0;
 
     const box = this.apartment.bounds;
     const size = box.getSize(new THREE.Vector3());
@@ -110,11 +122,20 @@ export class Viewer {
 
     this.applyCeiling();
     this.applyLighting();
+    this.setVisibleLevel(this.visibleLevel ?? null);
     if (this.mode === 'orbit') this.frameAll();
   }
 
   frameAll() {
     if (!this.apartment) return;
+    const visible = this.apartment.root.children.filter((c) => c.visible && c.userData.level !== undefined);
+    if (visible.length) {
+      const box = new THREE.Box3();
+      for (const g of visible) box.expandByObject(g);
+      box.getCenter(this.centre);
+      const size = box.getSize(new THREE.Vector3());
+      this.radius = Math.max(size.x, size.z) * 0.5 || 5;
+    }
     const r = this.radius;
     this.orbit.target.copy(this.centre);
     // steep enough to look over the near walls into the rooms
@@ -134,7 +155,7 @@ export class Viewer {
     if (mode === 'walk') {
       this.orbit.enabled = false;
       const start = this.spawnPoint();
-      this.walk.object.position.set(start.x, EYE_HEIGHT, start.z);
+      this.walk.object.position.set(start.x, this.walkYBase + EYE_HEIGHT, start.z);
       this.camera.rotation.set(0, 0, 0);
       this.walk.object.rotation.set(0, this.spawnYaw || 0, 0);
       this.velocity.set(0, 0, 0);
@@ -155,9 +176,33 @@ export class Viewer {
   }
 
   // yaw is measured so that 0 looks towards -z, matching PointerLockControls.
-  setSpawn(x, z, yaw = 0) {
+  setSpawn(x, z, yaw = 0, level = 0) {
     this.spawn = new THREE.Vector3(x, EYE_HEIGHT, z);
     this.spawnYaw = yaw;
+    this.walkLevel = level;
+  }
+
+  get walkYBase() {
+    return (this.walkLevel || 0) * (this.wallHeight || 2.7);
+  }
+
+  setWalkLevel(level) {
+    this.walkLevel = level;
+    if (this.mode === 'walk') {
+      const start = this.spawnPoint();
+      this.walk.object.position.set(start.x, this.walkYBase + EYE_HEIGHT, start.z);
+    }
+  }
+
+  // Show one storey on its own — a stacked model is otherwise only visible
+  // from the top floor down.
+  setVisibleLevel(level) {
+    this.visibleLevel = level;
+    if (!this.apartment) return;
+    for (const group of this.apartment.root.children) {
+      if (group.userData.level === undefined) continue;
+      group.visible = level == null || group.userData.level === level;
+    }
   }
 
   toggleCeiling(on) {
@@ -211,10 +256,22 @@ export class Viewer {
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
 
-    this.canvas.addEventListener('click', () => {
-      if (this.mode === 'walk' && !this.walk.isLocked && this.pointerLockOk !== false) {
-        try { this.walk.lock(); } catch { this.pointerLockOk = false; }
+    this.canvas.addEventListener('pointerdown', (e) => {
+      this._pressAt = { x: e.clientX, y: e.clientY };
+    });
+    this.canvas.addEventListener('click', (e) => {
+      if (this.mode === 'walk') {
+        if (!this.walk.isLocked && this.pointerLockOk !== false) {
+          try { this.walk.lock(); } catch { this.pointerLockOk = false; }
+        }
+        return;
       }
+      // ignore the click that ends an orbit drag
+      const moved = this._pressAt
+        ? Math.hypot(e.clientX - this._pressAt.x, e.clientY - this._pressAt.y)
+        : 0;
+      if (moved > 4) return;
+      this.onPick(this.pickAt(e));
     });
     // Sandboxed frames and touch devices refuse pointer lock; fall back to
     // dragging the view around, which needs no permission.
@@ -248,6 +305,52 @@ export class Viewer {
 
   onPointerLockDenied() {}
 
+  // What is under the cursor, as a plan selection: {kind, id} or null.
+  pickAt(event) {
+    if (!this.apartment) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hits = this.raycaster.intersectObject(this.apartment.root, true);
+    for (const hit of hits) {
+      if (!hit.object.visible) continue;
+      for (let o = hit.object; o && o !== this.apartment.root; o = o.parent) {
+        if (o.userData.itemId) return { kind: 'item', id: o.userData.itemId };
+        if (o.userData.openingId) return { kind: 'opening', id: o.userData.openingId };
+        if (o.userData.wallId) return { kind: 'wall', id: o.userData.wallId };
+        if (o.userData.room) return { kind: 'room', id: o.userData.room };
+      }
+    }
+    return null;
+  }
+
+  // Tint whatever is selected so the 3D view agrees with the plan.
+  setHighlight(selection) {
+    if (!this.apartment) return;
+    if (this._highlighted) {
+      for (const m of this._highlighted) m.material = m.userData.baseMaterial;
+      this._highlighted = null;
+    }
+    if (!selection) return;
+    const matches = [];
+    this.apartment.root.traverse((o) => {
+      if (!o.isMesh) return;
+      for (let p = o; p && p !== this.apartment.root; p = p.parent) {
+        const id = p.userData.itemId || p.userData.openingId || p.userData.wallId || p.userData.room;
+        if (id === selection.id) { matches.push(o); return; }
+      }
+    });
+    if (!matches.length) return;
+    for (const m of matches) {
+      m.userData.baseMaterial = m.material;
+      m.material = highlightMaterial();
+    }
+    this._highlighted = matches;
+  }
+
   _turn(dx, dy) {
     const euler = new THREE.Euler(0, 0, 0, 'YXZ');
     euler.setFromQuaternion(this.camera.quaternion);
@@ -278,14 +381,15 @@ export class Viewer {
     const before = obj.position.clone();
     this.walk.moveRight(this.velocity.x * dt);
     this.walk.moveForward(this.velocity.z * dt);
-    obj.position.y = EYE_HEIGHT;
+    obj.position.y = this.walkYBase + EYE_HEIGHT;
     this._resolveCollisions(obj.position, before);
   }
 
   _resolveCollisions(p, before) {
+    const segments = (this.collisionByLevel && this.collisionByLevel.get(this.walkLevel)) || [];
     for (let pass = 0; pass < 3; pass++) {
       let hit = false;
-      for (const seg of this.collision) {
+      for (const seg of segments) {
         const ax = seg.x1, ay = seg.y1;
         const bx = seg.x2, by = seg.y2;
         const dx = bx - ax, dy = by - ay;
@@ -350,6 +454,19 @@ export class Viewer {
       );
     });
   }
+}
+
+let _highlight = null;
+function highlightMaterial() {
+  if (!_highlight) {
+    _highlight = new THREE.MeshStandardMaterial({
+      color: 0xc2410c,
+      emissive: 0x7a2606,
+      emissiveIntensity: 0.35,
+      roughness: 0.6,
+    });
+  }
+  return _highlight;
 }
 
 function skyTexture(night) {

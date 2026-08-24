@@ -58,6 +58,7 @@ function placePiece(group, wall, s0, s1, y0, y1, mat) {
   const mesh = texturedBox(w, h, wall.t, mat);
   mesh.position.set(mid.x, (y0 + y1) / 2, mid.y);
   mesh.rotation.y = wallAngle(wall);
+  mesh.userData.wallId = wall.id;
   group.add(mesh);
 }
 
@@ -161,7 +162,11 @@ function buildWalls(plan, opts, out) {
       if (top < H - 0.01) placePiece(group, wall, o.s0, o.s1, top, H, mat);
 
       if (o.type === 'window') {
+        const before = group.children.length;
         windowUnit(group, wall, o.s0, o.s1, sill, top);
+        for (let i = before; i < group.children.length; i++) {
+          group.children[i].userData.openingId = o.id;
+        }
       } else {
         openingFrame(group, wall, o.s0, o.s1, 0, top, material('ash'));
         const hingeAt = o.hinge === 'end' ? o.s1 : o.s0;
@@ -170,6 +175,7 @@ function buildWalls(plan, opts, out) {
         const p = wallPointAt(wall, hingeAt + dirSign * 0.03);
         const holder = new THREE.Group();
         holder.position.set(p.x, 0, p.y);
+        holder.userData.openingId = o.id;
         holder.add(leaf);
         group.add(holder);
       }
@@ -359,7 +365,7 @@ export function autoFurnish(plan) {
         if (spec.w > Math.sqrt(area) * 1.6) continue;
         items.push({
           id: `f_${Math.random().toString(36).slice(2, 8)}`,
-          type, x: c.x, y: c.y, rot: 0,
+          type, x: c.x, y: c.y, rot: 0, level: room.level || 0,
         });
         continue;
       }
@@ -382,6 +388,7 @@ export function autoFurnish(plan) {
           y: slot.a.y + slot.uy * along + slot.ny * depth,
           // furniture faces -Z by default; turn its back to the wall
           rot: Math.atan2(-slot.ny, slot.nx) + Math.PI / 2,
+          level: room.level || 0,
         });
         placed = true;
         slotIndex = (slotIndex + attempt + 1) % slots.length;
@@ -408,19 +415,72 @@ function buildFurniture(plan) {
 
 // -------------------------------------------------------------------- entry
 
+// Split a plan into one sub-plan per level. Drawings that sit side by side on
+// the sheet are shifted so their footprints line up, then stacked.
+function splitLevels(plan) {
+  const groups = new Map();
+  const push = (level, key, value) => {
+    if (!groups.has(level)) groups.set(level, { walls: [], rooms: [], items: [] });
+    groups.get(level)[key].push(value);
+  };
+  for (const wall of plan.walls || []) push(wall.level || 0, 'walls', wall);
+  for (const room of plan.rooms || []) push(room.level || 0, 'rooms', room);
+  for (const item of plan.items || []) push(item.level || 0, 'items', item);
+
+  const offsets = plan.levelOffsets || {};
+  return [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([level, parts]) => {
+      const ids = new Set(parts.walls.map((w) => w.id));
+      const off = offsets[level] || { dx: 0, dy: 0 };
+      return {
+        level,
+        dx: off.dx || 0,
+        dy: off.dy || 0,
+        sub: {
+          ...plan,
+          walls: parts.walls,
+          rooms: parts.rooms,
+          items: parts.items,
+          openings: (plan.openings || []).filter((o) => ids.has(o.wallId)),
+        },
+      };
+    });
+}
+
 export function buildApartment(plan, options = {}) {
   const opts = { ...DEFAULTS, ...options };
-  const out = { collision: [], doorSpans: [] };
   const root = new THREE.Group();
   root.name = 'apartment';
+  const H = plan.wallHeight || opts.wallHeight;
+  const collision = [];
 
-  // walls first: it records the door spans that the skirting needs to skip
-  root.add(buildWalls(plan, opts, out));
-  root.add(buildFloors(plan, opts, out));
+  for (const { level, dx, dy, sub } of splitLevels(plan)) {
+    const out = { collision: [], doorSpans: [] };
+    const group = new THREE.Group();
+    group.name = `level-${level}`;
 
-  root.add(buildLights(plan, opts));
-  if (opts.furnish !== false) root.add(buildFurniture(plan));
+    // walls first: it records the door spans that the skirting needs to skip
+    group.add(buildWalls(sub, opts, out));
+    group.add(buildFloors(sub, opts, out));
+    group.add(buildLights(sub, opts));
+    if (opts.furnish !== false) group.add(buildFurniture(sub));
+
+    const yBase = level * H;
+    group.position.set(dx, yBase, dy);
+    group.userData.level = level;
+    root.add(group);
+
+    // collision lives in world coordinates so the walkthrough can use it directly
+    for (const c of out.collision) {
+      collision.push({
+        x1: c.x1 + dx, y1: c.y1 + dy,
+        x2: c.x2 + dx, y2: c.y2 + dy,
+        t: c.t, level, yBase,
+      });
+    }
+  }
 
   const bounds = new THREE.Box3().setFromObject(root);
-  return { root, collision: out.collision, bounds, height: plan.wallHeight || opts.wallHeight };
+  return { root, collision, bounds, height: H };
 }

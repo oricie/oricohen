@@ -4,7 +4,7 @@ import { Editor } from './editor.js';
 import { Viewer } from './viewer.js';
 import { trace, DEFAULT_OPTIONS } from './tracer.js';
 import { autoFurnish } from './builder.js';
-import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, uid } from './geom.js';
+import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, levelAt, clamp, uid } from './geom.js';
 import * as textures from './textures.js';
 import * as furniture from './furniture.js';
 import { sampleFloorPlan } from './sample.js';
@@ -43,11 +43,19 @@ const viewer = new Viewer($('#view-canvas'));
 editor.addEventListener('change', () => {
   renderRoomList();
   renderStats();
+  renderSelection();
   scheduleRebuild();
 });
-editor.addEventListener('select', () => renderRoomList());
+editor.addEventListener('select', () => { renderRoomList(); renderSelection(); });
 editor.addEventListener('notice', (e) => toast(e.detail));
 editor.addEventListener('calibrate', (e) => showCalibration(e.detail.measured));
+viewer.onPick = (selection) => {
+  editor.selection = selection;
+  editor.draw();
+  viewer.setHighlight(selection);
+  renderSelection();
+  renderRoomList();
+};
 viewer.onPointerLockDenied = () => {
   $('#walk-hint').innerHTML =
     '<strong>W A S D</strong> to move · <strong>Shift</strong> to run · <strong>drag</strong> to look around';
@@ -63,13 +71,16 @@ function scheduleRebuild() {
 }
 
 function rebuild3D() {
+  const keep = editor.selection;
   viewer.setPlan(state.plan, {
     wallMaterial: state.plan.wallMaterial,
     baseboards: $('#toggle-baseboards').checked,
   });
   const biggest = [...(state.plan.rooms || [])]
     .sort((a, b) => Math.abs(polygonArea(b.poly)) - Math.abs(polygonArea(a.poly)))[0];
-  if (biggest) viewer.setSpawn(...standingSpot(biggest.poly));
+  if (biggest) viewer.setSpawn(...standingSpot(biggest.poly), biggest.level || 0);
+  viewer.setHighlight(keep);
+  renderLevels();
 }
 
 // Stand back along the room's long axis and look down it, so the walkthrough
@@ -143,13 +154,18 @@ function planFromTrace(result) {
   plan.wallHeight = parseFloat($('#wall-height').value) || 2.7;
   plan.wallMaterial = $('#wall-material').value;
 
-  // Assume the plan is as wide as the target width until the user calibrates.
-  const pts = result.segments.flatMap((s) => [[s.x1, s.y1], [s.x2, s.y2]]);
-  const bounds = pts.length ? polygonBounds(pts) : { w: result.width, h: result.height };
-  const targetWidth = parseFloat($('#input-width').value) || 11;
-  const pxPerMetre = Math.max(4, (bounds.w || result.width) / targetWidth);
-  plan.scale = pxPerMetre;
+  // The tracer already split the sheet into separate drawings — usually the
+  // floors of one flat, laid out side by side.
+  const clusters = (result.sections || []).length
+    ? result.sections
+    : [{ minX: 0, minY: 0, maxX: result.width, maxY: result.height, w: result.width, h: result.height }];
 
+  // Scale from the widest single drawing, not the whole sheet — otherwise two
+  // floors side by side make every room half its real size.
+  const widest = clusters.reduce((a, b) => (b.w > a.w ? b : a), clusters[0]);
+  const targetWidth = parseFloat($('#input-width').value) || 11;
+  const pxPerMetre = Math.max(4, (widest.w || result.width) / targetWidth);
+  plan.scale = pxPerMetre;
   const toM = (v) => v / pxPerMetre;
 
   result.segments.forEach((s, i) => {
@@ -158,18 +174,25 @@ function planFromTrace(result) {
       x1: toM(s.x1), y1: toM(s.y1),
       x2: toM(s.x2), y2: toM(s.y2),
       t: Math.min(0.45, Math.max(0.07, toM(s.t))),
+      level: s.section || 0,
     });
   });
+
+  plan.sections = clusters.map((c, i) => ({
+    id: `s${i}`,
+    level: i,
+    minX: toM(c.minX), minY: toM(c.minY),
+    maxX: toM(c.maxX), maxY: toM(c.maxY),
+  }));
 
   for (const door of result.doors) {
     const wall = plan.walls[door.segment];
     if (!wall) continue;
-    const width = Math.min(2.4, Math.max(0.65, toM(door.width)));
     plan.openings.push({
       id: uid('o'),
       wallId: wall.id,
       pos: toM((door.from + door.to) / 2),
-      width,
+      width: Math.min(2.4, Math.max(0.65, toM(door.width))),
       height: 2.05,
       sill: 0,
       type: 'door',
@@ -177,22 +200,68 @@ function planFromTrace(result) {
     });
   }
 
-  const rooms = result.rooms.map((r) => ({
-    poly: r.poly.map(([x, y]) => [toM(x), toM(y)]),
-  }));
+  const rooms = result.rooms
+    .map((r) => ({ poly: r.poly.map(([x, y]) => [toM(x), toM(y)]) }))
+    .filter(isRealRoom);
+
   nameRooms(rooms).forEach((room, i) => {
+    const c = polygonCentroid(room.poly);
     plan.rooms.push({
       id: `r${i}`,
       name: room.name,
       poly: room.poly,
       floor: room.floor,
+      level: levelAt(plan, c.x, c.y),
     });
   });
 
+  updateLevelOffsets(plan);
   return plan;
 }
 
-// A first guess at what each room is, from size and shape. Always editable.
+// The cavity inside a window wall, the gap between a double-drawn partition:
+// these enclose an area but are not rooms. A real room is wide, not just big.
+function isRealRoom(room) {
+  const area = Math.abs(polygonArea(room.poly));
+  if (area < 1.2) return false;
+  let perimeter = 0;
+  for (let i = 0; i < room.poly.length; i++) {
+    const a = room.poly[i];
+    const b = room.poly[(i + 1) % room.poly.length];
+    perimeter += Math.hypot(b[0] - a[0], b[1] - a[1]);
+  }
+  if (perimeter < 0.01) return false;
+  // 2A/P is the inscribed half-width: ~0.05 m for a glazing cavity, ~0.45 m
+  // for a narrow hallway.
+  return (2 * area) / perimeter > 0.32;
+}
+
+// Shift each level so the drawings stack on top of each other instead of
+// standing side by side the way they are drawn on the sheet.
+function updateLevelOffsets(plan) {
+  const byLevel = new Map();
+  for (const sec of plan.sections || []) {
+    if (sec.level == null) continue;
+    const b = byLevel.get(sec.level) || { minX: Infinity, minY: Infinity };
+    byLevel.set(sec.level, {
+      minX: Math.min(b.minX, sec.minX),
+      minY: Math.min(b.minY, sec.minY),
+    });
+  }
+  const levels = [...byLevel.keys()].sort((a, b) => a - b);
+  const base = levels.length ? byLevel.get(levels[0]) : null;
+  plan.levelOffsets = {};
+  for (const level of levels) {
+    const b = byLevel.get(level);
+    plan.levelOffsets[level] = base
+      ? { dx: base.minX - b.minX, dy: base.minY - b.minY }
+      : { dx: 0, dy: 0 };
+  }
+}
+
+// A first guess at what each room is, from size and shape. Deliberately
+// cautious: a wrong confident label is worse than a neutral one, so only the
+// shapes that are genuinely characteristic get a real name.
 function nameRooms(rooms) {
   const scored = rooms.map((r) => {
     const area = Math.abs(polygonArea(r.poly));
@@ -201,16 +270,16 @@ function nameRooms(rooms) {
     return { ...r, area, aspect };
   }).sort((a, b) => b.area - a.area);
 
-  let bedrooms = 0;
+  let plain = 0;
   return scored.map((r, i) => {
     let name;
-    if (r.aspect > 3.2 && r.area < 14) name = 'Hallway';
-    else if (r.area < 5.5) name = 'Bathroom';
-    else if (i === 0) name = 'Living room';
-    else if (r.area > 9) name = `Bedroom ${++bedrooms || ''}`.trim();
-    else name = 'Kitchen';
+    if (r.area < 2.2) name = 'Closet';
+    else if (r.aspect > 3) name = 'Hallway';
+    else if (i === 0 && r.area > 12) name = 'Living room';
+    else if (r.area <= 6 && r.aspect < 2) name = 'Bathroom';
+    else name = `Room ${++plain}`;
 
-    const floor = /bath|hall|kitchen/i.test(name) ? 'tile' : 'oak';
+    const floor = /bath|hall|closet/i.test(name) ? 'tile' : 'oak';
     return { ...r, name, floor };
   });
 }
@@ -261,6 +330,8 @@ function renderRoomList() {
     const name = document.createElement('input');
     name.value = room.name || '';
     name.setAttribute('aria-label', 'Room name');
+    // the listed types are the ones auto-furnishing recognises
+    name.setAttribute('list', 'room-types');
     name.addEventListener('input', () => { room.name = name.value; editor.draw(); });
     name.addEventListener('change', () => editor.emit());
 
@@ -288,6 +359,226 @@ function renderRoomList() {
     });
     list.appendChild(row);
   }
+}
+
+// One row per drawing found on the sheet, so two floors on one page can be
+// stacked instead of standing side by side.
+function renderLevels() {
+  const panel = $('#levels-panel');
+  const list = $('#level-list');
+  const sections = state.plan.sections || [];
+  panel.hidden = sections.length < 2;
+  if (panel.hidden) {
+    $('#walk-level-row').hidden = true;
+    return;
+  }
+
+  list.innerHTML = '';
+  sections.forEach((sec, i) => {
+    const row = document.createElement('div');
+    row.className = 'level-row';
+
+    const label = document.createElement('span');
+    label.className = 'level-name';
+    label.textContent = `Drawing ${i + 1}`;
+
+    const size = document.createElement('span');
+    size.className = 'area';
+    size.textContent = `${(sec.maxX - sec.minX).toFixed(1)} × ${(sec.maxY - sec.minY).toFixed(1)} m`;
+
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', `Level for drawing ${i + 1}`);
+    for (const [value, text] of [['0', 'Ground floor'], ['1', 'Upper floor'], ['2', 'Second floor'], ['', 'Not part of the flat']]) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = text;
+      select.appendChild(opt);
+    }
+    select.value = sec.level == null ? '' : String(sec.level);
+    select.addEventListener('change', () => {
+      sec.level = select.value === '' ? null : parseInt(select.value, 10);
+      reassignLevels();
+    });
+
+    row.append(label, select, size);
+    list.appendChild(row);
+  });
+
+  const walkRow = $('#walk-level-row');
+  const walkSelect = $('#walk-level');
+  const levels = [...new Set(sections.filter((s2) => s2.level != null).map((s2) => s2.level))]
+    .sort((a, b) => a - b);
+  walkRow.hidden = levels.length < 2;
+  if (!walkRow.hidden) {
+    walkSelect.innerHTML = '';
+    for (const level of levels) {
+      const opt = document.createElement('option');
+      opt.value = String(level);
+      opt.textContent = ['Ground floor', 'Upper floor', 'Second floor'][level] || `Level ${level + 1}`;
+      walkSelect.appendChild(opt);
+    }
+    walkSelect.value = String(viewer.walkLevel ?? levels[0]);
+  }
+}
+
+// Re-stamp every wall, room and item with the level of the drawing it sits in.
+function reassignLevels() {
+  const p = state.plan;
+  const hidden = new Set((p.sections || []).filter((s2) => s2.level == null).map((s2) => s2.id));
+  const levelFor = (x, y) => {
+    for (const sec of p.sections || []) {
+      if (x >= sec.minX && x <= sec.maxX && y >= sec.minY && y <= sec.maxY) {
+        return hidden.has(sec.id) ? null : sec.level;
+      }
+    }
+    return 0;
+  };
+  const keep = (list, at) => list.filter((el) => {
+    const level = levelFor(...at(el));
+    if (level == null) return false;
+    el.level = level;
+    return true;
+  });
+
+  p.walls = keep(p.walls, (w) => [(w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2]);
+  const alive = new Set(p.walls.map((w) => w.id));
+  p.openings = p.openings.filter((o) => alive.has(o.wallId));
+  p.rooms = keep(p.rooms, (r) => { const c = polygonCentroid(r.poly); return [c.x, c.y]; });
+  p.items = keep(p.items, (it) => [it.x, it.y]);
+
+  updateLevelOffsets(p);
+  editor.emit();
+}
+
+// Whatever is selected — in the plan or by clicking it in 3D — gets an
+// editable panel here, so "change this wall" doesn't depend on knowing a
+// drag gesture exists.
+function renderSelection() {
+  const box = $('#selection-body');
+  const sel = editor.selection;
+  box.innerHTML = '';
+
+  if (!sel) {
+    box.innerHTML = '<p class="empty">Click anything in the plan or in the 3D view to edit it. ' +
+      'Drag a wall to move it, drag its round end handles to resize it, and press ' +
+      '<kbd>Delete</kbd> to remove what is selected.</p>';
+    return;
+  }
+
+  const field = (labelText, control) => {
+    const row = document.createElement('label');
+    row.className = 'field';
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    row.append(span, control);
+    box.appendChild(row);
+    return control;
+  };
+
+  const number = (value, { min, max, step }, onChange) => {
+    const wrap = document.createElement('span');
+    wrap.className = 'with-unit';
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = value.toFixed(2);
+    input.min = min; input.max = max; input.step = step;
+    input.addEventListener('change', () => {
+      const v = parseFloat(input.value);
+      if (isFinite(v)) { onChange(clamp(v, min, max)); editor.emit(); }
+    });
+    const unit = document.createElement('em');
+    unit.textContent = 'm';
+    wrap.append(input, unit);
+    return wrap;
+  };
+
+  const readout = (text) => {
+    const span = document.createElement('span');
+    span.className = 'readout';
+    span.textContent = text;
+    return span;
+  };
+
+  const heading = document.createElement('div');
+  heading.className = 'selection-head';
+  box.appendChild(heading);
+
+  if (sel.kind === 'wall') {
+    const wall = state.plan.walls.find((w) => w.id === sel.id);
+    if (!wall) return;
+    heading.textContent = 'Wall';
+    field('Length', readout(`${Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1).toFixed(2)} m`));
+    field('Thickness', number(wall.t, { min: 0.05, max: 0.6, step: 0.01 }, (v) => { wall.t = v; }));
+    const openings = state.plan.openings.filter((o) => o.wallId === wall.id).length;
+    field('Openings', readout(openings ? `${openings} in this wall` : 'none'));
+  } else if (sel.kind === 'opening') {
+    const op = state.plan.openings.find((o) => o.id === sel.id);
+    if (!op) return;
+    heading.textContent = op.type === 'door' ? 'Door' : 'Window';
+    field('Width', number(op.width, { min: 0.4, max: 4, step: 0.05 }, (v) => { op.width = v; }));
+    field('Height', number(op.height, { min: 0.4, max: 3, step: 0.05 }, (v) => { op.height = v; }));
+    if (op.type === 'window') {
+      field('Sill height', number(op.sill ?? 0.9, { min: 0, max: 2, step: 0.05 }, (v) => { op.sill = v; }));
+    }
+    const swap = document.createElement('button');
+    swap.type = 'button';
+    swap.textContent = op.type === 'door' ? 'Make it a window' : 'Make it a door';
+    swap.addEventListener('click', () => {
+      op.type = op.type === 'door' ? 'window' : 'door';
+      op.sill = op.type === 'window' ? 0.9 : 0;
+      op.height = op.type === 'window' ? 1.3 : 2.05;
+      editor.emit();
+    });
+    const flip = document.createElement('button');
+    flip.type = 'button';
+    flip.textContent = 'Flip hinge';
+    flip.disabled = op.type !== 'door';
+    flip.addEventListener('click', () => {
+      op.hinge = op.hinge === 'end' ? 'start' : 'end';
+      editor.emit();
+    });
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(swap, flip);
+    box.appendChild(row);
+  } else if (sel.kind === 'room') {
+    const room = state.plan.rooms.find((r) => r.id === sel.id);
+    if (!room) return;
+    heading.textContent = 'Room';
+    field('Area', readout(`${Math.abs(polygonArea(room.poly)).toFixed(1)} m²`));
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.value = room.name || '';
+    name.addEventListener('change', () => { room.name = name.value; editor.emit(); });
+    field('Name', name);
+  } else if (sel.kind === 'item') {
+    const item = state.plan.items.find((i) => i.id === sel.id);
+    if (!item) return;
+    const spec = furniture.spec(item.type);
+    heading.textContent = spec ? spec.label : 'Furniture';
+    if (spec) field('Footprint', readout(`${spec.w.toFixed(2)} × ${spec.d.toFixed(2)} m`));
+    const rot = document.createElement('input');
+    rot.type = 'range';
+    rot.min = 0; rot.max = 360; rot.step = 5;
+    rot.value = Math.round((((item.rot || 0) * 180) / Math.PI + 360) % 360);
+    rot.addEventListener('input', () => {
+      item.rot = (parseFloat(rot.value) * Math.PI) / 180;
+      editor.draw();
+    });
+    rot.addEventListener('change', () => editor.emit());
+    field('Rotation', rot);
+  }
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'wide danger';
+  del.textContent = `Delete ${sel.kind}`;
+  del.addEventListener('click', () => {
+    editor.deleteSelection();
+    viewer.setHighlight(null);
+    renderSelection();
+  });
+  box.appendChild(del);
 }
 
 function renderStats() {
@@ -478,7 +769,11 @@ function bindUI() {
     if (!state.plan.rooms.length) return toast('Detect or draw some rooms first');
     state.plan.items = autoFurnish(state.plan);
     editor.emit();
-    toast(`Placed ${state.plan.items.length} pieces from the room names`);
+    if (state.plan.items.length) {
+      toast(`Placed ${state.plan.items.length} pieces from the room names`);
+    } else {
+      toast('No room names matched a kit. Name a room Living room, Kitchen, Bedroom, Bathroom, Dining room or Office.');
+    }
   });
   $('#btn-clear-furniture').addEventListener('click', () => {
     state.plan.items = [];
@@ -493,6 +788,23 @@ function bindUI() {
     viewer.setMode(b.dataset.mode);
   }));
   $('#btn-frame').addEventListener('click', () => { viewer.setMode('orbit'); viewer.frameAll(); });
+  $('#isolate-level').addEventListener('change', (e) => {
+    const level = e.target.checked ? parseInt($('#walk-level').value, 10) : null;
+    viewer.setVisibleLevel(Number.isFinite(level) ? level : null);
+    viewer.frameAll();
+  });
+  $('#walk-level').addEventListener('change', (e) => {
+    const level = parseInt(e.target.value, 10);
+    const room = [...(state.plan.rooms || [])]
+      .filter((r) => (r.level || 0) === level)
+      .sort((a, b) => Math.abs(polygonArea(b.poly)) - Math.abs(polygonArea(a.poly)))[0];
+    if (room) viewer.setSpawn(...standingSpot(room.poly), level);
+    viewer.setWalkLevel(level);
+    if ($('#isolate-level').checked) {
+      viewer.setVisibleLevel(level);
+      viewer.frameAll();
+    }
+  });
 
   // file actions
   $('#btn-save').addEventListener('click', () => {
@@ -548,6 +860,7 @@ function bindUI() {
 
 renderPalette();
 bindUI();
+renderSelection();
 setView('split');
 setTool('select');
 renderStats();

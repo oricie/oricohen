@@ -279,6 +279,66 @@ function extendToJunctions(segs, snap) {
   return segs;
 }
 
+// A sheet often carries several drawings separated by a band of blank paper.
+// Find those gutters and cut the sheet into tiles, so walls in one drawing are
+// never joined to walls in another.
+function splitIntoTiles(segments, width, height, opts) {
+  // A gutter has to be blank across the drawing's whole height (or width), so
+  // it does not need to clear the doorway gap: a doorway is always covered by
+  // the walls that run past it.
+  const gutter = Math.max(20, Math.min(width, height) * 0.025);
+
+  const cuts = (along) => {
+    const horizontal = along === 'x';
+    const size = horizontal ? width : height;
+    const covered = new Uint8Array(size);
+    for (const s of segments) {
+      const lo = Math.floor(Math.max(0, horizontal ? Math.min(s.x1, s.x2) : Math.min(s.y1, s.y2)));
+      const hi = Math.ceil(Math.min(size - 1, horizontal ? Math.max(s.x1, s.x2) : Math.max(s.y1, s.y2)));
+      for (let i = lo; i <= hi; i++) covered[i] = 1;
+    }
+    const edges = [0];
+    let runStart = -1;
+    for (let i = 0; i <= size; i++) {
+      const blank = i < size && !covered[i];
+      if (blank && runStart < 0) runStart = i;
+      else if (!blank && runStart >= 0) {
+        // ignore the blank margins at either end of the sheet
+        if (runStart > 0 && i < size && i - runStart >= gutter) {
+          edges.push(Math.round((runStart + i) / 2));
+        }
+        runStart = -1;
+      }
+    }
+    edges.push(size);
+    return edges;
+  };
+
+  const xs = cuts('x');
+  const ys = cuts('y');
+  const tiles = [];
+  for (let i = 0; i < xs.length - 1; i++) {
+    for (let j = 0; j < ys.length - 1; j++) {
+      tiles.push({ x0: xs[i], x1: xs[i + 1], y0: ys[j], y1: ys[j + 1], segments: [] });
+    }
+  }
+
+  for (const s of segments) {
+    const cx = (s.x1 + s.x2) / 2;
+    const cy = (s.y1 + s.y2) / 2;
+    const tile = tiles.find((t) => cx >= t.x0 && cx < t.x1 && cy >= t.y0 && cy < t.y1) || tiles[0];
+    if (tile) tile.segments.push(s);
+  }
+
+  // A tile with almost nothing in it is a stray mark, not a drawing.
+  const kept = tiles.filter((t) => {
+    if (t.segments.length < 4) return false;
+    const run = t.segments.reduce((sum, s) => sum + Math.hypot(s.x2 - s.x1, s.y2 - s.y1), 0);
+    return run > Math.min(width, height) * 0.5;
+  });
+  return kept.length ? kept : [{ x0: 0, x1: width, y0: 0, y1: height, segments }];
+}
+
 export function detectWalls(mask, opts) {
   const o = { ...DEFAULT_OPTIONS, ...opts };
   const { ink, width, height } = mask;
@@ -288,15 +348,51 @@ export function detectWalls(mask, opts) {
   const hSegs = bandsToSegments(groupBands(hRuns, o.maxWallThickness), true, o);
   const vSegs = bandsToSegments(groupBands(vRuns, o.maxWallThickness), false, o);
 
-  const merged = mergeCollinear([...hSegs, ...vSegs], o);
-  let segments = merged.segments;
-  const doors = merged.doors;
+  const tiles = splitIntoTiles([...hSegs, ...vSegs], width, height, o);
+  const segments = [];
+  const doors = [];
+  const sections = [];
 
-  segments = snapCoordinates(segments, o.snap);
-  segments = extendToJunctions(segments, o.snap);
-  segments = segments.filter((s) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1) >= o.minWallLength);
+  tiles.forEach((tile, index) => {
+    const merged = mergeCollinear(tile.segments, o);
+    let segs = merged.segments;
+    segs.forEach((seg, i) => { seg._i = i; seg.section = index; });
 
-  return { segments, doors };
+    segs = snapCoordinates(segs, o.snap);
+    segs = extendToJunctions(segs, o.snap);
+
+    const long = new Set();
+    segs = segs.filter((seg) => {
+      const keep = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) >= o.minWallLength;
+      if (keep) long.add(seg._i);
+      return keep;
+    });
+    if (!segs.length) return;
+
+    // Re-point the doorways at their wall's final index; a doorway whose wall
+    // was dropped as too short goes with it.
+    const base = segments.length;
+    const remap = new Map();
+    segs.forEach((seg, i) => remap.set(seg._i, base + i));
+    for (const door of merged.doors) {
+      if (!long.has(door.segment)) continue;
+      doors.push({ ...door, segment: remap.get(door.segment) });
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const seg of segs) {
+      minX = Math.min(minX, seg.x1, seg.x2);
+      maxX = Math.max(maxX, seg.x1, seg.x2);
+      minY = Math.min(minY, seg.y1, seg.y2);
+      maxY = Math.max(maxY, seg.y1, seg.y2);
+      seg.section = sections.length;
+      delete seg._i;
+      segments.push(seg);
+    }
+    sections.push({ minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY });
+  });
+
+  return { segments, doors, sections };
 }
 
 // ------------------------------------------------------------------ room find
@@ -408,10 +504,10 @@ function traceContour(label, width, height, region) {
 export function trace(image, opts) {
   const o = { ...DEFAULT_OPTIONS, ...opts };
   const mask = imageToMask(image, o);
-  const { segments, doors } = detectWalls(mask, o);
+  const { segments, doors, sections } = detectWalls(mask, o);
   const wallMask = rasterizeWalls(segments, mask.width, mask.height, 1);
   const rooms = findRooms(wallMask, mask.width, mask.height, o);
-  return { mask, segments, doors, rooms, width: mask.width, height: mask.height };
+  return { mask, segments, doors, sections, rooms, width: mask.width, height: mask.height };
 }
 
 // Flood one region starting at (sx, sy) and return its polygon, or null when
@@ -451,4 +547,47 @@ export function regionAt(wallMask, width, height, sx, sy, minArea = 200) {
   poly = rectilinearize(poly, 0.22);
   poly = dedupe(poly);
   return poly.length >= 3 ? poly : null;
+}
+
+// Group wall segments into disconnected drawings. A plan sheet often holds
+// several floors side by side; each one comes back as its own cluster.
+export function findClusters(segments, gap = 40) {
+  const parent = segments.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const union = (a, b) => { parent[find(a)] = find(b); };
+
+  const boxes = segments.map((s) => ({
+    minX: Math.min(s.x1, s.x2) - s.t / 2,
+    maxX: Math.max(s.x1, s.x2) + s.t / 2,
+    minY: Math.min(s.y1, s.y2) - s.t / 2,
+    maxY: Math.max(s.y1, s.y2) + s.t / 2,
+  }));
+
+  for (let i = 0; i < segments.length; i++) {
+    for (let j = i + 1; j < segments.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      const overlaps =
+        a.minX - gap <= b.maxX && b.minX - gap <= a.maxX &&
+        a.minY - gap <= b.maxY && b.minY - gap <= a.maxY;
+      if (overlaps) union(i, j);
+    }
+  }
+
+  const groups = new Map();
+  segments.forEach((_, i) => {
+    const root = find(i);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(i);
+  });
+
+  return [...groups.values()].map((indices) => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const i of indices) {
+      minX = Math.min(minX, boxes[i].minX);
+      minY = Math.min(minY, boxes[i].minY);
+      maxX = Math.max(maxX, boxes[i].maxX);
+      maxY = Math.max(maxY, boxes[i].maxY);
+    }
+    return { indices, minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
+  }).sort((a, b) => (b.w * b.h) - (a.w * a.h));
 }

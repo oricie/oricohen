@@ -37,6 +37,19 @@
   </div>
 </header>
 
+<datalist id="room-types">
+  <option value="Living room"></option>
+  <option value="Kitchen"></option>
+  <option value="Dining room"></option>
+  <option value="Bedroom"></option>
+  <option value="Kids room"></option>
+  <option value="Bathroom"></option>
+  <option value="Hallway"></option>
+  <option value="Office"></option>
+  <option value="Balcony"></option>
+  <option value="Closet"></option>
+</datalist>
+
 <main class="shell">
   <aside class="sidebar">
 
@@ -88,6 +101,18 @@
       </div>
     </section>
 
+    <section class="panel" id="levels-panel" hidden>
+      <h2>Floors on this sheet</h2>
+      <p class="hint">More than one drawing was found. Say which floor each one
+        is and they will be stacked instead of standing side by side.</p>
+      <div id="level-list" class="level-list"></div>
+    </section>
+
+    <section class="panel" id="selection-panel">
+      <h2>Selection</h2>
+      <div id="selection-body" class="selection-body"></div>
+    </section>
+
     <section class="panel">
       <h2><span class="step">4</span> Rooms &amp; floors</h2>
       <div id="room-list" class="room-list"></div>
@@ -133,6 +158,11 @@
         <button type="button" data-view-tab="3d">3D</button>
       </div>
       <div id="view-modes" class="tabs right">
+        <span id="walk-level-row" class="walk-level" hidden>
+          <label for="walk-level">Floor</label>
+          <select id="walk-level"></select>
+          <label class="isolate"><input id="isolate-level" type="checkbox" /> only this one</label>
+        </span>
         <button type="button" data-mode="orbit" class="active">Dollhouse</button>
         <button type="button" data-mode="walk">Walk through</button>
         <button id="btn-frame" type="button" class="ghost">Reset view</button>

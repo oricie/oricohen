@@ -261,3 +261,18 @@ export function clamp(v, a, b) {
 export function uid(prefix = 'id') {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
+
+// A plan sheet can hold several drawings (the floors of one flat, side by
+// side). Each is a "section" with a bounding box and the level it maps to;
+// a section with level === null is excluded from the model.
+export function sectionAt(plan, x, y) {
+  for (const sec of plan.sections || []) {
+    if (x >= sec.minX && x <= sec.maxX && y >= sec.minY && y <= sec.maxY) return sec;
+  }
+  return null;
+}
+
+export function levelAt(plan, x, y) {
+  const sec = sectionAt(plan, x, y);
+  return sec && sec.level != null ? sec.level : 0;
+}

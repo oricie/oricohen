@@ -17,7 +17,8 @@ Everything runs client-side. No server, no upload, no build step, no CDN — ope
 3. **Set the scale.** Type the real overall width of the plan, or pick the
    **Measure** tool and drag along a dimension you know. Room areas in the plan
    update live — that is the quickest way to confirm you got it right.
-4. **Name the rooms** in the sidebar and pick a floor finish per room.
+4. **Name the rooms** in the sidebar and pick a floor finish per room. The name
+   box suggests the types that auto-furnishing recognises.
 5. **Auto-furnish from names** drops a sensible kit into each room (a bedroom
    gets a bed, nightstands and a wardrobe; a kitchen gets counters, a fridge and
    a cooker), or place pieces yourself from the palette.
@@ -36,8 +37,28 @@ Everything runs client-side. No server, no upload, no build step, no CDN — ope
 | Measure | — | Drag along a known dimension to set the scale |
 | Pan | `H` | Or drag with the middle/right mouse button, wheel to zoom |
 
+Anything you click — in the plan **or in the 3D view** — opens in the *Selection*
+panel, where you can change a wall's thickness, an opening's width, height, sill
+and hinge side, a room's name, or a piece of furniture's rotation, and delete it.
+`Delete` removes the selection from either view.
+
 `1` / `2` / `3` switch between plan, split and 3D. In the walkthrough: `WASD`
 to move, `Shift` to run, mouse to look, `Esc` to release the cursor.
+
+### Several floors on one sheet
+
+Architects often put two floors of the same flat side by side on one page. The
+tracer looks for **gutters** — bands of blank paper that run the full height or
+width of the sheet — and cuts it into separate drawings there. Walls are only
+ever joined within one drawing, so the two floors never fuse into one.
+
+Each drawing then appears under *Floors on this sheet*, where you say which
+storey it is. They are shifted into alignment and stacked, one storey per wall
+height. Pick which floor to walk on with the **Floor** control above the 3D
+view, and tick **only this one** to hide the others while you look around.
+
+A drawing that is not part of the flat — a site plan, a section, a legend — can
+be set to *Not part of the flat* and it is dropped from the model.
 
 ### Output
 
@@ -64,6 +85,15 @@ to move, `Shift` to run, mouse to look, `Esc` to release the cursor.
 5. Rasterise the merged walls and flood fill: each enclosed region that doesn't
    leak to the border is a room. Its boundary is traced, simplified, and snapped
    to the axes.
+6. Discard regions that enclose an area but are not rooms — the cavity inside a
+   glazed wall, the gap between a double-drawn partition. The test is width, not
+   area: `2 × area / perimeter` is the inscribed half-width, about 0.05 m for a
+   window cavity and 0.45 m for a narrow hallway.
+
+Room names are a **guess** from size and shape, and a deliberately cautious one:
+only a long thin room (hallway), a large main room (living room) and a small
+compact one (bathroom) get a real name. Everything else is `Room 1`, `Room 2`,
+because a confidently wrong label is worse than a neutral one.
 
 It works well on clean architectural plans (dark walls, light background, one
 floor per image). Sketches, heavy hatching, or plans with the walls drawn as

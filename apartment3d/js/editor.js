@@ -3,7 +3,7 @@
 
 import {
   pointToWall, wallLength, wallPointAt, polygonCentroid, polygonArea,
-  pointInPolygon, polygonBounds, uid, clamp, dist,
+  pointInPolygon, polygonBounds, levelAt, uid, clamp, dist,
 } from './geom.js';
 import { regionAt } from './tracer.js';
 import * as furniture from './furniture.js';
@@ -278,11 +278,13 @@ export class Editor extends EventTarget {
     if (drag.kind === 'newWall') {
       const L = dist(drag.from, drag.to);
       if (L > 0.15) {
+        const mid = { x: (drag.from.x + drag.to.x) / 2, y: (drag.from.y + drag.to.y) / 2 };
         const wall = {
           id: uid('w'),
           x1: drag.from.x, y1: drag.from.y,
           x2: drag.to.x, y2: drag.to.y,
           t: this.plan.defaultThickness || 0.12,
+          level: levelAt(this.plan, mid.x, mid.y),
         };
         this.plan.walls.push(wall);
         this.selection = { kind: 'wall', id: wall.id };
@@ -378,6 +380,7 @@ export class Editor extends EventTarget {
       name: `Room ${(this.plan.rooms.length + 1)}`,
       poly,
       floor: 'oak',
+      level: levelAt(this.plan, p.x, p.y),
     };
     this.plan.rooms.push(room);
     this.selection = { kind: 'room', id: room.id };
@@ -402,7 +405,9 @@ export class Editor extends EventTarget {
     ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#fff';
     ctx.lineCap = 'square';
+    const level = levelAt(this.plan, p.x, p.y);
     for (const wall of this.plan.walls) {
+      if ((wall.level || 0) !== level) continue;
       ctx.lineWidth = Math.max(1, wall.t / res);
       ctx.beginPath();
       ctx.moveTo((wall.x1 - minX) / res, (wall.y1 - minY) / res);
@@ -423,7 +428,10 @@ export class Editor extends EventTarget {
   _placeItem(p) {
     const spec = furniture.spec(this.itemType);
     if (!spec) return;
-    const item = { id: uid('f'), type: this.itemType, x: p.x, y: p.y, rot: 0 };
+    const item = {
+      id: uid('f'), type: this.itemType, x: p.x, y: p.y, rot: 0,
+      level: levelAt(this.plan, p.x, p.y),
+    };
     // face away from the nearest wall if we dropped it close to one
     const near = this.nearestWall(p, Math.max(spec.d, 0.9));
     if (near) {
