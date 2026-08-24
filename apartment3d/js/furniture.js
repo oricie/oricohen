@@ -969,6 +969,16 @@ export function spec(type) {
   return CATALOG[type] || null;
 }
 
+// The size a placed item actually occupies: its catalogue size, a fitted size
+// (a traced staircase), or a scale the user set.
+export function footprint(item) {
+  const s = CATALOG[item && item.type];
+  if (!s) return null;
+  if (item.fit) return { w: item.fit.w, d: item.fit.d, h: item.fit.h || s.h };
+  const k = item.scale || 1;
+  return { w: s.w * k, d: s.d * k, h: s.h * k };
+}
+
 export function build(type, item = {}) {
   const entry = CATALOG[type];
   if (!entry) return null;

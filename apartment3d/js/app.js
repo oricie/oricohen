@@ -67,13 +67,36 @@ editor.addEventListener('change', () => {
 editor.addEventListener('select', () => { renderRoomList(); renderSelection(); });
 editor.addEventListener('notice', (e) => toast(e.detail));
 editor.addEventListener('calibrate', (e) => showCalibration(e.detail.measured));
-viewer.onPick = (selection) => {
-  editor.selection = selection;
+viewer.onPick = (selection, additive) => {
+  if (additive && selection) editor.toggleSelected(selection);
+  else editor.selection = selection;
   editor.draw();
-  viewer.setHighlight(selection);
+  viewer.setHighlight(editor.selected);
   renderSelection();
   renderRoomList();
 };
+// Furniture dragged in the 3D view writes straight back to the plan.
+viewer.onItemChange = (id, change) => {
+  const item = state.plan.items.find((i) => i.id === id);
+  if (!item) return;
+  const level = item.level || 0;
+  const offset = (state.plan.levelOffsets || {})[level] || { dx: 0, dy: 0 };
+  if (change.x !== undefined) item.x = change.x - (offset.dx || 0);
+  if (change.y !== undefined) item.y = change.y - (offset.dy || 0);
+  if (change.rot !== undefined) item.rot = change.rot;
+  if (change.scale !== undefined) {
+    if (item.fit) {
+      const base = furniture.spec(item.type);
+      item.fit = { w: base.w * change.scale, d: base.d * change.scale, h: item.fit.h };
+    } else {
+      item.scale = change.scale;
+    }
+  }
+  editor.selection = { kind: 'item', id };
+  editor.emit();
+  renderSelection();
+};
+
 viewer.onPointerLockDenied = () => {
   $('#walk-hint').innerHTML =
     '<strong>W A S D</strong> to move · <strong>Shift</strong> to run · <strong>drag</strong> to look around';
@@ -94,7 +117,6 @@ function scheduleRebuild() {
 }
 
 function rebuild3D() {
-  const keep = editor.selection;
   viewer.setPlan(state.plan, {
     wallMaterial: state.plan.wallMaterial,
     baseboards: $('#toggle-baseboards').checked,
@@ -102,7 +124,7 @@ function rebuild3D() {
   const biggest = [...(state.plan.rooms || [])]
     .sort((a, b) => Math.abs(polygonArea(b.poly)) - Math.abs(polygonArea(a.poly)))[0];
   if (biggest) viewer.setSpawn(...standingSpot(biggest.poly), biggest.level || 0);
-  viewer.setHighlight(keep);
+  viewer.setHighlight(editor.selected);
   renderLevels();
   minimap.setPlan(state.plan, viewer.walkLevel || 0);
   scheduleAutosave();
@@ -164,7 +186,11 @@ function runDetection() {
       rebuild3D();
       renderRoomList();
       renderStats();
-      toast(`Found ${state.plan.walls.length} walls, ${state.plan.rooms.length} rooms`);
+      const windows = state.plan.openings.filter((o) => o.type === 'window').length;
+      const doors = state.plan.openings.length - windows;
+      const stairs = (result.stairs || []).length;
+      toast(`Found ${state.plan.walls.length} walls, ${doors} doors, ${windows} windows, ` +
+            `${state.plan.rooms.length} rooms${stairs ? `, ${stairs} staircase${stairs > 1 ? 's' : ''}` : ''}`);
     } catch (err) {
       console.error(err);
       toast(`Detection failed: ${err.message}`);
@@ -211,17 +237,18 @@ function planFromTrace(result) {
     maxX: toM(c.maxX), maxY: toM(c.maxY),
   }));
 
-  for (const door of result.doors) {
-    const wall = plan.walls[door.segment];
+  for (const found of result.doors) {
+    const wall = plan.walls[found.segment];
     if (!wall) continue;
+    const isWindow = found.type === 'window';
     plan.openings.push({
       id: uid('o'),
       wallId: wall.id,
-      pos: toM((door.from + door.to) / 2),
-      width: Math.min(2.4, Math.max(0.65, toM(door.width))),
-      height: 2.05,
-      sill: 0,
-      type: 'door',
+      pos: toM((found.from + found.to) / 2),
+      width: Math.min(4.0, Math.max(isWindow ? 0.4 : 0.65, toM(found.width))),
+      height: isWindow ? 1.4 : 2.05,
+      sill: isWindow ? 0.9 : 0,
+      type: isWindow ? 'window' : 'door',
       hinge: 'start',
     });
   }
@@ -240,6 +267,26 @@ function planFromTrace(result) {
       level: levelAt(plan, c.x, c.y),
     });
   });
+
+  // Staircases read as a ladder of parallel lines; place a real flight where
+  // each one was found instead of leaving a stack of phantom walls.
+  for (const flight of result.stairs || []) {
+    const acrossPx = flight.dir === 'h' ? flight.maxX - flight.minX : flight.maxY - flight.minY;
+    const runPx = flight.dir === 'h' ? flight.maxY - flight.minY : flight.maxX - flight.minX;
+    const across = toM(acrossPx);
+    const run = toM(runPx);
+    if (across < 0.5 || run < 0.9) continue;
+    const x = toM((flight.minX + flight.maxX) / 2);
+    const y = toM((flight.minY + flight.maxY) / 2);
+    plan.items.push({
+      id: uid('f'),
+      type: 'stairs',
+      x, y,
+      rot: flight.dir === 'h' ? 0 : Math.PI / 2,
+      fit: { w: across, d: run },
+      level: levelAt(plan, x, y),
+    });
+  }
 
   updateLevelOffsets(plan);
   return plan;
@@ -486,8 +533,33 @@ function renderSelection() {
 
   if (!sel) {
     box.innerHTML = '<p class="empty">Click anything in the plan or in the 3D view to edit it. ' +
-      'Drag a wall to move it, drag its round end handles to resize it, and press ' +
-      '<kbd>Delete</kbd> to remove what is selected.</p>';
+      'Drag a wall to move it, drag its round end handles to resize it, ' +
+      '<kbd>Shift</kbd>-click or sweep a box to select several, and press ' +
+      '<kbd>Delete</kbd> to remove what is selected. In the 3D view, drag furniture ' +
+      'to move it, <kbd>Shift</kbd>-drag to turn it and <kbd>Alt</kbd>-drag to resize it.</p>';
+    return;
+  }
+
+  if (editor.selected.length > 1) {
+    const counts = new Map();
+    for (const s of editor.selected) counts.set(s.kind, (counts.get(s.kind) || 0) + 1);
+    const parts = [...counts.entries()].map(([kind, n]) => `${n} ${kind}${n > 1 ? 's' : ''}`);
+    const head = document.createElement('div');
+    head.className = 'selection-head';
+    head.textContent = `${editor.selected.length} selected`;
+    const detail = document.createElement('p');
+    detail.className = 'empty';
+    detail.textContent = `${parts.join(', ')}. Shift-click to add or remove one.`;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'wide danger';
+    del.textContent = `Delete all ${editor.selected.length}`;
+    del.addEventListener('click', () => {
+      editor.deleteSelection();
+      viewer.setHighlight(null);
+      renderSelection();
+    });
+    box.append(head, detail, del);
     return;
   }
 
@@ -582,7 +654,8 @@ function renderSelection() {
     if (!item) return;
     const spec = furniture.spec(item.type);
     heading.textContent = spec ? spec.label : 'Furniture';
-    if (spec) field('Footprint', readout(`${spec.w.toFixed(2)} × ${spec.d.toFixed(2)} m`));
+    const fp = furniture.footprint(item);
+    if (fp) field('Footprint', readout(`${fp.w.toFixed(2)} × ${fp.d.toFixed(2)} m`));
     const rot = document.createElement('input');
     rot.type = 'range';
     rot.min = 0; rot.max = 360; rot.step = 5;
@@ -593,6 +666,14 @@ function renderSelection() {
     });
     rot.addEventListener('change', () => editor.emit());
     field('Rotation', rot);
+
+    const size = document.createElement('input');
+    size.type = 'range';
+    size.min = 0.4; size.max = 2.5; size.step = 0.05;
+    size.value = item.scale || 1;
+    size.addEventListener('input', () => { item.scale = parseFloat(size.value); editor.draw(); });
+    size.addEventListener('change', () => editor.emit());
+    if (!item.fit) field('Size', size);
 
     if (spec && spec.fabric) {
       box.appendChild(swatches('Fabric', furniture.FABRICS, item.fabric || 'sand', (key) => {
@@ -782,7 +863,8 @@ function renderPalette(filter = '') {
 function setTool(tool) {
   editor.setTool(tool);
   $$('.tool-btn').forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
-  setView(tool === 'select' ? currentView : (currentView === '3d' ? 'split' : currentView));
+  // stay in whatever view the user chose; picking a tool is not a request to
+  // move somewhere else
 }
 
 let currentView = 'split';

@@ -31,7 +31,7 @@ export class Editor extends EventTarget {
     this.view = { ox: 40, oy: 40, zoom: 46 };  // px per metre
     this.tool = 'select';
     this.itemType = 'sofa';
-    this.selection = null;      // {kind:'wall'|'opening'|'room'|'item', id}
+    this.selected = [];         // [{kind:'wall'|'opening'|'room'|'item', id}]
     this.hover = null;
     this.drag = null;
     this.pointer = null;
@@ -44,6 +44,25 @@ export class Editor extends EventTarget {
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
   }
 
+  // Selection is a list, but most code only cares about the primary one.
+  get selection() {
+    return this.selected.length ? this.selected[this.selected.length - 1] : null;
+  }
+
+  set selection(value) {
+    this.selected = value ? [value] : [];
+  }
+
+  isSelected(kind, id) {
+    return this.selected.some((s) => s.kind === kind && s.id === id);
+  }
+
+  toggleSelected(entry) {
+    const i = this.selected.findIndex((s) => s.kind === entry.kind && s.id === entry.id);
+    if (i >= 0) this.selected.splice(i, 1);
+    else this.selected.push(entry);
+  }
+
   // --------------------------------------------------------------- plumbing
 
   emit() {
@@ -53,7 +72,7 @@ export class Editor extends EventTarget {
 
   setPlan(plan) {
     this.plan = plan;
-    this.selection = null;
+    this.selected = [];
     this.draw();
   }
 
@@ -155,7 +174,16 @@ export class Editor extends EventTarget {
       const item = this.plan.items.find((i) => i.id === this.selection.id);
       if (item) { item.rot = (item.rot || 0) + Math.PI / 2; this.emit(); }
     }
-    if (e.key === 'Escape') { this.selection = null; this.drag = null; this.calibration = null; this.emit(); }
+    if (e.key === 'Escape') { this.selected = []; this.drag = null; this.calibration = null; this.emit(); }
+    if (e.key === 'a' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      this.selected = [
+        ...this.plan.walls.map((w) => ({ kind: 'wall', id: w.id })),
+        ...this.plan.items.map((i) => ({ kind: 'item', id: i.id })),
+      ];
+      this.dispatchEvent(new CustomEvent('select', { detail: this.selection }));
+      this.draw();
+    }
   }
 
   _down(e) {
@@ -190,7 +218,7 @@ export class Editor extends EventTarget {
         this._eraseAt(p);
         break;
       default:
-        this._selectAt(p, sx, sy);
+        this._selectAt(p, e.shiftKey);
     }
     this.draw();
   }
@@ -211,6 +239,9 @@ export class Editor extends EventTarget {
           break;
         case 'calibrate':
           this.calibration.to = p;
+          break;
+        case 'marquee':
+          this.drag.to = p;
           break;
         case 'wallEnd': {
           const wall = this.plan.walls.find((w) => w.id === this.drag.id);
@@ -291,6 +322,13 @@ export class Editor extends EventTarget {
         this.emit();
         return;
       }
+    }
+
+    if (drag.kind === 'marquee') {
+      this._applyMarquee(drag);
+      this.dispatchEvent(new CustomEvent('select', { detail: this.selection }));
+      this.draw();
+      return;
     }
 
     if (drag.kind === 'calibrate' && this.calibration) {
@@ -457,26 +495,28 @@ export class Editor extends EventTarget {
   }
 
   deleteSelection() {
-    const sel = this.selection;
-    if (!sel) return;
-    if (sel.kind === 'wall') {
-      this.plan.walls = this.plan.walls.filter((w) => w.id !== sel.id);
-      this.plan.openings = this.plan.openings.filter((o) => o.wallId !== sel.id);
-    } else if (sel.kind === 'opening') {
-      this.plan.openings = this.plan.openings.filter((o) => o.id !== sel.id);
-    } else if (sel.kind === 'room') {
-      this.plan.rooms = this.plan.rooms.filter((r) => r.id !== sel.id);
-    } else if (sel.kind === 'item') {
-      this.plan.items = this.plan.items.filter((i) => i.id !== sel.id);
-    }
-    this.selection = null;
+    if (!this.selected.length) return;
+    const ids = (kind) => new Set(this.selected.filter((s) => s.kind === kind).map((s) => s.id));
+    const walls = ids('wall');
+    const openings = ids('opening');
+    const rooms = ids('room');
+    const items = ids('item');
+
+    this.plan.walls = this.plan.walls.filter((w) => !walls.has(w.id));
+    this.plan.openings = this.plan.openings.filter(
+      (o) => !openings.has(o.id) && !walls.has(o.wallId)
+    );
+    this.plan.rooms = this.plan.rooms.filter((r) => !rooms.has(r.id));
+    this.plan.items = this.plan.items.filter((i) => !items.has(i.id));
+
+    this.selected = [];
     this.emit();
   }
 
   _hitTest(p) {
     const tol = 10 / this.view.zoom;
     for (const item of this.plan.items || []) {
-      const spec = furniture.spec(item.type);
+      const spec = furniture.footprint(item);
       if (!spec) continue;
       if (this._inItem(p, item, spec)) return { kind: 'item', id: item.id };
     }
@@ -505,25 +545,27 @@ export class Editor extends EventTarget {
     return Math.abs(lx) <= spec.w / 2 && Math.abs(ly) <= spec.d / 2;
   }
 
-  _selectAt(p, sx, sy) {
+  _selectAt(p, shift = false) {
     // wall endpoint handles win over everything else
     const grab = 11 / this.view.zoom;
-    for (const wall of this.plan.walls) {
-      if (dist(p, { x: wall.x1, y: wall.y1 }) < grab) {
-        this.selection = { kind: 'wall', id: wall.id };
-        this.drag = { kind: 'wallEnd', id: wall.id, end: 1 };
-        return;
-      }
-      if (dist(p, { x: wall.x2, y: wall.y2 }) < grab) {
-        this.selection = { kind: 'wall', id: wall.id };
-        this.drag = { kind: 'wallEnd', id: wall.id, end: 2 };
-        return;
+    if (!shift) {
+      for (const wall of this.plan.walls) {
+        if (dist(p, { x: wall.x1, y: wall.y1 }) < grab) {
+          this.selection = { kind: 'wall', id: wall.id };
+          this.drag = { kind: 'wallEnd', id: wall.id, end: 1 };
+          return;
+        }
+        if (dist(p, { x: wall.x2, y: wall.y2 }) < grab) {
+          this.selection = { kind: 'wall', id: wall.id };
+          this.drag = { kind: 'wallEnd', id: wall.id, end: 2 };
+          return;
+        }
       }
     }
     // rotation handle of the selected item
     if (this.selection && this.selection.kind === 'item') {
       const item = this.plan.items.find((i) => i.id === this.selection.id);
-      const spec = item && furniture.spec(item.type);
+      const spec = item && furniture.footprint(item);
       if (item && spec) {
         const h = this._rotateHandle(item, spec);
         if (dist(p, h) < grab * 1.2) {
@@ -534,8 +576,25 @@ export class Editor extends EventTarget {
     }
 
     const hit = this._hitTest(p);
-    this.selection = hit;
-    if (!hit) return;
+
+    if (shift) {
+      // shift adds to (or removes from) the selection, and never starts a drag
+      if (hit) {
+        this.toggleSelected(hit);
+        this.dispatchEvent(new CustomEvent('select', { detail: this.selection }));
+      }
+      return;
+    }
+
+    if (!hit) {
+      // dragging from empty space sweeps a box over the plan
+      this.selected = [];
+      this.drag = { kind: 'marquee', from: p, to: p };
+      this.dispatchEvent(new CustomEvent('select', { detail: null }));
+      return;
+    }
+
+    if (!this.isSelected(hit.kind, hit.id)) this.selection = hit;
     if (hit.kind === 'item') {
       const item = this.plan.items.find((i) => i.id === hit.id);
       this.drag = { kind: 'item', id: hit.id, grab: p, orig: { x: item.x, y: item.y } };
@@ -549,6 +608,33 @@ export class Editor extends EventTarget {
       };
     }
     this.dispatchEvent(new CustomEvent('select', { detail: this.selection }));
+  }
+
+  // Everything whose centre falls inside the swept box.
+  _applyMarquee(drag) {
+    const minX = Math.min(drag.from.x, drag.to.x);
+    const maxX = Math.max(drag.from.x, drag.to.x);
+    const minY = Math.min(drag.from.y, drag.to.y);
+    const maxY = Math.max(drag.from.y, drag.to.y);
+    if (maxX - minX < 0.05 && maxY - minY < 0.05) return;
+    const inside = (x, y) => x >= minX && x <= maxX && y >= minY && y <= maxY;
+
+    const picked = [];
+    for (const wall of this.plan.walls) {
+      if (inside((wall.x1 + wall.x2) / 2, (wall.y1 + wall.y2) / 2)) {
+        picked.push({ kind: 'wall', id: wall.id });
+      }
+    }
+    for (const item of this.plan.items || []) {
+      if (inside(item.x, item.y)) picked.push({ kind: 'item', id: item.id });
+    }
+    for (const op of this.plan.openings || []) {
+      const wall = this.plan.walls.find((w) => w.id === op.wallId);
+      if (!wall) continue;
+      const c = wallPointAt(wall, op.pos);
+      if (inside(c.x, c.y)) picked.push({ kind: 'opening', id: op.id });
+    }
+    this.selected = picked;
   }
 
   _rotateHandle(item, spec) {
@@ -620,7 +706,7 @@ export class Editor extends EventTarget {
 
   _drawRooms(ctx) {
     for (const room of this.plan.rooms || []) {
-      const selected = this.selection && this.selection.kind === 'room' && this.selection.id === room.id;
+      const selected = this.isSelected('room', room.id);
       ctx.beginPath();
       room.poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
       ctx.closePath();
@@ -649,7 +735,7 @@ export class Editor extends EventTarget {
 
   _drawWalls(ctx) {
     for (const wall of this.plan.walls) {
-      const selected = this.selection && this.selection.kind === 'wall' && this.selection.id === wall.id;
+      const selected = this.isSelected('wall', wall.id);
       ctx.strokeStyle = selected ? COLORS.wallSel : COLORS.wall;
       ctx.lineWidth = Math.max(wall.t, 0.04);
       ctx.lineCap = 'butt';
@@ -658,7 +744,7 @@ export class Editor extends EventTarget {
       ctx.lineTo(wall.x2, wall.y2);
       ctx.stroke();
 
-      if (selected) {
+      if (selected && this.selected.length === 1) {
         ctx.fillStyle = COLORS.wallSel;
         for (const e of [[wall.x1, wall.y1], [wall.x2, wall.y2]]) {
           ctx.beginPath();
@@ -676,7 +762,7 @@ export class Editor extends EventTarget {
       const L = wallLength(wall);
       const a = wallPointAt(wall, clamp(op.pos - op.width / 2, 0, L));
       const b = wallPointAt(wall, clamp(op.pos + op.width / 2, 0, L));
-      const selected = this.selection && this.selection.kind === 'opening' && this.selection.id === op.id;
+      const selected = this.isSelected('opening', op.id);
 
       ctx.strokeStyle = '#f7f5f1';
       ctx.lineWidth = Math.max(wall.t, 0.04) * 1.02;
@@ -710,9 +796,9 @@ export class Editor extends EventTarget {
 
   _drawItems(ctx) {
     for (const item of this.plan.items || []) {
-      const spec = furniture.spec(item.type);
+      const spec = furniture.footprint(item);
       if (!spec) continue;
-      const selected = this.selection && this.selection.kind === 'item' && this.selection.id === item.id;
+      const selected = this.isSelected('item', item.id);
       ctx.save();
       ctx.translate(item.x, item.y);
       ctx.rotate(item.rot || 0);
@@ -730,7 +816,7 @@ export class Editor extends EventTarget {
       ctx.stroke();
       ctx.restore();
 
-      if (selected) {
+      if (selected && this.selected.length === 1) {
         const h = this._rotateHandle(item, spec);
         ctx.fillStyle = COLORS.wallSel;
         ctx.beginPath();
@@ -752,6 +838,18 @@ export class Editor extends EventTarget {
       ctx.stroke();
       ctx.globalAlpha = 1;
       this._label(ctx, `${dist(from, to).toFixed(2)} m`, (from.x + to.x) / 2, (from.y + to.y) / 2);
+    }
+    if (this.drag && this.drag.kind === 'marquee') {
+      const { from, to } = this.drag;
+      ctx.fillStyle = 'rgba(194, 65, 12, 0.1)';
+      ctx.strokeStyle = COLORS.guide;
+      ctx.lineWidth = 1.2 / z;
+      ctx.setLineDash([5 / z, 3 / z]);
+      ctx.beginPath();
+      ctx.rect(from.x, from.y, to.x - from.x, to.y - from.y);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (this.calibration) {
       const { from, to } = this.calibration;

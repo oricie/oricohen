@@ -27,6 +27,8 @@ export class Viewer {
     this.onModeChange = () => {};
     this.onPick = () => {};
     this.onFrame = () => {};
+    this.onItemChange = () => {};
+    this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.raycaster = new THREE.Raycaster();
 
     this.renderer = new THREE.WebGLRenderer({
@@ -259,7 +261,64 @@ export class Viewer {
 
     this.canvas.addEventListener('pointerdown', (e) => {
       this._pressAt = { x: e.clientX, y: e.clientY };
+      if (this.mode !== 'orbit' || e.button !== 0) return;
+      const hit = this.pickAt(e);
+      if (!hit || hit.kind !== 'item') return;
+      const group = this.itemGroup(hit.id);
+      if (!group) return;
+
+      // grabbing furniture moves it; the camera stays put
+      this.orbit.enabled = false;
+      this.canvas.setPointerCapture(e.pointerId);
+      const level = this.levelOf(group);
+      this.dragPlane.set(new THREE.Vector3(0, 1, 0), -(level * (this.wallHeight || 2.7)));
+      const at = this.planePoint(e);
+      this.item = {
+        id: hit.id,
+        group,
+        mode: e.shiftKey ? 'rotate' : (e.altKey ? 'scale' : 'move'),
+        grab: at,
+        origin: group.position.clone(),
+        rot: group.rotation.y,
+        scale: group.scale.x,
+        startX: e.clientX,
+        moved: false,
+      };
     });
+
+    this.canvas.addEventListener('pointermove', (e) => {
+      if (!this.item) return;
+      const drag = this.item;
+      drag.moved = true;
+      if (drag.mode === 'move') {
+        const at = this.planePoint(e);
+        if (!at || !drag.grab) return;
+        drag.group.position.x = drag.origin.x + (at.x - drag.grab.x);
+        drag.group.position.z = drag.origin.z + (at.z - drag.grab.z);
+      } else if (drag.mode === 'rotate') {
+        drag.group.rotation.y = drag.rot + (e.clientX - drag.startX) * 0.012;
+      } else {
+        const k = Math.max(0.3, Math.min(3, drag.scale * (1 + (e.clientX - drag.startX) * 0.004)));
+        drag.group.scale.setScalar(k);
+      }
+    });
+
+    const endItemDrag = (e) => {
+      if (!this.item) return;
+      const drag = this.item;
+      this.item = null;
+      this.orbit.enabled = this.mode === 'orbit';
+      if (!drag.moved) return;
+      this._justDragged = true;
+      this.onItemChange(drag.id, {
+        x: drag.group.position.x,
+        y: drag.group.position.z,
+        rot: drag.group.rotation.y,
+        scale: drag.mode === 'scale' ? drag.group.scale.x : undefined,
+      });
+    };
+    this.canvas.addEventListener('pointerup', endItemDrag);
+    this.canvas.addEventListener('pointercancel', endItemDrag);
     this.canvas.addEventListener('click', (e) => {
       if (this.mode === 'walk') {
         if (!this.walk.isLocked && this.pointerLockOk !== false) {
@@ -267,12 +326,13 @@ export class Viewer {
         }
         return;
       }
-      // ignore the click that ends an orbit drag
+      // ignore the click that ends an orbit drag or a furniture drag
+      if (this._justDragged) { this._justDragged = false; return; }
       const moved = this._pressAt
         ? Math.hypot(e.clientX - this._pressAt.x, e.clientY - this._pressAt.y)
         : 0;
       if (moved > 4) return;
-      this.onPick(this.pickAt(e));
+      this.onPick(this.pickAt(e), e.shiftKey);
     });
     // Sandboxed frames and touch devices refuse pointer lock; fall back to
     // dragging the view around, which needs no permission.
@@ -306,6 +366,34 @@ export class Viewer {
 
   onPointerLockDenied() {}
 
+  // The group in the scene that carries this furniture id.
+  itemGroup(id) {
+    let found = null;
+    this.apartment.root.traverse((o) => {
+      if (!found && o.userData.itemId === id) found = o;
+    });
+    return found;
+  }
+
+  levelOf(object) {
+    for (let o = object; o; o = o.parent) {
+      if (o.userData && o.userData.level !== undefined) return o.userData.level;
+    }
+    return 0;
+  }
+
+  // Where the cursor meets the floor of the level being edited.
+  planePoint(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const at = new THREE.Vector3();
+    return this.raycaster.ray.intersectPlane(this.dragPlane, at) ? at : null;
+  }
+
   // What is under the cursor, as a plan selection: {kind, id} or null.
   pickAt(event) {
     if (!this.apartment) return null;
@@ -328,20 +416,23 @@ export class Viewer {
     return null;
   }
 
-  // Tint whatever is selected so the 3D view agrees with the plan.
+  // Tint whatever is selected so the 3D view agrees with the plan. Takes one
+  // selection or a list of them.
   setHighlight(selection) {
     if (!this.apartment) return;
     if (this._highlighted) {
       for (const m of this._highlighted) m.material = m.userData.baseMaterial;
       this._highlighted = null;
     }
-    if (!selection) return;
+    const list = Array.isArray(selection) ? selection : (selection ? [selection] : []);
+    if (!list.length) return;
+    const wanted = new Set(list.map((s) => s.id));
     const matches = [];
     this.apartment.root.traverse((o) => {
       if (!o.isMesh) return;
       for (let p = o; p && p !== this.apartment.root; p = p.parent) {
         const id = p.userData.itemId || p.userData.openingId || p.userData.wallId || p.userData.room;
-        if (id === selection.id) { matches.push(o); return; }
+        if (id && wanted.has(id)) { matches.push(o); return; }
       }
     });
     if (!matches.length) return;

@@ -44,8 +44,15 @@ a cleared browser or a move to another machine.
 
 Anything you click — in the plan **or in the 3D view** — opens in the *Selection*
 panel, where you can change a wall's thickness, an opening's width, height, sill
-and hinge side, a room's name, or a piece of furniture's rotation, and delete it.
-`Delete` removes the selection from either view.
+and hinge side, a room's name, or a piece of furniture's rotation and size, and
+delete it. `Delete` removes the selection from either view.
+
+**Selecting several at once**: `Shift`-click adds to (or removes from) the
+selection, sweeping a box over empty plan selects everything inside it, and
+`Ctrl`/`Cmd`+`A` takes all walls and furniture. Then `Delete` removes the lot.
+
+**In the 3D view**: drag furniture to slide it across the floor, `Shift`-drag to
+turn it, `Alt`-drag to resize it. The plan updates as you let go.
 
 `1` / `2` / `3` switch between plan, split and 3D. In the walkthrough: `WASD`
 to move, `Shift` to run, mouse to look, `M` for the map, `Esc` to release the
@@ -117,6 +124,21 @@ Room names are a **guess** from size and shape, and a deliberately cautious one:
 only a long thin room (hallway), a large main room (living room) and a small
 compact one (bathroom) get a real name. Everything else is `Room 1`, `Room 2`,
 because a confidently wrong label is worse than a neutral one.
+
+### Symbols it reads
+
+- **Windows.** A window is drawn as the wall's two faces carrying straight on
+  across an opening. The tracer folds any pair of thin parallel lines into the
+  single wall they describe, then finds the window as the stretch that the
+  glazed lines cover but no solid wall does. One wall with a window in it —
+  not two walls with a slot between them.
+- **Doorways.** A gap between two collinear stretches of the same wall.
+- **Staircases.** A ladder of short parallel lines, evenly spaced about a tread
+  apart and all the same length. Those treads are pulled out before anything
+  else looks at them, the side stringers with them, and a real flight of stairs
+  is placed where the symbol was, sized to it.
+- **Text, dimension lines and furniture symbols** are ignored, because they are
+  never long enough to survive the run-length filter.
 
 It works well on clean architectural plans (dark walls, light background, one
 floor per image). Sketches, heavy hatching, or plans with the walls drawn as

@@ -105,7 +105,7 @@ export class Minimap {
     // furniture footprints
     ctx.fillStyle = 'rgba(110, 116, 122, 0.3)';
     for (const item of (this.plan.items || []).filter(onLevel)) {
-      const spec = furniture.spec(item.type);
+      const spec = furniture.footprint(item);
       if (!spec) continue;
       const [sx, sy] = S(item.x, item.y);
       ctx.save();

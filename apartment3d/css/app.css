@@ -425,3 +425,17 @@ button.danger:hover { background: var(--accent-soft); border-color: var(--accent
   padding: 0 3px;
   background: #fff;
 }
+.drag-hint {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  pointer-events: none;
+}
+.drag-hint strong { color: var(--ink); }
+body[data-view="plan"] .drag-hint { display: none; }

@@ -404,7 +404,19 @@ function buildFurniture(plan) {
   for (const item of plan.items || []) {
     const mesh = furniture.build(item.type, item);
     if (!mesh) continue;
-    const mountY = mesh.userData.spec.mountY || 0;
+    const spec = mesh.userData.spec;
+    // a traced staircase carries the size it was found at; furniture the user
+    // resized carries a plain scale
+    if (item.fit) {
+      mesh.scale.set(
+        Math.max(0.2, item.fit.w / spec.w),
+        item.fit.h ? item.fit.h / spec.h : 1,
+        Math.max(0.2, item.fit.d / spec.d)
+      );
+    } else if (item.scale && item.scale !== 1) {
+      mesh.scale.setScalar(item.scale);
+    }
+    const mountY = spec.mountY || 0;
     mesh.position.set(item.x, mountY, item.y);
     mesh.rotation.y = item.rot || 0;
     mesh.userData.itemId = item.id;

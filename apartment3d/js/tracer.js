@@ -55,7 +55,10 @@ export function imageToMask(image, opts) {
   let ink = new Uint8Array(w * h);
   let inkCount = 0;
   for (let i = 0; i < grey.length; i++) {
-    if (grey[i] < threshold) { ink[i] = 1; inkCount++; }
+    // Otsu returns the last level of the dark class, so the test has to
+    // include it: on a pure two-tone plan the threshold lands exactly on the
+    // ink value, and a strict `<` would find no ink at all.
+    if (grey[i] <= threshold) { ink[i] = 1; inkCount++; }
   }
   // Inverted plans (white lines on dark paper): flip so ink is the minority.
   let inverted = false;
@@ -167,11 +170,163 @@ function bandsToSegments(bands, horizontal, opts) {
   return segs;
 }
 
+// A staircase is drawn as a ladder: several short parallel lines of similar
+// length, evenly spaced about a tread apart. Those are treads, not walls, so
+// pull them out before anything else looks at them.
+function findStairs(segs, opts) {
+  const axisOf = (s) => (s.dir === 'h' ? s.y1 : s.x1);
+  const startOf = (s) => (s.dir === 'h' ? s.x1 : s.y1);
+  const endOf = (s) => (s.dir === 'h' ? s.x2 : s.y2);
+  const lengthOf = (s) => endOf(s) - startOf(s);
+
+  const flights = [];
+  const claimed = new Set();
+
+  for (const dir of ['h', 'v']) {
+    const list = segs
+      .map((s, i) => ({ s, i }))
+      .filter((e) => e.s.dir === dir)
+      .sort((a, b) => axisOf(a.s) - axisOf(b.s));
+
+    let i = 0;
+    while (i < list.length) {
+      const run = [list[i]];
+      let pitch = 0;
+      let j = i + 1;
+
+      while (j < list.length) {
+        const prev = run[run.length - 1].s;
+        const next = list[j].s;
+        const gap = axisOf(next) - axisOf(prev);
+        // treads sit closer together than rooms do, and further apart than
+        // the two faces of one wall
+        if (gap < 5 || gap > opts.maxWallThickness * 1.4) break;
+        if (pitch && Math.abs(gap - pitch) > pitch * 0.45) break;
+        // and they are the same length, side by side
+        const overlap = Math.min(endOf(prev), endOf(next)) - Math.max(startOf(prev), startOf(next));
+        const shorter = Math.min(lengthOf(prev), lengthOf(next));
+        if (overlap < shorter * 0.55) break;
+        if (Math.abs(lengthOf(next) - lengthOf(prev)) > shorter * 0.5) break;
+        if (!pitch) pitch = gap;
+        run.push(list[j]);
+        j++;
+      }
+
+      if (run.length >= 4) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const e of run) {
+          claimed.add(e.i);
+          minX = Math.min(minX, e.s.x1, e.s.x2);
+          maxX = Math.max(maxX, e.s.x1, e.s.x2);
+          minY = Math.min(minY, e.s.y1, e.s.y2);
+          maxY = Math.max(maxY, e.s.y1, e.s.y2);
+        }
+        flights.push({ dir, minX, minY, maxX, maxY, treads: run.length, pitch });
+        i = j;
+      } else {
+        i++;
+      }
+    }
+  }
+
+  // The stringers drawn down the sides of a flight sit inside its outline;
+  // they belong to the staircase, not to the walls.
+  const pad = 4;
+  segs.forEach((seg, i) => {
+    if (claimed.has(i)) return;
+    for (const f of flights) {
+      const inside =
+        Math.min(seg.x1, seg.x2) >= f.minX - pad && Math.max(seg.x1, seg.x2) <= f.maxX + pad &&
+        Math.min(seg.y1, seg.y2) >= f.minY - pad && Math.max(seg.y1, seg.y2) <= f.maxY + pad;
+      if (inside) { claimed.add(i); return; }
+    }
+  });
+
+  return { flights, rest: segs.filter((_, i) => !claimed.has(i)) };
+}
+
+// Plans draw a wall's two faces as thin parallel lines, and draw a window as
+// that same pair crossing an opening in the wall. Either way it is ONE wall,
+// not two: fold each such pair into a single segment of the right thickness.
+// A folded pair is flagged `glazed` — if it later merges with solid wall on
+// either side, that stretch was a window symbol.
+function absorbParallelPairs(segs, opts) {
+  const taken = new Set();
+  const out = [];
+
+  const axisOf = (s) => (s.dir === 'h' ? s.y1 : s.x1);
+  const startOf = (s) => (s.dir === 'h' ? s.x1 : s.y1);
+  const endOf = (s) => (s.dir === 'h' ? s.x2 : s.y2);
+
+  for (let i = 0; i < segs.length; i++) {
+    if (taken.has(i)) continue;
+    const a = segs[i];
+    let best = -1;
+    let bestSep = Infinity;
+
+    for (let j = i + 1; j < segs.length; j++) {
+      if (taken.has(j) || segs[j].dir !== a.dir) continue;
+      const b = segs[j];
+      const sep = Math.abs(axisOf(a) - axisOf(b));
+      if (sep < 3 || sep > opts.maxWallThickness) continue;
+      // there must be a cavity between them; two solid walls standing close
+      // together are two walls and must stay that way
+      if (a.t + b.t > sep * 0.9) continue;
+      const overlap = Math.min(endOf(a), endOf(b)) - Math.max(startOf(a), startOf(b));
+      const shorter = Math.min(endOf(a) - startOf(a), endOf(b) - startOf(b));
+      if (overlap < 0.6 * shorter) continue;
+      if (sep < bestSep) { bestSep = sep; best = j; }
+    }
+
+    if (best < 0) { out.push(a); continue; }
+    const b = segs[best];
+    taken.add(i);
+    taken.add(best);
+
+    const axis = (axisOf(a) + axisOf(b)) / 2;
+    const lo = Math.min(startOf(a), startOf(b));
+    const hi = Math.max(endOf(a), endOf(b));
+    const t = bestSep + (a.t + b.t) / 2;
+    out.push(a.dir === 'h'
+      ? { x1: lo, y1: axis, x2: hi, y2: axis, t, dir: 'h', glazed: true }
+      : { x1: axis, y1: lo, x2: axis, y2: hi, t, dir: 'v', glazed: true });
+  }
+  return out;
+}
+
+function unionIntervals(list) {
+  const sorted = list.filter(([a, b]) => b > a).sort((p, q) => p[0] - q[0]);
+  const out = [];
+  for (const [a, b] of sorted) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+// The parts of `spans` that `holes` does not cover.
+function subtractIntervals(spans, holes) {
+  const out = [];
+  for (const [a, b] of spans) {
+    let cursor = a;
+    for (const [hs, he] of holes) {
+      if (he <= cursor || hs >= b) continue;
+      if (hs > cursor) out.push([cursor, Math.min(hs, b)]);
+      cursor = Math.max(cursor, he);
+      if (cursor >= b) break;
+    }
+    if (cursor < b) out.push([cursor, b]);
+  }
+  return out;
+}
+
 // Merge segments that sit on the same line. Gaps narrower than maxDoorGap are
-// bridged and reported as doorways.
+// bridged and reported as doorways; a glazed stretch between solid wall is
+// reported as a window.
 function mergeCollinear(segs, opts) {
   const out = [];
-  const doors = [];
+  const openings = [];
   const groups = new Map();
 
   for (const s of segs) {
@@ -185,40 +340,75 @@ function mergeCollinear(segs, opts) {
     const horizontal = group[0].dir === 'h';
     group.sort((a, b) => (horizontal ? a.x1 - b.x1 : a.y1 - b.y1));
     let cur = null;
+
+    const open = (s, a, b) => ({
+      a, b,
+      axis: (horizontal ? s.y1 : s.x1) * (b - a),
+      weight: b - a,
+      t: s.t,
+      holes: [],
+      pieces: [{ a, b, t: s.t, glazed: !!s.glazed }],
+    });
+
     for (const s of group) {
       const a = horizontal ? s.x1 : s.y1;
       const b = horizontal ? s.x2 : s.y2;
       const axis = horizontal ? s.y1 : s.x1;
-      if (!cur) {
-        cur = { a, b, axis: axis * (b - a), weight: b - a, t: s.t, holes: [] };
-        continue;
-      }
+      if (!cur) { cur = open(s, a, b); continue; }
+
       const gap = a - cur.b;
       if (gap <= opts.maxDoorGap) {
         if (gap > opts.snap) cur.holes.push([cur.b, a]);
         cur.b = Math.max(cur.b, b);
         cur.axis += axis * (b - a);
         cur.weight += b - a;
+        // a glazed piece is thinner than the wall it sits in; keep the wall's
+        // thickness, not the window's
         cur.t = Math.max(cur.t, s.t);
+        cur.pieces.push({ a, b, t: s.t, glazed: !!s.glazed });
       } else {
         flush(cur);
-        cur = { a, b, axis: axis * (b - a), weight: b - a, t: s.t, holes: [] };
+        cur = open(s, a, b);
       }
     }
     if (cur) flush(cur);
 
     function flush(c) {
       const axis = c.axis / (c.weight || 1);
+      const solids = c.pieces.filter((p) => !p.glazed);
+      // the folded outline pair measures a hair wider than the wall it sits
+      // in, so take the thickness from the solid stretches when there are any
+      const t = solids.length
+        ? Math.max(...solids.map((p) => p.t))
+        : Math.max(...c.pieces.map((p) => p.t));
       const seg = horizontal
-        ? { x1: c.a, y1: axis, x2: c.b, y2: axis, t: c.t, dir: 'h' }
-        : { x1: axis, y1: c.a, x2: axis, y2: c.b, t: c.t, dir: 'v' };
+        ? { x1: c.a, y1: axis, x2: c.b, y2: axis, t, dir: 'h' }
+        : { x1: axis, y1: c.a, x2: axis, y2: c.b, t, dir: 'v' };
       const index = out.push(seg) - 1;
+
+      // A wall drawn entirely as an outline pair is just a wall, not a window.
+      let windows = [];
+      if (solids.length) {
+        // The wall's own two faces are drawn straight past a window symbol, so
+        // the glazed run covers the whole wall. The window is the part of it
+        // that no solid stretch covers.
+        const glazed = unionIntervals(c.pieces.filter((p) => p.glazed).map((p) => [p.a, p.b]));
+        const solid = unionIntervals(solids.map((p) => [p.a, p.b]));
+        windows = subtractIntervals(glazed, solid)
+          .filter(([s, e]) => e - s >= opts.minWallLength * 0.6);
+      }
+
       for (const [s, e] of c.holes) {
-        doors.push({ segment: index, from: s - c.a, to: e - c.a, width: e - s });
+        // a gap that a window already explains is not also a doorway
+        if (windows.some(([ws, we]) => Math.min(e, we) - Math.max(s, ws) > (e - s) * 0.5)) continue;
+        openings.push({ segment: index, from: s - c.a, to: e - c.a, width: e - s, type: 'door' });
+      }
+      for (const [s, e] of windows) {
+        openings.push({ segment: index, from: s - c.a, to: e - c.a, width: e - s, type: 'window' });
       }
     }
   }
-  return { segments: out, doors };
+  return { segments: out, openings };
 }
 
 // Pull nearly-equal coordinates onto shared values so corners actually meet.
@@ -348,13 +538,14 @@ export function detectWalls(mask, opts) {
   const hSegs = bandsToSegments(groupBands(hRuns, o.maxWallThickness), true, o);
   const vSegs = bandsToSegments(groupBands(vRuns, o.maxWallThickness), false, o);
 
-  const tiles = splitIntoTiles([...hSegs, ...vSegs], width, height, o);
+  const stairs = findStairs([...hSegs, ...vSegs], o);
+  const tiles = splitIntoTiles(stairs.rest, width, height, o);
   const segments = [];
   const doors = [];
   const sections = [];
 
   tiles.forEach((tile, index) => {
-    const merged = mergeCollinear(tile.segments, o);
+    const merged = mergeCollinear(absorbParallelPairs(tile.segments, o), o);
     let segs = merged.segments;
     segs.forEach((seg, i) => { seg._i = i; seg.section = index; });
 
@@ -374,9 +565,9 @@ export function detectWalls(mask, opts) {
     const base = segments.length;
     const remap = new Map();
     segs.forEach((seg, i) => remap.set(seg._i, base + i));
-    for (const door of merged.doors) {
-      if (!long.has(door.segment)) continue;
-      doors.push({ ...door, segment: remap.get(door.segment) });
+    for (const op of merged.openings) {
+      if (!long.has(op.segment)) continue;
+      doors.push({ ...op, segment: remap.get(op.segment) });
     }
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -392,7 +583,7 @@ export function detectWalls(mask, opts) {
     sections.push({ minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY });
   });
 
-  return { segments, doors, sections };
+  return { segments, doors, sections, stairs: stairs.flights };
 }
 
 // ------------------------------------------------------------------ room find
@@ -504,10 +695,10 @@ function traceContour(label, width, height, region) {
 export function trace(image, opts) {
   const o = { ...DEFAULT_OPTIONS, ...opts };
   const mask = imageToMask(image, o);
-  const { segments, doors, sections } = detectWalls(mask, o);
+  const { segments, doors, sections, stairs } = detectWalls(mask, o);
   const wallMask = rasterizeWalls(segments, mask.width, mask.height, 1);
   const rooms = findRooms(wallMask, mask.width, mask.height, o);
-  return { mask, segments, doors, sections, rooms, width: mask.width, height: mask.height };
+  return { mask, segments, doors, sections, stairs, rooms, width: mask.width, height: mask.height };
 }
 
 // Flood one region starting at (sx, sy) and return its polygon, or null when
