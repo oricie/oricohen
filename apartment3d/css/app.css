@@ -466,3 +466,6 @@ body[data-view="plan"] .drag-hint { display: none; }
 .sketch-error, .sketch-examples { grid-column: 1 / -1; margin: 0; font-size: 11px; }
 .sketch-error { color: #a3350a; }
 .sketch-examples { color: var(--ink-soft); }
+.palette-grid button { cursor: grab; }
+.palette-grid button:active { cursor: grabbing; }
+.canvas-wrap.drop-target { outline: 2px dashed var(--accent); outline-offset: -6px; }

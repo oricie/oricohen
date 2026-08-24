@@ -198,6 +198,7 @@ function rebuild3D() {
   if (biggest) viewer.setSpawn(...standingSpot(biggest.poly), biggest.level || 0);
   viewer.setHighlight(editor.selected);
   syncGizmo();
+  if ($('#toggle-dimensions').checked) viewer.showDimensions(true, state.plan);
   renderLevels();
   minimap.setPlan(state.plan, viewer.walkLevel || 0);
   scheduleAutosave();
@@ -294,7 +295,14 @@ function planFromTrace(result) {
   plan.scale = pxPerMetre;
   const toM = (v) => v / pxPerMetre;
 
+  const sectionSpan = (index) => {
+    const sec = clusters[index] || clusters[0];
+    return sec ? Math.hypot(sec.maxX - sec.minX, sec.maxY - sec.minY) : Infinity;
+  };
+
   result.segments.forEach((s, i) => {
+    // a wall longer than its own drawing's diagonal is a tracing artefact
+    if (Math.hypot(s.x2 - s.x1, s.y2 - s.y1) > sectionSpan(s.section || 0) * 1.05) return;
     plan.walls.push({
       id: `w${i}`,
       x1: toM(s.x1), y1: toM(s.y1),
@@ -371,6 +379,14 @@ function planFromTrace(result) {
 function isRealRoom(room) {
   const area = Math.abs(polygonArea(room.poly));
   if (area < 1.2) return false;
+
+  // A spike - one vertex flung far from the rest by a bad contour - gives a
+  // polygon a huge bounding box for very little area, and renders as a long
+  // thin wedge shooting off across the ground. A real room, even an L-shaped
+  // one, fills a good part of its box.
+  const b = polygonBounds(room.poly);
+  if (area / Math.max(0.01, b.w * b.h) < 0.25) return false;
+
   let perimeter = 0;
   for (let i = 0; i < room.poly.length; i++) {
     const a = room.poly[i];
@@ -679,8 +695,14 @@ function renderSelection() {
     const wall = state.plan.walls.find((w) => w.id === sel.id);
     if (!wall) return;
     heading.textContent = 'Wall';
-    field('Length', readout(`${Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1).toFixed(2)} m`));
+    const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+    field('Length', number(length, { min: 0.1, max: 60, step: 0.05 }, (v) => setWallLength(wall, v)));
     field('Thickness', number(wall.t, { min: 0.05, max: 0.6, step: 0.01 }, (v) => { wall.t = v; }));
+    field('Height', number(wall.height || state.plan.wallHeight, { min: 1, max: 6, step: 0.05 },
+      (v) => { wall.height = v; }));
+    field('Runs', readout(
+      Math.abs(wall.y2 - wall.y1) < 0.01 ? 'east–west' :
+      Math.abs(wall.x2 - wall.x1) < 0.01 ? 'north–south' : 'at an angle'));
     const openings = state.plan.openings.filter((o) => o.wallId === wall.id).length;
     field('Openings', readout(openings ? `${openings} in this wall` : 'none'));
   } else if (sel.kind === 'opening') {
@@ -861,6 +883,35 @@ function renderProjects() {
   }
 }
 
+// Change a wall's length by moving its far end along its own direction, and
+// take everything that meets that end with it, so a junction stays a junction.
+function setWallLength(wall, length) {
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const current = Math.hypot(dx, dy);
+  if (current < 1e-6) return;
+  const ux = dx / current;
+  const uy = dy / current;
+  const from = { x: wall.x2, y: wall.y2 };
+  const to = { x: wall.x1 + ux * length, y: wall.y1 + uy * length };
+  wall.x2 = to.x;
+  wall.y2 = to.y;
+  dragJunction(from, to, wall.id);
+}
+
+// Move every wall end, room corner and opening that sat on `from` to `to`.
+function dragJunction(from, to, skipWallId) {
+  const near = (x, y) => Math.hypot(x - from.x, y - from.y) < 0.12;
+  for (const w of state.plan.walls) {
+    if (w.id === skipWallId) continue;
+    if (near(w.x1, w.y1)) { w.x1 = to.x; w.y1 = to.y; }
+    if (near(w.x2, w.y2)) { w.x2 = to.x; w.y2 = to.y; }
+  }
+  for (const room of state.plan.rooms) {
+    room.poly = room.poly.map(([x, y]) => (near(x, y) ? [to.x, to.y] : [x, y]));
+  }
+}
+
 // A row of colour chips; the chosen one is ringed.
 function swatches(title, options, current, onPick) {
   const wrap = document.createElement('div');
@@ -918,9 +969,17 @@ function renderPalette(filter = '') {
     for (const item of items) {
       const b = document.createElement('button');
       b.type = 'button';
+      b.draggable = true;
+      b.dataset.type = item.key;
       b.textContent = item.label;
       b.title = `${item.w.toFixed(2)} × ${item.d.toFixed(2)} m${item.mountY ? ' · wall mounted' : ''}`;
       b.classList.toggle('active', item.key === editor.itemType);
+      b.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', item.key);
+        e.dataTransfer.effectAllowed = 'copy';
+        state.dragging = item.key;
+      });
+      b.addEventListener('dragend', () => { state.dragging = null; });
       b.addEventListener('click', () => {
         editor.itemType = item.key;
         viewer.placing = item.key;
@@ -1074,6 +1133,7 @@ function bindUI() {
     rebuild3D();
   });
   $('#toggle-baseboards').addEventListener('change', rebuild3D);
+  $('#toggle-dimensions').addEventListener('change', (e) => viewer.showDimensions(e.target.checked, state.plan));
   $('#toggle-ceiling').addEventListener('change', (e) => viewer.toggleCeiling(e.target.checked));
   $('#toggle-night').addEventListener('change', (e) => viewer.setNight(e.target.checked));
   $('#toggle-image').addEventListener('change', (e) => {
@@ -1142,6 +1202,30 @@ function bindUI() {
 
   // file actions
   $('#palette-search').addEventListener('input', (e) => renderPalette(e.target.value));
+
+  // drag a piece straight from the list onto the floor
+  const canvas3d = $('#view-canvas');
+  canvas3d.addEventListener('dragover', (e) => {
+    if (!state.dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    canvas3d.parentElement.classList.add('drop-target');
+  });
+  canvas3d.addEventListener('dragleave', () => canvas3d.parentElement.classList.remove('drop-target'));
+  canvas3d.addEventListener('drop', (e) => {
+    e.preventDefault();
+    canvas3d.parentElement.classList.remove('drop-target');
+    const type = e.dataTransfer.getData('text/plain') || state.dragging;
+    state.dragging = null;
+    if (!type || !furniture.spec(type)) return;
+    if (viewer.mode !== 'orbit') viewer.setMode('orbit');
+    const level = viewer.walkLevel || 0;
+    viewer.dragPlane.constant = -(level * (state.plan.wallHeight || 2.7));
+    const at = viewer.planePoint(e);
+    if (!at) return toast('Drop it over the floor of the flat');
+    const offset = (state.plan.levelOffsets || {})[level] || { dx: 0, dy: 0 };
+    viewer.onPlace(type, at.x - (offset.dx || 0), at.z - (offset.dy || 0), level);
+  });
 
   $('#btn-project-save').addEventListener('click', () => {
     const name = ($('#project-name').value || '').trim() || state.plan.name || 'Apartment';

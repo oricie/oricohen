@@ -441,6 +441,38 @@ export class Viewer {
   onPointerLockDenied() {}
   onSketchProgress() {}
 
+  // Float a length label over the middle of every wall.
+  showDimensions(on, plan) {
+    if (this.dimensions) {
+      this.scene.remove(this.dimensions);
+      this.dimensions.traverse((o) => {
+        if (o.material && o.material.map) o.material.map.dispose();
+        if (o.material) o.material.dispose();
+      });
+      this.dimensions = null;
+    }
+    if (!on || !plan) return;
+
+    const group = new THREE.Group();
+    group.name = 'dimensions';
+    const height = plan.wallHeight || 2.7;
+    for (const wall of plan.walls || []) {
+      const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
+      if (length < 0.4) continue;
+      const level = wall.level || 0;
+      const offset = this.levelOffset(level);
+      const sprite = labelSprite(`${length.toFixed(2)} m`);
+      sprite.position.set(
+        (wall.x1 + wall.x2) / 2 + offset.dx,
+        level * height + height + 0.28,
+        (wall.y1 + wall.y2) / 2 + offset.dy
+      );
+      group.add(sprite);
+    }
+    this.dimensions = group;
+    this.scene.add(group);
+  }
+
   setSketching(on) {
     this.sketching = on;
     this.orbit.enabled = !on && this.mode === 'orbit';
@@ -703,6 +735,38 @@ function highlightMaterial() {
     });
   }
   return _highlight;
+}
+
+// A small canvas-drawn label that always faces the camera.
+function labelSprite(text) {
+  const pad = 10;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = '600 34px system-ui, sans-serif';
+  const width = Math.ceil(ctx.measureText(text).width) + pad * 2;
+  canvas.width = width;
+  canvas.height = 54;
+  const c = canvas.getContext('2d');
+  c.font = '600 34px system-ui, sans-serif';
+  c.fillStyle = 'rgba(255,255,255,0.92)';
+  c.strokeStyle = 'rgba(31,33,36,0.25)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.roundRect(1, 1, width - 2, 52, 10);
+  c.fill();
+  c.stroke();
+  c.fillStyle = '#1f2124';
+  c.textBaseline = 'middle';
+  c.fillText(text, pad, 28);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, depthTest: false, transparent: true,
+  }));
+  sprite.renderOrder = 998;
+  sprite.scale.set((width / 54) * 0.42, 0.42, 1);
+  return sprite;
 }
 
 function skyTexture(night) {
