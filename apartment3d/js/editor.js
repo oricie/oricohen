@@ -217,6 +217,9 @@ export class Editor extends EventTarget {
       case 'erase':
         this._eraseAt(p);
         break;
+      case 'sketch':
+        this.drag = { kind: 'sketch', points: [p] };
+        break;
       default:
         this._selectAt(p, e.shiftKey);
     }
@@ -243,6 +246,11 @@ export class Editor extends EventTarget {
         case 'marquee':
           this.drag.to = p;
           break;
+        case 'sketch': {
+          const last = this.drag.points[this.drag.points.length - 1];
+          if (!last || dist(last, p) > 0.08) this.drag.points.push(p);
+          break;
+        }
         case 'wallEnd': {
           const wall = this.plan.walls.find((w) => w.id === this.drag.id);
           if (wall) {
@@ -322,6 +330,14 @@ export class Editor extends EventTarget {
         this.emit();
         return;
       }
+    }
+
+    if (drag.kind === 'sketch') {
+      this.draw();
+      if (drag.points.length >= 4) {
+        this.dispatchEvent(new CustomEvent('sketch', { detail: { points: drag.points } }));
+      }
+      return;
     }
 
     if (drag.kind === 'marquee') {
@@ -838,6 +854,19 @@ export class Editor extends EventTarget {
       ctx.stroke();
       ctx.globalAlpha = 1;
       this._label(ctx, `${dist(from, to).toFixed(2)} m`, (from.x + to.x) / 2, (from.y + to.y) / 2);
+    }
+    if (this.drag && this.drag.kind === 'sketch') {
+      const pts = this.drag.points;
+      ctx.strokeStyle = COLORS.guide;
+      ctx.fillStyle = 'rgba(194, 65, 12, 0.12)';
+      ctx.lineWidth = 2.5 / z;
+      ctx.setLineDash([7 / z, 5 / z]);
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (this.drag && this.drag.kind === 'marquee') {
       const { from, to } = this.drag;

@@ -11,6 +11,7 @@ import { sampleFloorPlan } from './sample.js';
 import { Minimap } from './minimap.js';
 import * as storage from './storage.js';
 import * as instruct from './instruct.js';
+import { planToSVG } from './svg.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -70,6 +71,11 @@ editor.addEventListener('change', () => {
 });
 editor.addEventListener('select', () => { renderRoomList(); renderSelection(); });
 editor.addEventListener('notice', (e) => toast(e.detail));
+editor.addEventListener('sketch', (e) => {
+  const pts = e.detail.points;
+  const level = pts.length ? levelAt(state.plan, pts[0].x, pts[0].y) : 0;
+  viewer.onSketch(pts, level);
+});
 editor.addEventListener('calibrate', (e) => showCalibration(e.detail.measured));
 viewer.onPick = (selection, additive) => {
   if (additive && selection) editor.toggleSelected(selection);
@@ -253,10 +259,11 @@ function scheduleRebuild() {
   state.rebuildTimer = setTimeout(rebuild3D, 220);
 }
 
-function rebuild3D() {
+function rebuild3D({ frame = false } = {}) {
   viewer.setPlan(state.plan, {
     wallMaterial: state.plan.wallMaterial,
     baseboards: $('#toggle-baseboards').checked,
+    frame,
   });
   const biggest = [...(state.plan.rooms || [])]
     .sort((a, b) => Math.abs(polygonArea(b.poly)) - Math.abs(polygonArea(a.poly)))[0];
@@ -322,7 +329,7 @@ function runDetection() {
       editor.setPlan(state.plan);
       editor.setImage(state.image);
       editor.fit();
-      rebuild3D();
+      rebuild3D({ frame: true });
       renderRoomList();
       renderStats();
       showPlanPanel(false);
@@ -918,7 +925,7 @@ async function restoreSnapshot(snap, { announce = true } = {}) {
     $('#drop-zone').classList.add('has-image');
     $('#image-name').textContent = snap.name || 'restored plan';
   }
-  rebuild3D();
+  rebuild3D({ frame: true });
   renderRoomList();
   renderStats();
   renderSelection();
@@ -1324,6 +1331,15 @@ function bindUI() {
   $$('.tool-btn').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
   $('#btn-plan-panel').addEventListener('click', () => showPlanPanel($('#plan-panel').hidden));
   $('#plan-close').addEventListener('click', () => showPlanPanel(false));
+  $('#plan-expand').addEventListener('click', () => {
+    $('#plan-panel').classList.toggle('expanded');
+    requestAnimationFrame(() => { editor.resize(); editor.fit(); });
+  });
+  $('#plan-svg').addEventListener('click', () => {
+    const svg = planToSVG(state.plan, { level: viewer.walkLevel || 0 });
+    if (!svg) return toast('There is nothing on this floor to export yet');
+    download(new Blob([svg], { type: 'image/svg+xml' }), `${state.plan.name || 'plan'}.svg`);
+  });
 
   // sidebar sections fold away
   $$('.panel.collapsible > h2').forEach((h) => {

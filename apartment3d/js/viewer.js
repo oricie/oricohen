@@ -134,7 +134,9 @@ export class Viewer {
     this.applyCeiling();
     this.applyLighting();
     this.setVisibleLevel(this.visibleLevel ?? null);
-    if (this.mode === 'orbit') this.frameAll();
+    // Rebuilding after an edit must leave the camera exactly where it was:
+    // deleting a wall should not throw the view back to the overview.
+    if (options.frame && this.mode === 'orbit') this.frameAll();
   }
 
   frameAll() {
@@ -164,6 +166,10 @@ export class Viewer {
     if (mode === this.mode) return;
     this.mode = mode;
     if (mode === 'walk') {
+      this._orbitView = {
+        position: this.camera.position.clone(),
+        target: this.orbit.target.clone(),
+      };
       this.orbit.enabled = false;
       const start = this.spawnPoint();
       this.walk.object.position.set(start.x, this.walkYBase + EYE_HEIGHT, start.z);
@@ -174,7 +180,14 @@ export class Viewer {
     } else {
       this.orbit.enabled = true;
       if (this.walk.isLocked) this.walk.unlock();
-      this.frameAll();
+      if (this._orbitView) {
+        // put the dollhouse back exactly as it was before the walkthrough
+        this.camera.position.copy(this._orbitView.position);
+        this.orbit.target.copy(this._orbitView.target);
+        this.orbit.update();
+      } else {
+        this.frameAll();
+      }
     }
     this.applyCeiling();
     this.onModeChange(this.mode);

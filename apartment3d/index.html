@@ -212,7 +212,9 @@
           <aside id="plan-panel" class="plan-panel" hidden>
             <header class="plan-panel-bar">
               <strong>Plan</strong>
-              <span class="plan-panel-hint">for precise edits</span>
+              <span class="plan-panel-hint">vector — every edit shows in 3D</span>
+              <button id="plan-svg" type="button" class="plan-panel-action" title="Download the plan as SVG">SVG</button>
+              <button id="plan-expand" type="button" class="plan-panel-action" title="Expand / shrink">⤢</button>
               <button id="plan-close" type="button" aria-label="Close the plan">×</button>
             </header>
             <div class="canvas-wrap"><canvas id="plan-canvas"></canvas></div>
@@ -223,6 +225,7 @@
               <button class="tool-btn" data-tool="window" type="button" title="Add window (N)">Window</button>
               <button class="tool-btn" data-tool="room" type="button" title="Pick room (B)">Room</button>
               <button class="tool-btn" data-tool="erase" type="button" title="Erase (E)">Erase</button>
+              <button class="tool-btn" data-tool="sketch" type="button" title="Sketch an area and say what goes there">Sketch</button>
               <button class="tool-btn" data-tool="scale" type="button" title="Measure a known length">Measure</button>
             </div>
           </aside>
