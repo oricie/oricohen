@@ -307,3 +307,62 @@ export function snapIntoPolygons(pt, polys, inset = 0.25) {
     moved: true,
   };
 }
+
+// The four corners of an item's footprint, in plan coordinates.
+export function footprintCorners(centre, w, d, rot = 0) {
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  const hw = w / 2;
+  const hd = d / 2;
+  return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([lx, ly]) => ({
+    x: centre.x + lx * c - ly * s,
+    y: centre.y + lx * s + ly * c,
+  }));
+}
+
+// Slide a piece of furniture until its whole footprint sits inside a room,
+// not just its centre. Snapping the centre alone leaves half a bed poking
+// through the wall.
+export function fitInsidePolygons(centre, w, d, rot, polys, margin = 0.03) {
+  if (!polys || !polys.length) return { point: centre, moved: false, fits: true };
+
+  // work against the room the piece is in, or the nearest one
+  let room = polys.find((poly) => pointInPolygon(centre, poly));
+  let point = { ...centre };
+  if (!room) {
+    const snapped = snapIntoPolygons(centre, polys, 0.3);
+    point = snapped.point;
+    room = polys.find((poly) => pointInPolygon(point, poly)) || polys[0];
+  }
+
+  let moved = point.x !== centre.x || point.y !== centre.y;
+  for (let pass = 0; pass < 12; pass++) {
+    const corners = footprintCorners(point, w, d, rot);
+    let push = { x: 0, y: 0 };
+    let worst = 0;
+
+    for (const corner of corners) {
+      if (pointInPolygon(corner, room)) continue;
+      let best = null;
+      let bestDist = Infinity;
+      for (let i = 0; i < room.length; i++) {
+        const a = { x: room[i][0], y: room[i][1] };
+        const b = { x: room[(i + 1) % room.length][0], y: room[(i + 1) % room.length][1] };
+        const hit = closestOnSegment(corner, a, b);
+        if (hit.dist < bestDist) { bestDist = hit.dist; best = hit.point; }
+      }
+      if (!best) continue;
+      const away = sub(best, corner);
+      if (bestDist > worst) { worst = bestDist; push = away; }
+    }
+
+    if (worst < 1e-4) return { point, moved, fits: true };
+    const step = add(push, mul(norm(push), margin));
+    point = add(point, step);
+    moved = true;
+  }
+
+  // too big for the room: sit it in the middle and say so
+  const centreOfRoom = polygonCentroid(room);
+  return { point: centreOfRoom, moved: true, fits: false };
+}

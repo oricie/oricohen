@@ -4,7 +4,7 @@ import { Editor } from './editor.js';
 import { Viewer } from './viewer.js';
 import { trace, DEFAULT_OPTIONS } from './tracer.js';
 import { autoFurnish } from './builder.js';
-import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, snapIntoPolygons, levelAt, clamp, uid } from './geom.js';
+import { polygonArea, polygonBounds, polygonCentroid, pointInPolygon, snapIntoPolygons, fitInsidePolygons, levelAt, clamp, uid } from './geom.js';
 import * as textures from './textures.js';
 import * as furniture from './furniture.js';
 import { sampleFloorPlan } from './sample.js';
@@ -82,7 +82,8 @@ viewer.onPick = (selection, additive) => {
 };
 
 viewer.onPlace = (type, x, y, level) => {
-  const spot = keepInside({ x, y }, level);
+  const probe = { type, rot: 0 };
+  const spot = keepInside({ x, y }, level, probe);
   const item = { id: uid('f'), type, x: spot.point.x, y: spot.point.y, rot: 0, level };
   state.plan.items.push(item);
   viewer.placing = null;
@@ -97,17 +98,35 @@ viewer.onPlace = (type, x, y, level) => {
   renderSelection();
   renderStats();
   scheduleAutosave();
-  toast(spot.moved
-    ? `${furniture.spec(type).label} dropped outside the flat — moved it into the nearest room`
-    : `${furniture.spec(type).label} placed — drag it, ring turns it, corners resize it`);
+  toast(!spot.fits
+    ? `${furniture.spec(type).label} is bigger than that room — placed it in the middle anyway`
+    : spot.moved
+      ? `${furniture.spec(type).label} moved inside the walls`
+      : `${furniture.spec(type).label} placed — drag it, ring turns it, corners resize it`);
 };
 
-// Furniture belongs in the rooms, not on the lawn.
-function keepInside(point, level) {
+// Furniture belongs inside the rooms, and belongs there whole: the footprint
+// is what gets fitted, so nothing hangs through a wall.
+function keepInside(point, level, item) {
+  if (!$('#toggle-contain').checked) return { point, moved: false, fits: true };
   const polys = (state.plan.rooms || [])
     .filter((r) => (r.level || 0) === (level || 0))
     .map((r) => r.poly);
-  return snapIntoPolygons(point, polys, 0.3);
+  if (!polys.length) return { point, moved: false, fits: true };
+  if (!item) return snapIntoPolygons(point, polys, 0.3);
+  const size = furniture.footprint(item) || { w: 0.6, d: 0.6 };
+  return fitInsidePolygons(point, size.w, size.d, item.rot || 0, polys);
+}
+
+// Re-seat every piece, after auto-furnishing or an instruction.
+function containAll() {
+  if (!$('#toggle-contain').checked) return 0;
+  let moved = 0;
+  for (const item of state.plan.items || []) {
+    const spot = keepInside({ x: item.x, y: item.y }, item.level || 0, item);
+    if (spot.moved) { item.x = spot.point.x; item.y = spot.point.y; moved++; }
+  }
+  return moved;
 }
 
 // The gizmo only makes sense for exactly one piece of furniture.
@@ -129,14 +148,8 @@ viewer.onItemChange = (id, change) => {
   if (!item) return;
   const level = item.level || 0;
   const offset = (state.plan.levelOffsets || {})[level] || { dx: 0, dy: 0 };
-  if (change.x !== undefined && change.y !== undefined) {
-    const spot = keepInside(
-      { x: change.x - (offset.dx || 0), y: change.y - (offset.dy || 0) }, level
-    );
-    item.x = spot.point.x;
-    item.y = spot.point.y;
-    if (spot.moved) toast('Kept it inside the flat');
-  }
+  if (change.x !== undefined) item.x = change.x - (offset.dx || 0);
+  if (change.y !== undefined) item.y = change.y - (offset.dy || 0);
   if (change.rot !== undefined) item.rot = change.rot;
   if (change.scale !== undefined) {
     if (item.fit) {
@@ -146,6 +159,12 @@ viewer.onItemChange = (id, change) => {
       item.scale = change.scale;
     }
   }
+  // turning or resizing can push a piece through a wall as surely as moving it
+  const spot = keepInside({ x: item.x, y: item.y }, level, item);
+  item.x = spot.point.x;
+  item.y = spot.point.y;
+  if (spot.moved) toast(spot.fits ? 'Kept it inside the walls' : 'That piece is bigger than the room');
+
   editor.selection = { kind: 'item', id };
   editor.emit();
   renderSelection();
@@ -196,6 +215,7 @@ function runInstruction() {
   if (!state.sketch) return;
   const result = instruct.apply(state.plan, state.sketch.poly, text, state.sketch.level);
   if (result.done.length) {
+    containAll();
     editor.emit();
     toast(result.done.join(', '));
     closeSketch();
@@ -1269,6 +1289,12 @@ function bindUI() {
     rebuild3D();
   });
   $('#toggle-baseboards').addEventListener('change', rebuild3D);
+  $('#toggle-contain').addEventListener('change', (e) => {
+    if (!e.target.checked) return;
+    const moved = containAll();
+    editor.emit();
+    toast(moved ? `Moved ${moved} piece${moved > 1 ? 's' : ''} back inside the walls` : 'Everything is already inside');
+  });
   $('#toggle-dimensions').addEventListener('change', (e) => viewer.showDimensions(e.target.checked, state.plan));
   $('#toggle-ceiling').addEventListener('change', (e) => viewer.toggleCeiling(e.target.checked));
   $('#toggle-night').addEventListener('change', (e) => viewer.setNight(e.target.checked));
@@ -1281,6 +1307,7 @@ function bindUI() {
   $('#btn-furnish').addEventListener('click', () => {
     if (!state.plan.rooms.length) return toast('Detect or draw some rooms first');
     state.plan.items = autoFurnish(state.plan);
+    containAll();
     editor.emit();
     if (state.plan.items.length) {
       toast(`Placed ${state.plan.items.length} pieces from the room names`);
