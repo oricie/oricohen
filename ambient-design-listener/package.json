@@ -1,0 +1,20 @@
+{
+  "name": "ambient-design-listener",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ambient agent that watches Slack for design-relevant issues and surfaces them back into Slack. Notify-only.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "simulate": "node simulate.js",
+    "simulate:live": "node simulate.js --live"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.0",
+    "@slack/bolt": "^4.2.0",
+    "dotenv": "^16.4.5",
+    "zod": "^4.0.0"
+  },
+  "engines": { "node": ">=20" }
+}
