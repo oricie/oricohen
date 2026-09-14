@@ -1,0 +1,128 @@
+/* ── Grid version ───────────────────────────────────────── */
+:root {
+  --ink:        #141414;
+  --ink-2:      #4a4a4a;
+  --ink-3:      #6e6e6e;
+  --rule:       #dcdcdc;
+  --rule-heavy: #141414;
+  --bg:         #fbfbfb;
+  --paper:      #ffffff;
+  --sans:       -apple-system, BlinkMacSystemFont, "Segoe UI", Inter,
+                Helvetica, Arial, sans-serif;
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Shared micro-label ─────────────────────────────────── */
+.col-label,
+nav a,
+footer {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Nav ────────────────────────────────────────────────── */
+nav {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.wordmark {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 48px 40px 96px;
+  text-align: center;
+}
+
+.col-label {
+  color: var(--ink-3);
+  padding-bottom: 18px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+h1 {
+  font-size: 40px;
+  font-weight: 650;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin-bottom: 28px;
+}
+
+.bio p {
+  color: var(--ink-2);
+  margin-bottom: 18px;
+  max-width: 60ch;
+  margin-inline: auto;
+}
+
+.bio p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.bio-list {
+  list-style: none;
+  margin-top: 28px;
+  max-width: 34ch;
+  margin-inline: auto;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+
+.bio-list li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.bio-list li .icon {
+  font-size: 15px;
+  text-align: center;
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+footer {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 40px 48px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--rule);
+  text-align: center;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+  nav    { padding: 16px 24px; gap: 16px; }
+  main   { padding: 32px 24px 64px; }
+  footer { padding: 20px 24px 40px; }
+
+  h1 { font-size: 30px; }
+}

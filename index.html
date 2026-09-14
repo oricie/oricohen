@@ -5,16 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ori Cohen</title>
   <link rel="stylesheet" href="styles.css" />
+  <link id="theme-css" rel="stylesheet" href="themes/serif.css" />
+  <script>
+    /* Pick the saved version before first paint, to avoid a flash. */
+    (function () {
+      try {
+        var v = localStorage.getItem('oc-version');
+        if (v === 'grid' || v === 'serif') {
+          document.getElementById('theme-css').href = 'themes/' + v + '.css';
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <nav>
-    <a href="index.html" class="active">Home</a>
-    <a href="about.html">About</a>
-    <a href="work.html">Work</a>
+    <a href="index.html" class="wordmark">Ori Cohen</a>
+    <div class="version-switch" role="group" aria-label="Design version">
+      <button type="button" data-version="serif">Serif</button>
+      <button type="button" data-version="grid">Grid</button>
+    </div>
   </nav>
 
   <main>
-    <div class="profile-photo-placeholder">photo</div>
+    <figure class="banner">
+      <img src="images/profile.jpg" alt="Ori Cohen" />
+    </figure>
+
+    <div class="col-label">01 / Introduction</div>
 
     <h1>Hi! I'm Ori Cohen.</h1>
 
@@ -45,5 +63,6 @@
   </main>
 
   <footer>Built with love in Tel-aviv and Freiburg</footer>
+  <script src="theme.js"></script>
 </body>
 </html>
