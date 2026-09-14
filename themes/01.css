@@ -1,4 +1,6 @@
-/* ── Grid version ───────────────────────────────────────── */
+/* ── Version 01 ─────────────────────────────────────────────
+   Sans-only, grey scale, left-aligned, hairline rules.
+   ───────────────────────────────────────────────────────── */
 :root {
   --ink:        #141414;
   --ink-2:      #4a4a4a;
@@ -52,7 +54,6 @@ main {
   max-width: 760px;
   margin: 0 auto;
   padding: 48px 40px 96px;
-  text-align: center;
 }
 
 .col-label {
@@ -73,8 +74,7 @@ h1 {
 .bio p {
   color: var(--ink-2);
   margin-bottom: 18px;
-  max-width: 60ch;
-  margin-inline: auto;
+  max-width: 62ch;
 }
 
 .bio p strong {
@@ -85,10 +85,8 @@ h1 {
 .bio-list {
   list-style: none;
   margin-top: 28px;
-  max-width: 34ch;
-  margin-inline: auto;
+  max-width: 62ch;
   border-top: 1px solid var(--rule);
-  text-align: left;
 }
 
 .bio-list li {
@@ -115,7 +113,6 @@ footer {
   padding: 24px 40px 48px;
   color: var(--ink-3);
   border-top: 1px solid var(--rule);
-  text-align: center;
 }
 
 /* ── Responsive ─────────────────────────────────────────── */

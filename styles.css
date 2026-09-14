@@ -17,9 +17,7 @@ body {
   position: relative;
   /* Breaks out wider than the text column, so the rectangle reads as wide
      even at the 400px height ceiling. */
-  width: min(94vw, 980px);
-  margin-left: 50%;
-  transform: translateX(-50%);
+  width: 100%;
   height: clamp(200px, 34vw, 400px);
   margin-bottom: 44px;
   border-radius: 28px;
@@ -60,7 +58,7 @@ body {
 }
 
 .banner:hover {
-  transform: translateX(-50%) translateY(-3px);
+  transform: translateY(-3px);
   box-shadow: 0 18px 44px -18px rgba(0, 0, 0, 0.32);
 }
 
@@ -84,19 +82,22 @@ body {
   .banner img,
   .banner::after { transition: none; }
 
-  .banner:hover { transform: translateX(-50%); }
+  .banner:hover { transform: none; }
   .banner:hover img { transform: none; }
   .banner:hover::after { opacity: 0; }
 }
 
-/* ── Version switcher ───────────────────────────────────── */
+/* ── Version switcher ───────────────────────────────────────
+   Buttons are rendered by theme.js from its VERSIONS list, so
+   adding a version means adding a file and one array entry.
+   ───────────────────────────────────────────────────────── */
 .version-switch {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.02);
   flex: none;
@@ -105,16 +106,16 @@ body {
 .version-switch button {
   font: inherit;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #8a8a8a;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  color: #9a9a9a;
   background: none;
   border: 0;
   border-radius: 999px;
-  padding: 4px 11px;
+  padding: 5px 13px;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .version-switch button:hover { color: #1a1a1a; }
@@ -130,5 +131,5 @@ body {
 }
 
 @media (max-width: 600px) {
-  .version-switch button { padding: 4px 8px; }
+  .version-switch button { padding: 5px 10px; }
 }
