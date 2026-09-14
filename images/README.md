@@ -1,6 +1,6 @@
 # images
 
-Drop the profile photo here as `profile.jpg` (or `.png`, updating the
+Drop the profile photo here as `01.jpeg` (or `.png`, updating the
 `<img src>` in `index.html` to match).
 
 The banner crops to a wide rectangle with `object-fit: cover` and
