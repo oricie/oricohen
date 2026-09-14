@@ -220,22 +220,21 @@ body {
 }
 
 .sheet-eyebrow {
-  font-size: 15.5px;
+  font-size: 17px;
   color: #a6a6a6;
   margin-bottom: 2px;
 }
 
 .sheet h2 {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  line-height: 1.2;
-  margin-bottom: 18px;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.45;
+  margin-bottom: 20px;
 }
 
 .sheet-body p {
-  font-size: 15.5px;
-  line-height: 1.65;
+  font-size: 17px;
+  line-height: 1.6;
   color: #222;
   max-width: 62ch;
   margin-bottom: 16px;
