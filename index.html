@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ori Cohen</title>
   <link rel="stylesheet" href="styles.css" />
-  <link id="theme-css" rel="stylesheet" href="themes/01.css" />
+  <link id="theme-css" rel="stylesheet" href="themes/serif.css" />
   <script>
-    /* Apply the remembered version before first paint, to avoid a flash. */
+    /* Pick the saved version before first paint, to avoid a flash. */
     (function () {
       try {
         var v = localStorage.getItem('oc-version');
-        if (/^\d{2}$/.test(v)) {
+        if (v === 'grid' || v === 'serif') {
           document.getElementById('theme-css').href = 'themes/' + v + '.css';
         }
       } catch (e) {}
@@ -21,7 +21,10 @@
 <body>
   <nav>
     <a href="index.html" class="wordmark">Ori Cohen</a>
-    <div class="version-switch" role="group" aria-label="Design version"></div>
+    <div class="version-switch" role="group" aria-label="Design version">
+      <button type="button" data-version="serif">Serif</button>
+      <button type="button" data-version="grid">Grid</button>
+    </div>
   </nav>
 
   <main>
@@ -29,7 +32,7 @@
       <img src="images/profile.jpg" alt="Ori Cohen" />
     </figure>
 
-    <div class="col-label">Introduction</div>
+    <div class="col-label">01 / Introduction</div>
 
     <h1>Hi! I'm Ori Cohen.</h1>
 

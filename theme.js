@@ -1,55 +1,45 @@
-/* Version switcher.
- *
- * To add a new design version:
- *   1. drop the stylesheet in as themes/02.css (then 03, 04 …)
- *   2. add its number to VERSIONS below
- *   3. optionally set LATEST to it, to make it the default for new visitors
- *
- * Nothing else changes: the pills, the switching and the remembered
- * choice all follow from that list.
- */
+/* Version switcher. Swaps the theme stylesheet and remembers the choice.
+   No build step, no framework — one <link> href and a localStorage key. */
 (function () {
-  var VERSIONS = ['01'];
-  var LATEST = VERSIONS[VERSIONS.length - 1];
   var KEY = 'oc-version';
+  var VERSIONS = ['serif', 'grid'];
+  var DEFAULT = 'serif';
 
-  var mount = document.querySelector('.version-switch');
-  if (!mount) return;
-
-  function stored() {
+  function read() {
     try {
       var v = localStorage.getItem(KEY);
-      return VERSIONS.indexOf(v) > -1 ? v : LATEST;
+      return VERSIONS.indexOf(v) > -1 ? v : DEFAULT;
     } catch (e) {
-      return LATEST;
+      return DEFAULT;
     }
   }
 
-  function apply(version, persist) {
+  function apply(name, persist) {
     var link = document.getElementById('theme-css');
-    if (link) link.href = 'themes/' + version + '.css';
+    if (link) link.href = 'themes/' + name + '.css';
 
-    var buttons = mount.querySelectorAll('button');
+    var buttons = document.querySelectorAll('.version-switch button');
     for (var i = 0; i < buttons.length; i++) {
-      var on = buttons[i].value === version;
+      var on = buttons[i].getAttribute('data-version') === name;
       buttons[i].classList.toggle('is-active', on);
       buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
     if (persist) {
-      try { localStorage.setItem(KEY, version); } catch (e) {}
+      try { localStorage.setItem(KEY, name); } catch (e) {}
     }
   }
 
-  VERSIONS.forEach(function (version) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.value = version;
-    b.textContent = version;
-    b.setAttribute('aria-label', 'Version ' + version);
-    b.addEventListener('click', function () { apply(version, true); });
-    mount.appendChild(b);
-  });
+  apply(read(), false);
 
-  apply(stored(), false);
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    while (el && el !== document) {
+      if (el.tagName === 'BUTTON' && el.getAttribute('data-version')) {
+        apply(el.getAttribute('data-version'), true);
+        return;
+      }
+      el = el.parentNode;
+    }
+  });
 })();

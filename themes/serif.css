@@ -1,0 +1,96 @@
+/* ── Serif version ──────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+/* Not used in this version — the grid version's section marker. */
+.col-label { display: none; }
+
+/* ── Nav ────────────────────────────────────────────────── */
+nav {
+  padding: 24px 48px;
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+.wordmark {
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 17px;
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 48px 120px;
+  text-align: center;
+}
+
+h1 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  margin-bottom: 32px;
+}
+
+.bio p {
+  margin-bottom: 20px;
+  font-size: 15.5px;
+  color: #222;
+  max-width: 60ch;
+  margin-inline: auto;
+}
+
+.bio-list {
+  list-style: none;
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.bio-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15.5px;
+  color: #222;
+}
+
+.bio-list li .icon {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+  color: #555;
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+footer {
+  padding: 32px 48px;
+  font-size: 13px;
+  color: #bbb;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+  nav    { padding: 20px 24px; gap: 16px; }
+  main   { padding: 24px 24px 80px; }
+  footer { padding: 24px; }
+
+  h1 { font-size: 34px; }
+}
