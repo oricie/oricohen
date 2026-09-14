@@ -31,7 +31,10 @@
       <img src="images/01.jpeg" alt="Ori Cohen" />
     </figure>
 
-    <h1>Hi! I'm Ori Cohen.</h1>
+    <header class="intro">
+      <h1>Hi! I'm Ori Cohen.</h1>
+      <p class="tagline">Leading design at Jedox.</p>
+    </header>
 
     <div class="bio">
       <p>
@@ -57,9 +60,118 @@
         </li>
       </ul>
     </div>
+
+    <section class="work" aria-labelledby="work-heading">
+      <h2 id="work-heading">Selected Work</h2>
+      <p class="work-note">
+        Most of what I do lives behind NDAs — reach out if you'd like to talk through specifics.
+      </p>
+
+      <ul class="work-list">
+        <li class="work-item">
+          <button type="button" class="work-card" style="--panel: #e7e9fd">
+            <span class="work-head">
+              <span class="work-title">Design System at Scale</span>
+              <span class="work-sub">Jedox</span>
+            </span>
+            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              Building a shared design language across multiple product teams in an
+              enterprise BI platform.
+            </p>
+            <p>
+              The work spans component architecture, contribution models and the
+              governance that keeps a system usable once more than one team depends
+              on it.
+            </p>
+          </template>
+        </li>
+
+        <li class="work-item">
+          <button type="button" class="work-card" style="--panel: #e6f5ec">
+            <span class="work-head">
+              <span class="work-title">AI-Driven Product Features</span>
+              <span class="work-sub">Jedox</span>
+            </span>
+            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              Leading UX for new AI capabilities embedded in planning and reporting
+              workflows.
+            </p>
+            <p>
+              The design question is less about the model and more about trust:
+              where a suggestion appears, how much it explains itself, and what it
+              costs to undo.
+            </p>
+          </template>
+        </li>
+
+        <li class="work-item">
+          <button type="button" class="work-card" style="--panel: #fdf1e3">
+            <span class="work-head">
+              <span class="work-title">Enterprise UX in Motion</span>
+              <span class="work-sub">Volkswagen</span>
+            </span>
+            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              Designing internal tools and experiences for one of the world's largest
+              automotive groups.
+            </p>
+            <p>
+              Highly structured environment, long timelines, and users who live in
+              these tools every working day.
+            </p>
+          </template>
+        </li>
+
+        <li class="work-item">
+          <button type="button" class="work-card" style="--panel: #f0ecfa">
+            <span class="work-head">
+              <span class="work-title">Cross-Functional Design Operations</span>
+              <span class="work-sub">SAP</span>
+            </span>
+            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              Embedding design into agile delivery and aligning teams across complex
+              org structures.
+            </p>
+            <p>
+              Most of the leverage came from process and rituals rather than from
+              artefacts.
+            </p>
+          </template>
+        </li>
+      </ul>
+    </section>
   </main>
 
   <footer>Built with love in Tel-aviv and Freiburg</footer>
+
+  <dialog class="sheet" aria-labelledby="sheet-title">
+    <div class="sheet-panel">
+      <div class="sheet-grabber" aria-hidden="true"></div>
+      <button type="button" class="sheet-close" aria-label="Close">×</button>
+      <div class="sheet-scroll">
+        <p class="sheet-eyebrow"></p>
+        <h2 id="sheet-title"></h2>
+        <div class="sheet-body"></div>
+      </div>
+    </div>
+  </dialog>
+
   <script src="theme.js"></script>
+  <script src="sheet.js"></script>
 </body>
 </html>
