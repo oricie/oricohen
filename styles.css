@@ -37,7 +37,7 @@ body {
   object-fit: cover;
   /* Keeps a head-and-shoulders portrait framed on the face when the
      source is cropped to a wide rectangle. */
-  object-position: center 14%;
+  object-position: center 28%;
   transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
