@@ -12,20 +12,11 @@
 }
 
 body {
-  font-family: var(--sans);
-  background: var(--bg);
-  color: var(--ink);
-  font-size: 15px;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ── Shared micro-label ─────────────────────────────────── */
-nav a,
-footer {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 16px;
+  line-height: 1.65;
 }
 
 /* ── Nav ────────────────────────────────────────────────── */
@@ -54,17 +45,18 @@ main {
 }
 
 h1 {
-  font-size: 40px;
-  font-weight: 650;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-  margin-bottom: 28px;
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  margin-bottom: 32px;
 }
 
 .bio p {
-  color: var(--ink-2);
-  margin-bottom: 18px;
-  max-width: 62ch;
+  margin-bottom: 20px;
+  font-size: 15.5px;
+  color: #222;
+  max-width: 680px;
 }
 
 .bio p strong {
@@ -74,35 +66,33 @@ h1 {
 
 .bio-list {
   list-style: none;
-  margin-top: 28px;
-  max-width: 62ch;
-  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .bio-list li {
-  display: grid;
-  grid-template-columns: 32px 1fr;
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--rule);
-  color: var(--ink-2);
+  font-size: 15.5px;
+  color: #222;
 }
 
 .bio-list li .icon {
-  font-size: 15px;
+  font-size: 20px;
+  width: 28px;
   text-align: center;
-  filter: grayscale(1);
-  opacity: 0.7;
+  color: #555;
 }
 
 /* ── Footer ─────────────────────────────────────────────── */
 footer {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px 40px 48px;
-  color: var(--ink-3);
-  border-top: 1px solid var(--rule);
+  padding: 32px 48px;
+  font-size: 13px;
+  color: #bbb;
+  font-style: italic;
 }
 
 /* ── Responsive ─────────────────────────────────────────── */
@@ -111,5 +101,5 @@ footer {
   main   { padding: 32px 24px 64px; }
   footer { padding: 20px 24px 40px; }
 
-  h1 { font-size: 30px; }
+  h1 { font-size: 36px; }
 }
