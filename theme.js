@@ -2,8 +2,8 @@
    No build step, no framework — one <link> href and a localStorage key. */
 (function () {
   var KEY = 'oc-version';
-  var VERSIONS = ['serif', 'grid'];
-  var DEFAULT = 'serif';
+  var VERSIONS = ['grid'];
+  var DEFAULT = 'grid';
 
   function read() {
     try {

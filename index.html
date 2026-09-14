@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ori Cohen</title>
   <link rel="stylesheet" href="styles.css" />
-  <link id="theme-css" rel="stylesheet" href="themes/serif.css" />
+  <link id="theme-css" rel="stylesheet" href="themes/grid.css" />
   <script>
     /* Pick the saved version before first paint, to avoid a flash. */
     (function () {
       try {
         var v = localStorage.getItem('oc-version');
-        if (v === 'grid' || v === 'serif') {
+        if (v === 'grid') {
           document.getElementById('theme-css').href = 'themes/' + v + '.css';
         }
       } catch (e) {}
@@ -22,7 +22,6 @@
   <nav>
     <a href="index.html" class="wordmark">Ori Cohen</a>
     <div class="version-switch" role="group" aria-label="Design version">
-      <button type="button" data-version="serif">Serif</button>
       <button type="button" data-version="grid">Grid</button>
     </div>
   </nav>
