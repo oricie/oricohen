@@ -51,14 +51,17 @@
         Most of what I do lives behind NDAs — reach out if you'd like to talk through specifics.
       </p>
 
-      <ul class="work-list">
-        <li class="work-item">
-          <button type="button" class="work-card" style="--panel: #e7e9fd">
-            <span class="work-head">
-              <span class="work-title">Design System at Scale</span>
-              <span class="work-sub">Jedox</span>
+      <ul class="work-stack" tabindex="0" role="listbox"
+          aria-label="Projects — drag or scroll sideways, click to read">
+        <li class="work-item" style="--panel: #e7e9fd">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">Design System at Scale</span>
+                <span class="work-sub">Jedox</span>
+              </span>
+              <span class="work-screen" aria-hidden="true"></span>
             </span>
-            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
             <span class="work-open" aria-hidden="true">↗</span>
           </button>
           <template>
@@ -74,13 +77,15 @@
           </template>
         </li>
 
-        <li class="work-item">
-          <button type="button" class="work-card" style="--panel: #e6f5ec">
-            <span class="work-head">
-              <span class="work-title">AI-Driven Product Features</span>
-              <span class="work-sub">Jedox</span>
+        <li class="work-item" style="--panel: #e6f5ec">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">AI-Driven Product Features</span>
+                <span class="work-sub">Jedox</span>
+              </span>
+              <span class="work-screen" aria-hidden="true"></span>
             </span>
-            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
             <span class="work-open" aria-hidden="true">↗</span>
           </button>
           <template>
@@ -96,13 +101,15 @@
           </template>
         </li>
 
-        <li class="work-item">
-          <button type="button" class="work-card" style="--panel: #fdf1e3">
-            <span class="work-head">
-              <span class="work-title">Enterprise UX in Motion</span>
-              <span class="work-sub">Volkswagen</span>
+        <li class="work-item" style="--panel: #fdf1e3">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">Enterprise UX in Motion</span>
+                <span class="work-sub">Volkswagen</span>
+              </span>
+              <span class="work-screen" aria-hidden="true"></span>
             </span>
-            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
             <span class="work-open" aria-hidden="true">↗</span>
           </button>
           <template>
@@ -117,13 +124,15 @@
           </template>
         </li>
 
-        <li class="work-item">
-          <button type="button" class="work-card" style="--panel: #f0ecfa">
-            <span class="work-head">
-              <span class="work-title">Cross-Functional Design Operations</span>
-              <span class="work-sub">SAP</span>
+        <li class="work-item" style="--panel: #f0ecfa">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">Cross-Functional Design Operations</span>
+                <span class="work-sub">SAP</span>
+              </span>
+              <span class="work-screen" aria-hidden="true"></span>
             </span>
-            <span class="work-panel"><span class="work-screen" aria-hidden="true"></span></span>
             <span class="work-open" aria-hidden="true">↗</span>
           </button>
           <template>
@@ -155,6 +164,7 @@
     </div>
   </dialog>
 
+  <script src="stack.js"></script>
   <script src="sheet.js"></script>
 </body>
 </html>

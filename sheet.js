@@ -19,7 +19,8 @@
    * come from the template's data attributes, or from the card's own head. */
   function findTemplate(trigger) {
     for (var el = trigger; el && el !== document.body; el = el.parentNode) {
-      var tpl = el.parentNode && el.parentNode.querySelector(':scope > template');
+      if (!el.querySelector) continue;
+      var tpl = el.querySelector(':scope > template');
       if (tpl) return tpl;
     }
     return null;
@@ -63,7 +64,7 @@
   }
 
   document.addEventListener('click', function (e) {
-    var trigger = e.target.closest && e.target.closest('.work-card, .read-more');
+    var trigger = e.target.closest && e.target.closest('.work-card, .work-item, .read-more');
     if (trigger) { open(trigger); return; }
 
     if (e.target.closest && e.target.closest('.sheet-close')) { close(); return; }
