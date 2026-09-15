@@ -1,5 +1,5 @@
-/* iOS-style sheet. Clicking a work card opens its content in a sheet that
- * slides up from the bottom — no navigation, no second page.
+/* iOS-style sheet. A work card or the "Read more" link opens its content
+ * in a sheet that slides up from the bottom — no navigation, no second page.
  *
  * Built on <dialog> so focus trapping, Esc and inertness come from the
  * platform; the CSS only handles how it moves.
@@ -14,10 +14,26 @@
   var body = sheet.querySelector('.sheet-body');
   var closing = false;
 
-  function open(card) {
-    var tpl = card.parentNode.querySelector('template');
-    eyebrow.textContent = card.querySelector('.work-sub').textContent;
-    title.textContent = card.querySelector('.work-title').textContent;
+  /* A trigger's content is the nearest <template> above it in the tree —
+   * a card's sits beside the button, the bio's beside the paragraph. Titles
+   * come from the template's data attributes, or from the card's own head. */
+  function findTemplate(trigger) {
+    for (var el = trigger; el && el !== document.body; el = el.parentNode) {
+      var tpl = el.parentNode && el.parentNode.querySelector(':scope > template');
+      if (tpl) return tpl;
+    }
+    return null;
+  }
+
+  function open(trigger) {
+    var tpl = findTemplate(trigger);
+    if (!tpl) return;
+
+    var head = trigger.querySelector('.work-title');
+    eyebrow.textContent = tpl.dataset.eyebrow ||
+      (trigger.querySelector('.work-sub') || {}).textContent || '';
+    title.textContent = tpl.dataset.title || (head ? head.textContent : '');
+
     body.replaceChildren(tpl.content.cloneNode(true));
     sheet.querySelector('.sheet-scroll').scrollTop = 0;
 
@@ -47,8 +63,8 @@
   }
 
   document.addEventListener('click', function (e) {
-    var card = e.target.closest && e.target.closest('.work-card');
-    if (card) { open(card); return; }
+    var trigger = e.target.closest && e.target.closest('.work-card, .read-more');
+    if (trigger) { open(trigger); return; }
 
     if (e.target.closest && e.target.closest('.sheet-close')) { close(); return; }
 

@@ -56,6 +56,28 @@ h1 {
   max-width: var(--measure);
 }
 
+.read-more {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: 2px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: #c9c9c9;
+  cursor: pointer;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.read-more:hover { text-decoration-color: var(--ink); }
+
+.read-more:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
 .bio-list {
   list-style: none;
   margin-top: 8px;

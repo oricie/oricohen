@@ -121,8 +121,8 @@ body {
   position: absolute;
   left: 0;
   right: 0;
+  top: 44px;          /* the strip of page left visible above an iOS sheet */
   bottom: 0;
-  max-height: 92%;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -172,7 +172,13 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 28px 40px 56px;
+  padding: 28px 24px 64px;
+}
+
+/* The panel spans the window; the reading column does not. */
+.sheet-scroll > * {
+  max-width: 680px;
+  margin-inline: auto;
 }
 
 .sheet-eyebrow {
@@ -201,19 +207,6 @@ body {
 /* Keep the page still behind the sheet. */
 body.sheet-open { overflow: hidden; }
 
-@media (min-width: 700px) {
-  .sheet-panel {
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(680px, calc(100% - 48px));
-    bottom: 24px;
-    max-height: calc(100% - 72px);
-    border-radius: 20px;
-  }
-
-  .sheet-scroll { padding: 32px 44px 44px; }
-}
-
 @keyframes sheet-up {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
@@ -222,18 +215,6 @@ body.sheet-open { overflow: hidden; }
 @keyframes sheet-down {
   from { transform: translateY(0); }
   to   { transform: translateY(100%); }
-}
-
-@media (min-width: 700px) {
-  @keyframes sheet-up {
-    from { transform: translate(-50%, calc(100% + 24px)); }
-    to   { transform: translate(-50%, 0); }
-  }
-
-  @keyframes sheet-down {
-    from { transform: translate(-50%, 0); }
-    to   { transform: translate(-50%, calc(100% + 24px)); }
-  }
 }
 
 @keyframes sheet-fade {
