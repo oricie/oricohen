@@ -40,15 +40,22 @@
 
     document.body.classList.add('sheet-open');
     sheet.showModal();
+
+    // Restart the slide now that the panel is actually rendered.
+    sheet.classList.remove('is-opening');
+    void panel.offsetWidth;
+    sheet.classList.add('is-opening');
   }
 
   function close() {
     if (closing) return;
     closing = true;
+    sheet.classList.remove('is-opening');
     sheet.classList.add('is-closing');
 
     var done = function () {
       sheet.classList.remove('is-closing');
+      sheet.classList.remove('is-opening');
       document.body.classList.remove('sheet-open');
       closing = false;
       sheet.close();

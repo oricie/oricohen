@@ -110,6 +110,9 @@ body {
   background: rgba(0, 0, 0, 0.35);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
+}
+
+.sheet.is-opening::backdrop {
   animation: sheet-fade 0.35s ease both;
 }
 
@@ -128,7 +131,17 @@ body {
   background: #fff;
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -12px 50px -12px rgba(0, 0, 0, 0.28);
+  transform: translateY(100%);
+}
+
+/* Added a frame after showModal(), so the slide starts from a rendered
+   element rather than from inside a display:none dialog. */
+.sheet.is-opening .sheet-panel {
   animation: sheet-up 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.sheet[open]:not(.is-opening):not(.is-closing) .sheet-panel {
+  transform: translateY(0);
 }
 
 .sheet.is-closing .sheet-panel {
