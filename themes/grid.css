@@ -223,7 +223,9 @@ h1 {
 
 /* ── Footer ─────────────────────────────────────────────── */
 footer {
-  padding: 72px 48px 40px;
+  max-width: 760px;      /* same container as main, so it lines up with the text */
+  margin: 0 auto;
+  padding: 72px 40px 40px;
   font-size: 13px;
   color: #bbb;
   font-style: italic;
