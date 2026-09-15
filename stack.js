@@ -60,11 +60,74 @@
   function front() { return cards[index]; }
 
   /* ── View ─────────────────────────────────────────────── */
+
+  /* Stack and grid are different layouts, so the cards cannot simply
+   * transition between them. Measure where each card is, switch the
+   * layout, measure again, then play the difference back as one eased
+   * move (a FLIP). */
+  function morph(apply) {
+    var reduce = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduce) { apply(); return; }
+
+    var first = cards.map(function (c) { return c.getBoundingClientRect(); });
+    apply();
+    var last = cards.map(function (c) { return c.getBoundingClientRect(); });
+
+    cards.forEach(function (card, i) {
+      var a = first[i], b = last[i];
+      if (!a.width || !b.width) return;
+
+      var dx = a.left - b.left;
+      var dy = a.top - b.top;
+      var sx = a.width / b.width;
+      var sy = a.height / b.height;
+      if (!dx && !dy && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) return;
+
+      card.style.transition = 'none';
+      card.style.transformOrigin = 'top left';
+      card.style.transform =
+        'translate(' + dx + 'px,' + dy + 'px) scale(' + sx + ',' + sy + ')';
+    });
+
+    // One reflow, then let every card travel home together.
+    void stack.offsetWidth;
+
+    cards.forEach(function (card) {
+      if (card.style.transform === '') return;
+      card.style.transition = 'transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      card.style.transform = '';
+
+      card.addEventListener('transitionend', function handler(e) {
+        if (e.propertyName !== 'transform') return;
+        card.removeEventListener('transitionend', handler);
+        card.style.transition = '';
+        card.style.transformOrigin = '';
+        if (view === 'stack') render();
+      });
+    });
+  }
+
   function setView(next) {
     if (next === view) return;
     view = next;
-    section.classList.toggle('is-grid', view === 'grid');
 
+    morph(function () {
+      section.classList.toggle('is-grid', view === 'grid');
+      applyView();
+    });
+
+    if (toggle) {
+      toggle.querySelectorAll('.view-btn').forEach(function (b) {
+        var on = b.dataset.view === view;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+  }
+
+  function applyView() {
     if (view === 'grid') {
       // Hand every card back to the grid: no stacking styles left behind.
       cards.forEach(function (card) {
@@ -83,17 +146,6 @@
     } else {
       stack.setAttribute('tabindex', '0');
       render(true);
-      requestAnimationFrame(function () {
-        cards.forEach(function (c) { c.classList.remove('no-transition'); });
-      });
-    }
-
-    if (toggle) {
-      toggle.querySelectorAll('.view-btn').forEach(function (b) {
-        var on = b.dataset.view === view;
-        b.classList.toggle('is-active', on);
-        b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
     }
   }
 

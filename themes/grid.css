@@ -104,26 +104,21 @@ h1 {
 /* ── Stacked / grid toggle ──────────────────────────────── */
 .view-toggle {
   display: flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.02);
+  gap: 10px;
   flex: none;
 }
 
 .view-btn {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
   background: none;
-  color: #9a9a9a;
+  color: #cfcfcf;
   cursor: pointer;
-  transition: color 0.18s ease, background 0.18s ease;
+  transition: color 0.25s ease;
 }
 
 .view-btn svg {
@@ -137,16 +132,14 @@ h1 {
 
 .view-btn[data-view="grid"] svg { fill: currentColor; stroke: none; }
 
-.view-btn:hover { color: var(--ink); }
+.view-btn:hover { color: #9a9a9a; }
 
-.view-btn.is-active {
-  background: var(--ink);
-  color: #fff;
-}
+.view-btn.is-active { color: #767676; }
 
 .view-btn:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+  outline: 2px solid #9a9a9a;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 /* The deck: every card occupies the same box, offset by its depth. */
@@ -211,6 +204,7 @@ h1 {
   height: 100%;
   background: var(--panel, #eef0fb);
   border-radius: 28px;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
   padding: 28px 32px 0;
   overflow: hidden;
   box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
@@ -235,6 +229,7 @@ h1 {
   display: block;
   flex: 1;
   border-radius: 14px 14px 0 0;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
   background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
   box-shadow: 0 18px 40px -16px rgba(20, 20, 40, 0.30),
               0 2px 6px rgba(20, 20, 40, 0.06);
@@ -303,6 +298,10 @@ h1 {
 
 .work.is-grid .work-item:nth-child(3) .work-panel,
 .work.is-grid .work-item:nth-child(4) .work-panel { height: 280px; }
+
+.work.is-grid .work-panel  { border-radius: 8px; }
+.work.is-grid .work-screen { border-radius: 4px 4px 0 0; }
+.work.is-grid .work-open   { border-radius: 6px; }
 
 .work.is-grid .work-card { cursor: pointer; }
 
