@@ -78,27 +78,9 @@ h1 {
   border-radius: 3px;
 }
 
-.bio-list {
-  list-style: none;
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bio-list li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: var(--text);
-  color: var(--ink-2);
-}
-
-.bio-list li .icon {
-  font-size: 20px;
-  width: 28px;
-  text-align: center;
-  color: #555;
+.bio .icon {
+  font-size: 15px;
+  filter: grayscale(0.15);
 }
 
 /* ── Work ───────────────────────────────────────────────── */
