@@ -46,7 +46,30 @@
     </div>
 
     <section class="work" aria-labelledby="work-heading">
-      <h2 id="work-heading">Selected Work</h2>
+      <div class="work-bar">
+        <h2 id="work-heading">Selected Work</h2>
+
+        <div class="view-toggle" role="group" aria-label="Layout">
+          <button type="button" class="view-btn is-active" data-view="stack"
+                  aria-label="Stacked" aria-pressed="true">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="3.5" y="2.5" width="9" height="5.5" rx="1.6" />
+              <path d="M4.6 10.4h6.8" />
+              <path d="M5.8 12.8h4.4" />
+            </svg>
+          </button>
+          <button type="button" class="view-btn" data-view="grid"
+                  aria-label="Grid" aria-pressed="false">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="2" y="2.5" width="7.5" height="5" rx="1.3" />
+              <rect x="11" y="2.5" width="3" height="5" rx="1.3" />
+              <rect x="2" y="9" width="3" height="4.5" rx="1.3" />
+              <rect x="6.5" y="9" width="7.5" height="4.5" rx="1.3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <ul class="work-stack" tabindex="0" role="listbox"
           aria-label="Projects — drag or scroll sideways, click to read">
         <li class="work-item" style="--panel: #e7e9fd">

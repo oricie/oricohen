@@ -87,11 +87,66 @@ h1 {
   margin-top: 88px;
 }
 
+.work-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 36px;
+}
+
 .work h2 {
   font-size: var(--text);
   font-weight: 400;
   color: var(--ink);
-  margin-bottom: 36px;
+}
+
+/* ── Stacked / grid toggle ──────────────────────────────── */
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.02);
+  flex: none;
+}
+
+.view-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #9a9a9a;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.view-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.view-btn[data-view="grid"] svg { fill: currentColor; stroke: none; }
+
+.view-btn:hover { color: var(--ink); }
+
+.view-btn.is-active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.view-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
 /* The deck: every card occupies the same box, offset by its depth. */
@@ -214,6 +269,61 @@ h1 {
   outline: 2px solid var(--ink);
   outline-offset: 6px;
   border-radius: 30px;
+}
+
+/* ── Grid view ──────────────────────────────────────────── */
+.work.is-grid .work-stack {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  height: auto;
+  /* Break the text column: edge to edge of the window. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  touch-action: auto;
+  cursor: auto;
+}
+
+.work.is-grid .work-item {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  transition: none;
+}
+
+/* Uneven spans, so the row reads as a composition rather than a table. */
+.work.is-grid .work-item:nth-child(1) { grid-column: span 4; }
+.work.is-grid .work-item:nth-child(2) { grid-column: span 2; }
+.work.is-grid .work-item:nth-child(3) { grid-column: span 2; }
+.work.is-grid .work-item:nth-child(4) { grid-column: span 4; }
+
+.work.is-grid .work-item:nth-child(1) .work-panel,
+.work.is-grid .work-item:nth-child(2) .work-panel { height: 340px; }
+
+.work.is-grid .work-item:nth-child(3) .work-panel,
+.work.is-grid .work-item:nth-child(4) .work-panel { height: 280px; }
+
+.work.is-grid .work-card { cursor: pointer; }
+
+.work.is-grid .work-card:hover .work-open,
+.work.is-grid .work-card:focus-visible .work-open {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.work.is-grid .work-card:hover .work-panel { transform: translateY(-3px); }
+
+.work.is-grid .work-panel {
+  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (max-width: 700px) {
+  .work.is-grid .work-stack { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .work.is-grid .work-item:nth-child(n) { grid-column: span 2; }
+  .work.is-grid .work-item:nth-child(2),
+  .work.is-grid .work-item:nth-child(3) { grid-column: span 1; }
+  .work.is-grid .work-item .work-panel { height: 220px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

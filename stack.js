@@ -16,12 +16,18 @@
   var THROW = 90;         // px of drag that commits to a change
   var TAP = 6;            // px below which a pointer gesture is still a click
 
+  var section = stack.closest('.work');
+  var toggle = section && section.querySelector('.view-toggle');
+
+  var view = 'stack';     // 'stack' | 'grid'
   var index = 0;
   var dragging = null;
   var justDragged = false;
   var wheelLock = false;
 
   function render(skipTransition) {
+    if (view === 'grid') return;
+
     cards.forEach(function (card, i) {
       var depth = i - index;
       card.classList.toggle('is-front', depth === 0);
@@ -53,8 +59,54 @@
 
   function front() { return cards[index]; }
 
+  /* ── View ─────────────────────────────────────────────── */
+  function setView(next) {
+    if (next === view) return;
+    view = next;
+    section.classList.toggle('is-grid', view === 'grid');
+
+    if (view === 'grid') {
+      // Hand every card back to the grid: no stacking styles left behind.
+      cards.forEach(function (card) {
+        card.classList.remove('is-front', 'is-gone', 'no-transition');
+        card.style.cssText = card.style.cssText.replace(/(^|;)\s*(transform|opacity|z-index)\s*:[^;]*/g, '');
+        card.style.removeProperty('--x');
+        card.style.removeProperty('--rot');
+        card.style.removeProperty('--depth');
+        card.style.opacity = '';
+        card.style.zIndex = '';
+        var btn = card.querySelector('.work-card');
+        btn.tabIndex = 0;
+        btn.setAttribute('aria-hidden', 'false');
+      });
+      stack.removeAttribute('tabindex');
+    } else {
+      stack.setAttribute('tabindex', '0');
+      render(true);
+      requestAnimationFrame(function () {
+        cards.forEach(function (c) { c.classList.remove('no-transition'); });
+      });
+    }
+
+    if (toggle) {
+      toggle.querySelectorAll('.view-btn').forEach(function (b) {
+        var on = b.dataset.view === view;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+  }
+
+  if (toggle) {
+    toggle.addEventListener('click', function (e) {
+      var btn = e.target.closest('.view-btn');
+      if (btn) setView(btn.dataset.view);
+    });
+  }
+
   /* ── Drag ─────────────────────────────────────────────── */
   stack.addEventListener('pointerdown', function (e) {
+    if (view === 'grid') return;
     var card = e.target.closest('.work-item');
     if (!card || card !== front() || e.button !== 0) return;
 
@@ -111,6 +163,7 @@
 
   /* ── Scroll ───────────────────────────────────────────── */
   stack.addEventListener('wheel', function (e) {
+    if (view === 'grid') return;
     var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     if (Math.abs(delta) < 2) return;
 
@@ -127,6 +180,7 @@
 
   /* ── Keyboard ─────────────────────────────────────────── */
   stack.addEventListener('keydown', function (e) {
+    if (view === 'grid') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       if (go(-1)) e.preventDefault();
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
