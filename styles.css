@@ -89,50 +89,6 @@ body {
   .banner:hover::after { opacity: 0; }
 }
 
-/* ── Version switcher ───────────────────────────────────── */
-.version-switch {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.02);
-  flex: none;
-}
-
-.version-switch button {
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #8a8a8a;
-  background: none;
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 11px;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-
-.version-switch button:hover { color: #1a1a1a; }
-
-.version-switch button.is-active {
-  color: #fff;
-  background: #1a1a1a;
-}
-
-.version-switch button:focus-visible {
-  outline: 2px solid #1a1a1a;
-  outline-offset: 2px;
-}
-
-@media (max-width: 600px) {
-  .version-switch button { padding: 4px 8px; }
-}
-
 /* ── iOS-style sheet ────────────────────────────────────────
    A <dialog>, so focus trapping and Esc come from the platform.
    Full-width and bottom-anchored on phones; a centred card with

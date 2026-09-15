@@ -22,21 +22,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Nav ────────────────────────────────────────────────── */
-nav {
-  padding: 24px 48px;
-  display: flex;
-  gap: 32px;
-  align-items: center;
-}
-
-.wordmark {
-  font-size: var(--text);
-  font-weight: 500;
-  color: var(--ink);
-  text-decoration: none;
-}
-
 /* ── Layout ─────────────────────────────────────────────── */
 main {
   max-width: 760px;
@@ -216,7 +201,6 @@ footer {
 
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 600px) {
-  nav    { padding: 20px 24px; gap: 16px; }
   main   { padding: 16px 24px 32px; }
   footer { padding: 48px 24px 32px; }
 
