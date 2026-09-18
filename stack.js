@@ -202,6 +202,9 @@
     }
   }
 
+  // Images inside a card would otherwise start a native drag mid-gesture.
+  stack.addEventListener('dragstart', function (e) { e.preventDefault(); });
+
   stack.addEventListener('pointerup', endDrag);
   stack.addEventListener('pointercancel', endDrag);
 

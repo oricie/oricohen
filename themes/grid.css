@@ -242,6 +242,9 @@ h1 {
   display: block;
   width: 100%;
   height: auto;
+  /* Without this the browser's own image drag hijacks the card gesture. */
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 /* The circular open affordance. */
@@ -300,14 +303,12 @@ h1 {
 /* Uneven spans, so the row reads as a composition rather than a table. */
 .work.is-grid .work-item:nth-child(1) { grid-column: span 4; }
 .work.is-grid .work-item:nth-child(2) { grid-column: span 2; }
-.work.is-grid .work-item:nth-child(3) { grid-column: span 2; }
-.work.is-grid .work-item:nth-child(4) { grid-column: span 4; }
+.work.is-grid .work-item:nth-child(3) { grid-column: span 6; }
 
 .work.is-grid .work-item:nth-child(1) .work-panel,
-.work.is-grid .work-item:nth-child(2) .work-panel { height: 340px; }
+.work.is-grid .work-item:nth-child(2) .work-panel { height: 360px; }
 
-.work.is-grid .work-item:nth-child(3) .work-panel,
-.work.is-grid .work-item:nth-child(4) .work-panel { height: 280px; }
+.work.is-grid .work-item:nth-child(3) .work-panel { height: 280px; }
 
 .work.is-grid .work-panel {
   border-radius: 8px;
@@ -335,8 +336,7 @@ h1 {
 @media (max-width: 700px) {
   .work.is-grid .work-stack { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .work.is-grid .work-item:nth-child(n) { grid-column: span 2; }
-  .work.is-grid .work-item:nth-child(2),
-  .work.is-grid .work-item:nth-child(3) { grid-column: span 1; }
+  .work.is-grid .work-item:nth-child(2) { grid-column: span 1; }
   .work.is-grid .work-item .work-panel { height: 220px; }
 }
 
