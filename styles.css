@@ -212,6 +212,26 @@ body {
 
 .sheet-body p:last-child { margin-bottom: 0; }
 
+/* A supporting shot inside a sheet. */
+.sheet-shot {
+  margin: 26px 0 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f4f4f4;
+}
+
+.sheet-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sheet-shot figcaption {
+  padding: 12px 14px 14px;
+  font-size: 13.5px;
+  color: #8a8a8a;
+}
+
 /* Keep the page still behind the sheet. */
 body.sheet-open { overflow: hidden; }
 
