@@ -216,26 +216,35 @@ body {
 .sheet-body p:last-child { margin-bottom: 0; }
 
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
-   the screenshots break out of it, since their detail needs the width. */
+   the screenshots break out of it and sit on a grey panel, so they read as
+   objects rather than floating on the white. */
 .sheet-shot {
   max-width: 1440px;
   width: 100%;
   margin: 30px auto 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f4f4f4;
+  padding: 28px 28px 0;
+  border-radius: 16px;
+  background: #f1f1f1;
 }
 
 .sheet-shot img {
   display: block;
   width: 100%;
   height: auto;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px -12px rgba(20, 20, 40, 0.28),
+              0 1px 3px rgba(20, 20, 40, 0.06);
 }
 
 .sheet-shot figcaption {
-  padding: 12px 14px 14px;
+  padding: 16px 2px 18px;
   font-size: 13.5px;
   color: #8a8a8a;
+}
+
+@media (max-width: 600px) {
+  .sheet-shot { padding: 14px 14px 0; border-radius: 12px; }
+  .sheet-shot figcaption { padding: 12px 2px 14px; }
 }
 
 /* Keep the page still behind the sheet. */
