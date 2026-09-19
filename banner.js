@@ -18,10 +18,10 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 3;       // css px per dot
+  var BLOCK = 2;       // css px per dot
   var RADIUS = 150;    // reach of the cursor light
   var LIFT = 105;      // how much that light brightens, 0-255
-  var GRAIN = 30;      // noise added to the threshold, 0-255
+  var GRAIN = 48;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
   var BAYER = [
@@ -39,6 +39,9 @@
   var small = document.createElement('canvas');
   var lum = null;            // luminance per cell
   var grain = null;          // fixed noise per cell, so it never crawls
+  var bits = null;           // the 1-bit frame, one pixel per cell
+  var bitsCtx = null;
+  var bitmap = document.createElement('canvas');
   var cols = 0, rows = 0;
   var w = 0, h = 0, dpr = 1;
   var pointer = { x: -9999, y: -9999 };
@@ -81,6 +84,13 @@
       lum = null;            // cross-origin image: leave the photo alone
       return false;
     }
+
+    // The frame is composed one pixel per dot, then scaled up with smoothing
+    // off — far cheaper than painting tens of thousands of rectangles.
+    bitmap.width = cols;
+    bitmap.height = rows;
+    bitsCtx = bitmap.getContext('2d');
+    bits = bitsCtx.createImageData(cols, rows);
     return true;
   }
 
@@ -88,17 +98,15 @@
     raf = 0;
     if (!lum) return;
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-
     var px = pointer.x, py = pointer.y;
     var r2 = RADIUS * RADIUS;
+    var d = bits.data;
 
-    ctx.beginPath();
-    for (var y = 0; y < rows; y++) {
+    for (var y = 0, i = 0, p = 0; y < rows; y++) {
       var cy = y * BLOCK;
-      for (var x = 0; x < cols; x++) {
-        var v = lum[y * cols + x];
+      var by = y & 3;
+      for (var x = 0; x < cols; x++, i++, p += 4) {
+        var v = lum[i];
         var cx = x * BLOCK;
 
         // The cursor lights the picture locally, thinning the dots.
@@ -109,13 +117,16 @@
           v += LIFT * f * f;
         }
 
-        if (v < BAYER[y & 3][x & 3] + grain[y * cols + x]) {
-          ctx.rect(cx, cy, BLOCK, BLOCK);
-        }
+        var ink = v < BAYER[by][x & 3] + grain[i] ? 18 : 255;
+        d[p] = d[p + 1] = d[p + 2] = ink;
+        d[p + 3] = 255;
       }
     }
-    ctx.fillStyle = '#121212';
-    ctx.fill();
+
+    bitsCtx.putImageData(bits, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
   }
 
   function schedule() {
