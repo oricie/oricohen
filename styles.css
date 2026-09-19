@@ -183,8 +183,11 @@ body {
   padding: 28px 24px 64px;
 }
 
-/* The panel spans the window; the reading column does not. */
-.sheet-scroll > * {
+/* The panel spans the window; the text inside it keeps a reading column,
+   while figures are free to use the full width. */
+.sheet-eyebrow,
+.sheet h2,
+.sheet-body p {
   max-width: 680px;
   margin-inline: auto;
 }
@@ -212,9 +215,12 @@ body {
 
 .sheet-body p:last-child { margin-bottom: 0; }
 
-/* A supporting shot inside a sheet. */
+/* A supporting shot inside a sheet. Text keeps the 680px reading column;
+   the screenshots break out of it, since their detail needs the width. */
 .sheet-shot {
-  margin: 26px 0 0;
+  max-width: 1440px;
+  width: 100%;
+  margin: 30px auto 0;
   border-radius: 10px;
   overflow: hidden;
   background: #f4f4f4;
