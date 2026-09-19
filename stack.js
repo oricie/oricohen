@@ -1,9 +1,8 @@
-/* The project deck.
+/* The project cards.
  *
- * Cards sit stacked on top of one another. Dragging the front card sideways
- * throws it off and brings the next one forward; a sideways or vertical
- * scroll over the deck does the same. At either end the deck stops
- * consuming the scroll, so the page carries on as normal.
+ * Cards can be picked up and left anywhere on the page — dragging moves a
+ * card rather than throwing it away. The two buttons in the heading row
+ * gather them back up: into the stack, or into the grid.
  */
 (function () {
   var stack = document.querySelector('.work-stack');
@@ -12,59 +11,97 @@
   var cards = Array.prototype.slice.call(stack.querySelectorAll('.work-item'));
   if (!cards.length) return;
 
-  var DEPTH = 3;          // how many cards are visible behind the front one
-  var THROW = 90;         // px of drag that commits to a change
-  var TAP = 6;            // px below which a pointer gesture is still a click
-
   var section = stack.closest('.work');
   var toggle = section && section.querySelector('.view-toggle');
 
-  var view = 'stack';     // 'stack' | 'grid'
-  var index = 0;
+  var TAP = 6;              // px below which a gesture is still a click
+  var view = 'stack';       // 'stack' | 'grid'
+  var offsets = cards.map(function () { return { x: 0, y: 0 }; });
   var dragging = null;
   var justDragged = false;
-  var wheelLock = false;
+  var topZ = cards.length;
+
+  function place(card, i) {
+    card.style.setProperty('--x', offsets[i].x + 'px');
+    card.style.setProperty('--y', offsets[i].y + 'px');
+    card.classList.toggle('is-moved', !!(offsets[i].x || offsets[i].y));
+  }
 
   function render(skipTransition) {
-    if (view === 'grid') return;
-
     cards.forEach(function (card, i) {
-      var depth = i - index;
-      card.classList.toggle('is-front', depth === 0);
       card.classList.toggle('no-transition', !!skipTransition);
-      card.style.setProperty('--depth', Math.max(depth, 0));
-      card.style.setProperty('--x', '0px');
-      card.style.setProperty('--rot', '0deg');
-
-      // Cards already passed sit off to the left; deep ones fade out.
-      var gone = depth < 0;
-      card.classList.toggle('is-gone', gone);
-      card.style.zIndex = String(cards.length - Math.abs(depth));
-      card.style.opacity = gone ? '0' : (depth > DEPTH ? '0' : '1');
-      card.hidden = false;
-
-      var btn = card.querySelector('.work-card');
-      btn.tabIndex = depth === 0 ? 0 : -1;
-      btn.setAttribute('aria-hidden', depth === 0 ? 'false' : 'true');
+      card.style.setProperty('--depth', view === 'grid' ? 0 : i);
+      place(card, i);
     });
   }
 
-  function go(delta) {
-    var next = Math.min(Math.max(index + delta, 0), cards.length - 1);
-    if (next === index) return false;
-    index = next;
-    render();
-    return true;
+  /* ── Free drag ────────────────────────────────────────── */
+  stack.addEventListener('pointerdown', function (e) {
+    var card = e.target.closest('.work-item');
+    if (!card || e.button !== 0) return;
+
+    var i = cards.indexOf(card);
+    justDragged = false;
+    dragging = {
+      id: e.pointerId, i: i, card: card,
+      x0: e.clientX, y0: e.clientY,
+      ox: offsets[i].x, oy: offsets[i].y,
+      moved: 0
+    };
+
+    card.classList.add('no-transition', 'is-lifted');
+    card.style.zIndex = String(++topZ);
+    card.setPointerCapture(e.pointerId);
+  });
+
+  stack.addEventListener('pointermove', function (e) {
+    if (!dragging || e.pointerId !== dragging.id) return;
+
+    var dx = e.clientX - dragging.x0;
+    var dy = e.clientY - dragging.y0;
+    dragging.moved = Math.max(dragging.moved, Math.abs(dx) + Math.abs(dy));
+
+    offsets[dragging.i].x = dragging.ox + dx;
+    offsets[dragging.i].y = dragging.oy + dy;
+    place(dragging.card, dragging.i);
+  });
+
+  function endDrag(e) {
+    if (!dragging || e.pointerId !== dragging.id) return;
+    var card = dragging.card;
+
+    justDragged = dragging.moved > TAP;
+    card.classList.remove('no-transition', 'is-lifted');
+
+    // Pointer capture retargets the click that follows, so let it go before
+    // the browser dispatches one.
+    if (card.hasPointerCapture && card.hasPointerCapture(e.pointerId)) {
+      card.releasePointerCapture(e.pointerId);
+    }
+    dragging = null;
   }
 
-  function front() { return cards[index]; }
+  stack.addEventListener('pointerup', endDrag);
+  stack.addEventListener('pointercancel', endDrag);
 
-  /* ── View ─────────────────────────────────────────────── */
+  // Images inside a card would otherwise start a native drag mid-gesture.
+  stack.addEventListener('dragstart', function (e) { e.preventDefault(); });
 
-  /* Stack and grid are different layouts, so the cards cannot simply
-   * transition between them. Measure where each card is, switch the
-   * layout, measure again, then play the difference back as one eased
-   * move (a FLIP). */
+  // A drag must not also register as a click on the card.
+  stack.addEventListener('click', function (e) {
+    if (justDragged) {
+      e.stopPropagation();
+      e.preventDefault();
+      justDragged = false;
+    }
+  }, true);
+
+  /* ── Gathering them back up ───────────────────────────── */
+
+  /* Stack and grid are different layouts, and a moved card is somewhere
+   * else again, so none of it can simply transition. Measure where every
+   * card is, apply the new arrangement, measure again, and play the
+   * difference back as one eased move. */
   function morph(apply) {
     var reduce = window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -91,7 +128,6 @@
         'translate(' + dx + 'px,' + dy + 'px) scale(' + sx + ',' + sy + ')';
     });
 
-    // One reflow, then let every card travel home together.
     void stack.offsetWidth;
 
     cards.forEach(function (card) {
@@ -104,19 +140,28 @@
         card.removeEventListener('transitionend', handler);
         card.style.transition = '';
         card.style.transformOrigin = '';
-        if (view === 'stack') render();
+        card.style.transform = '';
+        render();
       });
     });
   }
 
-  function setView(next) {
-    if (next === view) return;
-    view = next;
-    justDragged = false;      // never carry a stack gesture into the grid
+  function gather(next) {
+    justDragged = false;
 
     morph(function () {
+      view = next;
       section.classList.toggle('is-grid', view === 'grid');
-      applyView();
+
+      // Everything returns to its place in the arrangement.
+      offsets = cards.map(function () { return { x: 0, y: 0 }; });
+      topZ = cards.length;
+      cards.forEach(function (card, i) {
+        card.classList.remove('is-lifted', 'no-transition');
+        card.style.zIndex = view === 'grid' ? '' : String(cards.length - i);
+        card.style.setProperty('--depth', view === 'grid' ? 0 : i);
+        place(card, i);
+      });
     });
 
     if (toggle) {
@@ -128,123 +173,14 @@
     }
   }
 
-  function applyView() {
-    if (view === 'grid') {
-      // Hand every card back to the grid: no stacking styles left behind.
-      cards.forEach(function (card) {
-        card.classList.remove('is-front', 'is-gone', 'no-transition');
-        card.style.cssText = card.style.cssText.replace(/(^|;)\s*(transform|opacity|z-index)\s*:[^;]*/g, '');
-        card.style.removeProperty('--x');
-        card.style.removeProperty('--rot');
-        card.style.removeProperty('--depth');
-        card.style.opacity = '';
-        card.style.zIndex = '';
-        var btn = card.querySelector('.work-card');
-        btn.tabIndex = 0;
-        btn.setAttribute('aria-hidden', 'false');
-      });
-      stack.removeAttribute('tabindex');
-    } else {
-      stack.setAttribute('tabindex', '0');
-      render(true);
-    }
-  }
-
   if (toggle) {
     toggle.addEventListener('click', function (e) {
       var btn = e.target.closest('.view-btn');
-      if (btn) setView(btn.dataset.view);
+      if (btn) gather(btn.dataset.view);
     });
   }
 
-  /* ── Drag ─────────────────────────────────────────────── */
-  stack.addEventListener('pointerdown', function (e) {
-    if (view === 'grid') return;
-    var card = e.target.closest('.work-item');
-    if (!card || card !== front() || e.button !== 0) return;
-
-    // Every gesture starts out as a potential click.
-    justDragged = false;
-    dragging = { id: e.pointerId, x0: e.clientX, dx: 0, card: card };
-    card.classList.add('no-transition');
-    card.setPointerCapture(e.pointerId);
-  });
-
-  stack.addEventListener('pointermove', function (e) {
-    if (!dragging || e.pointerId !== dragging.id) return;
-    dragging.dx = e.clientX - dragging.x0;
-    dragging.card.style.setProperty('--x', dragging.dx + 'px');
-    dragging.card.style.setProperty('--rot', (dragging.dx / 36).toFixed(2) + 'deg');
-  });
-
-  function endDrag(e) {
-    if (!dragging || e.pointerId !== dragging.id) return;
-    var dx = dragging.dx;
-    var card = dragging.card;
-    card.classList.remove('no-transition');
-    dragging = null;
-
-    // Pointer capture retargets the click that follows, so let it go before
-    // the browser dispatches one.
-    if (card.hasPointerCapture && card.hasPointerCapture(e.pointerId)) {
-      card.releasePointerCapture(e.pointerId);
-    }
-
-    justDragged = Math.abs(dx) > TAP;
-
-    if (dx <= -THROW && index < cards.length - 1) {
-      go(1);
-    } else if (dx >= THROW && index > 0) {
-      go(-1);
-    } else {
-      // Snap back.
-      card.style.setProperty('--x', '0px');
-      card.style.setProperty('--rot', '0deg');
-    }
-  }
-
-  // Images inside a card would otherwise start a native drag mid-gesture.
-  stack.addEventListener('dragstart', function (e) { e.preventDefault(); });
-
-  stack.addEventListener('pointerup', endDrag);
-  stack.addEventListener('pointercancel', endDrag);
-
-  // A drag must not also register as a click on the card.
-  stack.addEventListener('click', function (e) {
-    if (view === 'grid') return;
-    if (justDragged) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }, true);
-
-  /* ── Scroll ───────────────────────────────────────────── */
-  stack.addEventListener('wheel', function (e) {
-    if (view === 'grid') return;
-    var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (Math.abs(delta) < 2) return;
-
-    var wanted = delta > 0 ? 1 : -1;
-    var canMove = wanted > 0 ? index < cards.length - 1 : index > 0;
-    if (!canMove) return;          // let the page scroll on at either end
-
-    e.preventDefault();
-    if (wheelLock) return;
-    wheelLock = true;
-    setTimeout(function () { wheelLock = false; }, 320);
-    go(wanted);
-  }, { passive: false });
-
-  /* ── Keyboard ─────────────────────────────────────────── */
-  stack.addEventListener('keydown', function (e) {
-    if (view === 'grid') return;
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      if (go(-1)) e.preventDefault();
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      if (go(1)) e.preventDefault();
-    }
-  });
-
+  cards.forEach(function (card, i) { card.style.zIndex = String(cards.length - i); });
   render(true);
   requestAnimationFrame(function () {
     cards.forEach(function (c) { c.classList.remove('no-transition'); });

@@ -163,25 +163,23 @@ h1 {
   position: absolute;
   inset: 0;
   transform:
-    translateX(var(--x, 0px))
+    translate(var(--x, 0px), var(--y, 0px))
     translateY(calc(var(--depth, 0) * 14px))
-    scale(calc(1 - var(--depth, 0) * 0.045))
-    rotate(var(--rot, 0deg));
+    scale(calc(1 - var(--depth, 0) * 0.045));
   transform-origin: 50% 100%;
   transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
-              opacity 0.45s ease;
+              box-shadow 0.3s ease;
   will-change: transform;
 }
 
-/* Thrown cards leave to the left and wait there. */
-.work-item.is-gone {
-  transform: translateX(-130%) rotate(-7deg);
-  pointer-events: none;
+/* A card in hand. */
+.work-item.is-lifted { z-index: 99; }
+
+.work-item.is-lifted .work-panel {
+  box-shadow: 0 30px 60px -24px rgba(20, 20, 40, 0.5);
 }
 
 .work-item.no-transition { transition: none; }
-
-.work-item:not(.is-front) { pointer-events: none; }
 
 .work-card {
   position: relative;
@@ -196,7 +194,7 @@ h1 {
   cursor: grab;
 }
 
-.is-front .work-card:active { cursor: grabbing; }
+.work-card:active { cursor: grabbing; }
 
 .work-panel {
   display: flex;
@@ -266,13 +264,13 @@ h1 {
   transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.is-front .work-card:hover .work-open,
-.is-front .work-card:focus-visible .work-open {
+.work-card:hover .work-open,
+.work-card:focus-visible .work-open {
   opacity: 1;
   transform: scale(1);
 }
 
-.is-front .work-card:focus-visible {
+.work-card:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 6px;
   border-radius: 30px;
@@ -294,10 +292,9 @@ h1 {
 
 .work.is-grid .work-item {
   position: static;
-  transform: none;
+  transform: translate(var(--x, 0px), var(--y, 0px));
   opacity: 1;
   pointer-events: auto;
-  transition: none;
 }
 
 /* Uneven spans, so the row reads as a composition rather than a table. */
