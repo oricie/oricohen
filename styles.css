@@ -15,10 +15,9 @@ body {
 /* ── Banner ─────────────────────────────────────────────── */
 .banner {
   position: relative;
-  /* Wide at rest, spanning the text column. */
-  --banner-h: 264px;
+  /* Wide at rest, spanning the text column, at the photo's own ratio. */
   width: 100%;
-  height: var(--banner-h);
+  aspect-ratio: 1659 / 948;
   margin-bottom: 44px;
   border-radius: 28px;
   overflow: hidden;
@@ -82,7 +81,6 @@ body {
 
 @media (max-width: 600px) {
   .banner {
-    --banner-h: 208px;
     border-radius: 20px;
     margin-bottom: 32px;
   }
