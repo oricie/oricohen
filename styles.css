@@ -215,6 +215,22 @@ body {
 
 .sheet-body p:last-child { margin-bottom: 0; }
 
+.sheet-list {
+  max-width: 62ch;
+  margin: 0 auto 16px;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.sheet-list li {
+  font-size: 17px;
+  line-height: 1.6;
+  color: #222;
+  margin-bottom: 10px;
+}
+
+.sheet-list li::marker { color: #b4b4b4; }
+
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
    the screenshots break out of it and sit on a grey panel, so they read as
    objects rather than floating on the white. */
