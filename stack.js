@@ -112,6 +112,7 @@
   function setView(next) {
     if (next === view) return;
     view = next;
+    justDragged = false;      // never carry a stack gesture into the grid
 
     morph(function () {
       section.classList.toggle('is-grid', view === 'grid');
@@ -210,6 +211,7 @@
 
   // A drag must not also register as a click on the card.
   stack.addEventListener('click', function (e) {
+    if (view === 'grid') return;
     if (justDragged) {
       e.stopPropagation();
       e.preventDefault();
