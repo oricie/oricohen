@@ -18,9 +18,10 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 5;       // css px per dot
-  var RADIUS = 170;    // reach of the cursor light
-  var LIFT = 150;      // how much that light brightens, 0-255
+  var BLOCK = 3;       // css px per dot
+  var RADIUS = 150;    // reach of the cursor light
+  var LIFT = 105;      // how much that light brightens, 0-255
+  var GRAIN = 30;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
   var BAYER = [
@@ -37,6 +38,7 @@
   var ctx = canvas.getContext('2d');
   var small = document.createElement('canvas');
   var lum = null;            // luminance per cell
+  var grain = null;          // fixed noise per cell, so it never crawls
   var cols = 0, rows = 0;
   var w = 0, h = 0, dpr = 1;
   var pointer = { x: -9999, y: -9999 };
@@ -65,10 +67,15 @@
     try {
       var data = sc.getImageData(0, 0, cols, rows).data;
       lum = new Float32Array(cols * rows);
+      grain = new Float32Array(cols * rows);
       for (var i = 0, p = 0; i < lum.length; i++, p += 4) {
         // Rec. 601 luma, then a little contrast so 1-bit has something to bite on.
         var y = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
-        lum[i] = Math.max(0, Math.min(255, (y - 128) * 1.25 + 128));
+        lum[i] = Math.max(0, Math.min(255, (y - 128) * 1.3 + 128));
+
+        // Noise breaks up the Bayer crosshatch into something closer to a
+        // stochastic screen. Averaging two draws pulls it toward the middle.
+        grain[i] = ((Math.random() + Math.random()) - 1) * GRAIN;
       }
     } catch (e) {
       lum = null;            // cross-origin image: leave the photo alone
@@ -102,7 +109,7 @@
           v += LIFT * f * f;
         }
 
-        if (v < BAYER[y & 3][x & 3]) {
+        if (v < BAYER[y & 3][x & 3] + grain[y * cols + x]) {
           ctx.rect(cx, cy, BLOCK, BLOCK);
         }
       }
