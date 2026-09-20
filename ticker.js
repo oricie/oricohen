@@ -1,61 +1,28 @@
-/* The card with nothing in it yet runs a departure board.
+/* The card with nothing written up yet runs a reel of older interface work.
  *
- * Nine cells roll through letters and settle on a word, the way a split-flap
- * display does: each cell stops a beat after the one before it, so the word
- * lands left to right. Underneath, a strip of the same vocabulary scrolls by.
+ * One frame is on at a time and they cross over quickly, so the card reads
+ * as something still being sorted through rather than a finished gallery.
  */
 (function () {
-  var board = document.querySelector('.flap');
-  if (!board) return;
+  var reel = document.querySelector('.reel');
+  if (!reel) return;
+
+  var frames = Array.prototype.slice.call(reel.querySelectorAll('img'));
+  if (frames.length < 2) return;
+
+  var HOLD = 900;   // ms a frame stays up
+  var at = 0;
 
   var reduce = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;   // leave the first frame showing
 
-  var cells = Array.prototype.slice.call(board.querySelectorAll('.flap-cell'));
-  var WORDS = ['ARRIVING', 'MOTION', 'FRAGMENTS', 'ARCHIVE', 'SKETCHES', 'SOON'];
-  var GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  // Pull them all in before the first turn, so no frame arrives blank.
+  frames.forEach(function (f) { new Image().src = f.src; });
 
-  var word = 0;
-  var timers = [];
-
-  function clear() {
-    timers.forEach(clearTimeout);
-    timers = [];
-  }
-
-  function set(cell, ch) {
-    cell.textContent = ch;
-    cell.classList.toggle('is-blank', ch === ' ');
-    cell.classList.remove('is-turning');
-    void cell.offsetWidth;
-    if (ch !== ' ') cell.classList.add('is-turning');
-  }
-
-  function show(text) {
-    var padded = text.padEnd(cells.length, ' ').slice(0, cells.length);
-
-    cells.forEach(function (cell, i) {
-      var target = padded[i];
-
-      if (reduce) { set(cell, target); return; }
-
-      // Roll this cell, then let it settle — later cells roll longer.
-      var rolls = 5 + i * 2;
-      var n = 0;
-      (function step() {
-        if (n++ >= rolls) { set(cell, target); return; }
-        set(cell, GLYPHS[(Math.random() * GLYPHS.length) | 0]);
-        timers.push(setTimeout(step, 55));
-      })();
-    });
-  }
-
-  function next() {
-    clear();
-    show(WORDS[word % WORDS.length]);
-    word++;
-    timers.push(setTimeout(next, 3400));
-  }
-
-  next();
+  setInterval(function () {
+    frames[at].classList.remove('is-on');
+    at = (at + 1) % frames.length;
+    frames[at].classList.add('is-on');
+  }, HOLD);
 })();

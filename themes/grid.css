@@ -298,40 +298,40 @@ h1 {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  padding-bottom: 46px;
   background: none;
   box-shadow: none;
 }
 
-.flap {
-  display: flex;
-  gap: 5px;
+/* Old interface work, cycling in place. One frame is on at a time; they
+   cross over quickly, so the card reads as a reel rather than a gallery. */
+.reel {
+  position: relative;
+  display: block;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
 }
 
-.flap-cell {
-  width: 38px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--on-panel, #fff);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 24px;
-  line-height: 1;
-  /* The seam across the middle of a split flap. */
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.14);
+.reel img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0;
+  transition: opacity 0.22s linear;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
-.flap-cell.is-blank { background: rgba(0, 0, 0, 0.14); }
+.reel img.is-on { opacity: 1; }
 
-.flap-cell.is-turning { animation: flap-turn 0.12s ease-out; }
-
-@keyframes flap-turn {
-  from { transform: perspective(200px) rotateX(-58deg); opacity: 0.45; }
-  to   { transform: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .reel img { transition: none; }
 }
 
 .soon-label {
@@ -359,8 +359,7 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .soon-pulse,
-  .flap-cell.is-turning { animation: none; }
+  .soon-pulse { animation: none; }
 }
 
 
@@ -439,13 +438,6 @@ h1 {
 .work.is-grid .work-screen--soon { border-radius: 0; }
 
 /* Grid swaps the coloured panel for grey, so the board swaps with it. */
-.work.is-grid .flap-cell {
-  background: rgba(20, 20, 40, 0.08);
-  color: var(--ink);
-  box-shadow: inset 0 -1px 0 rgba(20, 20, 40, 0.10);
-}
-
-.work.is-grid .flap-cell.is-blank { background: rgba(20, 20, 40, 0.04); }
 .work.is-grid .soon-label { color: var(--ink-mute); }
 .work.is-grid .soon-pulse { background: var(--ink); }
 .work.is-grid .work-open   { border-radius: 6px; }
@@ -472,7 +464,6 @@ h1 {
   .work.is-grid .work-stack { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .work.is-grid .work-item:nth-child(n) { grid-column: span 2; }
   .work.is-grid .work-item .work-panel { height: 220px; }
-  .flap-cell { width: 24px; height: 34px; font-size: 16px; }
   .work-screen--soon { gap: 14px; }
 }
 
