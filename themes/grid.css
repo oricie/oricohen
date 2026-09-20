@@ -213,13 +213,12 @@ h1 {
               clip-path 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-/* On hover the card rises, and its two sides crop inward. Nothing is
-   scaled: the panel's painted box narrows over content that holds still,
-   so the head and the screenshot never stretch. */
+/* On hover only the background moves: the panel's painted box crops inward
+   from both sides and the shadow under it deepens. Nothing is scaled and
+   nothing is lifted, so the head and the screenshot hold exactly still. */
 .work-card:hover,
 .work-card:focus-visible {
-  transform: translateY(-6px);
-  box-shadow: 0 26px 52px -28px rgba(20, 20, 40, 0.42);
+  box-shadow: 0 24px 48px -28px rgba(20, 20, 40, 0.40);
 }
 
 .work-card:hover .work-panel,
@@ -227,6 +226,32 @@ h1 {
   clip-path: inset(0 7px 0 7px round 28px);
 }
 
+
+.work-head {
+  display: block;
+  margin-bottom: 22px;
+}
+
+.work-title,
+.work-sub {
+  display: block;
+  font-size: var(--text);
+  line-height: 1.45;
+}
+.work-title { color: var(--on-panel, var(--ink)); }
+.work-sub   { color: var(--on-panel-mute, var(--ink-mute)); }
+
+
+.work-screen {
+  display: block;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
+  box-shadow: 0 18px 40px -16px rgba(20, 20, 40, 0.30),
+              0 2px 6px rgba(20, 20, 40, 0.06);
+}
 
 /* A product shot scales to the full width of the screen and is cropped at
    the bottom, so the interface keeps its own proportions. */
@@ -450,8 +475,7 @@ h1 {
 
 .work.is-grid .work-card:hover,
 .work.is-grid .work-card:focus-visible {
-  transform: translateY(-6px);
-  box-shadow: 0 22px 44px -28px rgba(20, 20, 40, 0.34);
+  box-shadow: 0 20px 40px -28px rgba(20, 20, 40, 0.30);
 }
 
 .work.is-grid .work-card:hover .work-panel,
