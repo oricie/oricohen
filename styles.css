@@ -216,16 +216,27 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 8px;
   max-width: 1000px;
   margin: 0 auto 46px;
   padding-bottom: 18px;
 }
 
+/* The snapshots lie over one another, later ones on top, the way a handful
+   of prints falls on a table. Each PNG carries its own shadow as about 17%
+   of transparent margin a side, so the pull has to swallow that before any
+   overlap shows; as a percentage of the row it scales with the sheet. */
 .photo-card {
+  position: relative;
   flex: 0 1 300px;
   margin: 0;
+  z-index: 1;
 }
+
+.photo-card:nth-child(2) { margin-left: -14%; z-index: 2; }
+.photo-card:nth-child(3) { margin-left: -14%; z-index: 3; }
+
+/* The captions sit above the pile, so an overlap never buries one. */
+.photo-card figcaption { position: relative; z-index: 4; }
 
 .photo-card img {
   display: block;
@@ -247,8 +258,10 @@ body {
 .photo-card:nth-child(3) { transform: rotate(-2deg) translateY(10px); }
 
 @media (max-width: 700px) {
-  .about-photos { flex-wrap: wrap; gap: 4px; margin-bottom: 34px; }
+  .about-photos { flex-wrap: wrap; margin-bottom: 34px; }
   .photo-card { flex: 0 1 46%; }
+  .photo-card:nth-child(2),
+  .photo-card:nth-child(3) { margin-left: -19%; }
   .photo-card figcaption { font-size: 15px; }
 }
 
