@@ -245,6 +245,114 @@ h1 {
   -webkit-user-drag: none;
 }
 
+/* ── The card with nothing in it yet ────────────────────── */
+/* Instead of a product shot it shows an interface mid-build: skeleton
+   blocks under a shimmer that sweeps the whole screen, so the card reads
+   as filling up rather than as empty. */
+.work-screen--soon {
+  position: relative;
+  padding: 22px 24px;
+}
+
+.soon-ui { display: block; }
+
+.soon-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.soon-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e4e4e9;
+}
+
+.soon-block {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: #ededf1;
+  margin-bottom: 11px;
+}
+
+.soon-block--wide  { width: 62%; }
+.soon-block--short { width: 34%; }
+.soon-block:not([class*="--"]) { width: 48%; }
+
+.soon-tiles {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.soon-tile {
+  flex: 1;
+  height: 64px;
+  border-radius: 8px;
+  background: #f0f0f4;
+  animation: soon-breathe 3.2s ease-in-out infinite;
+}
+
+.soon-tile:nth-child(2) { animation-delay: 0.4s; }
+.soon-tile:nth-child(3) { animation-delay: 0.8s; }
+
+/* One sweep across the lot, rather than an animation per block. */
+.work-screen--soon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(255, 255, 255, 0) 62%);
+  transform: translateX(-100%);
+  animation: soon-sweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.soon-label {
+  position: absolute;
+  left: 24px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+.soon-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--panel, var(--ink));
+  animation: soon-blink 1.8s ease-in-out infinite;
+}
+
+@keyframes soon-sweep {
+  0%        { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+
+@keyframes soon-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes soon-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-screen--soon::after,
+  .soon-tile,
+  .soon-pulse { animation: none; }
+  .work-screen--soon::after { opacity: 0; }
+}
+
 /* The circular open affordance. */
 .work-open {
   position: absolute;
@@ -300,8 +408,10 @@ h1 {
 /* Uneven spans, so the row reads as a composition rather than a table. */
 .work.is-grid .work-item:nth-child(1) { grid-column: span 4; }
 .work.is-grid .work-item:nth-child(2) { grid-column: span 2; }
+.work.is-grid .work-item:nth-child(3) { grid-column: span 6; }
 
 .work.is-grid .work-item .work-panel { height: 380px; }
+.work.is-grid .work-item:nth-child(3) .work-panel { height: 260px; }
 
 .work.is-grid .work-panel {
   border-radius: 8px;
