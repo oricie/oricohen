@@ -34,7 +34,6 @@ body {
   /* Keeps a head-and-shoulders portrait framed on the face when the
      source is cropped to a wide rectangle. */
   object-position: center 8%;
-  transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* Subtle sheen that drifts across on hover. */
@@ -72,8 +71,6 @@ body {
 
 .banner.is-rastered .banner-fx { opacity: 1; }
 
-.banner:hover img { transform: scale(1.025); }
-
 .banner:hover::after {
   opacity: 1;
   transform: translateX(18%);
@@ -88,10 +85,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .banner,
-  .banner img,
   .banner::after { transition: none; }
 
-  .banner:hover img { transform: none; }
   .banner:hover::after { opacity: 0; }
 }
 
