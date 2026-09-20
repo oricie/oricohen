@@ -18,7 +18,7 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 1.5;     // css px per dot
+  var BLOCK = 1.5;     // target css px per dot
   var RADIUS = 165;    // reach of the cursor
   var LIFT = 42;       // how much the cursor brightens, 0-255
   var GRAIN = 62;      // noise added to the threshold, 0-255
@@ -44,6 +44,7 @@
   var bitsCtx = null;
   var bitmap = document.createElement('canvas');
   var cols = 0, rows = 0;
+  var cell = 3, step = 1.5;  // dot size, in device px and in css px
   var w = 0, h = 0, dpr = 1;
   var pointer = { x: -9999, y: -9999 };
   var raf = 0, over = false;
@@ -57,10 +58,16 @@
     h = r.height;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    cols = Math.max(1, Math.round(w / BLOCK));
-    rows = Math.max(1, Math.round(h / BLOCK));
+    // Every dot has to land on a whole number of device pixels, or the
+    // nearest-neighbour scale rounds some cells wider than others and the
+    // grid reads as uneven. So the cell is sized in device px and the canvas
+    // is painted untransformed, at 1:1.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    cell = Math.max(2, Math.round(BLOCK * dpr));
+    step = cell / dpr;
+    cols = Math.max(1, Math.ceil(canvas.width / cell));
+    rows = Math.max(1, Math.ceil(canvas.height / cell));
     small.width = cols;
     small.height = rows;
 
@@ -112,11 +119,11 @@
     var d = bits.data;
 
     for (var y = 0, i = 0, p = 0; y < rows; y++) {
-      var cy = y * BLOCK;
+      var cy = (y + 0.5) * step;
       var by = y & 3;
       for (var x = 0; x < cols; x++, i++, p += 4) {
         var v = lum[i];
-        var cx = x * BLOCK;
+        var cx = (x + 0.5) * step;
 
         // Near the cursor the dots lighten a little — and take on the
         // photo's own colour instead of ink.
@@ -146,8 +153,8 @@
 
     bitsCtx.putImageData(bits, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(bitmap, 0, 0, w, h);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, cols * cell, rows * cell);
   }
 
   function schedule() {
