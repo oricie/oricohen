@@ -30,8 +30,10 @@ main {
 }
 
 /* ── Intro ──────────────────────────────────────────────── */
+/* The title pair and the bio are one block of text, not two sections, so
+   the gap between them is an ordinary paragraph gap. */
 .intro {
-  margin-bottom: 52px;
+  margin-bottom: 20px;
 }
 
 h1 {

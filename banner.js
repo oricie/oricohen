@@ -23,7 +23,8 @@
   var FEATHER = 0.22;  // fraction of the radius the patch fades over
   var SETTLE = 140;    // ms of stillness before the patch starts seeping
   var SPREAD = 0.0022; // how fast it seeps outward
-  var PULL = 0.30;     // how fast it draws back once the pointer moves
+  var PULL = 0.12;     // how fast it draws back once the pointer moves
+  var STIR = 2.5;      // px the pointer must travel to count as moving
   var ARCS = 168;      // angular resolution of the stain's outline
   var TAU = Math.PI * 2;
   var GRAIN = 62;      // noise added to the threshold, 0-255
@@ -54,7 +55,9 @@
   var raf = 0, over = false;
   var radius = RADIUS;   // the live radius, eased toward its target
   var reach = RADIUS;    // the widest the patch can open to
-  var moved = 0;         // when the pointer last moved
+  var moved = 0;         // when the pointer last travelled
+  var born = 0;          // when this hover began
+  var lastX = 0, lastY = 0;
 
   // The stain is not a disc. Its edge is a handful of sine lobes at random
   // phases, so it comes out lopsided, differently each time, and the lobes
@@ -159,7 +162,7 @@
     var target = idle ? reach : RADIUS;
     radius += (target - radius) * (idle ? SPREAD : PULL);
 
-    outline(now);
+    outline(now - born);
 
     var px = pointer.x, py = pointer.y;
     var rMax = radius * arcMax, rMax2 = rMax * rMax;
@@ -226,6 +229,16 @@
     pointer.y = e.clientY - r.top;
   }
 
+  // Sub-pixel jitter from a resting hand should not keep collapsing the
+  // stain; only a real move counts as a move.
+  function stirred() {
+    var dx = pointer.x - lastX, dy = pointer.y - lastY;
+    if (dx * dx + dy * dy < STIR * STIR) return false;
+    lastX = pointer.x;
+    lastY = pointer.y;
+    return true;
+  }
+
   banner.addEventListener('pointerenter', function (e) {
     if (e.pointerType === 'touch') return;
     if (!measure()) return;
@@ -233,7 +246,9 @@
     banner.classList.add('is-rastered');
     at(e);
     radius = RADIUS;
-    moved = Date.now();
+    born = moved = Date.now();
+    lastX = pointer.x;
+    lastY = pointer.y;
     reshape();
     schedule();
   });
@@ -241,7 +256,7 @@
   banner.addEventListener('pointermove', function (e) {
     if (!over) return;
     at(e);
-    moved = Date.now();
+    if (stirred()) moved = Date.now();
     schedule();
   });
 
