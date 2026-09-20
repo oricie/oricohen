@@ -175,7 +175,7 @@ h1 {
 /* A card in hand. */
 .work-item.is-lifted { z-index: 99; }
 
-.work-item.is-lifted .work-panel {
+.work-item.is-lifted .work-card {
   box-shadow: 0 30px 60px -24px rgba(20, 20, 40, 0.5);
 }
 
@@ -192,6 +192,10 @@ h1 {
   font: inherit;
   text-align: left;
   cursor: grab;
+  border-radius: 28px;
+  box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
+  transition: transform 0.5s cubic-bezier(0.34, 1.4, 0.64, 1),
+              box-shadow 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 .work-card:active { cursor: grabbing; }
@@ -204,62 +208,25 @@ h1 {
   border-radius: 28px;
   padding: 28px 32px 0;
   overflow: hidden;
-  box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
+  clip-path: inset(0 0 0 0 round 28px);
   transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
-              transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
+              clip-path 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-/* On hover the card rises and pulls in at the sides, and the shadow under
-   it deepens to carry the height. The curve overshoots slightly, so it
-   settles rather than stops.
+/* On hover the card rises, and its two sides crop inward. Nothing is
+   scaled: the panel's painted box narrows over content that holds still,
+   so the head and the screenshot never stretch. */
+.work-card:hover,
+.work-card:focus-visible {
+  transform: translateY(-6px);
+  box-shadow: 0 26px 52px -28px rgba(20, 20, 40, 0.42);
+}
 
-   Only the shell moves: the head and the screenshot are scaled back by the
-   inverse, so the panel's edges close in over content that holds still
-   rather than squeezing it. */
 .work-card:hover .work-panel,
 .work-card:focus-visible .work-panel {
-  transform: translateY(-8px) scaleX(0.978);
-  box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.55);
+  clip-path: inset(0 7px 0 7px round 28px);
 }
 
-.work-head,
-.work-screen {
-  transition: transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.work-card:hover .work-head,
-.work-card:focus-visible .work-head,
-.work-card:hover .work-screen,
-.work-card:focus-visible .work-screen {
-  transform: scaleX(1.0225);
-}
-
-.work-head {
-  display: block;
-  margin-bottom: 22px;
-}
-
-.work-title,
-.work-sub {
-  display: block;
-  font-size: var(--text);
-  line-height: 1.45;
-}
-
-.work-title { color: var(--on-panel, var(--ink)); }
-.work-sub   { color: var(--on-panel-mute, var(--ink-mute)); }
-
-.work-screen {
-  display: block;
-  flex: 1;
-  overflow: hidden;
-  border-radius: 14px 14px 0 0;
-  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
-  background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
-  box-shadow: 0 18px 40px -16px rgba(20, 20, 40, 0.30),
-              0 2px 6px rgba(20, 20, 40, 0.06);
-}
 
 /* A product shot scales to the full width of the screen and is cropped at
    the bottom, so the interface keeps its own proportions. */
@@ -384,6 +351,7 @@ h1 {
   .flap-cell.is-turning { animation: none; }
 }
 
+
 /* The circular open affordance. */
 .work-open {
   position: absolute;
@@ -447,8 +415,10 @@ h1 {
 .work.is-grid .work-panel {
   border-radius: 8px;
   background: #f1f1f1;     /* grey, not the stack's colours */
-  box-shadow: none;
+  clip-path: inset(0 0 0 0 round 8px);
 }
+
+.work.is-grid .work-card { box-shadow: none; }
 
 .work.is-grid .work-title { color: var(--ink); }
 .work.is-grid .work-sub   { color: var(--ink-mute); }
@@ -478,10 +448,15 @@ h1 {
   transform: scale(1);
 }
 
+.work.is-grid .work-card:hover,
+.work.is-grid .work-card:focus-visible {
+  transform: translateY(-6px);
+  box-shadow: 0 22px 44px -28px rgba(20, 20, 40, 0.34);
+}
+
 .work.is-grid .work-card:hover .work-panel,
 .work.is-grid .work-card:focus-visible .work-panel {
-  transform: translateY(-8px) scaleX(0.978);
-  box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.45);
+  clip-path: inset(0 7px 0 7px round 8px);
 }
 
 @media (max-width: 700px) {
@@ -518,12 +493,8 @@ footer {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .work-card:hover .work-panel,
-  .work-card:focus-visible .work-panel,
-  .work.is-grid .work-card:hover .work-panel,
-  .work.is-grid .work-card:focus-visible .work-panel,
-  .work-card:hover .work-head,
-  .work-card:focus-visible .work-head,
-  .work-card:hover .work-screen,
-  .work-card:focus-visible .work-screen { transform: none; }
+  .work-card:hover,
+  .work-card:focus-visible,
+  .work.is-grid .work-card:hover,
+  .work.is-grid .work-card:focus-visible { transform: none; }
 }
