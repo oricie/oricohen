@@ -24,19 +24,20 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 9;       // target css px per cell
+  var BLOCK = 7;       // target css px per cell
   var RADIUS = 165;    // the patch while the pointer is moving
   var FEATHER = 0.42;  // fraction of the radius the marks shrink away over
   var SETTLE = 140;    // ms of stillness before the patch starts seeping
-  var SPREAD = 0.0055; // how fast it seeps outward
-  var PULL = 0.12;     // how fast it draws back once the pointer moves
-  var STIR = 2.5;      // px the pointer must travel to count as moving
+  var SPREAD = 0.0075; // how fast it seeps outward
+  var PULL = 0.26;     // how fast it draws back once the pointer moves
+  var STIR = 1.6;      // px the pointer must travel to count as moving
   var ARCS = 168;      // angular resolution of the stain's outline
   var TAU = Math.PI * 2;
   var FLOOR = 0.10;    // below this much ink a cell stays empty
-  var TONES = 7;       // grey steps the marks are drawn in
-  var LIGHT = 168;     // the grey a barely-inked mark takes
-  var DARK = 16;       // the grey a fully inked mark takes
+  var TONES = 20;      // grey steps the marks are drawn in
+  var LIGHT = 196;     // the grey a barely-inked mark takes
+  var DARK = 12;       // the grey a fully inked mark takes
+  var SPR = 26;        // px a sprite is drawn at before being scaled down
 
   var canvas = document.createElement('canvas');
   canvas.className = 'banner-fx';
@@ -140,22 +141,39 @@
       return false;
     }
 
+    buildSheet();
     return true;
   }
 
-  /* Tone picks both the mark and its size. The bands are wide enough that a
-     face reads as fields of shape rather than a gradient of one. */
-  function mark(g, cx, cy, ink, half) {
-    if (ink < 0.40) {                       // light: a triangle
-      g.moveTo(cx, cy - half);
-      g.lineTo(cx + half, cy + half);
-      g.lineTo(cx - half, cy + half);
+  /* Every shape in every grey, rendered once into a sheet. Stamping a
+     scaled sprite is an order of magnitude cheaper than building and
+     filling a path per mark, which is what caps how fine the grid can be
+     and how many greys it can carry. */
+  var sheet = document.createElement('canvas');
+
+  function buildSheet() {
+    sheet.width = 3 * SPR;
+    sheet.height = TONES * SPR;
+    var g = sheet.getContext('2d');
+    var r = SPR / 2;
+
+    for (var t = 0; t < TONES; t++) {
+      var v = Math.round(LIGHT + (DARK - LIGHT) * (t / (TONES - 1)));
+      g.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+      var y = t * SPR;
+
+      g.beginPath();                              // light: a triangle
+      g.moveTo(r, y + 1.5);
+      g.lineTo(SPR - 1.5, y + SPR - 2);
+      g.lineTo(1.5, y + SPR - 2);
       g.closePath();
-    } else if (ink < 0.72) {                // mid: a circle
-      g.moveTo(cx + half, cy);
-      g.arc(cx, cy, half, 0, TAU);
-    } else {                                // dark: a square
-      g.rect(cx - half, cy - half, half * 2, half * 2);
+      g.fill();
+
+      g.beginPath();                              // mid: a circle
+      g.arc(SPR + r, y + r, r - 1, 0, TAU);
+      g.fill();
+
+      g.fillRect(2 * SPR + 1, y + 1, SPR - 2, SPR - 2);   // dark: a square
     }
   }
 
@@ -184,7 +202,10 @@
     radius += (target - radius) * (idle ? SPREAD : PULL);
     // The approach is asymptotic; past this the last of it shows nothing
     // new, so land it and let the frame go quiet.
-    if (Math.abs(target - radius) < 1.5) radius = target;
+    // Once the shortest lobe already reaches the furthest corner there is
+    // nothing left to reveal, so land it rather than creep for another ten
+    // seconds at full cost.
+    if (radius * arcMin >= far || target - radius < target * 0.01) radius = target;
     if (radius > reach) radius = reach;
 
     // Arrived, and the pointer has not moved: the next frame would be the
@@ -226,10 +247,6 @@
     var y0 = Math.max(0, Math.floor((py - rMax) / cell));
     var y1 = Math.min(rows - 1, Math.ceil((py + rMax) / cell));
 
-    // A path per shape per tone: the marks keep their own greys, and the
-    // frame still goes down in a couple of dozen fills.
-    var paths = [];
-    for (var b = 0; b < 3 * TONES; b++) paths.push(null);
 
     for (var y = y0; y <= y1; y++) {
       var cy = (y + 0.5) * cell;
@@ -268,18 +285,9 @@
         // what makes it read as a photograph rather than a pattern.
         var tone = (t * TONES) | 0;
         if (tone > TONES - 1) tone = TONES - 1;
-        var slot = shape * TONES + tone;
-        if (!paths[slot]) paths[slot] = new Path2D();
-        mark(paths[slot], cx, cy, ink, half);
+        ctx.drawImage(sheet, shape * SPR, tone * SPR, SPR, SPR,
+                      cx - half, cy - half, half * 2, half * 2);
       }
-    }
-
-    for (var b2 = 0; b2 < paths.length; b2++) {
-      if (!paths[b2]) continue;
-      var t2 = b2 % TONES;
-      var g = Math.round(LIGHT + (DARK - LIGHT) * (t2 / (TONES - 1)));
-      ctx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
-      ctx.fill(paths[b2]);
     }
 
     if (over) schedule();
