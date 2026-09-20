@@ -206,15 +206,16 @@ h1 {
   overflow: hidden;
   box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
   transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
-              transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
-              box-shadow 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+              transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* On hover the card rises and draws back a little, and the shadow under it
-   deepens to carry the height. */
+/* On hover the card rises and pulls in at the sides, and the shadow under
+   it deepens to carry the height. The curve overshoots slightly, so it
+   settles rather than stops. */
 .work-card:hover .work-panel,
 .work-card:focus-visible .work-panel {
-  transform: translateY(-8px) scale(0.982);
+  transform: translateY(-8px) scaleX(0.978);
   box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.55);
 }
 
@@ -445,7 +446,7 @@ h1 {
 
 .work.is-grid .work-card:hover .work-panel,
 .work.is-grid .work-card:focus-visible .work-panel {
-  transform: translateY(-8px) scale(0.982);
+  transform: translateY(-8px) scaleX(0.978);
   box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.45);
 }
 
