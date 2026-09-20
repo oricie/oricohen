@@ -18,10 +18,10 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 2;       // css px per dot
-  var RADIUS = 150;    // reach of the cursor light
-  var LIFT = 105;      // how much that light brightens, 0-255
-  var GRAIN = 48;      // noise added to the threshold, 0-255
+  var BLOCK = 1.5;     // css px per dot
+  var RADIUS = 165;    // reach of the cursor
+  var LIFT = 42;       // how much the cursor brightens, 0-255
+  var GRAIN = 62;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
   var BAYER = [
@@ -38,6 +38,7 @@
   var ctx = canvas.getContext('2d');
   var small = document.createElement('canvas');
   var lum = null;            // luminance per cell
+  var rgb = null;            // the photo's own colour per cell
   var grain = null;          // fixed noise per cell, so it never crawls
   var bits = null;           // the 1-bit frame, one pixel per cell
   var bitsCtx = null;
@@ -71,7 +72,15 @@
       var data = sc.getImageData(0, 0, cols, rows).data;
       lum = new Float32Array(cols * rows);
       grain = new Float32Array(cols * rows);
+      rgb = new Uint8ClampedArray(cols * rows * 3);
       for (var i = 0, p = 0; i < lum.length; i++, p += 4) {
+        // Keep the photo's colour, pushed a little to hold up as ink.
+        var sr = data[p], sg = data[p + 1], sb = data[p + 2];
+        var mid = (sr + sg + sb) / 3;
+        rgb[i * 3]     = mid + (sr - mid) * 3.2;
+        rgb[i * 3 + 1] = mid + (sg - mid) * 3.2;
+        rgb[i * 3 + 2] = mid + (sb - mid) * 3.2;
+
         // Rec. 601 luma, then a little contrast so 1-bit has something to bite on.
         var y = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
         lum[i] = Math.max(0, Math.min(255, (y - 128) * 1.3 + 128));
@@ -109,16 +118,28 @@
         var v = lum[i];
         var cx = x * BLOCK;
 
-        // The cursor lights the picture locally, thinning the dots.
+        // Near the cursor the dots lighten a little — and take on the
+        // photo's own colour instead of ink.
         var dx = cx - px, dy = cy - py;
         var d2 = dx * dx + dy * dy;
+        var f = 0;
         if (d2 < r2) {
-          var f = 1 - Math.sqrt(d2) / RADIUS;
+          f = 1 - Math.sqrt(d2) / RADIUS;
           v += LIFT * f * f;
         }
 
-        var ink = v < BAYER[by][x & 3] + grain[i] ? 18 : 255;
-        d[p] = d[p + 1] = d[p + 2] = ink;
+        if (v < BAYER[by][x & 3] + grain[i]) {
+          if (f > 0) {
+            var t = f;
+            d[p]     = 18 + (rgb[i * 3] - 18) * t;
+            d[p + 1] = 18 + (rgb[i * 3 + 1] - 18) * t;
+            d[p + 2] = 18 + (rgb[i * 3 + 2] - 18) * t;
+          } else {
+            d[p] = d[p + 1] = d[p + 2] = 18;
+          }
+        } else {
+          d[p] = d[p + 1] = d[p + 2] = 255;
+        }
         d[p + 3] = 255;
       }
     }
