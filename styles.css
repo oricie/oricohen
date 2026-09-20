@@ -273,15 +273,56 @@ body {
   background: #f1f1f1;
 }
 
-/* A figure with nothing to explain: the image stands on its own, full
-   width, no mount around it. */
-.sheet-shot--full {
-  padding: 0;
-  background: none;
-  margin-top: 22px;
+/* The same reel as the card, opened out: full width, at the frames' own
+   ratio so nothing is cropped, with dots to step through by hand. */
+.reel--sheet {
+  position: relative;
+  width: 100%;
+  max-width: 1440px;
+  margin: 26px auto 0;
+  aspect-ratio: 1198 / 1058;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: none;
 }
 
-.sheet-shot--full img { border-radius: 10px; }
+.reel--sheet img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.reel-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.reel-dot:hover { background: rgba(255, 255, 255, 0.6); }
+
+.reel-dot.is-on {
+  background: #ffffff;
+  transform: scale(1.3);
+}
+
+.reel-dot:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
 
 .sheet-shot img {
   display: block;
