@@ -21,9 +21,11 @@
   var BLOCK = 1.5;     // target css px per dot
   var RADIUS = 165;    // the patch while the pointer is moving
   var FEATHER = 0.22;  // fraction of the radius the patch fades over
-  var SETTLE = 140;    // ms of stillness before the patch starts spreading
-  var SPREAD = 0.007;  // how fast it opens out
+  var SETTLE = 140;    // ms of stillness before the patch starts seeping
+  var SPREAD = 0.0022; // how fast it seeps outward
   var PULL = 0.30;     // how fast it draws back once the pointer moves
+  var ARCS = 168;      // angular resolution of the stain's outline
+  var TAU = Math.PI * 2;
   var GRAIN = 62;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
@@ -53,6 +55,44 @@
   var radius = RADIUS;   // the live radius, eased toward its target
   var reach = RADIUS;    // the widest the patch can open to
   var moved = 0;         // when the pointer last moved
+
+  // The stain is not a disc. Its edge is a handful of sine lobes at random
+  // phases, so it comes out lopsided, differently each time, and the lobes
+  // drift as it grows — it creeps rather than inflates.
+  var arc = new Float32Array(ARCS);
+  var lobes = [];
+  var arcMin = 1, arcMax = 1;
+
+  function reshape() {
+    lobes = [];
+    var n = 3 + (Math.random() * 3 | 0);
+    var budget = 0.42;
+    for (var i = 0; i < n; i++) {
+      var amp = budget * (0.25 + Math.random() * 0.6) / n;
+      lobes.push({
+        k: 2 + (Math.random() * 4 | 0),
+        amp: amp,
+        phase: Math.random() * TAU,
+        drift: (Math.random() - 0.5) * 0.0009
+      });
+    }
+  }
+
+  function outline(t) {
+    var lo = 9, hi = 0;
+    for (var i = 0; i < ARCS; i++) {
+      var a = i / ARCS * TAU, v = 1;
+      for (var j = 0; j < lobes.length; j++) {
+        var L = lobes[j];
+        v += L.amp * Math.sin(L.k * a + L.phase + L.drift * t);
+      }
+      arc[i] = v;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    arcMin = lo;
+    arcMax = hi;
+  }
 
   function measure() {
     var r = banner.getBoundingClientRect();
@@ -114,25 +154,25 @@
     raf = 0;
     if (!lum) return;
 
-    // Still pointer: the patch keeps opening out. Moving pointer: it draws
-    // back to its travelling size.
-    var idle = Date.now() - moved > SETTLE;
+    var now = Date.now();
+    var idle = now - moved > SETTLE;
     var target = idle ? reach : RADIUS;
     radius += (target - radius) * (idle ? SPREAD : PULL);
 
+    outline(now);
+
     var px = pointer.x, py = pointer.y;
-    var r2 = radius * radius;
-    var inner = radius * (1 - FEATHER);
+    var rMax = radius * arcMax, rMax2 = rMax * rMax;
+    // Inside this, no cell can be near the edge, so the angle is not needed.
+    var rSafe = radius * arcMin * (1 - FEATHER), rSafe2 = rSafe * rSafe;
     var d = bits.data;
 
-    // Everything starts clear, and only the cells the patch can reach are
-    // worked out — so the cost follows the patch, not the frame.
     d.fill(0);
 
-    var x0 = Math.max(0, Math.floor((px - radius) / step));
-    var x1 = Math.min(cols - 1, Math.ceil((px + radius) / step));
-    var y0 = Math.max(0, Math.floor((py - radius) / step));
-    var y1 = Math.min(rows - 1, Math.ceil((py + radius) / step));
+    var x0 = Math.max(0, Math.floor((px - rMax) / step));
+    var x1 = Math.min(cols - 1, Math.ceil((px + rMax) / step));
+    var y0 = Math.max(0, Math.floor((py - rMax) / step));
+    var y1 = Math.min(rows - 1, Math.ceil((py + rMax) / step));
 
     for (var y = y0; y <= y1; y++) {
       var cy = (y + 0.5) * step;
@@ -142,12 +182,23 @@
         var cx = (x + 0.5) * step;
         var dx = cx - px, dy = cy - py;
         var d2 = dx * dx + dy * dy;
-        if (d2 > r2) continue;
+        if (d2 > rMax2) continue;
+
+        var a;
+        if (d2 < rSafe2) {
+          a = 1;
+        } else {
+          // Only the rim needs to know which way it is facing.
+          var k = ((Math.atan2(dy, dx) + Math.PI) / TAU * ARCS) | 0;
+          if (k < 0) k = 0; else if (k >= ARCS) k = ARCS - 1;
+          var lr = radius * arc[k];
+          var dist = Math.sqrt(d2);
+          if (dist > lr) continue;
+          var inner = lr * (1 - FEATHER);
+          a = dist <= inner ? 1 : 1 - (dist - inner) / (lr - inner);
+        }
 
         var i = row + x, p = i * 4;
-        var dist = Math.sqrt(d2);
-        var a = dist <= inner ? 1 : 1 - (dist - inner) / (radius - inner);
-
         if (lum[i] < BAYER[by][x & 3] + grain[i]) {
           d[p] = d[p + 1] = d[p + 2] = 18;
         } else {
@@ -183,6 +234,7 @@
     at(e);
     radius = RADIUS;
     moved = Date.now();
+    reshape();
     schedule();
   });
 
