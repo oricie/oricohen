@@ -1,7 +1,8 @@
 /* The card with nothing written up yet runs a reel of older interface work.
  *
- * One frame is on at a time and they cross over quickly, so the card reads
- * as something still being sorted through rather than a finished gallery.
+ * The frames cut from one to the next. A cross-fade would dissolve two
+ * different interfaces through each other, which reads as a ghost rather
+ * than as a change.
  */
 (function () {
   var reel = document.querySelector('.reel');
@@ -10,7 +11,7 @@
   var frames = Array.prototype.slice.call(reel.querySelectorAll('img'));
   if (frames.length < 2) return;
 
-  var HOLD = 900;   // ms a frame stays up
+  var HOLD = 1300;  // ms a frame stays up
   var at = 0;
 
   var reduce = window.matchMedia &&
