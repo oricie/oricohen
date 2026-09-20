@@ -212,11 +212,27 @@ h1 {
 
 /* On hover the card rises and pulls in at the sides, and the shadow under
    it deepens to carry the height. The curve overshoots slightly, so it
-   settles rather than stops. */
+   settles rather than stops.
+
+   Only the shell moves: the head and the screenshot are scaled back by the
+   inverse, so the panel's edges close in over content that holds still
+   rather than squeezing it. */
 .work-card:hover .work-panel,
 .work-card:focus-visible .work-panel {
   transform: translateY(-8px) scaleX(0.978);
   box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.55);
+}
+
+.work-head,
+.work-screen {
+  transition: transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.work-card:hover .work-head,
+.work-card:focus-visible .work-head,
+.work-card:hover .work-screen,
+.work-card:focus-visible .work-screen {
+  transform: scaleX(1.0225);
 }
 
 .work-head {
@@ -257,99 +273,104 @@ h1 {
 }
 
 /* ── The card with nothing in it yet ────────────────────── */
-/* Instead of a product shot it shows an interface mid-build: skeleton
-   blocks under a shimmer that sweeps the whole screen, so the card reads
-   as filling up rather than as empty. */
+/* No product shot, so nothing sits in a white frame: a small departure
+   board floats in the card's own colour, with a strip of the same
+   vocabulary running underneath it. */
 .work-screen--soon {
   position: relative;
-  padding: 22px 24px;
-}
-
-.soon-ui { display: block; }
-
-.soon-bar {
   display: flex;
-  gap: 6px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: none;
+  box-shadow: none;
 }
 
-.soon-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #e4e4e9;
-}
-
-.soon-block {
-  display: block;
-  height: 12px;
-  border-radius: 6px;
-  background: #ededf1;
-  margin-bottom: 11px;
-}
-
-.soon-block--wide  { width: 62%; }
-.soon-block--short { width: 34%; }
-.soon-block:not([class*="--"]) { width: 48%; }
-
-.soon-tiles {
+.flap {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 5px;
 }
 
-.soon-tile {
-  flex: 1;
-  height: 64px;
-  border-radius: 8px;
-  background: #f0f0f4;
-  animation: soon-breathe 3.2s ease-in-out infinite;
+.flap-cell {
+  width: 38px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--on-panel, #fff);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 24px;
+  line-height: 1;
+  /* The seam across the middle of a split flap. */
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.14);
 }
 
-.soon-tile:nth-child(2) { animation-delay: 0.4s; }
-.soon-tile:nth-child(3) { animation-delay: 0.8s; }
+.flap-cell.is-blank { background: rgba(0, 0, 0, 0.14); }
 
-/* One sweep across the lot, rather than an animation per block. */
-.work-screen--soon::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg,
-    rgba(255, 255, 255, 0) 38%,
-    rgba(255, 255, 255, 0.9) 50%,
-    rgba(255, 255, 255, 0) 62%);
-  transform: translateX(-100%);
-  animation: soon-sweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  pointer-events: none;
+.flap-cell.is-turning { animation: flap-turn 0.12s ease-out; }
+
+@keyframes flap-turn {
+  from { transform: perspective(200px) rotateX(-58deg); opacity: 0.45; }
+  to   { transform: none; opacity: 1; }
+}
+
+.ticker {
+  width: 100%;
+  overflow: hidden;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 9px 0;
+  /* Fade the strip out at both ends instead of cutting it. */
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-run 26s linear infinite;
+}
+
+.ticker-run {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-right: 18px;
+  white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--on-panel-mute, rgba(255, 255, 255, 0.75));
+}
+
+.ticker-run b { font-weight: 400; }
+.ticker-run i { font-style: normal; opacity: 0.5; }
+
+@keyframes ticker-run {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 
 .soon-label {
   position: absolute;
-  left: 24px;
-  bottom: 20px;
+  left: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--ink-mute);
+  color: var(--on-panel-mute, rgba(255, 255, 255, 0.75));
 }
 
 .soon-pulse {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--panel, var(--ink));
+  background: var(--on-panel, #fff);
   animation: soon-blink 1.8s ease-in-out infinite;
-}
-
-@keyframes soon-sweep {
-  0%        { transform: translateX(-100%); }
-  60%, 100% { transform: translateX(100%); }
-}
-
-@keyframes soon-breathe {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
 }
 
 @keyframes soon-blink {
@@ -358,10 +379,9 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .work-screen--soon::after,
-  .soon-tile,
-  .soon-pulse { animation: none; }
-  .work-screen--soon::after { opacity: 0; }
+  .ticker-track,
+  .soon-pulse,
+  .flap-cell.is-turning { animation: none; }
 }
 
 /* The circular open affordance. */
@@ -434,6 +454,20 @@ h1 {
 .work.is-grid .work-sub   { color: var(--ink-mute); }
 
 .work.is-grid .work-screen { border-radius: 4px 4px 0 0; }
+.work.is-grid .work-screen--soon { border-radius: 0; }
+
+/* Grid swaps the coloured panel for grey, so the board swaps with it. */
+.work.is-grid .flap-cell {
+  background: rgba(20, 20, 40, 0.08);
+  color: var(--ink);
+  box-shadow: inset 0 -1px 0 rgba(20, 20, 40, 0.10);
+}
+
+.work.is-grid .flap-cell.is-blank { background: rgba(20, 20, 40, 0.04); }
+.work.is-grid .ticker { border-color: rgba(20, 20, 40, 0.12); }
+.work.is-grid .ticker-run,
+.work.is-grid .soon-label { color: var(--ink-mute); }
+.work.is-grid .soon-pulse { background: var(--ink); }
 .work.is-grid .work-open   { border-radius: 6px; }
 
 .work.is-grid .work-card { cursor: pointer; }
@@ -454,6 +488,8 @@ h1 {
   .work.is-grid .work-stack { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .work.is-grid .work-item:nth-child(n) { grid-column: span 2; }
   .work.is-grid .work-item .work-panel { height: 220px; }
+  .flap-cell { width: 24px; height: 34px; font-size: 16px; }
+  .work-screen--soon { gap: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -485,5 +521,9 @@ footer {
   .work-card:hover .work-panel,
   .work-card:focus-visible .work-panel,
   .work.is-grid .work-card:hover .work-panel,
-  .work.is-grid .work-card:focus-visible .work-panel { transform: none; }
+  .work.is-grid .work-card:focus-visible .work-panel,
+  .work-card:hover .work-head,
+  .work-card:focus-visible .work-head,
+  .work-card:hover .work-screen,
+  .work-card:focus-visible .work-screen { transform: none; }
 }
