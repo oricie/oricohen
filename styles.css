@@ -209,9 +209,9 @@ body {
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
    the screenshots break out of it and sit on a grey panel, so they read as
    objects rather than floating on the white. */
-/* Three snapshots pinned above the text, each at its own angle, with the
-   caption turning with the card. The photographs carry their own shadow, so
-   nothing is added underneath. */
+/* Three snapshots pinned above the text, overlapping like a handful of
+   prints dropped on a table. The files are flat rectangles now, so the
+   angle, the rounding and the shadow all belong here. */
 .about-photos {
   display: flex;
   justify-content: center;
@@ -221,10 +221,6 @@ body {
   padding-bottom: 18px;
 }
 
-/* The snapshots lie over one another, later ones on top, the way a handful
-   of prints falls on a table. Each PNG carries its own shadow as about 17%
-   of transparent margin a side, so the pull has to swallow that before any
-   overlap shows; as a percentage of the row it scales with the sheet. */
 .photo-card {
   position: relative;
   flex: 0 1 300px;
@@ -232,26 +228,29 @@ body {
   z-index: 1;
 }
 
-.photo-card:nth-child(2) { margin-left: -14%; z-index: 2; }
-.photo-card:nth-child(3) { margin-left: -14%; z-index: 3; }
-
-/* The captions sit above the pile, so an overlap never buries one. */
-.photo-card figcaption { position: relative; z-index: 4; }
-
 .photo-card img {
   display: block;
   width: 100%;
   height: auto;
+  border-radius: 12px;
+  box-shadow: 0 18px 34px -18px rgba(20, 20, 40, 0.34),
+              0 2px 6px rgba(20, 20, 40, 0.06);
   -webkit-user-drag: none;
 }
 
 .photo-card figcaption {
-  margin-top: -6px;
+  position: relative;
+  z-index: 4;
+  margin-top: 16px;
   font-size: 19px;
   font-weight: 700;
   text-align: center;
   color: var(--ink);
 }
+
+/* Later prints lie on top of earlier ones. */
+.photo-card:nth-child(2) { margin-left: -6%; z-index: 2; }
+.photo-card:nth-child(3) { margin-left: -6%; z-index: 3; }
 
 .photo-card:nth-child(1) { transform: rotate(-5deg); }
 .photo-card:nth-child(2) { transform: rotate(3deg) translateY(-14px); }
@@ -261,8 +260,8 @@ body {
   .about-photos { flex-wrap: wrap; margin-bottom: 34px; }
   .photo-card { flex: 0 1 46%; }
   .photo-card:nth-child(2),
-  .photo-card:nth-child(3) { margin-left: -19%; }
-  .photo-card figcaption { font-size: 15px; }
+  .photo-card:nth-child(3) { margin-left: -5%; }
+  .photo-card figcaption { font-size: 15px; margin-top: 10px; }
 }
 
 .sheet-shot {
