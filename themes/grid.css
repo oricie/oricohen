@@ -220,8 +220,8 @@ h1 {
   line-height: 1.45;
 }
 
-.work-title { color: var(--ink); }
-.work-sub   { color: var(--ink-mute); }
+.work-title { color: var(--on-panel, var(--ink)); }
+.work-sub   { color: var(--on-panel-mute, var(--ink-mute)); }
 
 .work-screen {
   display: block;
@@ -305,9 +305,12 @@ h1 {
 
 .work.is-grid .work-panel {
   border-radius: 8px;
-  background: #f1f1f1;     /* grey, not the stack's pastels */
+  background: #f1f1f1;     /* grey, not the stack's colours */
   box-shadow: none;
 }
+
+.work.is-grid .work-title { color: var(--ink); }
+.work.is-grid .work-sub   { color: var(--ink-mute); }
 
 .work.is-grid .work-screen { border-radius: 4px 4px 0 0; }
 .work.is-grid .work-open   { border-radius: 6px; }
