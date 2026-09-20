@@ -24,17 +24,19 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 12;       // target css px per cell
+  var BLOCK = 9;       // target css px per cell
   var RADIUS = 165;    // the patch while the pointer is moving
   var FEATHER = 0.42;  // fraction of the radius the marks shrink away over
   var SETTLE = 140;    // ms of stillness before the patch starts seeping
-  var SPREAD = 0.0022; // how fast it seeps outward
+  var SPREAD = 0.0055; // how fast it seeps outward
   var PULL = 0.12;     // how fast it draws back once the pointer moves
   var STIR = 2.5;      // px the pointer must travel to count as moving
   var ARCS = 168;      // angular resolution of the stain's outline
   var TAU = Math.PI * 2;
-  var FLOOR = 0.06;    // below this much ink a cell stays empty
-  var INK = '#141414';
+  var FLOOR = 0.10;    // below this much ink a cell stays empty
+  var TONES = 7;       // grey steps the marks are drawn in
+  var LIGHT = 168;     // the grey a barely-inked mark takes
+  var DARK = 16;       // the grey a fully inked mark takes
 
   var canvas = document.createElement('canvas');
   canvas.className = 'banner-fx';
@@ -52,6 +54,7 @@
   var radius = RADIUS;   // the live radius, eased toward its target
   var reach = RADIUS;    // the widest the patch can open to
   var moved = 0;         // when the pointer last travelled
+  var drewX = -1, drewY = -1, drewR = -1;   // what the last frame showed
   var born = 0;          // when this hover began
   var lastX = 0, lastY = 0;
 
@@ -97,7 +100,9 @@
     var r = banner.getBoundingClientRect();
     if (!r.width || !img.naturalWidth) return false;
 
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // The marks are small and there are thousands of them; rasterising at
+    // 1.5x rather than 2x costs nothing visible and nearly halves the work.
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     w = r.width;
     h = r.height;
     canvas.width = Math.round(w * dpr);
@@ -112,9 +117,6 @@
     step = cell / dpr;
     cols = Math.max(1, Math.ceil(canvas.width / cell));
     rows = Math.max(1, Math.ceil(canvas.height / cell));
-
-    // Far enough to reach every corner from anywhere in the frame.
-    reach = Math.sqrt(w * w + h * h);
     small.width = cols;
     small.height = rows;
 
@@ -162,9 +164,38 @@
     if (!lum) return;
 
     var now = Date.now();
+
+    // Grow only as far as actually covers the frame from where the pointer
+    // is — chasing the full diagonal meant it never arrived, and a patch
+    // that never arrives can never stop being redrawn.
+    var pxc = pointer.x, pyc = pointer.y;
+    var far = Math.max(
+      Math.sqrt(pxc * pxc + pyc * pyc),
+      Math.sqrt((w - pxc) * (w - pxc) + pyc * pyc),
+      Math.sqrt(pxc * pxc + (h - pyc) * (h - pyc)),
+      Math.sqrt((w - pxc) * (w - pxc) + (h - pyc) * (h - pyc)));
+    // A fixed divisor, not the live arcMin: the lobes drift, and a target
+    // that drifts with them can never be reached, so the frame would never
+    // go quiet.
+    reach = far / 0.58;
+
     var idle = now - moved > SETTLE;
     var target = idle ? reach : RADIUS;
     radius += (target - radius) * (idle ? SPREAD : PULL);
+    // The approach is asymptotic; past this the last of it shows nothing
+    // new, so land it and let the frame go quiet.
+    if (Math.abs(target - radius) < 1.5) radius = target;
+    if (radius > reach) radius = reach;
+
+    // Arrived, and the pointer has not moved: the next frame would be the
+    // same one. Don't spend it, and leave the lobes where they are — their
+    // drift is what would otherwise keep nudging the target forever.
+    if (Math.abs(radius - target) < 1 &&
+        pxc === drewX && pyc === drewY && Math.abs(radius - drewR) < 1) {
+      if (over) schedule();
+      return;
+    }
+    drewX = pxc; drewY = pyc; drewR = radius;
 
     outline(now - born);
 
@@ -195,8 +226,10 @@
     var y0 = Math.max(0, Math.floor((py - rMax) / cell));
     var y1 = Math.min(rows - 1, Math.ceil((py + rMax) / cell));
 
-    // Three paths for the whole picture, one per shape.
-    var paths = [new Path2D(), new Path2D(), new Path2D()];
+    // A path per shape per tone: the marks keep their own greys, and the
+    // frame still goes down in a couple of dozen fills.
+    var paths = [];
+    for (var b = 0; b < 3 * TONES; b++) paths.push(null);
 
     for (var y = y0; y <= y1; y++) {
       var cy = (y + 0.5) * cell;
@@ -223,17 +256,31 @@
           fade *= fade;                     // ease it out rather than ramp
         }
 
-        var half = maxHalf * (0.16 + 0.82 * ink) * fade;
+        // Spread the midtones, so a nearly flat background still varies.
+        var t = ink * ink * (3 - 2 * ink);
+        // Capped short of the cell: marks never quite touch, which is what
+        // keeps dark areas reading as a screen rather than a solid mass.
+        var half = maxHalf * (0.14 + 0.72 * t) * fade;
         if (half < 0.35) continue;
 
-        mark(paths[ink < 0.40 ? 0 : ink < 0.72 ? 1 : 2], cx, cy, ink, half);
+        var shape = t < 0.34 ? 0 : t < 0.70 ? 1 : 2;
+        // Darkness follows the ink, not just the size — that is most of
+        // what makes it read as a photograph rather than a pattern.
+        var tone = (t * TONES) | 0;
+        if (tone > TONES - 1) tone = TONES - 1;
+        var slot = shape * TONES + tone;
+        if (!paths[slot]) paths[slot] = new Path2D();
+        mark(paths[slot], cx, cy, ink, half);
       }
     }
 
-    ctx.fillStyle = INK;
-    ctx.fill(paths[0]);
-    ctx.fill(paths[1]);
-    ctx.fill(paths[2]);
+    for (var b2 = 0; b2 < paths.length; b2++) {
+      if (!paths[b2]) continue;
+      var t2 = b2 % TONES;
+      var g = Math.round(LIGHT + (DARK - LIGHT) * (t2 / (TONES - 1)));
+      ctx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
+      ctx.fill(paths[b2]);
+    }
 
     if (over) schedule();
   }
