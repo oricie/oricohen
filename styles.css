@@ -244,6 +244,49 @@ body {
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
    the screenshots break out of it and sit on a grey panel, so they read as
    objects rather than floating on the white. */
+/* Three snapshots pinned above the text, each at its own angle, with the
+   caption turning with the card. The photographs carry their own shadow, so
+   nothing is added underneath. */
+.about-photos {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 1000px;
+  margin: 0 auto 46px;
+  padding-bottom: 18px;
+}
+
+.photo-card {
+  flex: 0 1 300px;
+  margin: 0;
+}
+
+.photo-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-user-drag: none;
+}
+
+.photo-card figcaption {
+  margin-top: -6px;
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink);
+}
+
+.photo-card:nth-child(1) { transform: rotate(-5deg); }
+.photo-card:nth-child(2) { transform: rotate(3deg) translateY(-14px); }
+.photo-card:nth-child(3) { transform: rotate(-2deg) translateY(10px); }
+
+@media (max-width: 700px) {
+  .about-photos { flex-wrap: wrap; gap: 4px; margin-bottom: 34px; }
+  .photo-card { flex: 0 1 46%; }
+  .photo-card figcaption { font-size: 15px; }
+}
+
 .sheet-shot {
   max-width: 1440px;
   width: 100%;

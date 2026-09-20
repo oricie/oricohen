@@ -1,9 +1,9 @@
-/* The portrait resolves into 1-bit pixel art under the pointer.
+/* A patch of the portrait turns to pixel art under the pointer.
  *
- * On hover the photo is redrawn as black dots on white, ordered-dithered
- * with a Bayer matrix so it keeps its tones without any greys. The cursor
- * acts as a light: dots thin out around it, so moving the mouse pushes the
- * picture in and out of legibility.
+ * Only what the cursor covers is redrawn — black dots on white, ordered-
+ * dithered with a Bayer matrix so it keeps its tones without any greys.
+ * Everywhere else the canvas stays transparent and the photograph shows
+ * through, so the pixel art travels with the mouse.
  */
 (function () {
   var banner = document.querySelector('.banner');
@@ -19,8 +19,8 @@
   if (reduce || noHover) return;
 
   var BLOCK = 1.5;     // target css px per dot
-  var RADIUS = 165;    // reach of the cursor
-  var LIFT = 42;       // how much the cursor brightens, 0-255
+  var RADIUS = 165;    // size of the pixel-art patch
+  var FEATHER = 0.22;  // fraction of the radius the patch fades over
   var GRAIN = 62;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
@@ -38,7 +38,6 @@
   var ctx = canvas.getContext('2d');
   var small = document.createElement('canvas');
   var lum = null;            // luminance per cell
-  var rgb = null;            // the photo's own colour per cell
   var grain = null;          // fixed noise per cell, so it never crawls
   var bits = null;           // the 1-bit frame, one pixel per cell
   var bitsCtx = null;
@@ -79,15 +78,7 @@
       var data = sc.getImageData(0, 0, cols, rows).data;
       lum = new Float32Array(cols * rows);
       grain = new Float32Array(cols * rows);
-      rgb = new Uint8ClampedArray(cols * rows * 3);
       for (var i = 0, p = 0; i < lum.length; i++, p += 4) {
-        // Keep the photo's colour, pushed a little to hold up as ink.
-        var sr = data[p], sg = data[p + 1], sb = data[p + 2];
-        var mid = (sr + sg + sb) / 3;
-        rgb[i * 3]     = mid + (sr - mid) * 3.2;
-        rgb[i * 3 + 1] = mid + (sg - mid) * 3.2;
-        rgb[i * 3 + 2] = mid + (sb - mid) * 3.2;
-
         // Rec. 601 luma, then a little contrast so 1-bit has something to bite on.
         var y = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
         lum[i] = Math.max(0, Math.min(255, (y - 128) * 1.3 + 128));
@@ -116,38 +107,29 @@
 
     var px = pointer.x, py = pointer.y;
     var r2 = RADIUS * RADIUS;
+    var inner = RADIUS * (1 - FEATHER);
     var d = bits.data;
 
     for (var y = 0, i = 0, p = 0; y < rows; y++) {
       var cy = (y + 0.5) * step;
       var by = y & 3;
       for (var x = 0; x < cols; x++, i++, p += 4) {
-        var v = lum[i];
         var cx = (x + 0.5) * step;
-
-        // Near the cursor the dots lighten a little — and take on the
-        // photo's own colour instead of ink.
         var dx = cx - px, dy = cy - py;
         var d2 = dx * dx + dy * dy;
-        var f = 0;
-        if (d2 < r2) {
-          f = 1 - Math.sqrt(d2) / RADIUS;
-          v += LIFT * f * f;
-        }
 
-        if (v < BAYER[by][x & 3] + grain[i]) {
-          if (f > 0) {
-            var t = f;
-            d[p]     = 18 + (rgb[i * 3] - 18) * t;
-            d[p + 1] = 18 + (rgb[i * 3 + 1] - 18) * t;
-            d[p + 2] = 18 + (rgb[i * 3 + 2] - 18) * t;
-          } else {
-            d[p] = d[p + 1] = d[p + 2] = 18;
-          }
+        // Outside the patch the canvas stays clear, so the photo shows.
+        if (d2 > r2) { d[p + 3] = 0; continue; }
+
+        var dist = Math.sqrt(d2);
+        var a = dist <= inner ? 1 : 1 - (dist - inner) / (RADIUS - inner);
+
+        if (lum[i] < BAYER[by][x & 3] + grain[i]) {
+          d[p] = d[p + 1] = d[p + 2] = 18;
         } else {
           d[p] = d[p + 1] = d[p + 2] = 255;
         }
-        d[p + 3] = 255;
+        d[p + 3] = (a * 255) | 0;
       }
     }
 
