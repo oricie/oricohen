@@ -273,6 +273,16 @@ body {
   background: #f1f1f1;
 }
 
+/* A figure with nothing to explain: the image stands on its own, full
+   width, no mount around it. */
+.sheet-shot--full {
+  padding: 0;
+  background: none;
+  margin-top: 22px;
+}
+
+.sheet-shot--full img { border-radius: 10px; }
+
 .sheet-shot img {
   display: block;
   width: 100%;
