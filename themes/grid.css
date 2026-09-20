@@ -1,0 +1,361 @@
+/* ── Ori Cohen — quiet, light, one page ─────────────────────
+   Light ground, understated type, pastel panels with soft
+   shadows, and content that opens in a sheet instead of a page.
+   ───────────────────────────────────────────────────────── */
+:root {
+  --ink:       #1a1a1a;
+  --ink-2:     #222222;
+  --ink-mute:  #a6a6a6;   /* the grey half of every title pair */
+  --hairline:  #ececec;
+  --paper:     #ffffff;
+  --sans:      -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --measure:   680px;
+  --text:      17px;      /* one size for nearly everything */
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 40px 40px;
+}
+
+/* ── Intro ──────────────────────────────────────────────── */
+.intro {
+  margin-bottom: 52px;
+}
+
+h1 {
+  font-size: var(--text);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  margin-bottom: 0;
+}
+
+/* The black/grey pair the reference uses for every title. */
+.tagline {
+  font-size: var(--text);
+  line-height: 1.45;
+  color: var(--ink-mute);
+}
+
+.bio p {
+  margin-bottom: 20px;
+  font-size: var(--text);
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+
+.read-more {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: #c9c9c9;
+  cursor: pointer;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.read-more:hover { text-decoration-color: var(--ink); }
+
+.read-more:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.bio .icon {
+  font-size: 15px;
+  filter: grayscale(0.15);
+}
+
+/* ── Work ───────────────────────────────────────────────── */
+.work {
+  margin-top: 88px;
+}
+
+.work-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 36px;
+}
+
+.work h2 {
+  font-size: var(--text);
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* ── Stacked / grid toggle ──────────────────────────────── */
+.view-toggle {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+
+.view-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #cfcfcf;
+  cursor: pointer;
+  transition: color 0.25s ease;
+}
+
+.view-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.view-btn[data-view="grid"] svg { fill: currentColor; stroke: none; }
+
+.view-btn:hover { color: #9a9a9a; }
+
+.view-btn.is-active { color: #767676; }
+
+.view-btn:focus-visible {
+  outline: 2px solid #9a9a9a;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* The deck: every card occupies the same box, offset by its depth. */
+.work-stack {
+  list-style: none;
+  position: relative;
+  height: 400px;
+  margin-bottom: 8px;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.work-stack:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 12px;
+  border-radius: 32px;
+}
+
+.work-item {
+  position: absolute;
+  inset: 0;
+  transform:
+    translate(var(--x, 0px), var(--y, 0px))
+    translateY(calc(var(--depth, 0) * 14px))
+    scale(calc(1 - var(--depth, 0) * 0.045));
+  transform-origin: 50% 100%;
+  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
+              box-shadow 0.3s ease;
+  will-change: transform;
+}
+
+/* A card in hand. */
+.work-item.is-lifted { z-index: 99; }
+
+.work-item.is-lifted .work-panel {
+  box-shadow: 0 30px 60px -24px rgba(20, 20, 40, 0.5);
+}
+
+.work-item.no-transition { transition: none; }
+
+.work-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.work-card:active { cursor: grabbing; }
+
+.work-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel, #eef0fb);
+  border-radius: 28px;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  padding: 28px 32px 0;
+  overflow: hidden;
+  box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
+}
+
+.work-head {
+  display: block;
+  margin-bottom: 22px;
+}
+
+.work-title,
+.work-sub {
+  display: block;
+  font-size: var(--text);
+  line-height: 1.45;
+}
+
+.work-title { color: var(--on-panel, var(--ink)); }
+.work-sub   { color: var(--on-panel-mute, var(--ink-mute)); }
+
+.work-screen {
+  display: block;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
+  box-shadow: 0 18px 40px -16px rgba(20, 20, 40, 0.30),
+              0 2px 6px rgba(20, 20, 40, 0.06);
+}
+
+/* A product shot scales to the full width of the screen and is cropped at
+   the bottom, so the interface keeps its own proportions. */
+.work-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Without this the browser's own image drag hijacks the card gesture. */
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* The circular open affordance. */
+.work-open {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 40px;
+  text-align: center;
+  box-shadow: 0 6px 18px -6px rgba(20, 20, 40, 0.28);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.work-card:hover .work-open,
+.work-card:focus-visible .work-open {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.work-card:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 6px;
+  border-radius: 30px;
+}
+
+/* ── Grid view ──────────────────────────────────────────── */
+.work.is-grid .work-stack {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+  height: auto;
+  /* Break the text column, but keep a margin from the window edges. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 0 32px;
+  touch-action: auto;
+  cursor: auto;
+}
+
+.work.is-grid .work-item {
+  position: static;
+  transform: translate(var(--x, 0px), var(--y, 0px));
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Uneven spans, so the row reads as a composition rather than a table. */
+.work.is-grid .work-item:nth-child(1) { grid-column: span 4; }
+.work.is-grid .work-item:nth-child(2) { grid-column: span 2; }
+
+.work.is-grid .work-item .work-panel { height: 380px; }
+
+.work.is-grid .work-panel {
+  border-radius: 8px;
+  background: #f1f1f1;     /* grey, not the stack's colours */
+  box-shadow: none;
+}
+
+.work.is-grid .work-title { color: var(--ink); }
+.work.is-grid .work-sub   { color: var(--ink-mute); }
+
+.work.is-grid .work-screen { border-radius: 4px 4px 0 0; }
+.work.is-grid .work-open   { border-radius: 6px; }
+
+.work.is-grid .work-card { cursor: pointer; }
+
+.work.is-grid .work-card:hover .work-open,
+.work.is-grid .work-card:focus-visible .work-open {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.work.is-grid .work-card:hover .work-panel { transform: translateY(-3px); }
+
+.work.is-grid .work-panel {
+  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (max-width: 700px) {
+  .work.is-grid .work-stack { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .work.is-grid .work-item:nth-child(n) { grid-column: span 2; }
+  .work.is-grid .work-item .work-panel { height: 220px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-item { transition: none; }
+}
+
+/* ── Footer ─────────────────────────────────────────────── */
+footer {
+  max-width: 760px;      /* same container as main, so it lines up with the text */
+  margin: 0 auto;
+  padding: 72px 40px 40px;
+  font-size: 13px;
+  color: #bbb;
+  font-style: italic;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+  main   { padding: 16px 24px 32px; }
+  footer { padding: 48px 24px 32px; }
+
+  .work        { margin-top: 64px; }
+  .work-stack  { height: 320px; }
+  .work-panel  { border-radius: 22px; padding: 22px 22px 0; }
+  .work-open   { top: 18px; right: 18px; }
+}

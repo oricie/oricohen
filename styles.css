@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+/* Always loaded. Theme-independent: reset, the banner, switcher chrome.
+   The look of the site lives in themes/serif.css and themes/grid.css. */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -7,273 +8,329 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: #fff;
-  color: #1a1a1a;
   font-size: 16px;
   line-height: 1.65;
 }
 
-/* Nav */
-nav {
-  padding: 24px 48px;
-  display: flex;
-  gap: 32px;
-  align-items: center;
+/* ── Banner ─────────────────────────────────────────────── */
+.banner {
+  position: relative;
+  /* Wide at rest, spanning the text column, at the photo's own ratio. */
+  width: 100%;
+  aspect-ratio: 1659 / 948;
+  margin-bottom: 44px;
+  border-radius: 28px;
+  overflow: hidden;
+  background: #e6e6e6;
+  isolation: isolate;
+  transition: box-shadow 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-nav a {
-  text-decoration: none;
-  font-size: 15px;
-  color: #aaa;
-  font-weight: 400;
-  transition: color 0.15s;
-}
-
-nav a:hover {
-  color: #1a1a1a;
-}
-
-nav a.active {
-  color: #1a1a1a;
-  font-weight: 600;
-}
-
-/* Layout */
-main {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 48px 48px 120px;
-}
-
-/* Headings */
-h1 {
-  font-family: "Playfair Display", Georgia, serif;
-  font-style: italic;
-  font-weight: 700;
-  font-size: 48px;
-  line-height: 1.1;
-  margin-bottom: 32px;
-  letter-spacing: -0.5px;
-}
-
-/* Home page */
-.profile-photo {
-  width: 140px;
-  height: 140px;
-  border-radius: 8px;
-  object-fit: cover;
-  margin-bottom: 32px;
+.banner img {
   display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Keeps a head-and-shoulders portrait framed on the face when the
+     source is cropped to a wide rectangle. */
+  object-position: center 8%;
 }
 
-.profile-photo-placeholder {
-  width: 140px;
-  height: 140px;
-  border-radius: 8px;
-  background: #e8e8e8;
-  margin-bottom: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: #999;
+/* Subtle sheen that drifts across on hover. */
+.banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.13) 48%,
+    transparent 64%
+  );
+  opacity: 0;
+  transform: translateX(-18%);
+  pointer-events: none;
+  transition: opacity 0.45s ease,
+              transform 1s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-.bio p {
-  margin-bottom: 20px;
-  font-size: 15.5px;
-  color: #222;
-  max-width: 680px;
+.banner:hover {
+  box-shadow: 0 18px 44px -18px rgba(0, 0, 0, 0.26);
 }
 
-.bio-list {
-  list-style: none;
-  margin-top: 8px;
+/* The rasterised overlay, drawn only while the pointer is inside. */
+.banner-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.banner.is-rastered .banner-fx { opacity: 1; }
+
+.banner:hover::after {
+  opacity: 1;
+  transform: translateX(18%);
+}
+
+@media (max-width: 600px) {
+  .banner {
+    border-radius: 20px;
+    margin-bottom: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner,
+  .banner::after { transition: none; }
+
+  .banner:hover::after { opacity: 0; }
+}
+
+/* ── iOS-style sheet ────────────────────────────────────────
+   A <dialog>, so focus trapping and Esc come from the platform.
+   Full-width and bottom-anchored on phones; a centred card with
+   a little breathing room on larger screens.
+   ───────────────────────────────────────────────────────── */
+.sheet {
+  width: 100%;
+  max-width: none;
+  max-height: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: hidden;
+}
+
+.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  /* With a card open, the scrim carries that card's colour. */
+  background: color-mix(in srgb, var(--accent, #000) 34%, rgba(0, 0, 0, 0.62));
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.sheet.is-opening::backdrop {
+  animation: sheet-fade 0.35s ease both;
+}
+
+.sheet.is-closing::backdrop {
+  animation: sheet-fade 0.28s ease both reverse;
+}
+
+.sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 44px;          /* the strip of page left visible above an iOS sheet */
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.bio-list li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 15.5px;
-  color: #222;
-}
-
-.bio-list li .icon {
-  font-size: 20px;
-  width: 28px;
-  text-align: center;
-  color: #555;
-}
-
-/* About page */
-.about-photos {
-  position: relative;
-  height: 260px;
-  margin-bottom: 48px;
-  margin-left: -8px;
-}
-
-.photo-card {
-  position: absolute;
   background: #fff;
-  padding: 6px 6px 28px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  text-align: center;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 50px -12px rgba(0, 0, 0, 0.28);
+  transform: translateY(100%);
 }
 
-.photo-card img,
-.photo-card .photo-placeholder {
-  display: block;
-  width: 200px;
-  height: 155px;
-  object-fit: cover;
+/* Added a frame after showModal(), so the slide starts from a rendered
+   element rather than from inside a display:none dialog. */
+.sheet.is-opening .sheet-panel {
+  animation: sheet-up 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-.photo-card .photo-placeholder {
-  background: #ddd;
+.sheet[open]:not(.is-opening):not(.is-closing) .sheet-panel {
+  transform: translateY(0);
 }
 
-.photo-card .caption {
-  font-family: "Comic Sans MS", "Chalkboard SE", cursive;
-  font-size: 12.5px;
-  font-weight: 700;
-  margin-top: 6px;
-  color: #111;
-  white-space: nowrap;
+.sheet.is-closing .sheet-panel {
+  animation: sheet-down 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
-.photo-card:nth-child(1) {
-  left: 0;
-  top: 20px;
-  transform: rotate(-3deg);
-  z-index: 1;
+/* The iOS grabber. */
+.sheet-grabber {
+  flex: none;
+  width: 36px;
+  height: 5px;
+  margin: 8px auto 0;
+  border-radius: 999px;
+  background: #d8d8d8;
 }
 
-.photo-card:nth-child(2) {
-  left: 170px;
-  top: 0;
-  transform: rotate(1.5deg);
-  z-index: 2;
-}
-
-.photo-card:nth-child(3) {
-  left: 360px;
-  top: 15px;
-  transform: rotate(-1deg);
-  z-index: 3;
-}
-
-.about-text p {
-  font-size: 15.5px;
-  color: #222;
-  margin-bottom: 20px;
-  max-width: 680px;
-}
-
-/* Work page */
-.work-intro {
-  font-size: 15.5px;
-  color: #222;
-  max-width: 680px;
-  margin-bottom: 48px;
-}
-
-.work-intro p {
-  margin-bottom: 20px;
-}
-
-.work-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.work-card {
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: default;
-}
-
-.work-card-img {
-  width: 100%;
-  height: 160px;
+.sheet-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
   background: #f0f0f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: #aaa;
+  color: #6b6b6b;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.work-card-body {
-  padding: 16px 18px 20px;
+.sheet-close:hover { background: #e4e4e4; color: #1a1a1a; }
+
+.sheet-close:focus-visible {
+  outline: 2px solid #1a1a1a;
+  outline-offset: 2px;
 }
 
-.work-card-company {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #aaa;
-  margin-bottom: 4px;
+.sheet-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 28px 24px 64px;
 }
 
-.work-card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 6px;
+/* The panel spans the window; the text inside it keeps one reading column,
+   while figures are free to use the full width. */
+.sheet-eyebrow,
+.sheet h2,
+.sheet-body p,
+.sheet-list {
+  max-width: 600px;
+  margin-inline: auto;
 }
 
-.work-card-desc {
+/* Title first, then the line that qualifies it — the same order the
+   cards use. */
+.sheet h2 {
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.45;
+  margin-bottom: 1px;
+}
+
+.sheet-eyebrow {
+  font-size: 17px;
+  line-height: 1.45;
+  color: #a6a6a6;
+  margin-bottom: 24px;
+}
+
+.sheet-body p {
+  font-size: 17px;
+  line-height: 1.6;
+  color: #222;
+  margin-bottom: 16px;
+}
+
+.sheet-body p:last-child { margin-bottom: 0; }
+
+.sheet-list {
+  margin: 0 auto 16px;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.sheet-list li {
+  font-size: 17px;
+  line-height: 1.6;
+  color: #222;
+  margin-bottom: 10px;
+}
+
+.sheet-list li::marker { color: #b4b4b4; }
+
+/* A supporting shot inside a sheet. Text keeps the 680px reading column;
+   the screenshots break out of it and sit on a grey panel, so they read as
+   objects rather than floating on the white. */
+.sheet-shot {
+  max-width: 1440px;
+  width: 100%;
+  margin: 30px auto 0;
+  padding: 28px 28px 0;
+  border-radius: 16px;
+  background: #f1f1f1;
+}
+
+.sheet-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px -12px rgba(20, 20, 40, 0.28),
+              0 1px 3px rgba(20, 20, 40, 0.06);
+}
+
+.sheet-shot figcaption {
+  padding: 16px 2px 18px;
   font-size: 13.5px;
-  color: #666;
-  line-height: 1.55;
+  color: #8a8a8a;
 }
 
-/* Footer */
-footer {
-  padding: 32px 48px;
-  font-size: 13px;
-  color: #bbb;
-  font-style: italic;
-}
-
-/* Responsive */
 @media (max-width: 600px) {
-  nav {
-    padding: 20px 24px;
-    gap: 24px;
-  }
+  .sheet-shot { padding: 14px 14px 0; border-radius: 12px; }
+  .sheet-shot figcaption { padding: 12px 2px 14px; }
+}
 
-  main {
-    padding: 32px 24px 80px;
-  }
+/* Keep the page still behind the sheet. */
+body.sheet-open { overflow: hidden; }
 
-  h1 {
-    font-size: 36px;
-  }
+/* The colour carries past the scrim: a wash on the page, the eyebrow, and
+   the panels the screenshots sit on. */
+.has-accent body {
+  background: color-mix(in srgb, var(--accent) 6%, #fff);
+}
 
-  .about-photos {
-    height: 380px;
-  }
+/* The whole sheet takes the card's colour, and its contents turn light. */
+.has-accent .sheet-panel { background: var(--accent); }
 
-  .photo-card:nth-child(2) {
-    left: 140px;
-    top: 120px;
-  }
+.has-accent .sheet-eyebrow { color: rgba(255, 255, 255, 0.7); }
+.has-accent .sheet h2 { color: #fff; }
+.has-accent .sheet-body p { color: rgba(255, 255, 255, 0.92); }
+.has-accent .sheet-list li { color: rgba(255, 255, 255, 0.92); }
+.has-accent .sheet-list li::marker { color: rgba(255, 255, 255, 0.45); }
+.has-accent .sheet-body strong { color: #fff; }
 
-  .photo-card:nth-child(3) {
-    left: 20px;
-    top: 230px;
-  }
+.has-accent .sheet-shot {
+  background: rgba(255, 255, 255, 0.10);
+}
 
-  .work-grid {
-    grid-template-columns: 1fr;
-  }
+.has-accent .sheet-shot figcaption {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.has-accent .sheet-grabber { background: rgba(255, 255, 255, 0.45); }
+
+.has-accent .sheet-close {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.has-accent .sheet-close:hover {
+  background: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
+
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes sheet-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-panel,
+  .sheet.is-closing .sheet-panel,
+  .sheet::backdrop,
+  .sheet.is-closing::backdrop { animation-duration: 0.01ms; }
 }

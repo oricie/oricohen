@@ -5,45 +5,224 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ori Cohen</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="themes/grid.css" />
 </head>
 <body>
-  <nav>
-    <a href="index.html" class="active">Home</a>
-    <a href="about.html">About</a>
-    <a href="work.html">Work</a>
-  </nav>
-
   <main>
-    <div class="profile-photo-placeholder">photo</div>
+    <figure class="banner">
+      <img src="images/portrait.png" alt="Ori Cohen" />
+    </figure>
 
-    <h1>Hi! I'm Ori Cohen.</h1>
+    <header class="intro">
+      <h1>Hi! I'm Ori Cohen.</h1>
+      <p class="tagline">Leading design at Jedox.</p>
+    </header>
 
     <div class="bio">
       <p>
         I'm a design leader with nearly 15 years of experience shaping UX/UI across startups,
-        scale-ups, and global enterprises. Currently, I lead design at <strong>Jedox.com</strong>,
-        where I supported the build and scale of the design organization — spanning research, design
-        systems, and cross-functional operations and where I work closely with executive leadership
-        to drive strategic initiatives and business impact.
-      </p>
-      <p>
+        scale-ups, and global enterprises. Currently, I lead design at <strong>Jedox.com</strong>.
         Previously, I designed and led teams at <strong>Volkswagen</strong>,
         <strong>SAP</strong>, and other key players in the Tel Aviv and Berlin tech ecosystems.
-        Also a:
+        Also a <span class="icon">☕</span> bitter coffee lover and an
+        <span class="icon">⛰️</span> average indoor climber.
       </p>
-      <ul class="bio-list">
-        <li>
-          <span class="icon">☕</span>
-          Bitter coffee lover
+      <p>
+        <button type="button" class="read-more">Read more</button>
+      </p>
+      <template data-eyebrow="Ori Cohen" data-title="About">
+        <p>
+          A product design leader focused on agile leadership, strategy and
+          innovation — and on designing and building digital products that
+          leave people happy using them.
+        </p>
+        <p>
+          I manage a diverse UX/UI team across distributed, scalable streams:
+          UX research, cross-functional projects and the design system. That
+          means leading end-to-end design processes and organisational
+          collaboration, alongside mentoring, coaching and people development.
+        </p>
+        <p>
+          Before Jedox and <strong>SAP Signavio</strong>, I worked at
+          <strong>Spark Networks</strong>, <strong>Volkswagen AG</strong>,
+          <strong>PeoplePost</strong>, <strong>Stoooodio</strong> and
+          <strong>Webplanet</strong>, which was acquired by Wix.
+        </p>
+        <p>
+          B.Des in Design and Visual Communications, Bezalel Academy of Art and
+          Design, Jerusalem. Certified Agile Coach (ICP-ACC).
+        </p>
+        <p>
+          Outside work: very average indoor bouldering, founding the
+          Israeli-German tech network, and a standing hope of one day unlocking
+          flamenco.
+        </p>
+      </template>
+    </div>
+
+    <section class="work" aria-labelledby="work-heading">
+      <div class="work-bar">
+        <h2 id="work-heading">Selected Work</h2>
+
+        <div class="view-toggle" role="group" aria-label="Layout">
+          <button type="button" class="view-btn is-active" data-view="stack"
+                  aria-label="Stacked" aria-pressed="true">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="3.5" y="2.5" width="9" height="5.5" rx="1.6" />
+              <path d="M4.6 10.4h6.8" />
+              <path d="M5.8 12.8h4.4" />
+            </svg>
+          </button>
+          <button type="button" class="view-btn" data-view="grid"
+                  aria-label="Grid" aria-pressed="false">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="2" y="2.5" width="7.5" height="5" rx="1.3" />
+              <rect x="11" y="2.5" width="3" height="5" rx="1.3" />
+              <rect x="2" y="9" width="3" height="4.5" rx="1.3" />
+              <rect x="6.5" y="9" width="7.5" height="4.5" rx="1.3" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <ul class="work-stack" tabindex="0" role="listbox"
+          aria-label="Projects — drag or scroll sideways, click to read">
+        <li class="work-item" style="--panel: #3730a3; --on-panel: #ffffff; --on-panel-mute: rgba(255,255,255,0.72)">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">Jedox</span>
+                <span class="work-sub">Planning and analytics platform</span>
+              </span>
+              <span class="work-screen">
+                <img src="images/jedox-01-financial-review.png" draggable="false"
+                     alt="A Q4 financial review dashboard with revenue forecast, OPEX summary and income statement, JedoxAI open alongside" />
+              </span>
+            </span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              I lead the UX/UI team at Jedox, a planning and analytics platform.
+              I'm responsible for user experience research and for the design
+              system, and for growing and scaling the team itself.
+            </p>
+            <p>
+              The work runs across the organization: I partner directly with
+              executive leadership and with engineering, in a setup built around
+              close collaboration rather than handover.
+            </p>
+            <ul class="sheet-list">
+              <li>
+                Led the research, redesign and release of a modernised,
+                multi-persona analytical FP&amp;A platform — dashboards, modelling,
+                integrations and end-to-end agentic AI capabilities.
+              </li>
+              <li>
+                Established and scaled an internal design system for consistent,
+                accessible UI across products, improving accessibility of
+                cross-platform components by 40%.
+              </li>
+              <li>
+                Built a user research framework, qualitative and quantitative, that
+                lifted usability benchmarks 15% year over year.
+              </li>
+            </ul>
+            <figure class="sheet-shot">
+              <img src="images/jedox-02-home.png" draggable="false"
+                   alt="The Jedox workspace home, with quick-start actions and recent models" />
+              <figcaption>The workspace home — quick starts, recent models and shared work.</figcaption>
+            </figure>
+            <figure class="sheet-shot">
+              <img src="images/jedox-03-dynatable.png" draggable="false"
+                   alt="Dynatable: a financial analysis table with dimensions and measures" />
+              <figcaption>Dynatable — dimensions, measures and pivot configuration.</figcaption>
+            </figure>
+            <figure class="sheet-shot">
+              <img src="images/jedox-04-integrator.png" draggable="false"
+                   alt="The Integrator flowgraph with the JedoxAI assistant answering a question" />
+              <figcaption>Integrator — a transform flowgraph, with JedoxAI alongside it.</figcaption>
+            </figure>
+          </template>
         </li>
-        <li>
-          <span class="icon">⛰️</span>
-          Average indoor climber
+
+        <li class="work-item" style="--panel: #c2410c; --on-panel: #ffffff; --on-panel-mute: rgba(255,255,255,0.75)">
+          <button type="button" class="work-card">
+            <span class="work-panel">
+              <span class="work-head">
+                <span class="work-title">SAP Signavio</span>
+                <span class="work-sub">Process transformation suite</span>
+              </span>
+              <span class="work-screen">
+                <img src="images/signavio-01-process-insights.png" draggable="false"
+                     alt="Process Insights: recommendations for purchase order items, with the Process.AI panel open alongside" />
+              </span>
+            </span>
+            <span class="work-open" aria-hidden="true">↗</span>
+          </button>
+          <template>
+            <p>
+              I led design discovery and delivery across the process
+              transformation suite, and the collaboration that had to hold it
+              together across a large organization.
+            </p>
+            <ul class="sheet-list">
+              <li>
+                Supported the release of three new suite products — dashboards,
+                metrics libraries and AI insights — through to general availability.
+              </li>
+              <li>
+                Facilitated collaboration across eight teams, keeping design
+                scalable and consistent across product lines, and improving the
+                processes behind it.
+              </li>
+              <li>
+                Ran cross-domain UX workshops, design-thinking activities and design
+                sprints for product discovery.
+              </li>
+            </ul>
+            <figure class="sheet-shot">
+              <img src="images/signavio-02-hub.png" draggable="false"
+                   alt="The Signavio hub: suite onboarding, an overview of changes, tasks and comments" />
+              <figcaption>The hub — onboarding, recent changes, tasks and comments in one place.</figcaption>
+            </figure>
+            <figure class="sheet-shot">
+              <img src="images/signavio-03-process-explorer.png" draggable="false"
+                   alt="Process explorer for Source to Pay, with recent process insights and Process.AI" />
+              <figcaption>Process explorer — sub-processes scored against best run, insights beside them.</figcaption>
+            </figure>
+            <figure class="sheet-shot">
+              <img src="images/signavio-04-galaxy-viewer.png" draggable="false"
+                   alt="Galaxy Viewer showing a process landscape with a BPMN model previewed in place" />
+              <figcaption>Galaxy Viewer — the process landscape, with a model previewed in place.</figcaption>
+            </figure>
+            <figure class="sheet-shot">
+              <img src="images/signavio-05-inbox.png" draggable="false"
+                   alt="My Inbox: a task list with a task detail panel showing assignees and steps" />
+              <figcaption>My Inbox — tasks, assignees and steps.</figcaption>
+            </figure>
+          </template>
         </li>
       </ul>
-    </div>
+    </section>
   </main>
 
-  <footer>Built with love in Tel-aviv and Freiburg</footer>
+  <footer>Built with love in Freiburg</footer>
+
+  <dialog class="sheet" aria-labelledby="sheet-title">
+    <div class="sheet-panel">
+      <div class="sheet-grabber" aria-hidden="true"></div>
+      <button type="button" class="sheet-close" aria-label="Close">×</button>
+      <div class="sheet-scroll">
+        <h2 id="sheet-title"></h2>
+        <p class="sheet-eyebrow"></p>
+        <div class="sheet-body"></div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="banner.js"></script>
+  <script src="stack.js"></script>
+  <script src="sheet.js"></script>
 </body>
 </html>
