@@ -44,13 +44,6 @@ h1 {
   margin-bottom: 0;
 }
 
-/* The black/grey pair the reference uses for every title. */
-.tagline {
-  font-size: var(--text);
-  line-height: 1.45;
-  color: var(--ink-mute);
-}
-
 .bio p {
   margin-bottom: 20px;
   font-size: var(--text);
