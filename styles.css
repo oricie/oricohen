@@ -188,9 +188,7 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 28px 0 64px;
-  /* The band everything inside the sheet lines up to. */
-  padding-inline: max(24px, calc(50% - 720px));
+  padding: 28px 24px 64px;
 }
 
 /* The panel spans the window; the text inside it keeps one reading column,
@@ -200,7 +198,7 @@ body {
 .sheet-body p,
 .sheet-list {
   max-width: 600px;
-  margin-inline: 0;
+  margin-inline: auto;
 }
 
 .sheet-eyebrow {
@@ -226,7 +224,7 @@ body {
 .sheet-body p:last-child { margin-bottom: 0; }
 
 .sheet-list {
-  margin: 0 0 16px;
+  margin: 0 auto 16px;
   padding-left: 20px;
   list-style: disc;
 }
@@ -244,8 +242,9 @@ body {
    the screenshots break out of it and sit on a grey panel, so they read as
    objects rather than floating on the white. */
 .sheet-shot {
+  max-width: 1440px;
   width: 100%;
-  margin: 30px 0 0;
+  margin: 30px auto 0;
   padding: 28px 28px 0;
   border-radius: 16px;
   background: #f1f1f1;
@@ -280,21 +279,35 @@ body.sheet-open { overflow: hidden; }
   background: color-mix(in srgb, var(--accent) 6%, #fff);
 }
 
-.has-accent .sheet-panel {
-  background: color-mix(in srgb, var(--accent) 2.5%, #fff);
+/* The whole sheet takes the card's colour, and its contents turn light. */
+.has-accent .sheet-panel { background: var(--accent); }
+
+.has-accent .sheet-eyebrow { color: rgba(255, 255, 255, 0.7); }
+.has-accent .sheet h2 { color: #fff; }
+.has-accent .sheet-body p { color: rgba(255, 255, 255, 0.92); }
+.has-accent .sheet-list li { color: rgba(255, 255, 255, 0.92); }
+.has-accent .sheet-list li::marker { color: rgba(255, 255, 255, 0.45); }
+.has-accent .sheet-body strong { color: #fff; }
+
+.has-accent .sheet-shot {
+  background: rgba(255, 255, 255, 0.10);
 }
-
-.has-accent .sheet-eyebrow { color: var(--accent); }
-
-/* The figure panels take the card's colour at full strength, so the
-   screenshots sit on it exactly as they do on the card itself. */
-.has-accent .sheet-shot { background: var(--accent); }
 
 .has-accent .sheet-shot figcaption {
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.has-accent .sheet-grabber { background: var(--accent); }
+.has-accent .sheet-grabber { background: rgba(255, 255, 255, 0.45); }
+
+.has-accent .sheet-close {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.has-accent .sheet-close:hover {
+  background: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
 
 
 @keyframes sheet-up {
