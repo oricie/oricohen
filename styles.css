@@ -98,6 +98,7 @@ body {
   flex-direction: column;
   background: #fff;
   border-radius: 20px 20px 0 0;
+  overflow: hidden;
   box-shadow: 0 -12px 50px -12px rgba(0, 0, 0, 0.28);
   transform: translateY(100%);
 }
@@ -128,6 +129,7 @@ body {
 
 .sheet-close {
   position: absolute;
+  z-index: 4;
   top: 16px;
   right: 16px;
   width: 32px;
@@ -153,8 +155,21 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 28px 24px 64px;
+  padding: 0 24px 64px;
 }
+
+/* The title holds its place at the top of the panel and the content passes
+   underneath it, rather than riding up over it. */
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -24px;
+  padding: 28px 24px 16px;
+  background: #ffffff;
+}
+
+.has-accent .sheet-head { background: var(--accent); }
 
 /* The panel spans the window; the text inside it keeps one reading column,
    while figures are free to use the full width. */
@@ -272,6 +287,39 @@ body {
   border-radius: 16px;
   background: #f1f1f1;
 }
+
+/* Where to find him, at the end of the piece. */
+.sheet-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  max-width: 600px;
+  margin: 36px auto 0;
+  padding-top: 22px;
+  border-top: 1px solid rgba(20, 20, 40, 0.10);
+}
+
+.sheet-contact a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: #c9c9c9;
+  transition: text-decoration-color 0.18s ease;
+}
+
+.sheet-contact a:hover { text-decoration-color: currentColor; }
+
+.sheet-contact a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.has-accent .sheet-contact {
+  border-top-color: rgba(255, 255, 255, 0.22);
+}
+
+.has-accent .sheet-contact a { text-decoration-color: rgba(255, 255, 255, 0.45); }
 
 /* The same reel as the card, opened out: full width, at the frames' own
    ratio so nothing is cropped, with dots to step through by hand. */

@@ -389,30 +389,182 @@ h1 {
 }
 
 
-/* The circular open affordance. */
+/* The open affordance. At rest a milky disc; on hover it opens leftward
+   into a pill and names itself. The grain is a turbulence filter inlined as
+   a data URI, so it costs no request and never tiles visibly. */
 .work-open {
   position: absolute;
   top: 24px;
   right: 24px;
-  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   height: 40px;
-  border-radius: 50%;
-  background: var(--paper);
+  padding: 0 12px;
+  border-radius: 999px;
+  background-color: #f6f2ea;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
   color: var(--ink);
-  font-size: 16px;
-  line-height: 40px;
-  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
   box-shadow: 0 6px 18px -6px rgba(20, 20, 40, 0.28);
   opacity: 0;
   transform: scale(0.85);
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: opacity 0.3s ease,
+              transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+              padding 0.42s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.work-open-mark {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* Collapsed to nothing at rest, so the pill is a plain disc until asked. */
+.work-open-label {
+  display: block;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.42s cubic-bezier(0.22, 0.61, 0.36, 1),
+              opacity 0.26s ease,
+              margin-right 0.42s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .work-card:hover .work-open,
 .work-card:focus-visible .work-open {
   opacity: 1;
   transform: scale(1);
+  padding: 0 12px 0 16px;
 }
+
+/* The disc lands first, then the pill opens out behind the arrow. */
+.work-card:hover .work-open-label,
+.work-card:focus-visible .work-open-label {
+  max-width: 110px;
+  opacity: 1;
+  margin-right: 8px;
+  transition-delay: 0.14s;
+}
+
+.work-card:focus-visible {
+  box-shadow: 0 24px 48px -28px rgba(20, 20, 40, 0.40);
+}
+
+.work-card:hover .work-panel,
+.work-card:focus-visible .work-panel {
+  clip-path: inset(0 7px 0 7px round 28px);
+}
+
+
+.work-head {
+  display: block;
+  margin-bottom: 22px;
+}
+
+.work-title,
+.work-sub {
+  display: block;
+  font-size: var(--text);
+  line-height: 1.45;
+}
+.work-title { color: var(--on-panel, var(--ink)); }
+.work-sub   { color: var(--on-panel-mute, var(--ink-mute)); }
+
+
+.work-screen {
+  display: block;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 14px 14px 0 0;
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
+  box-shadow: 0 18px 40px -16px rgba(20, 20, 40, 0.30),
+              0 2px 6px rgba(20, 20, 40, 0.06);
+}
+
+/* A product shot scales to the full width of the screen and is cropped at
+   the bottom, so the interface keeps its own proportions. */
+.work-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Without this the browser's own image drag hijacks the card gesture. */
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* ── The card with nothing in it yet ────────────────────── */
+/* No product shot, so nothing sits in a white frame: a small departure
+   board floats in the card's own colour. */
+.work-screen--soon {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 46px;
+  background: none;
+  box-shadow: none;
+}
+
+/* Old interface work, cycling in place. Each frame fills the width and
+   carries on past the bottom of the frame, the same way the other two
+   cards hold their screenshots — nothing is cut at the sides and there is
+   no mount showing around it. They cut from one to the next rather than
+   cross-fading: two different interfaces dissolving through each other
+   read as a ghost. */
+.reel {
+  position: relative;
+  display: block;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+}
+
+.reel img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  visibility: hidden;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.reel img.is-on { visibility: visible; }
+
+.soon-label {
+  position: absolute;
+  left: 0;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--on-panel-mute, rgba(255, 255, 255, 0.75));
+}
+
+.soon-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--on-panel, #fff);
+  animation: soon-blink 1.8s ease-in-out infinite;
+}
+
+@keyframes soon-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soon-pulse { animation: none; }
+}
+
 
 .work-card:focus-visible {
   outline: 2px solid var(--ink);
@@ -466,7 +618,7 @@ h1 {
 /* Grid swaps the coloured panel for grey, so the board swaps with it. */
 .work.is-grid .soon-label { color: var(--ink-mute); }
 .work.is-grid .soon-pulse { background: var(--ink); }
-.work.is-grid .work-open   { border-radius: 6px; }
+.work.is-grid .work-open   { border-radius: 999px; }
 
 .work.is-grid .work-card { cursor: pointer; }
 
