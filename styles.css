@@ -109,6 +109,8 @@ body {
 
 .sheet::backdrop {
   background: rgba(0, 0, 0, 0.35);
+  /* With a card open, the scrim carries that card's colour. */
+  background: color-mix(in srgb, var(--accent, #000) 34%, rgba(0, 0, 0, 0.62));
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
 }
@@ -189,12 +191,14 @@ body {
   padding: 28px 24px 64px;
 }
 
-/* The panel spans the window; the text inside it keeps a reading column,
+/* The panel spans the window; the text inside it keeps one reading column,
    while figures are free to use the full width. */
 .sheet-eyebrow,
 .sheet h2,
-.sheet-body p {
-  max-width: 680px;
+.sheet-body p,
+.sheet-list,
+.sheet-meta {
+  max-width: 600px;
   margin-inline: auto;
 }
 
@@ -206,23 +210,67 @@ body {
 
 .sheet h2 {
   font-size: 17px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1.45;
+  margin-bottom: 26px;
+}
+
+/* The opening line carries a touch more weight than the body. */
+.sheet-lead {
+  font-size: 19px !important;
+  line-height: 1.5;
+  color: #1a1a1a !important;
   margin-bottom: 20px;
+}
+
+/* Facts, set as rows rather than more prose. */
+.sheet-meta {
+  margin: 30px auto 0;
+  border-top: 1px solid #ececec;
+}
+
+.sheet-meta > div {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: 24px;
+  padding: 15px 0;
+  border-bottom: 1px solid #ececec;
+}
+
+.sheet-meta dt {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #a6a6a6;
+}
+
+.sheet-meta dd {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.6;
+  color: #222;
+}
+
+.sheet-meta dd strong { font-weight: 600; }
+
+@media (max-width: 600px) {
+  .sheet-lead { font-size: 18px !important; }
+
+  .sheet-meta > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }
 
 .sheet-body p {
   font-size: 17px;
   line-height: 1.6;
   color: #222;
-  max-width: 62ch;
   margin-bottom: 16px;
 }
 
 .sheet-body p:last-child { margin-bottom: 0; }
 
 .sheet-list {
-  max-width: 62ch;
   margin: 0 auto 16px;
   padding-left: 20px;
   list-style: disc;
@@ -271,6 +319,33 @@ body {
 
 /* Keep the page still behind the sheet. */
 body.sheet-open { overflow: hidden; }
+
+/* The colour carries past the scrim: a wash on the page, the eyebrow, and
+   the panels the screenshots sit on. */
+.has-accent body {
+  background: color-mix(in srgb, var(--accent) 6%, #fff);
+}
+
+.has-accent .sheet-panel {
+  background: color-mix(in srgb, var(--accent) 2.5%, #fff);
+}
+
+.has-accent .sheet-eyebrow {
+  color: color-mix(in srgb, var(--accent) 78%, #6e6e6e);
+}
+
+.has-accent .sheet-shot {
+  background: color-mix(in srgb, var(--accent) 12%, #f1f1f1);
+}
+
+.has-accent .sheet-grabber {
+  background: color-mix(in srgb, var(--accent) 45%, #d8d8d8);
+}
+
+.has-accent .sheet-meta,
+.has-accent .sheet-meta > div {
+  border-color: color-mix(in srgb, var(--accent) 22%, #ececec);
+}
 
 @keyframes sheet-up {
   from { transform: translateY(100%); }

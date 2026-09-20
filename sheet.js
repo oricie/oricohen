@@ -26,9 +26,28 @@
     return null;
   }
 
+  /* A card lends its colour to the page while its sheet is open. */
+  function tint(trigger) {
+    var card = trigger.closest ? trigger.closest('.work-item') : null;
+    var accent = card
+      ? getComputedStyle(card).getPropertyValue('--panel').trim()
+      : '';
+    var root = document.documentElement;
+
+    if (accent) {
+      root.style.setProperty('--accent', accent);
+      root.classList.add('has-accent');
+    } else {
+      root.style.removeProperty('--accent');
+      root.classList.remove('has-accent');
+    }
+  }
+
   function open(trigger) {
     var tpl = findTemplate(trigger);
     if (!tpl) return;
+
+    tint(trigger);
 
     var head = trigger.querySelector('.work-title');
     eyebrow.textContent = tpl.dataset.eyebrow ||
@@ -57,6 +76,7 @@
       sheet.classList.remove('is-closing');
       sheet.classList.remove('is-opening');
       document.body.classList.remove('sheet-open');
+      document.documentElement.classList.remove('has-accent');
       closing = false;
       sheet.close();
     };
