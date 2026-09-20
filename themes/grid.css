@@ -202,10 +202,20 @@ h1 {
   height: 100%;
   background: var(--panel, #eef0fb);
   border-radius: 28px;
-  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
   padding: 28px 32px 0;
   overflow: hidden;
   box-shadow: 0 18px 44px -26px rgba(20, 20, 40, 0.45);
+  transition: border-radius 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
+              transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1),
+              box-shadow 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* On hover the card rises and draws back a little, and the shadow under it
+   deepens to carry the height. */
+.work-card:hover .work-panel,
+.work-card:focus-visible .work-panel {
+  transform: translateY(-8px) scale(0.982);
+  box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.55);
 }
 
 .work-head {
@@ -433,10 +443,10 @@ h1 {
   transform: scale(1);
 }
 
-.work.is-grid .work-card:hover .work-panel { transform: translateY(-3px); }
-
-.work.is-grid .work-panel {
-  transition: transform 0.4s cubic-bezier(0.22, 0.61, 0.36, 1);
+.work.is-grid .work-card:hover .work-panel,
+.work.is-grid .work-card:focus-visible .work-panel {
+  transform: translateY(-8px) scale(0.982);
+  box-shadow: 0 38px 64px -26px rgba(20, 20, 40, 0.45);
 }
 
 @media (max-width: 700px) {
@@ -468,4 +478,11 @@ footer {
   .work-stack  { height: 320px; }
   .work-panel  { border-radius: 22px; padding: 22px 22px 0; }
   .work-open   { top: 18px; right: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-card:hover .work-panel,
+  .work-card:focus-visible .work-panel,
+  .work.is-grid .work-card:hover .work-panel,
+  .work.is-grid .work-card:focus-visible .work-panel { transform: none; }
 }
