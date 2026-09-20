@@ -201,17 +201,20 @@ body {
   margin-inline: auto;
 }
 
-.sheet-eyebrow {
-  font-size: 17px;
-  color: #a6a6a6;
-  margin-bottom: 2px;
-}
-
+/* Title first, then the line that qualifies it — the same order the
+   cards use. */
 .sheet h2 {
   font-size: 17px;
-  font-weight: 400;
+  font-weight: 550;
   line-height: 1.45;
-  margin-bottom: 22px;
+  margin-bottom: 1px;
+}
+
+.sheet-eyebrow {
+  font-size: 17px;
+  line-height: 1.45;
+  color: #a6a6a6;
+  margin-bottom: 24px;
 }
 
 .sheet-body p {
