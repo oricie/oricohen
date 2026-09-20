@@ -19,8 +19,11 @@
   if (reduce || noHover) return;
 
   var BLOCK = 1.5;     // target css px per dot
-  var RADIUS = 165;    // size of the pixel-art patch
+  var RADIUS = 165;    // the patch while the pointer is moving
   var FEATHER = 0.22;  // fraction of the radius the patch fades over
+  var SETTLE = 140;    // ms of stillness before the patch starts spreading
+  var SPREAD = 0.007;  // how fast it opens out
+  var PULL = 0.30;     // how fast it draws back once the pointer moves
   var GRAIN = 62;      // noise added to the threshold, 0-255
 
   // 4x4 ordered dither, normalised to 0-255.
@@ -47,6 +50,9 @@
   var w = 0, h = 0, dpr = 1;
   var pointer = { x: -9999, y: -9999 };
   var raf = 0, over = false;
+  var radius = RADIUS;   // the live radius, eased toward its target
+  var reach = RADIUS;    // the widest the patch can open to
+  var moved = 0;         // when the pointer last moved
 
   function measure() {
     var r = banner.getBoundingClientRect();
@@ -67,6 +73,9 @@
     step = cell / dpr;
     cols = Math.max(1, Math.ceil(canvas.width / cell));
     rows = Math.max(1, Math.ceil(canvas.height / cell));
+
+    // Far enough to reach every corner from anywhere in the frame.
+    reach = Math.sqrt(w * w + h * h);
     small.width = cols;
     small.height = rows;
 
@@ -105,24 +114,39 @@
     raf = 0;
     if (!lum) return;
 
+    // Still pointer: the patch keeps opening out. Moving pointer: it draws
+    // back to its travelling size.
+    var idle = Date.now() - moved > SETTLE;
+    var target = idle ? reach : RADIUS;
+    radius += (target - radius) * (idle ? SPREAD : PULL);
+
     var px = pointer.x, py = pointer.y;
-    var r2 = RADIUS * RADIUS;
-    var inner = RADIUS * (1 - FEATHER);
+    var r2 = radius * radius;
+    var inner = radius * (1 - FEATHER);
     var d = bits.data;
 
-    for (var y = 0, i = 0, p = 0; y < rows; y++) {
+    // Everything starts clear, and only the cells the patch can reach are
+    // worked out — so the cost follows the patch, not the frame.
+    d.fill(0);
+
+    var x0 = Math.max(0, Math.floor((px - radius) / step));
+    var x1 = Math.min(cols - 1, Math.ceil((px + radius) / step));
+    var y0 = Math.max(0, Math.floor((py - radius) / step));
+    var y1 = Math.min(rows - 1, Math.ceil((py + radius) / step));
+
+    for (var y = y0; y <= y1; y++) {
       var cy = (y + 0.5) * step;
       var by = y & 3;
-      for (var x = 0; x < cols; x++, i++, p += 4) {
+      var row = y * cols;
+      for (var x = x0; x <= x1; x++) {
         var cx = (x + 0.5) * step;
         var dx = cx - px, dy = cy - py;
         var d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
 
-        // Outside the patch the canvas stays clear, so the photo shows.
-        if (d2 > r2) { d[p + 3] = 0; continue; }
-
+        var i = row + x, p = i * 4;
         var dist = Math.sqrt(d2);
-        var a = dist <= inner ? 1 : 1 - (dist - inner) / (RADIUS - inner);
+        var a = dist <= inner ? 1 : 1 - (dist - inner) / (radius - inner);
 
         if (lum[i] < BAYER[by][x & 3] + grain[i]) {
           d[p] = d[p + 1] = d[p + 2] = 18;
@@ -137,6 +161,8 @@
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(bitmap, 0, 0, cols * cell, rows * cell);
+
+    if (over) schedule();
   }
 
   function schedule() {
@@ -155,12 +181,15 @@
     over = true;
     banner.classList.add('is-rastered');
     at(e);
+    radius = RADIUS;
+    moved = Date.now();
     schedule();
   });
 
   banner.addEventListener('pointermove', function (e) {
     if (!over) return;
     at(e);
+    moved = Date.now();
     schedule();
   });
 

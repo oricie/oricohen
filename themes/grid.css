@@ -142,6 +142,38 @@ h1 {
   border-radius: 4px;
 }
 
+/* The two icons are not self-evident, so each names itself on hover. */
+.view-btn { position: relative; }
+
+.view-btn::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-3px);
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 100;
+}
+
+.view-btn:hover::after,
+.view-btn:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (hover: none) {
+  .view-btn::after { display: none; }
+}
+
 /* The deck: every card occupies the same box, offset by its depth. */
 .work-stack {
   list-style: none;
@@ -266,15 +298,13 @@ h1 {
 
 /* ── The card with nothing in it yet ────────────────────── */
 /* No product shot, so nothing sits in a white frame: a small departure
-   board floats in the card's own colour, with a strip of the same
-   vocabulary running underneath it. */
+   board floats in the card's own colour. */
 .work-screen--soon {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
   background: none;
   box-shadow: none;
 }
@@ -309,47 +339,10 @@ h1 {
   to   { transform: none; opacity: 1; }
 }
 
-.ticker {
-  width: 100%;
-  overflow: hidden;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-  padding: 9px 0;
-  /* Fade the strip out at both ends instead of cutting it. */
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-
-.ticker-track {
-  display: flex;
-  width: max-content;
-  animation: ticker-run 26s linear infinite;
-}
-
-.ticker-run {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding-right: 18px;
-  white-space: nowrap;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--on-panel-mute, rgba(255, 255, 255, 0.75));
-}
-
-.ticker-run b { font-weight: 400; }
-.ticker-run i { font-style: normal; opacity: 0.5; }
-
-@keyframes ticker-run {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-
 .soon-label {
   position: absolute;
   left: 0;
-  bottom: 0;
+  bottom: 18px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -371,7 +364,6 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ticker-track,
   .soon-pulse,
   .flap-cell.is-turning { animation: none; }
 }
@@ -459,8 +451,6 @@ h1 {
 }
 
 .work.is-grid .flap-cell.is-blank { background: rgba(20, 20, 40, 0.04); }
-.work.is-grid .ticker { border-color: rgba(20, 20, 40, 0.12); }
-.work.is-grid .ticker-run,
 .work.is-grid .soon-label { color: var(--ink-mute); }
 .work.is-grid .soon-pulse { background: var(--ink); }
 .work.is-grid .work-open   { border-radius: 6px; }
