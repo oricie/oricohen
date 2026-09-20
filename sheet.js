@@ -112,4 +112,32 @@
     e.preventDefault();
     close();
   });
+
+  /* The sheets hold their screenshots in a <template>, so nothing is fetched
+   * until one opens — which is a wait of a few hundred kilobytes at exactly
+   * the wrong moment. Once the page itself has settled, pull them into the
+   * cache in the background, one at a time so they never compete with what
+   * is on screen. */
+  function warm() {
+    var srcs = [];
+    document.querySelectorAll('template').forEach(function (t) {
+      t.content.querySelectorAll('img[src]').forEach(function (img) {
+        var src = img.getAttribute('src');
+        if (srcs.indexOf(src) === -1) srcs.push(src);
+      });
+    });
+
+    (function next() {
+      var src = srcs.shift();
+      if (!src) return;
+      var probe = new Image();
+      probe.onload = probe.onerror = next;
+      probe.src = src;
+    })();
+  }
+
+  window.addEventListener('load', function () {
+    if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 2500 });
+    else setTimeout(warm, 1200);
+  });
 })();
