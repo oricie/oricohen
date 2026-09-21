@@ -1,15 +1,9 @@
-/* A patch of the portrait turns to a halftone of geometric marks under the
- * pointer.
+/* A patch of the portrait turns to pixel art under the pointer.
  *
- * The grid is perfectly regular and there is no dithering and no noise:
- * tone is carried by how big each mark is and which shape it takes — a
- * triangle for light, a circle for mid, a square for dark. The same tone
- * always draws the same mark, which is what makes it read as a screen
- * rather than as static.
- *
- * The patch has no edge either. Marks simply shrink toward the rim until
- * there is nothing left of them, so the photograph comes back without a
- * boundary anywhere.
+ * Only what the cursor covers is redrawn — black dots on white, ordered-
+ * dithered with a Bayer matrix so it keeps its tones without any greys.
+ * Everywhere else the canvas stays transparent and the photograph shows
+ * through, so the pixel art travels with the mouse.
  */
 (function () {
   var banner = document.querySelector('.banner');
@@ -24,20 +18,23 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var BLOCK = 7;       // target css px per cell
+  var BLOCK = 1.5;     // target css px per dot
   var RADIUS = 165;    // the patch while the pointer is moving
-  var FEATHER = 0.42;  // fraction of the radius the marks shrink away over
+  var FEATHER = 0.22;  // fraction of the radius the patch fades over
   var SETTLE = 140;    // ms of stillness before the patch starts seeping
-  var SPREAD = 0.0075; // how fast it seeps outward
-  var PULL = 0.26;     // how fast it draws back once the pointer moves
-  var STIR = 1.6;      // px the pointer must travel to count as moving
+  var SPREAD = 0.0022; // how fast it seeps outward
+  var PULL = 0.12;     // how fast it draws back once the pointer moves
+  var STIR = 2.5;      // px the pointer must travel to count as moving
   var ARCS = 168;      // angular resolution of the stain's outline
   var TAU = Math.PI * 2;
-  var FLOOR = 0.10;    // below this much ink a cell stays empty
-  var TONES = 20;      // grey steps the marks are drawn in
-  var LIGHT = 196;     // the grey a barely-inked mark takes
-  var DARK = 12;       // the grey a fully inked mark takes
-  var SPR = 26;        // px a sprite is drawn at before being scaled down
+  var GRAIN = 62;      // noise added to the threshold, 0-255
+
+  // 4x4 ordered dither, normalised to 0-255.
+  var BAYER = [
+    [0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]
+  ].map(function (row) {
+    return row.map(function (v) { return (v + 0.5) / 16 * 255; });
+  });
 
   var canvas = document.createElement('canvas');
   canvas.className = 'banner-fx';
@@ -47,6 +44,10 @@
   var ctx = canvas.getContext('2d');
   var small = document.createElement('canvas');
   var lum = null;            // luminance per cell
+  var grain = null;          // fixed noise per cell, so it never crawls
+  var bits = null;           // the 1-bit frame, one pixel per cell
+  var bitsCtx = null;
+  var bitmap = document.createElement('canvas');
   var cols = 0, rows = 0;
   var cell = 3, step = 1.5;  // dot size, in device px and in css px
   var w = 0, h = 0, dpr = 1;
@@ -55,7 +56,6 @@
   var radius = RADIUS;   // the live radius, eased toward its target
   var reach = RADIUS;    // the widest the patch can open to
   var moved = 0;         // when the pointer last travelled
-  var drewX = -1, drewY = -1, drewR = -1;   // what the last frame showed
   var born = 0;          // when this hover began
   var lastX = 0, lastY = 0;
 
@@ -101,9 +101,7 @@
     var r = banner.getBoundingClientRect();
     if (!r.width || !img.naturalWidth) return false;
 
-    // The marks are small and there are thousands of them; rasterising at
-    // 1.5x rather than 2x costs nothing visible and nearly halves the work.
-    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = r.width;
     h = r.height;
     canvas.width = Math.round(w * dpr);
@@ -118,6 +116,9 @@
     step = cell / dpr;
     cols = Math.max(1, Math.ceil(canvas.width / cell));
     rows = Math.max(1, Math.ceil(canvas.height / cell));
+
+    // Far enough to reach every corner from anywhere in the frame.
+    reach = Math.sqrt(w * w + h * h);
     small.width = cols;
     small.height = rows;
 
@@ -128,6 +129,7 @@
     try {
       var data = sc.getImageData(0, 0, cols, rows).data;
       lum = new Float32Array(cols * rows);
+      grain = new Float32Array(cols * rows);
       for (var i = 0, p = 0; i < lum.length; i++, p += 4) {
         // Rec. 601 luma, then a little contrast so 1-bit has something to bite on.
         var y = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
@@ -135,46 +137,20 @@
 
         // Noise breaks up the Bayer crosshatch into something closer to a
         // stochastic screen. Averaging two draws pulls it toward the middle.
+        grain[i] = ((Math.random() + Math.random()) - 1) * GRAIN;
       }
     } catch (e) {
       lum = null;            // cross-origin image: leave the photo alone
       return false;
     }
 
-    buildSheet();
+    // The frame is composed one pixel per dot, then scaled up with smoothing
+    // off — far cheaper than painting tens of thousands of rectangles.
+    bitmap.width = cols;
+    bitmap.height = rows;
+    bitsCtx = bitmap.getContext('2d');
+    bits = bitsCtx.createImageData(cols, rows);
     return true;
-  }
-
-  /* Every shape in every grey, rendered once into a sheet. Stamping a
-     scaled sprite is an order of magnitude cheaper than building and
-     filling a path per mark, which is what caps how fine the grid can be
-     and how many greys it can carry. */
-  var sheet = document.createElement('canvas');
-
-  function buildSheet() {
-    sheet.width = 3 * SPR;
-    sheet.height = TONES * SPR;
-    var g = sheet.getContext('2d');
-    var r = SPR / 2;
-
-    for (var t = 0; t < TONES; t++) {
-      var v = Math.round(LIGHT + (DARK - LIGHT) * (t / (TONES - 1)));
-      g.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
-      var y = t * SPR;
-
-      g.beginPath();                              // light: a triangle
-      g.moveTo(r, y + 1.5);
-      g.lineTo(SPR - 1.5, y + SPR - 2);
-      g.lineTo(1.5, y + SPR - 2);
-      g.closePath();
-      g.fill();
-
-      g.beginPath();                              // mid: a circle
-      g.arc(SPR + r, y + r, r - 1, 0, TAU);
-      g.fill();
-
-      g.fillRect(2 * SPR + 1, y + 1, SPR - 2, SPR - 2);   // dark: a square
-    }
   }
 
   function draw() {
@@ -182,113 +158,63 @@
     if (!lum) return;
 
     var now = Date.now();
-
-    // Grow only as far as actually covers the frame from where the pointer
-    // is — chasing the full diagonal meant it never arrived, and a patch
-    // that never arrives can never stop being redrawn.
-    var pxc = pointer.x, pyc = pointer.y;
-    var far = Math.max(
-      Math.sqrt(pxc * pxc + pyc * pyc),
-      Math.sqrt((w - pxc) * (w - pxc) + pyc * pyc),
-      Math.sqrt(pxc * pxc + (h - pyc) * (h - pyc)),
-      Math.sqrt((w - pxc) * (w - pxc) + (h - pyc) * (h - pyc)));
-    // A fixed divisor, not the live arcMin: the lobes drift, and a target
-    // that drifts with them can never be reached, so the frame would never
-    // go quiet.
-    reach = far / 0.58;
-
     var idle = now - moved > SETTLE;
     var target = idle ? reach : RADIUS;
     radius += (target - radius) * (idle ? SPREAD : PULL);
-    // The approach is asymptotic; past this the last of it shows nothing
-    // new, so land it and let the frame go quiet.
-    // Once the shortest lobe already reaches the furthest corner there is
-    // nothing left to reveal, so land it rather than creep for another ten
-    // seconds at full cost.
-    if (radius * arcMin >= far || target - radius < target * 0.01) radius = target;
-    if (radius > reach) radius = reach;
-
-    // Arrived, and the pointer has not moved: the next frame would be the
-    // same one. Don't spend it, and leave the lobes where they are — their
-    // drift is what would otherwise keep nudging the target forever.
-    if (Math.abs(radius - target) < 1 &&
-        pxc === drewX && pyc === drewY && Math.abs(radius - drewR) < 1) {
-      if (over) schedule();
-      return;
-    }
-    drewX = pxc; drewY = pyc; drewR = radius;
 
     outline(now - born);
 
-    var px = pointer.x * dpr, py = pointer.y * dpr;
-    var live = radius * dpr;
-    var rMax = live * arcMax, rMax2 = rMax * rMax;
-    var rSolid = live * arcMin * (1 - FEATHER);
-    var maxHalf = cell * 0.5;
+    var px = pointer.x, py = pointer.y;
+    var rMax = radius * arcMax, rMax2 = rMax * rMax;
+    // Inside this, no cell can be near the edge, so the angle is not needed.
+    var rSafe = radius * arcMin * (1 - FEATHER), rSafe2 = rSafe * rSafe;
+    var d = bits.data;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    d.fill(0);
 
-    // A ground for the marks to sit on, fading out over the same distance
-    // they shrink over — so the photograph returns without a boundary.
-    var ground = ctx.createRadialGradient(px, py, rSolid * 0.9, px, py, rMax);
-    ground.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    ground.addColorStop(0.55, 'rgba(255, 255, 255, 0.82)');
-    ground.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = ground;
-    // Only the part of it that lands on the canvas: once the patch is wide
-    // the square around it is mostly off-screen.
-    var gx = Math.max(0, px - rMax), gy = Math.max(0, py - rMax);
-    ctx.fillRect(gx, gy,
-                 Math.min(canvas.width, px + rMax) - gx,
-                 Math.min(canvas.height, py + rMax) - gy);
-
-    var x0 = Math.max(0, Math.floor((px - rMax) / cell));
-    var x1 = Math.min(cols - 1, Math.ceil((px + rMax) / cell));
-    var y0 = Math.max(0, Math.floor((py - rMax) / cell));
-    var y1 = Math.min(rows - 1, Math.ceil((py + rMax) / cell));
-
+    var x0 = Math.max(0, Math.floor((px - rMax) / step));
+    var x1 = Math.min(cols - 1, Math.ceil((px + rMax) / step));
+    var y0 = Math.max(0, Math.floor((py - rMax) / step));
+    var y1 = Math.min(rows - 1, Math.ceil((py + rMax) / step));
 
     for (var y = y0; y <= y1; y++) {
-      var cy = (y + 0.5) * cell;
+      var cy = (y + 0.5) * step;
+      var by = y & 3;
       var row = y * cols;
       for (var x = x0; x <= x1; x++) {
-        var cx = (x + 0.5) * cell;
+        var cx = (x + 0.5) * step;
         var dx = cx - px, dy = cy - py;
         var d2 = dx * dx + dy * dy;
         if (d2 > rMax2) continue;
 
-        var ink = 1 - lum[row + x] / 255;
-        if (ink < FLOOR) continue;
-
-        // Toward the rim the marks shrink away, so the patch has no edge.
-        var fade = 1;
-        if (d2 > rSolid * rSolid) {
+        var a;
+        if (d2 < rSafe2) {
+          a = 1;
+        } else {
+          // Only the rim needs to know which way it is facing.
           var k = ((Math.atan2(dy, dx) + Math.PI) / TAU * ARCS) | 0;
           if (k < 0) k = 0; else if (k >= ARCS) k = ARCS - 1;
-          var lr = live * arc[k];
-          var inner = lr * (1 - FEATHER);
+          var lr = radius * arc[k];
           var dist = Math.sqrt(d2);
-          if (dist >= lr) continue;
-          fade = dist <= inner ? 1 : 1 - (dist - inner) / (lr - inner);
-          fade *= fade;                     // ease it out rather than ramp
+          if (dist > lr) continue;
+          var inner = lr * (1 - FEATHER);
+          a = dist <= inner ? 1 : 1 - (dist - inner) / (lr - inner);
         }
 
-        // Spread the midtones, so a nearly flat background still varies.
-        var t = ink * ink * (3 - 2 * ink);
-        // Capped short of the cell: marks never quite touch, which is what
-        // keeps dark areas reading as a screen rather than a solid mass.
-        var half = maxHalf * (0.14 + 0.72 * t) * fade;
-        if (half < 0.35) continue;
-
-        var shape = t < 0.34 ? 0 : t < 0.70 ? 1 : 2;
-        // Darkness follows the ink, not just the size — that is most of
-        // what makes it read as a photograph rather than a pattern.
-        var tone = (t * TONES) | 0;
-        if (tone > TONES - 1) tone = TONES - 1;
-        ctx.drawImage(sheet, shape * SPR, tone * SPR, SPR, SPR,
-                      cx - half, cy - half, half * 2, half * 2);
+        var i = row + x, p = i * 4;
+        if (lum[i] < BAYER[by][x & 3] + grain[i]) {
+          d[p] = d[p + 1] = d[p + 2] = 18;
+        } else {
+          d[p] = d[p + 1] = d[p + 2] = 255;
+        }
+        d[p + 3] = (a * 255) | 0;
       }
     }
+
+    bitsCtx.putImageData(bits, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, cols * cell, rows * cell);
 
     if (over) schedule();
   }
