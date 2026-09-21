@@ -23,7 +23,7 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var RADIUS = 185;    // how far the reveal reaches
+  var RADIUS = 140;    // how far the reveal reaches
   var FEATHER = 0.34;  // fraction of the reach the scatter spans
   var ARCS = 168;      // angular resolution of the outline
   var CELL = 4;        // css px per cell of the dissolve
