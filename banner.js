@@ -1,9 +1,13 @@
 /* A pixel-art Freiburg seeps through the portrait under the pointer.
  *
- * The photograph stays as it is. On hover a stain opens over it and shows
- * the illustration underneath — lopsided, differently shaped each time,
- * creeping outward while the pointer rests and drawing back when it moves.
- * Its rim fades rather than cuts, so the two pictures meet without an edge.
+ * The photograph stays as it is. On hover the illustration underneath comes
+ * through it, cell by cell: near the pointer every cell has turned, further
+ * out they turn at random, and past that none have. The edge is a scatter
+ * rather than a line, and because each cell's noise is fixed the scatter
+ * holds still instead of crawling.
+ *
+ * The reach is lopsided too — a handful of sine lobes at random phases,
+ * redrawn on every hover — and it creeps outward while the pointer rests.
  */
 (function () {
   var banner = document.querySelector('.banner');
@@ -25,6 +29,7 @@
   var PULL = 0.20;     // how fast it draws back once the pointer moves
   var STIR = 2;        // px the pointer must travel to count as moving
   var ARCS = 168;      // angular resolution of the stain's outline
+  var CELL = 9;        // css px per cell of the dissolve
   var TAU = Math.PI * 2;
 
   var canvas = document.createElement('canvas');
@@ -39,6 +44,10 @@
   art.src = 'images/portrait-pixel.png';
 
   var w = 0, h = 0, dpr = 1;
+  var mask = document.createElement('canvas');
+  var maskCtx = null, maskData = null;
+  var noise = null;          // fixed per cell, so the scatter never crawls
+  var cols = 0, rows = 0, cell = 1;
   var pointer = { x: -9999, y: -9999 };
   var raf = 0, over = false;
   var radius = RADIUS, reach = RADIUS;
@@ -92,6 +101,24 @@
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // The dissolve is worked out one pixel per cell and blown up with
+    // smoothing off, so it costs a few thousand values rather than a few
+    // million.
+    cell = Math.max(3, Math.round(CELL * dpr));
+    cols = Math.max(1, Math.ceil(canvas.width / cell));
+    rows = Math.max(1, Math.ceil(canvas.height / cell));
+    mask.width = cols;
+    mask.height = rows;
+    maskCtx = mask.getContext('2d');
+    maskData = maskCtx.createImageData(cols, rows);
+
+    noise = new Float32Array(cols * rows);
+    for (var i = 0; i < noise.length; i++) {
+      // Two draws averaged: fewer cells turn very early or very late, so
+      // the scatter reads as a dissolve rather than as salt and pepper.
+      noise[i] = (Math.random() + Math.random()) * 0.5;
+    }
     return true;
   }
 
@@ -142,25 +169,34 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(art, (canvas.width - dw) / 2, (canvas.height - dh) * 0.08, dw, dh);
 
-    // Then keep only the stain: the lobed outline carries the shape, the
-    // gradient inside it carries the soft rim.
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.beginPath();
-    for (var i = 0; i < ARCS; i++) {
-      var a = i / ARCS * TAU;
-      var r = live * arc[i];
-      var x = px + Math.cos(a) * r, y = py + Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
+    // Then keep only the cells that have turned. Every cell gets the same
+    // fixed noise each frame, so the scatter stays put while the reach
+    // moves through it.
+    var d = maskData.data;
+    var band = FEATHER;
 
-    var g = ctx.createRadialGradient(
-      px, py, Math.max(0, live * arcMin * (1 - FEATHER)), px, py, live * arcMax);
-    g.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    g.addColorStop(0.72, 'rgba(0, 0, 0, 0.92)');
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = g;
-    ctx.fill();
+    for (var y = 0, i = 0, p = 0; y < rows; y++) {
+      var cy = (y + 0.5) * cell;
+      for (var x = 0; x < cols; x++, i++, p += 4) {
+        var cx = (x + 0.5) * cell;
+        var dx = cx - px, dy = cy - py;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+
+        var k = ((Math.atan2(dy, dx) + Math.PI) / TAU * ARCS) | 0;
+        if (k < 0) k = 0; else if (k >= ARCS) k = ARCS - 1;
+        var lr = live * arc[k];
+
+        // 1 well inside, 0 well outside, and in between the chance that
+        // this particular cell has turned yet.
+        var f = (lr - dist) / (lr * band);
+        d[p + 3] = f >= 1 ? 255 : (f <= 0 ? 0 : (f > noise[i] ? 255 : 0));
+      }
+    }
+
+    maskCtx.putImageData(maskData, 0, 0);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mask, 0, 0, cols * cell, rows * cell);
 
     ctx.globalCompositeOperation = 'source-over';
 
