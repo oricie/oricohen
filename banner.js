@@ -7,7 +7,8 @@
  * holds still instead of crawling.
  *
  * The reach is lopsided too — a handful of sine lobes at random phases,
- * redrawn on every hover — and it creeps outward while the pointer rests.
+ * redrawn on every hover, drifting slowly so the outline never sits still.
+ * It holds its size and simply follows the pointer.
  */
 (function () {
   var banner = document.querySelector('.banner');
@@ -22,14 +23,10 @@
     window.matchMedia('(hover: none)').matches;
   if (reduce || noHover) return;
 
-  var RADIUS = 175;    // the stain while the pointer is moving
-  var FEATHER = 0.34;  // fraction of the radius the rim fades over
-  var SETTLE = 140;    // ms of stillness before it starts seeping
-  var SPREAD = 0.0055; // how fast it seeps outward
-  var PULL = 0.20;     // how fast it draws back once the pointer moves
-  var STIR = 2;        // px the pointer must travel to count as moving
-  var ARCS = 168;      // angular resolution of the stain's outline
-  var CELL = 9;        // css px per cell of the dissolve
+  var RADIUS = 185;    // how far the reveal reaches
+  var FEATHER = 0.34;  // fraction of the reach the scatter spans
+  var ARCS = 168;      // angular resolution of the outline
+  var CELL = 6;        // css px per cell of the dissolve
   var TAU = Math.PI * 2;
 
   var canvas = document.createElement('canvas');
@@ -50,10 +47,8 @@
   var cols = 0, rows = 0, cell = 1;
   var pointer = { x: -9999, y: -9999 };
   var raf = 0, over = false;
-  var radius = RADIUS, reach = RADIUS;
-  var moved = 0, born = 0;
-  var lastX = 0, lastY = 0;
-  var drewX = -1, drewY = -1, drewR = -1;
+  var born = 0;
+  var drewX = -1, drewY = -1;
 
   /* The stain is not a disc. Its edge is a handful of sine lobes at random
      phases, so it comes out lopsided, differently each time, and the lobes
@@ -129,35 +124,18 @@
     var now = Date.now();
     var pxc = pointer.x, pyc = pointer.y;
 
-    // Grow only as far as covers the frame from where the pointer is; a
-    // target it can never reach is a frame that can never go quiet.
-    var far = Math.max(
-      Math.sqrt(pxc * pxc + pyc * pyc),
-      Math.sqrt((w - pxc) * (w - pxc) + pyc * pyc),
-      Math.sqrt(pxc * pxc + (h - pyc) * (h - pyc)),
-      Math.sqrt((w - pxc) * (w - pxc) + (h - pyc) * (h - pyc)));
-    reach = far / 0.58;
-
-    var idle = now - moved > SETTLE;
-    var target = idle ? reach : RADIUS;
-    radius += (target - radius) * (idle ? SPREAD : PULL);
-    if (radius * arcMin >= far || Math.abs(target - radius) < target * 0.01) {
-      radius = target;
-    }
-
-    // Arrived, and the pointer has not moved: the next frame would be the
-    // same one, so don't spend it.
-    if (radius === target && pxc === drewX && pyc === drewY &&
-        Math.abs(radius - drewR) < 0.5) {
+    // Nothing but the pointer changes the picture now, so a frame where it
+    // has not moved would redraw the same thing.
+    if (pxc === drewX && pyc === drewY) {
       if (over) schedule();
       return;
     }
-    drewX = pxc; drewY = pyc; drewR = radius;
+    drewX = pxc; drewY = pyc;
 
     outline(now - born);
 
     var px = pxc * dpr, py = pyc * dpr;
-    var live = radius * dpr;
+    var live = RADIUS * dpr;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
@@ -213,27 +191,14 @@
     pointer.y = e.clientY - r.top;
   }
 
-  // Sub-pixel jitter from a resting hand should not keep collapsing the
-  // stain; only a real move counts as a move.
-  function stirred() {
-    var dx = pointer.x - lastX, dy = pointer.y - lastY;
-    if (dx * dx + dy * dy < STIR * STIR) return false;
-    lastX = pointer.x;
-    lastY = pointer.y;
-    return true;
-  }
-
   banner.addEventListener('pointerenter', function (e) {
     if (e.pointerType === 'touch') return;
     if (!measure()) return;
     over = true;
     banner.classList.add('is-rastered');
     at(e);
-    radius = RADIUS;
-    born = moved = Date.now();
-    lastX = pointer.x;
-    lastY = pointer.y;
-    drewX = drewY = drewR = -1;
+    born = Date.now();
+    drewX = drewY = -1;
     reshape();
     schedule();
   });
@@ -241,7 +206,6 @@
   banner.addEventListener('pointermove', function (e) {
     if (!over) return;
     at(e);
-    if (stirred()) moved = Date.now();
     schedule();
   });
 
