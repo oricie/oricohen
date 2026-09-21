@@ -26,7 +26,7 @@
   var RADIUS = 185;    // how far the reveal reaches
   var FEATHER = 0.34;  // fraction of the reach the scatter spans
   var ARCS = 168;      // angular resolution of the outline
-  var CELL = 6;        // css px per cell of the dissolve
+  var CELL = 4;        // css px per cell of the dissolve
   var TAU = Math.PI * 2;
 
   var canvas = document.createElement('canvas');
