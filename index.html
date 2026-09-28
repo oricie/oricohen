@@ -148,9 +148,29 @@
                 <span class="work-title">Jedox</span>
                 <span class="work-sub">AI-first financial planning</span>
               </span>
-              <span class="work-screen">
-                <img src="images/jedox-01-financial-review.png" draggable="false"
-                     alt="A Q4 financial review dashboard with revenue forecast, OPEX summary and income statement, JedoxAI open alongside" />
+              <span class="work-screen work-screen--live">
+                <span class="ui" aria-hidden="true">
+                  <span class="ui-bar">
+                    <span class="ui-crumb">Reports <i>›</i> <b>Q4 2024 Financial Review</b></span>
+                    <span class="ui-pill">✦ JedoxAI</span>
+                  </span>
+                  <span class="ui-body">
+                    <span class="ui-main">
+                      <span class="ui-kpis">
+                        <span class="ui-kpi"><i>Revenue</i><b data-to="1284" data-pre="$" data-post="k">$0k</b></span>
+                        <span class="ui-kpi"><i>Profit</i><b data-to="412" data-pre="$" data-post="k">$0k</b></span>
+                        <span class="ui-kpi"><i>Margin</i><b data-to="32" data-post="%">0%</b></span>
+                      </span>
+                      <span class="ui-chart"><span class="ui-col" style="--h:0.46;--i:0"></span><span class="ui-col" style="--h:0.58;--i:1"></span><span class="ui-col" style="--h:0.66;--i:2"></span><span class="ui-col" style="--h:0.55;--i:3"></span><span class="ui-col" style="--h:0.70;--i:4"></span><span class="ui-col" style="--h:0.74;--i:5"></span><span class="ui-col" style="--h:0.62;--i:6"></span><span class="ui-col" style="--h:0.78;--i:7"></span><span class="ui-col" style="--h:0.72;--i:8"></span><span class="ui-col" style="--h:0.86;--i:9"></span><span class="ui-col" style="--h:0.80;--i:10"></span><span class="ui-col" style="--h:0.94;--i:11"></span></span>
+                    </span>
+                    <span class="ui-side">
+                      <span class="ui-side-head">JedoxAI</span>
+                      <span class="ui-msg ui-msg--user">Compare 2023 and 2024</span>
+                      <span class="ui-think"><span class="ui-spin"></span>Understanding query…</span>
+                      <span class="ui-msg ui-msg--ai"><span class="ui-type"></span><span class="ui-caret"></span></span>
+                    </span>
+                  </span>
+                </span>
               </span>
             </span>
             <span class="work-open" aria-hidden="true"><span class="work-open-label">Read more</span><span class="work-open-mark">↗</span></span>
@@ -183,6 +203,11 @@
                 lifted usability benchmarks 15% year over year.
               </li>
             </ul>
+            <figure class="sheet-shot">
+              <img src="images/jedox-01-financial-review.png" draggable="false"
+                   alt="A Q4 financial review dashboard with revenue forecast, OPEX summary and income statement, JedoxAI open alongside" />
+              <figcaption>Financial review — forecast against actuals, with JedoxAI working alongside.</figcaption>
+            </figure>
             <figure class="sheet-shot">
               <img src="images/jedox-02-home.png" draggable="false"
                    alt="The Jedox workspace home, with quick-start actions and recent models" />
@@ -354,6 +379,7 @@
   <script src="stack.js"></script>
   <script src="ticker.js"></script>
   <script src="field.js"></script>
+  <script src="jedox-live.js"></script>
   <script src="sheet.js"></script>
 </body>
 </html>
