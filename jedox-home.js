@@ -6,10 +6,12 @@
  * previews are the screenshot's own pixels, as they are images in the
  * product too; everything else is built here.
  *
- * One pass: the greeting types itself, the quick starts and the workspace
- * come in, the list fills, the tabs are looked through, and a document
- * that has just gone into review arrives at the top of the list. It ends on
- * the screenshot's own frame, holds, and starts again.
+ * It plays once each time the sheet opens: the greeting types itself, the
+ * quick starts and the workspace come in, the list fills, the tabs are
+ * looked through, and a document that has just gone into review arrives at
+ * the top of the list. It ends on the screenshot's own frame and stays
+ * there, and from then on it answers the pointer the way the product does —
+ * hover states only. Nothing opens or navigates; it is a screen, not an app.
  *
  * The sheet builds its content from a <template> each time it opens, so
  * this watches for the frame to appear rather than looking for it once.
@@ -220,15 +222,15 @@
       tabs.querySelectorAll('.jh-tab').forEach(function (n, k) { n.classList.toggle('is-on', k === i); });
       ui.classList.toggle('is-away', i !== 0);
     }
-    var FULL = 'jh is-tiles is-cards is-rows is-new';
-    function settle() { ui.className = FULL; hi.textContent = GREETING; tab(0); }
+    // The resting frame, and the point from which the screen answers hover.
+    var REST = 'jh is-tiles is-cards is-rows is-new is-idle';
+    function settle() { stop(); ui.className = REST; hi.textContent = GREETING; tab(0); }
     function play() {
       stop(); running = true;
-      ui.className = 'jh is-resetting is-leaving';
+      ui.className = 'jh is-resetting';
       hi.textContent = ''; tab(0);
       void ui.offsetWidth;
       ui.classList.remove('is-resetting');
-      later(60,    function () { ui.classList.remove('is-leaving'); });
       later(200,   function () { type(0); ui.classList.add('is-tiles'); });
       later(1500,  function () { ui.classList.add('is-cards'); });
       later(2700,  function () { ui.classList.add('is-rows'); });
@@ -236,17 +238,15 @@
       later(5600,  function () { tab(2); });
       later(6600,  function () { tab(0); });
       later(7600,  function () { ui.classList.add('is-new'); });
-      later(12800, function () { ui.classList.add('is-leaving'); });
-      later(13400, play);
+      later(9400,  function () { ui.classList.add('is-idle'); running = false; });
     }
     if (reduce) { settle(); return; }
+    // Once, when it first comes into view.
     if (window.IntersectionObserver) {
-      new IntersectionObserver(function (es) {
-        es.forEach(function (e) {
-          if (e.isIntersecting && !running) play();
-          else if (!e.isIntersecting && running) { stop(); settle(); }
-        });
-      }, { threshold: 0.25 }).observe(host);
+      var seen = new IntersectionObserver(function (es) {
+        if (es.some(function (e) { return e.isIntersecting; })) { seen.disconnect(); play(); }
+      }, { threshold: 0.25 });
+      seen.observe(host);
     } else play();
   }
 
