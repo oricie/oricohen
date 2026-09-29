@@ -1,0 +1,180 @@
+/* ── Older work, rebuilt: a video editing and review app ───────────────
+   A phone in a CSS 3D scene, with the app built in code inside it and a
+   prototype flow playing on a loop; see misc-video.js. The app is laid out
+   at the original 375 by 812 and scaled into a 390 by 844 screen. */
+.live-video { position: relative; display: block; overflow: hidden; background: #7d92f3; }
+.mv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 18% 8%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(158deg, #6f86f2 0%, #8196f4 52%, #9aa9f6 100%);
+  -webkit-font-smoothing: antialiased;
+  direction: ltr;
+  contain: strict;
+  pointer-events: none;
+  user-select: none;
+}
+.mv-scene { position: absolute; inset: 0; }
+.mv-rig { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.mv-shadow {
+  position: absolute;
+  border-radius: 64px;
+  pointer-events: none;
+}
+.mv-shadow--far {
+  left: -190px; top: -410px; width: 380px; height: 830px;
+  background: rgba(34, 40, 140, 0.42);
+  filter: blur(34px);
+  transform: translate3d(70px, 90px, -90px);
+}
+.mv-shadow--near {
+  left: -200px; top: -424px; width: 400px; height: 852px;
+  background: rgba(30, 34, 110, 0.34);
+  filter: blur(9px);
+  transform: translate3d(12px, 16px, -14px);
+}
+
+/* The device */
+.mv-face { position: absolute; inset: 0; transform: translateZ(0.5px); transform-style: flat; isolation: isolate; }
+.mv-phone { position: absolute; left: -209px; top: -436px; width: 418px; height: 872px; transform-style: preserve-3d; }
+.mv-edge {
+  position: absolute; inset: 0; border-radius: 60px;
+  background: linear-gradient(135deg, #b9bec9 0%, #7c828f 30%, #4a4f5b 62%, #8d93a0 100%);
+}
+.mv-edge--back { background: #3a3e49; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35); }
+.mv-key { position: absolute; width: 5px; border-radius: 2px; background: linear-gradient(90deg, #59606d, #a7adb8 50%, #5b616e); }
+.mv-frame {
+  position: absolute; inset: 0; border-radius: 60px;
+  background: linear-gradient(140deg, #e9ebf0 0%, #9ba1ad 22%, #5f6571 48%, #b5bac4 78%, #eceef2 100%);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.55);
+}
+.mv-bezel {
+  position: absolute; inset: 3px; border-radius: 57px; background: #07080b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.mv-screen {
+  position: absolute; left: 14px; top: 14px; width: 390px; height: 844px;
+  border-radius: 46px; overflow: hidden; background: #edf1f4;
+}
+.mv-island {
+  position: absolute; left: 132px; top: 11px; width: 126px; height: 37px;
+  border-radius: 19px; background: #000; z-index: 50;
+}
+.mv-glare {
+  position: absolute; inset: 0; z-index: 51; pointer-events: none;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 32%, rgba(255, 255, 255, 0) 46%);
+}
+
+/* The app, at 375 by 812 */
+.mv-app {
+  position: absolute; left: 0; top: 0; width: 375px; height: 812px;
+  transform: scale(1.04); transform-origin: 0 0; overflow: hidden;
+  font-family: "Nunito", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  color: #556476; background: #edf1f4;
+}
+.mv-app div, .mv-app span { box-sizing: border-box; }
+.mv-app svg { display: block; overflow: visible; }
+.mv-a { position: absolute; }
+.mv-t { position: absolute; white-space: nowrap; line-height: 1; }
+.mv-scr { position: absolute; left: 0; top: 0; width: 375px; height: 812px; overflow: hidden; background: #edf1f4; }
+.mv-scr--white { background: #fff; }
+.mv-dim { position: absolute; inset: 0; background: #0c1030; opacity: 0; pointer-events: none; z-index: 40; }
+.mv-modal { position: absolute; inset: 0; overflow: hidden; transform: translateY(100%); }
+
+.mv-sb { position: absolute; left: 0; top: 0; width: 375px; height: 44px; z-index: 30; color: #0c0d10; }
+.mv-sb--light { color: #fff; }
+.mv-sb-time { position: absolute; left: 29px; top: 17px; font: 600 15px/1 "Helvetica Neue", Arial, sans-serif; letter-spacing: -0.1px; }
+
+/* My drive */
+.mv-top { position: absolute; left: 0; top: 0; width: 375px; height: 114px; background: #fff; box-shadow: 0 1px 4px rgba(90, 100, 130, 0.07); z-index: 5; }
+.mv-h1 { font-size: 22px; font-weight: 700; color: #556476; }
+.mv-plus { position: absolute; left: 320.7px; top: 59.8px; width: 40px; height: 40px; border-radius: 50%; background: #edf1f4; }
+.mv-search { position: absolute; left: 12px; top: 128px; width: 353px; height: 35.5px; border-radius: 18px; background: #fff; }
+.mv-list { position: absolute; left: 0; top: 0; width: 375px; height: 812px; }
+.mv-row { position: absolute; left: 0; width: 375px; height: 115px; }
+.mv-act { position: absolute; left: 120px; top: 0; width: 242.5px; height: 115px; border-radius: 9px; background: #c4cdda; opacity: 0; }
+.mv-act-l { font-size: 15px; font-weight: 600; color: #596676; }
+.mv-card { position: absolute; left: 10px; top: 0; width: 352.5px; height: 115px; border-radius: 8px; background: #fff; overflow: hidden; }
+.mv-th { position: absolute; left: 0; top: 0; width: 124px; height: 115px; background-size: cover; background-position: center; }
+.mv-name { font-size: 15px; font-weight: 600; color: #556476; }
+.mv-meta { font-size: 13px; font-weight: 400; color: #5b6471; }
+.mv-cnt { font-size: 13px; color: #63646a; text-align: right; }
+.mv-av { position: absolute; border-radius: 50%; background-size: 800% 400%; background-color: #c7ced9; }
+.mv-avs .mv-av { width: 23.5px; height: 23.5px; box-shadow: 0 0 0 0.9px #fff; }
+.mv-more { position: absolute; width: 23.5px; height: 23.5px; border-radius: 50%; background: #c7ced9; color: #fff; font-size: 10px; font-weight: 700; line-height: 23.5px; text-align: center; box-shadow: 0 0 0 0.9px #fff; }
+
+/* Player */
+.mv-photo { position: absolute; left: 0; top: 0; width: 375px; height: 278px; background-size: cover; background-position: center 42%; }
+.mv-track { position: absolute; left: 0; top: 277.7px; width: 375px; height: 4.3px; background: #6b6981; }
+.mv-fill { position: absolute; left: 0; top: 0; height: 100%; background: #4345fd; width: 46.4%; }
+.mv-knob { position: absolute; top: -5.85px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #4443fc; left: 46.4%; }
+.mv-time { font-size: 13px; color: #fff; text-shadow: 0 0 6px rgba(0, 0, 0, 0.25); }
+.mv-ptitle { font-size: 18px; font-weight: 600; color: #566673; }
+.mv-psub { font-size: 15px; color: #afb3b6; }
+.mv-clist { position: absolute; left: 10px; top: 348.7px; width: 355px; height: 386px; overflow: hidden; }
+.mv-cm { position: relative; width: 355px; border-radius: 8px; background: #fff; margin-bottom: 10px; overflow: hidden; }
+.mv-cm-in { position: relative; padding: 61px 19.5px 13.8px 19.5px; }
+.mv-cm .mv-av { left: 18px; top: 19px; width: 30px; height: 30px; }
+.mv-cm-n { left: 59.4px; top: 24px; font-size: 15px; font-weight: 700; color: #2b2a31; }
+.mv-cm-w { right: 19.5px; top: 24px; font-size: 15px; color: #bebebe; }
+.mv-cm-x { font-size: 15px; line-height: 19px; color: #2c2b30; white-space: normal; }
+.mv-cm-r { position: relative; height: 19px; margin-top: 4.2px; font-size: 13px; line-height: 19px; color: #c4c7cf; }
+.mv-cm-r .mv-t { line-height: 19px; top: 0; }
+.mv-heart path { fill: #c6cacf; transition: fill 0.2s ease; }
+.mv-heart.is-on path { fill: #4345fd; }
+.mv-input { position: absolute; left: 11px; top: 742.8px; width: 354px; height: 51.2px; border-radius: 26px; background: #fff; border: 1px solid #c9ccd4; transition: border-color 0.25s ease; }
+.mv-input.is-focus { border-color: #9fa2fb; }
+.mv-ph { left: 13.5px; top: 0; font-size: 15px; line-height: 49.2px; color: #5d6371; }
+.mv-typed { left: 13.5px; top: 0; font-size: 15px; line-height: 49.2px; color: #2c2b30; }
+.mv-caret { display: inline-block; width: 1.5px; height: 18px; margin-left: 1px; vertical-align: -3.5px; background: #4345fd; opacity: 0; }
+.mv-input.is-focus .mv-caret { animation: mv-blink 1s steps(1) infinite; }
+@keyframes mv-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.mv-post { position: absolute; right: 4px; top: 4px; width: 73px; height: 41.2px; border-radius: 21px; background: #4345fd; color: #fff; font-size: 15px; font-weight: 600; line-height: 41.2px; text-align: center; opacity: 0; transform: scale(0.6); }
+
+/* Add new, upload source */
+.mv-h2 { font-size: 22px; font-weight: 600; color: #586479; }
+.mv-q { font-size: 20px; font-weight: 600; color: #556373; }
+.mv-tile { position: absolute; border-radius: 10px; background: #edf1f4; }
+.mv-tile--on { background: #6261fe; }
+.mv-tile-l { font-size: 18px; font-weight: 600; color: #556677; }
+.mv-tile--on .mv-tile-l { color: #fff; }
+.mv-press { position: absolute; inset: 0; border-radius: inherit; background: #0c1030; opacity: 0; pointer-events: none; }
+
+/* Uploading file */
+.mv-hero { position: absolute; left: 0; top: 0; width: 375px; height: 309.6px; overflow: hidden; background: #26272a; }
+.mv-hero-img { position: absolute; left: 0; top: 0; width: 375px; height: 278px; background-size: 100% 100%; }
+.mv-hero-ref { position: absolute; left: 0; top: 278px; width: 375px; height: 278px; background-size: 100% 100%; transform: scaleY(-1); transform-origin: 50% 0; top: 556px; }
+.mv-strip { position: absolute; left: 0; top: 278px; width: 375px; height: 31.6px; background: rgba(150, 154, 152, 0.62); }
+.mv-strip-fill { position: absolute; left: 0; top: 0; height: 100%; width: 40%; background: #4a4df3; }
+.mv-strip-l { left: 16.8px; top: 9.6px; font-size: 13px; font-weight: 700; color: #fff; }
+.mv-htitle { font-size: 24px; font-weight: 700; color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.18); }
+.mv-form { position: absolute; left: 0; top: 309.6px; width: 375px; height: 503px; background: #fff; }
+.mv-lbl { font-size: 15px; font-weight: 600; color: #586577; }
+.mv-field { position: absolute; left: 20px; width: 331px; border-radius: 4px; background: #edf1f4; }
+.mv-fieldtx { left: 12.7px; font-size: 15px; color: #5b6471; }
+.mv-chip { position: absolute; height: 41px; border-radius: 20.5px; background: #edf1f4; padding-left: 39px; padding-right: 32px; font-size: 13px; font-weight: 600; color: #5b6770; line-height: 41px; white-space: nowrap; opacity: 0; }
+.mv-chip .mv-av { left: 5px; top: 5.5px; width: 30px; height: 30px; }
+.mv-chip svg { position: absolute; right: 13px; top: 15.7px; }
+.mv-btn { position: absolute; left: 22px; width: 332px; height: 51px; border-radius: 26px; background: #4244fe; color: #fff; font-size: 15px; font-weight: 600; text-align: center; line-height: 51px; box-shadow: 0 6px 14px rgba(66, 68, 254, 0.18); overflow: hidden; }
+
+/* File uploaded */
+.mv-done-img { position: absolute; left: -330px; top: -40px; width: 1100px; height: 813px; background-size: 100% 100%; filter: blur(1.5px); }
+.mv-done-tint { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(76, 62, 214, 0.9) 0%, rgba(58, 52, 190, 0.8) 45%, rgba(46, 44, 150, 0.72) 75%, rgba(40, 42, 150, 0.8) 100%); mix-blend-mode: normal; }
+.mv-done-l { left: 0; width: 375px; text-align: center; font-size: 22px; font-weight: 600; color: #fff; }
+
+/* The finger */
+.mv-tap { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; pointer-events: none; opacity: 0; }
+.mv-tap-dot {
+  position: absolute; left: -21px; top: -21px; width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(34, 38, 84, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 3px 12px rgba(20, 24, 70, 0.3), inset 0 0 0 1px rgba(34, 38, 84, 0.08);
+}
+.mv-tap-ring { position: absolute; left: -21px; top: -21px; width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); opacity: 0; }
+
+/* Test mode: the screen alone, flat, at 390 by 844 */
+.mv--flat { background: #d8d8d8; contain: none; }
+.mv--flat .mv-scene { position: static; }
+.mv--flat .mv-screen { position: absolute; left: 0; top: 0; border-radius: 0; transform: none; }
