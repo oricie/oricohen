@@ -255,6 +255,10 @@ h1 {
 }
 
 .work-card:active { cursor: grabbing; }
+/* While a card is held the drag owns the pointer, so the hand has to be
+   set on the whole card, not only on the button under it. */
+.work-item.is-lifted,
+.work-item.is-lifted * { cursor: grabbing !important; }
 
 .work-panel {
   display: flex;
