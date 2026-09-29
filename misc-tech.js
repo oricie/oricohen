@@ -18,7 +18,7 @@
   // closer than a plain cover. Tuned for a wide 2:1 tile: the top bar and both
   // product cards, with backdrop showing above and to the right of the
   // window, which bleeds off the left.
-  var FOCUS = [675, 459], ZOOM = 1.275;
+  var FOCUS = [675, 459], ZOOM = 1.275;   // defaults; a host may set data-focus="x,y" and data-zoom
 
   function el(tag, cls, css, text) {
     var n = document.createElement(tag);
@@ -312,9 +312,9 @@
       T(st, tx, 1027.5, 22, label, 'mt-win-t', lw);
       return [b, c];
     }
-    win(233, 'IOS WINS', 60, 311);
-    win(636, 'ANDROID WINS', 99, 715);
-    svg(st, 650, 1028.5, 26, 34, '<g transform="scale(1.4)"><path d="' + HAND + '" fill="#fff" stroke="#111" stroke-width="1.15" stroke-linejoin="round"/>' +
+    var winIos = win(233, 'IOS WINS', 60, 311);
+    var winAnd = win(636, 'ANDROID WINS', 99, 715);
+    var hand = svg(st, 650, 1028.5, 26, 34, '<g transform="scale(1.4)"><path d="' + HAND + '" fill="#fff" stroke="#111" stroke-width="1.15" stroke-linejoin="round"/>' +
       '<path d="M10 10.3v3.6M12.8 11v3M7.1 9.3v4.3" stroke="#111" stroke-width=".9" stroke-linecap="round"/></g>', 'mt-hand', '0 0 26 34');
 
     // Right column ----------------------------------------------------------------
@@ -350,12 +350,15 @@
       }
     });
 
-    // Fit: cover the tile, centred.
+    // Fit: cover the tile, centred on the focus.
+    var focus = FOCUS, zoom = ZOOM;
+    if (host.dataset.focus) focus = host.dataset.focus.split(',').map(Number);
+    if (host.dataset.zoom) zoom = parseFloat(host.dataset.zoom);
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
-      var k = Math.max(w / W, h / H) * ZOOM;
-      var tx = Math.min(0, Math.max(w - W * k, w / 2 - FOCUS[0] * k));
-      var ty = Math.min(0, Math.max(h - H * k, h / 2 - FOCUS[1] * k));
+      var k = Math.max(w / W, h / H) * zoom;
+      var tx = Math.min(0, Math.max(w - W * k, w / 2 - focus[0] * k));
+      var ty = Math.min(0, Math.max(h - H * k, h / 2 - focus[1] * k));
       st.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
     }
     fit();
@@ -384,6 +387,52 @@
       count(p80, '80%', 900, 60);
       count(p20, '20%', 900, 60);
       counters.forEach(function (c) { count(c[0], c[1], 800, 120); });
+      setTimeout(startLoop, 1700);
+    }
+
+    // The loop: the hand hops between the two buttons and presses one; the
+    // split, the percentages, the tallies and the ticks follow the press.
+    // Short and crisp, and it stops whenever the tile is off screen.
+    var visible = true, looping = false, side = 0;
+    var cur = { a: 80, b: 20, u0: 1.2, u1: 2.2 };
+    function tween(node, from, to, ms, suf, dec) {
+      var t0 = performance.now();
+      (function step(now) {
+        var p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+        setRun(node, (from + (to - from) * e).toFixed(dec) + suf);
+        if (p < 1) requestAnimationFrame(step);
+      })(t0);
+    }
+    var STATE = [   // [Ios %, Android %, Ios tally, Android tally]
+      [82, 18, 1.3, 2.2],
+      [78, 22, 1.2, 2.3]
+    ];
+    function press(i) {
+      var st2 = STATE[i], btn = i ? winAnd : winIos;
+      hand.style.setProperty('--hx', (i ? 0 : -403) + 'px');
+      setTimeout(function () {
+        hand.style.setProperty('--hs', '0.88'); btn[0].classList.add('is-press'); btn[1].classList.add('is-press');
+      }, 420);
+      setTimeout(function () {
+        tween(p80, cur.a, st2[0], 420, '%', 0); tween(p20, cur.b, st2[1], 420, '%', 0);
+        tween(counters[0][0], cur.u0, st2[2], 420, 'K', 1); tween(counters[1][0], cur.u1, st2[3], 420, 'K', 1);
+        cur = { a: st2[0], b: st2[1], u0: st2[2], u1: st2[3] };
+        slice.style.strokeDasharray = (st2[1] * 0.81).toFixed(2) + ' ' + (100 - st2[1] * 0.81).toFixed(2);
+        ticks[0].classList.toggle('is-off', i === 1); ticks[1].classList.toggle('is-off', i === 0);
+      }, 500);
+      setTimeout(function () {
+        hand.style.setProperty('--hs', '1'); btn[0].classList.remove('is-press'); btn[1].classList.remove('is-press');
+      }, 720);
+    }
+    function loop() {
+      if (!looping) return;
+      if (!visible) { setTimeout(loop, 600); return; }
+      press(side); side = 1 - side;
+      setTimeout(loop, 2500);
+    }
+    function startLoop() { if (looping) return; looping = true; ui.classList.add('is-loop'); loop(); }
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function (es) { visible = es.some(function (e) { return e.isIntersecting; }); }, { threshold: 0.1 }).observe(host);
     }
     if (reduce) { ui.classList.add('is-on', 'is-still'); return; }
     setRun(p80, '0%'); setRun(p20, '0%');

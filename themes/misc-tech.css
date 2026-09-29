@@ -89,4 +89,12 @@
 .mt:not(.is-on) .mt-slice { stroke-dasharray: 100 0; }
 .mt-tick path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.8s; }
 .mt:not(.is-on) .mt-tick path { stroke-dashoffset: 1; }
+/* The loop's hand and presses. */
+.mt-hand { transform-origin: 0 0; transform: translateX(var(--hx, 0px)) scale(var(--hs, 1)); transition: transform 0.4s cubic-bezier(0.3, 1.25, 0.4, 1); }
+.mt-win-b { transition: background 0.12s ease, transform 0.12s ease; }
+.mt-win-b.is-press { background: #379ba0; transform: scale(0.985); }
+.mt-win-c.is-press { transform: scale(0.94); }
+.mt.is-loop .mt-slice { transition-delay: 0s; transition-duration: 0.45s; }
+.mt.is-loop .mt-tick path { transition-delay: 0s; }
+.mt-tick.is-off path { stroke-dashoffset: 1; }
 @media (prefers-reduced-motion: reduce) { .mt * { transition: none !important; animation: none !important; } }

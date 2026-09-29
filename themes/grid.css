@@ -336,6 +336,18 @@ h1 {
   box-shadow: none;
 }
 
+/* The card's cover: a rebuilt screen of older work, filling the frame above
+   the label. */
+.soon-live {
+  position: relative;
+  display: block;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+  background: #dcd6f1;
+}
+
 /* Old interface work, cycling in place. Each frame fills the width and
    carries on past the bottom of the frame, the same way the other two
    cards hold their screenshots — nothing is cut at the sides and there is
