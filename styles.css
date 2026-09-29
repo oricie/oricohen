@@ -215,24 +215,19 @@ body {
 .sheet-list li::marker { color: #b4b4b4; }
 
 /* Small titles that divide a piece into its parts: role, highlights, and
-   the screens after them. */
+   the screens after them. They sit in the same reading column as the text. */
 .sheet-sub {
   max-width: 600px;
-  margin: 44px auto 12px;
-  font-size: 12.5px;
+  margin: 40px auto 8px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #8a8a8a;
+  line-height: 1.45;
+  color: #222;
 }
 .sheet-body > .sheet-sub:first-child { margin-top: 0; }
 
-/* The screens get room of their own, and their title lines up with them
-   rather than with the text column. */
-.sheet-sub--shots {
-  max-width: 1440px;
-  margin: 96px auto 0;
-}
+/* The screens get room of their own. */
+.sheet-sub--shots { margin-top: 96px; margin-bottom: 0; }
 
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
    the screenshots break out of it and sit on a grey panel, so they read as
@@ -394,10 +389,14 @@ body {
               0 1px 3px rgba(20, 20, 40, 0.06);
 }
 
-/* Each screen is titled above it: its name, then what it shows. */
+/* Each screen is titled above it, in the reading column: its name, then
+   what it shows. */
 .sheet-shot figcaption {
   order: -1;
-  padding: 0 2px 16px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 0 16px;
   font-size: 14.5px;
   line-height: 1.5;
   color: #8a8a8a;
@@ -410,7 +409,7 @@ body {
 }
 
 @media (max-width: 600px) {
-  .sheet-shot figcaption { padding: 0 2px 12px; }
+  .sheet-shot figcaption { padding: 0 0 12px; }
   .sheet-shot { margin-top: 44px; }
   .sheet-sub--shots { margin-top: 64px; }
 }
@@ -437,7 +436,7 @@ body.sheet-open { overflow: hidden; }
   color: rgba(255, 255, 255, 0.7);
 }
 .has-accent .sheet-shot figcaption b { color: #fff; }
-.has-accent .sheet-sub { color: rgba(255, 255, 255, 0.62); }
+.has-accent .sheet-sub { color: #fff; }
 
 .has-accent .sheet-grabber { background: rgba(255, 255, 255, 0.45); }
 
