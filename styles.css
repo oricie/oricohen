@@ -283,9 +283,6 @@ body {
   max-width: 1440px;
   width: 100%;
   margin: 30px auto 0;
-  padding: 28px 28px 0;
-  border-radius: 16px;
-  background: #f1f1f1;
 }
 
 /* Where to find him, at the end of the piece. */
@@ -388,15 +385,13 @@ body {
 }
 
 @media (max-width: 600px) {
-  .sheet-shot { padding: 14px 14px 0; border-radius: 12px; }
   .sheet-shot figcaption { padding: 12px 2px 14px; }
 }
 
 /* Keep the page still behind the sheet. */
 body.sheet-open { overflow: hidden; }
 
-/* The colour carries past the scrim: a wash on the page, the eyebrow, and
-   the panels the screenshots sit on. */
+/* The colour carries past the scrim: a wash on the page and the eyebrow. */
 .has-accent body {
   background: color-mix(in srgb, var(--accent) 6%, #fff);
 }
@@ -410,10 +405,6 @@ body.sheet-open { overflow: hidden; }
 .has-accent .sheet-list li { color: rgba(255, 255, 255, 0.92); }
 .has-accent .sheet-list li::marker { color: rgba(255, 255, 255, 0.45); }
 .has-accent .sheet-body strong { color: #fff; }
-
-.has-accent .sheet-shot {
-  background: rgba(255, 255, 255, 0.10);
-}
 
 .has-accent .sheet-shot figcaption {
   color: rgba(255, 255, 255, 0.7);

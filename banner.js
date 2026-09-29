@@ -38,7 +38,7 @@
   var art = new Image();
   var ready = false;
   art.onload = function () { ready = true; };
-  art.src = 'images/portrait-pixel.png';
+  art.src = 'images/portrait-pixel.webp';
 
   var w = 0, h = 0, dpr = 1;
   var mask = document.createElement('canvas');

@@ -115,29 +115,55 @@
 
   /* The sheets hold their screenshots in a <template>, so nothing is fetched
    * until one opens — which is a wait of a few hundred kilobytes at exactly
-   * the wrong moment. Once the page itself has settled, pull them into the
-   * cache in the background, one at a time so they never compete with what
-   * is on screen. */
+   * the wrong moment. So a card's screenshots are fetched and decoded as
+   * soon as the pointer reaches it, well before the click; and once the page
+   * has settled the rest come in behind, two at a time, so they never
+   * compete with what is on screen. Decoded copies are kept, so the sheet
+   * paints them on its first frame instead of a moment later. */
+  var kept = {};
+  function fetchOne(src, done) {
+    if (kept[src]) { if (done) done(); return; }
+    var img = new Image();
+    kept[src] = img;
+    img.decoding = 'async';
+    img.src = src;
+    var finish = function () { if (done) done(); };
+    if (img.decode) img.decode().then(finish, finish);
+    else img.onload = img.onerror = finish;
+  }
+  function sources(tpl) {
+    var out = [];
+    tpl.content.querySelectorAll('img[src]').forEach(function (img) {
+      var src = img.getAttribute('src');
+      if (out.indexOf(src) === -1) out.push(src);
+    });
+    return out;
+  }
+
+  function warmTrigger(e) {
+    var trigger = e.target.closest && e.target.closest('.work-card, .work-item, .read-more');
+    if (!trigger) return;
+    var tpl = findTemplate(trigger);
+    if (tpl) sources(tpl).forEach(function (src) { fetchOne(src); });
+  }
+  document.addEventListener('pointerover', warmTrigger, { passive: true });
+  document.addEventListener('focusin', warmTrigger);
+  document.addEventListener('touchstart', warmTrigger, { passive: true });
+
   function warm() {
     var srcs = [];
     document.querySelectorAll('template').forEach(function (t) {
-      t.content.querySelectorAll('img[src]').forEach(function (img) {
-        var src = img.getAttribute('src');
-        if (srcs.indexOf(src) === -1) srcs.push(src);
-      });
+      sources(t).forEach(function (src) { if (srcs.indexOf(src) === -1) srcs.push(src); });
     });
-
-    (function next() {
+    function next() {
       var src = srcs.shift();
-      if (!src) return;
-      var probe = new Image();
-      probe.onload = probe.onerror = next;
-      probe.src = src;
-    })();
+      if (src) fetchOne(src, next);
+    }
+    next(); next();
   }
 
   window.addEventListener('load', function () {
-    if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 2500 });
-    else setTimeout(warm, 1200);
+    if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 1500 });
+    else setTimeout(warm, 800);
   });
 })();
