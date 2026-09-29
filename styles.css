@@ -227,7 +227,7 @@ body {
 .sheet-body > .sheet-sub:first-child { margin-top: 0; }
 
 /* The screens get room of their own. */
-.sheet-sub--shots { margin-top: 96px; margin-bottom: 0; }
+.sheet-sub--shots { margin-top: 56px; margin-bottom: 0; }
 
 /* A supporting shot inside a sheet. Text keeps the 680px reading column;
    the screenshots break out of it and sit on a grey panel, so they read as
@@ -411,7 +411,7 @@ body {
 @media (max-width: 600px) {
   .sheet-shot figcaption { padding: 0 0 20px; }
   .sheet-shot { margin-top: 44px; }
-  .sheet-sub--shots { margin-top: 64px; }
+  .sheet-sub--shots { margin-top: 40px; }
 }
 
 /* Keep the page still behind the sheet. */
