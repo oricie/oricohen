@@ -1306,6 +1306,141 @@ h1 {
   .jf * { transition: none !important; animation: none !important; }
 }
 
+/* ── The Jedox Canvas, playing inside the sheet ─────────── */
+/* Drawn from the Designer and the Executive Dashboard it builds, quieter
+   than either, on a dotted canvas with the Integrator's toolbar; see
+   jedox-canvas.js. Sizes are the screenshots' px scaled by 1.428. */
+.live-canvas {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 2856 / 2048;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f5f7fa;
+  box-shadow: 0 10px 30px -12px rgba(20, 20, 40, 0.28),
+              0 1px 3px rgba(20, 20, 40, 0.06);
+}
+.jc { position: absolute; inset: 0; overflow: hidden; }
+.jc-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #f5f7fa;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #2b3445;
+  -webkit-font-smoothing: antialiased;
+}
+.jc-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
+.jc-stage svg { display: block; }
+.jc-t { font-size: 25.7px; line-height: 34px; color: #2b3445; }
+.jc-c { text-align: center; }
+
+.jc-rail { background: #ffffff; border-right: 2px solid #dfe4ec; }
+.jc-rail-on { background: #edf2fc; border-radius: 12px; }
+.jc-rule { border-top: 2px solid #e3e7ee; }
+.jc-top { background: #ffffff; border-bottom: 2px solid #dfe4ec; }
+.jc-crumb { font-size: 22.8px; font-weight: 600; }
+.jc-search { background: #f8fafc; border: 2px solid #e5e9f0; border-radius: 10px; }
+.jc-ph { font-size: 24px; color: #8793a6; }
+.jc-ai { background: #eef3fd; border-radius: 10px; }
+.jc-ai-t { font-size: 23px; font-weight: 600; color: #2f55a8; }
+.jc-dot { background: #e0698f; border-radius: 50%; }
+.jc-vr { border-left: 2px solid #e5e9f0; }
+.jc-avatar { background: #e7ebf1; border-radius: 50%; color: #3a4556; font-size: 22px; line-height: 48px; text-align: center; }
+
+.jc-side { background: #ffffff; border-right: 2px solid #dfe4ec; }
+.jc-h { font-size: 28.5px; font-weight: 500; }
+.jc-h2 { font-size: 25.7px; font-weight: 500; }
+.jc-sub { font-size: 21.4px; color: #6b778a; }
+.jc-widget { background: #fafbfc; border: 2px solid #e5e9f0; border-radius: 10px; }
+.jc-widget-ic { border-radius: 8px; }
+.jc-widget-t { font-size: 25.7px; line-height: 34px; }
+.jc-link { font-size: 25.7px; color: #3f6fd6; }
+
+.jc-head { background: #ffffff; border-bottom: 2px solid #e3e7ee; }
+.jc-back { font-size: 27px; font-weight: 600; color: #3f6fd6; }
+.jc-title { font-size: 30px; }
+.jc-btn { background: #ffffff; border: 2px solid #dfe4ec; border-radius: 8px; }
+.jc-btn-t { font-size: 27px; }
+.jc-save { background: #3f6fd6; border-radius: 8px; }
+.jc-save-t { font-size: 27px; color: #ffffff; }
+
+.jc-canvas {
+  background-color: #f5f7fa;
+  background-image: radial-gradient(circle, #dfe4ec 1.6px, transparent 2.2px);
+  background-size: 34px 34px;
+}
+.jc-card { background: #ffffff; border-radius: 16px; box-shadow: 0 1px 2px rgba(20, 30, 50, 0.04), 0 6px 18px -8px rgba(20, 30, 50, 0.12); }
+.jc-kpi-l { font-size: 25.7px; color: #6b778a; }
+.jc-kpi-v { font-size: 52px; line-height: 64px; font-weight: 500; color: #2b3445; letter-spacing: -0.5px; }
+.jc-kpi-v--ghost { color: #b8c1cf; }
+.jc-kpi-s { font-size: 25.7px; color: #6b778a; }
+.jc-badge { background: #fbf1dd; border-radius: 18px; color: #b27a1c; font-size: 21px; font-weight: 600; line-height: 37px; text-align: center; }
+.jc-big { font-size: 50px; line-height: 60px; font-weight: 500; }
+.jc-sub2 { font-size: 25.7px; color: #3a4556; }
+.jc-axis { font-size: 22px; color: #6b778a; }
+.jc-vert { transform: rotate(-90deg); transform-origin: 0 0; font-weight: 600; color: #3a4556; font-size: 24px; }
+.jc-ldot { border-radius: 50%; }
+.jc-legend { font-size: 25.7px; color: #3a4556; }
+.jc-pl { font-size: 22px; }
+
+.jc-table { overflow: hidden; }
+.jc-thead { background: #f5f7fa; border-bottom: 2px solid #e5e9f0; }
+.jc-th { font-size: 25.7px; font-weight: 600; }
+.jc-sub-h { font-size: 22px; font-weight: 600; color: #56657b; }
+.jc-vl { border-left: 2px solid #e5e9f0; }
+.jc-vl--s { border-left-color: #eef1f5; }
+.jc-tr { border-top: 2px solid #eef1f5; background: #ffffff; }
+.jc-td { font-size: 25.7px; color: #2b3445; }
+.jc-blue { color: #3f6fd6; }
+
+.jc-tools { background: #ffffff; border-radius: 16px; box-shadow: 0 0 0 2px #e9ecf1, 0 10px 24px -10px rgba(20, 30, 50, 0.25); }
+.jc-tools-on { background: #e4ecfb; border-radius: 10px; }
+.jc-zoom { border: 2px solid #dfe4ec; border-radius: 10px; background: #ffffff; }
+
+/* Playing */
+.jc.is-resetting * { transition: none !important; animation: none !important; }
+.jc-kpi, .jc-panel, .jc-table { opacity: 0; transform: translateY(16px); transition: opacity 0.45s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease; }
+.jc-kpi { transition-delay: calc(var(--i) * 70ms); }
+.jc-panel { transition-delay: 0.3s; }
+.jc-table { transition-delay: 0.45s; }
+.jc.is-in .jc-kpi, .jc.is-in .jc-panel, .jc.is-in .jc-table { opacity: 1; transform: none; }
+.jc.is-in .jc-kpi--new { opacity: 0; transform: scale(0.96); }
+.jc.is-dropped .jc-kpi--new { opacity: 1; transform: none; transition-delay: 0s; }
+.jc-bar { transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(0); transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); transition-delay: calc(0.55s + var(--i) * 90ms); }
+.jc.is-in .jc-bar { transform: none; }
+.jc-slice { opacity: 0; transform: scale(0.7); transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1); transition-delay: calc(0.6s + var(--i) * 110ms); }
+.jc.is-in .jc-slice { opacity: 1; transform: none; }
+.jc-tr { opacity: 0; transition: opacity 0.35s ease, background 0.18s ease; transition-delay: calc(0.7s + var(--i) * 70ms); }
+.jc.is-in .jc-tr { opacity: 1; }
+
+.jc-slot { border: 3px dashed #c9d3e2; border-radius: 16px; opacity: 0; transition: opacity 0.3s ease, border-color 0.3s ease, background 0.3s ease; }
+.jc.is-in:not(.is-dropped) .jc-slot { opacity: 1; }
+.jc.is-target .jc-slot { border-color: #4a78d8; background: rgba(74, 120, 216, 0.06); }
+.jc-widget { transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.2s ease, transform 0.2s ease; }
+.jc-widget.is-held { background: #eef3fd; border-color: #b9cbf1; }
+.jc-ghost { opacity: 0; transform-origin: 0 0; transition-property: transform, opacity; transition-timing-function: cubic-bezier(0.5, 0, 0.2, 1); box-shadow: 0 24px 50px -16px rgba(20, 30, 50, 0.4); }
+.jc.is-grab .jc-ghost { opacity: 0.94; }
+.jc.is-dropped .jc-ghost { opacity: 0 !important; transition-duration: 0.15s !important; }
+.jc-cursor { opacity: 0; transition-property: transform, opacity; transition-timing-function: cubic-bezier(0.45, 0, 0.2, 1); }
+.jc.is-cursor .jc-cursor { opacity: 1; }
+
+/* Resting: the builder's hover states, nothing more. */
+.jc:not(.is-idle) .jc-stage { pointer-events: none; }
+.jc.is-idle .jc-widget:hover { background: #f3f6fb; border-color: #cdd7e6; transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(20, 30, 50, 0.25); }
+.jc.is-idle .jc-kpi:hover, .jc.is-idle .jc-panel:hover { transform: translateY(-4px); box-shadow: 0 0 0 2px #c9d8f5, 0 16px 30px -14px rgba(20, 30, 50, 0.28); transition-delay: 0s; }
+.jc.is-idle .jc-tr:hover { background: #f7f9fc; transition-delay: 0s; }
+.jc.is-idle .jc-btn:hover { background: #f5f7fa; }
+.jc.is-idle .jc-save:hover { background: #3461c4; }
+.jc.is-idle .jc-link:hover { text-decoration: underline; }
+.jc.is-idle .jc-tools > svg:hover { background: #eef2f7; box-shadow: 0 0 0 10px #eef2f7; border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jc * { transition: none !important; animation: none !important; }
+}
+
 /* ── The Lucky Card's grid ──────────────────────────────── */
 /* Five pieces in an uneven grid, mirrored between its two halves: a large
    tile beside two stacked small ones, then the other way round. Two are
