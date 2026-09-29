@@ -72,16 +72,16 @@ h1 {
   border-radius: 3px;
 }
 
-/* Phrases worth noticing sit in ink until the pointer finds them, then
-   take their own colour; their emoji goes from grey to full colour with a
-   small kick. Nothing moves in the line itself, so the text never reflows. */
+/* Phrases worth noticing sit in ink until the pointer reaches the
+   paragraph, then all of them take their own colour at once; their emoji go
+   from grey to full colour with a small kick. Nothing moves in the line itself, so the text never reflows. */
 .pop {
   color: inherit;
   transition: color 0.2s ease;
 }
 
-.pop:hover { color: var(--pop); }
-.pop:hover strong { color: var(--pop); }
+.bio p:hover .pop { color: var(--pop); }
+.bio p:hover .pop strong { color: var(--pop); }
 
 .bio .icon {
   display: inline-block;
@@ -91,7 +91,7 @@ h1 {
   transition: filter 0.25s ease, opacity 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.7, 0.64, 1);
 }
 
-.pop:hover .icon {
+.bio p:hover .icon {
   filter: grayscale(0);
   opacity: 1;
   transform: translateY(-2px) rotate(-8deg) scale(1.22);
@@ -99,7 +99,7 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   .bio .icon { transition: filter 0.25s ease, opacity 0.25s ease; }
-  .pop:hover .icon { transform: none; }
+  .bio p:hover .icon { transform: none; }
 }
 
 @media (hover: none) {
@@ -993,7 +993,7 @@ h1 {
 .work.is-grid .work-item:nth-child(3) { grid-column: span 6; }
 .work.is-grid .work-item:nth-child(4) { grid-column: span 6; }
 
-.work.is-grid .work-item .work-panel { height: 380px; }
+.work.is-grid .work-item .work-panel { height: 480px; }
 .work.is-grid .work-item:nth-child(3) .work-panel { height: 260px; }
 .work.is-grid .work-item:nth-child(4) .work-panel { height: 300px; }
 .work.is-grid .work-item:nth-child(4) .work-panel { padding-bottom: 28px; }

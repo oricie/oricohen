@@ -240,7 +240,9 @@
 
   /* ── Fit ───────────────────────────────────────────────────────────── */
   function fit() {
-    var k = host.clientWidth / STAGE_W;
+    // Cover the screen: a narrow or tall card fills to its bottom edge and
+    // crops at the right, rather than ending halfway down.
+    var k = Math.max(host.clientWidth / STAGE_W, host.clientHeight / STAGE_H);
     st.style.transform = 'scale(' + k + ')';
   }
   fit();
