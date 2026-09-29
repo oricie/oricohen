@@ -336,8 +336,8 @@ h1 {
   box-shadow: none;
 }
 
-/* The card's cover: a rebuilt screen of older work, filling the frame above
-   the label. */
+/* A live cover for the card, kept for later: a rebuilt screen filling the
+   frame above the label (see the "detail" view in misc-tech.js). */
 .soon-live {
   position: relative;
   display: block;

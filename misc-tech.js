@@ -18,7 +18,17 @@
   // closer than a plain cover. Tuned for a wide 2:1 tile: the top bar and both
   // product cards, with backdrop showing above and to the right of the
   // window, which bleeds off the left.
-  var FOCUS = [675, 459], ZOOM = 1.275;   // defaults; a host may set data-focus="x,y" and data-zoom
+  // Named framings; a host picks one with data-view, or sets data-focus="x,y"
+  // and data-zoom itself.
+  //   top     the window from a margin of backdrop above its top bar down
+  //           to just under the comment cards: anchored on height, so the
+  //           margin and the cut (in the gap before "Which one wins?", not
+  //           through a line of text) are the same at any tile width; only
+  //           the sides give or take a little.
+  //   detail  a close-up of the "Which one wins?" band, where the loop
+  //           plays (kept for later use).
+  var VIEWS = { top: { from: 176, to: 728, cx: 600 }, detail: { focus: [550, 905], zoom: 1.58 } };
+  var FOCUS = [600, 452], ZOOM = 1.2;
 
   function el(tag, cls, css, text) {
     var n = document.createElement(tag);
@@ -245,10 +255,11 @@
     T(st, 589, 461.5, 11.8, 'apps like Google Maps, Calendar, Gmail and', 'mt-cap', 210);
 
     // Comments -------------------------------------------------------------------
+    var votes = [];
     function comment(x, w, o, face, name, nameW, official, line1, w1, line2, w2) {
       P(x, 577, w, 109, 'mt-card');
       svg(st, x + 14, 596, 12, 9, '<path d="M1.5 7 6 2.5 10.5 7" fill="none" stroke="#cacaca" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>');
-      T(st, x + 13, 635, 12.5, '83', 'mt-vote', 13);
+      votes.push(T(st, x + 13, 635, 12.5, '83', 'mt-vote', 13));
       svg(st, x + 14, 663, 12, 9, '<path d="M1.5 2 6 6.5 10.5 2" fill="none" stroke="#cacaca" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>');
       img(x + o.av, 594, 34, 34, face);
       T(st, x + o.nm, 610, 13, name, 'mt-cname', nameW);
@@ -351,18 +362,24 @@
     });
 
     // Fit: cover the tile, centred on the focus.
-    var focus = FOCUS, zoom = ZOOM;
+    var focus = FOCUS, zoom = ZOOM, view = VIEWS[host.dataset.view || (host.dataset.focus ? '' : 'top')];
+    if (view && view.focus) { focus = view.focus; zoom = view.zoom; }
     if (host.dataset.focus) focus = host.dataset.focus.split(',').map(Number);
     if (host.dataset.zoom) zoom = parseFloat(host.dataset.zoom);
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
+      if (view && view.from != null) {
+        var kk = h / (view.to - view.from);
+        st.style.transform = 'translate(' + (w / 2 - view.cx * kk) + 'px,' + (-view.from * kk) + 'px) scale(' + kk + ')';
+        return;
+      }
       var k = Math.max(w / W, h / H) * zoom;
       var tx = Math.min(0, Math.max(w - W * k, w / 2 - focus[0] * k));
       var ty = Math.min(0, Math.max(h - H * k, h / 2 - focus[1] * k));
       st.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
     }
     fit();
-    if (window.ResizeObserver) new ResizeObserver(fit).observe(host);
+    if (window.ResizeObserver) new ResizeObserver(function () { fit(); fitText(); }).observe(host);
     fitText();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitText);
 
@@ -419,6 +436,9 @@
         cur = { a: st2[0], b: st2[1], u0: st2[2], u1: st2[3] };
         slice.style.strokeDasharray = (st2[1] * 0.81).toFixed(2) + ' ' + (100 - st2[1] * 0.81).toFixed(2);
         ticks[0].classList.toggle('is-off', i === 1); ticks[1].classList.toggle('is-off', i === 0);
+        // The comment on the pressed side takes a vote.
+        setRun(votes[i], '84'); votes[i].classList.add('is-up');
+        setRun(votes[1 - i], '83'); votes[1 - i].classList.remove('is-up');
       }, 500);
       setTimeout(function () {
         hand.style.setProperty('--hs', '1'); btn[0].classList.remove('is-press'); btn[1].classList.remove('is-press');
