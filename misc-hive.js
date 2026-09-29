@@ -188,9 +188,9 @@
     put(R.typed, el('span', 'mb-caret'));
     R.send = box(inp, 'mb-send', 305, 6, 32, 32);
     icon(R.send, 7, 8, 18, 18, '0 0 18 18', I.send).style.color = '#fff';
-    R.toast = box(cc, 'mb-toast', 112, 392, 150, 30);
-    icon(R.toast, 14, 9, 14, 12, '0 0 18 18', '<path d="M2 9.5l4.6 4.6L16 4" ' + ST + ' stroke-width="2.8"/>').style.color = '#fff';
-    T(R.toast, 36, 9, 'mb-toast-l', 'Comment added');
+    R.toast = box(cc, 'mb-toast', 160, 16, 134, 28);
+    icon(R.toast, 12, 8, 14, 12, '0 0 18 18', '<path d="M2 9.5l4.6 4.6L16 4" ' + ST + ' stroke-width="2.8"/>').style.color = '#fff';
+    T(R.toast, 32, 8, 'mb-toast-l', 'Comment added');
     feed.appendChild(el('div', 'mb-dim'));
 
     tabBar(app, '#111');
@@ -217,13 +217,12 @@
     R.rows = RINGS.map(function (g, i) {
       var r = box(sh, 'mb-row', 0, 150 + 74 * i, 375, 74);
       var hl = box(r, 'mb-hl', 0, 0, 375, 74);
-      var s = icon(r, 16, 11, 52, 52, '0 0 52 52',
+      var s = icon(r, 28, 11, 52, 52, '0 0 52 52',
         '<circle cx="26" cy="26" r="19" fill="none" stroke="#e9e9ee" stroke-width="5.5"/>' +
         '<circle class="mb-arc" cx="26" cy="26" r="19" fill="none" stroke="' + g[1] + '" stroke-width="5.5" transform="rotate(-90 26 26)" stroke-dasharray="' + RC.toFixed(2) + '" stroke-dashoffset="' + RC.toFixed(2) + '"/>');
-      var lb = T(r, 84, 22, 'mb-rl', g[0], 'opacity:0;');
-      var pc = T(r, 84, 42, 'mb-rp', Math.round(g[2] * 100) + '%', 'opacity:0;');
+      var lb = T(r, 96, 30, 'mb-rl', g[0], 'opacity:0;');
       icon(r, 344, 30, 8, 14, '0 0 7 12', I.gt).style.color = '#fff';
-      return { el: r, hl: hl, arc: s.querySelector('.mb-arc'), lb: lb, pc: pc, v: g[2] };
+      return { el: r, hl: hl, arc: s.querySelector('.mb-arc'), lb: lb, v: g[2] };
     });
     R.share = box(sh, 'mb-bar2', 16, 542, 343, 52);
     T(R.share, 20, 19, 'mb-bar2-l', 'SHARE WITH');
@@ -299,7 +298,6 @@
           var off = RC * (1 - r.v);
           A(r.arc, on ? [{ strokeDashoffset: RC }, { strokeDashoffset: off }] : [{ strokeDashoffset: off }, { strokeDashoffset: RC }], on ? 650 : 360, on ? 'cubic-bezier(.3,.7,.2,1)' : 'cubic-bezier(.5,0,.7,.4)', d);
           A(r.lb, [{ opacity: on ? 0 : 1, transform: 'translateX(' + (on ? -6 : 0) + 'px)' }, { opacity: on ? 1 : 0, transform: 'translateX(' + (on ? 0 : -6) + 'px)' }], on ? 300 : 220, 'ease-out', d + (on ? 220 : 0));
-          A(r.pc, [{ opacity: on ? 0 : 1 }, { opacity: on ? 1 : 0 }], on ? 300 : 220, 'ease-out', d + (on ? 300 : 0));
         });
       });
     }
@@ -478,7 +476,7 @@
   }
 
   // The pose, as in the original still.
-  var RX = 60, RZ = -40, LEFT = [-520, -40];
+  var RX = 63, RZ = -40, LEFT = [-455, -115];
 
   function build(host) {
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -537,7 +535,7 @@
     // Fit: the right phone whole, near the right edge, with a margin; the
     // left one runs off the left edge, as in the original.
     var fit = { s: 1, cx: 0, cy: 0, w: 0, h: 0 };
-    var PERSP = 3200;
+    var PERSP = 6000;
     function place() {
       scene.style.perspective = (PERSP * fit.s).toFixed(1) + 'px';
       scene.style.perspectiveOrigin = (fit.w * 0.5).toFixed(1) + 'px ' + (fit.h * 0.42).toFixed(1) + 'px';
@@ -550,7 +548,7 @@
       fit.w = W0; fit.h = H0;
       var m = Math.max(8, Math.min(W0, H0) * 0.035);
       // The right phone's box: right edge at W - m, its left edge at 23%.
-      var bx0 = W0 * 0.23, bx1 = W0 - m, oy = H0 * 0.53;
+      var bx0 = W0 * 0.19, bx1 = W0 - m, oy = H0 * 0.47;
       fit.s = W0 / 1600; fit.cx = W0 * 0.6; fit.cy = oy;
       for (var i = 0; i < 5; i++) {
         place();

@@ -16,15 +16,15 @@
 }
 .mb-scene { position: absolute; inset: 0; }
 .mb-rig { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
-.mb-shadow { position: absolute; border-radius: 60px; pointer-events: none; }
+/* Soft shadows without a filter: each box sits a long way off and casts
+   its shadow back, which paints once instead of blurring every frame. */
+.mb-shadow { position: absolute; border-radius: 60px; pointer-events: none; margin-left: -3000px; }
 .mb-shadow--far {
-  background: rgba(150, 70, 30, 0.3);
-  filter: blur(40px);
+  box-shadow: 3000px 0 70px 6px rgba(150, 70, 30, 0.2);
   transform: translate3d(-34px, 60px, -27px);
 }
 .mb-shadow--near {
-  background: rgba(110, 50, 25, 0.34);
-  filter: blur(8px);
+  box-shadow: 3000px 0 14px 0 rgba(110, 50, 25, 0.34);
   transform: translate3d(-4px, 8px, -26.5px);
 }
 
@@ -141,7 +141,6 @@
 .mb-row { position: absolute; }
 .mb-hl { position: absolute; background: rgba(255, 255, 255, 0.07); opacity: 0; }
 .mb-rl { font-size: 14px; color: #d4d4d8; }
-.mb-rp { font-size: 12px; color: #7d7d83; }
 .mb-bar2 { position: absolute; border-radius: 4px; background: #4f43fd; overflow: hidden; }
 .mb-bar2-l { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; color: #fff; }
 .mb-psheet { position: absolute; z-index: 30; border-radius: 18px 18px 0 0; background: #26262b; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.4); }
