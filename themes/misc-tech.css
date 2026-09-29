@@ -1,0 +1,92 @@
+/* ── Older work, rebuilt: TECHWARS ───────────────────────── */
+/* Built at the image's own size (1198 by 1058) and scaled to cover its
+   tile; see misc-tech.js. */
+.live-tech { position: relative; display: block; overflow: hidden; background: #e2ddf3; }
+.mt { position: absolute; inset: 0; overflow: hidden; }
+.mt-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: linear-gradient(180deg, #d9d3f0 0%, #ece9f7 100%);
+  font-family: "Roboto", Arial, sans-serif;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+.mt-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
+.mt-stage span.mt-run { position: static; display: inline; }
+.mt-stage svg { display: block; overflow: visible; }
+.mt-img { position: absolute; display: block; }
+.mt-t { color: #555; }
+
+.mt-win { background: #eeeeee; box-shadow: 0 0 6px rgba(60, 50, 110, 0.12); }
+.mt-top { background: #fff; border-bottom: 1px solid #dedede; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05); }
+.mt-logo { color: #777; font-weight: 400; }
+.mt-logo-b { color: #515151; font-weight: 700; }
+.mt-uline { background: #98cfce; }
+.mt-tile { background: #fff; border: 1px solid #e3e3e3; border-top: 0; border-bottom-width: 2px; border-radius: 0 0 1px 1px; overflow: hidden; }
+.mt-tile--sel { border-color: #c2c2c2; }
+.mt-tile--cut { border-right: 0; }
+.mt-appsq { background: #6e6e71; border-radius: 5px; }
+.mt-user { color: #48afad; font-weight: 700; }
+
+.mt-sep { background: linear-gradient(90deg, #d9d9d9 50%, #e5e5e5 50%); }
+.mt-ind { background: #47b0b1; }
+.mt-nav { color: #cbcbcb; }
+.mt-nav--on { color: #47aeaa; font-weight: 700; }
+
+.mt-card { background: #fff; box-shadow: 0 1px 1.5px rgba(0, 0, 0, 0.1); }
+.mt-card-rule { background: #e9e9e9; }
+.mt-card-div { background: #e2e2e2; }
+.mt-applogo { background: #6e6e71; border-radius: 9px; }
+.mt-pname { color: #111; }
+.mt-uses { color: #545557; font-weight: 700; }
+.mt-uses-l { color: #575759; font-weight: 700; }
+.mt-me { border: 1px solid #d3d3d3; border-radius: 2px; }
+.mt-cb { background: #dfdfdf; border-radius: 2px; }
+.mt-me-t { color: #cbcbcb; font-weight: 700; }
+.mt-cap { color: #e6e6e6; }
+
+.mt-vote { color: #828282; font-weight: 700; }
+.mt-cname { color: #7f7f7f; font-weight: 700; }
+.mt-off { background: #eb5a40; }
+.mt-off-t { color: #fff; font-weight: 700; }
+.mt-date { color: #949494; }
+.mt-body { color: #858585; }
+.mt-more { color: #2dc486; }
+.mt-dot { background: #cdcdcd; border-radius: 50%; }
+.mt-rule { background: #dfdfdf; }
+
+.mt-wh { background: #fff; }
+.mt-wh-t { color: #4a4a4a; }
+.mt-band { background: linear-gradient(90deg, #0d1b1c 0%, #317f83 95%, #37868b 100%); }
+.mt-pct {
+  color: #fff;
+  -webkit-text-stroke: 0;
+}
+.mt-pref { color: #e8eded; }
+.mt-ring { border-radius: 50%; background: #46b3b5; overflow: hidden; }
+.mt-ring .mt-img { border-radius: 50%; }
+.mt-win-b { background: #45b0b5; border-radius: 24px; }
+.mt-win-c { background: #58e0e4; border-radius: 50%; box-shadow: 0 2px 3px rgba(0, 40, 42, 0.3); }
+.mt-win-t { color: #fff; font-weight: 700; }
+
+.mt-sep2 { background: #cecece; }
+.mt-help { background: #01b969; box-shadow: 0 0 0 1px rgba(0, 110, 60, 0.35); }
+.mt-help-h { color: #fff; font-weight: 700; }
+.mt-face { border-radius: 50%; }
+.mt-help-t { color: #eaf7ee; }
+.mt-adv { border: 1.5px solid #86ddb8; }
+.mt-adv-t { color: #fff; font-weight: 700; }
+.mt-rd-h { color: #313131; font-weight: 700; }
+.mt-q { color: #8a8a8a; }
+.mt-chip { border: 2px solid #d9d9d9; }
+.mt-chip-t { color: #d0d0d0; font-weight: 700; }
+
+/* Motion: one intro, about a second, then still. The rest state (and
+   reduced motion) is the screenshot. */
+.mt-slice { stroke-dasharray: 16.2 83.8; transition: stroke-dasharray 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.05s; }
+.mt:not(.is-on) .mt-slice { stroke-dasharray: 100 0; }
+.mt-tick path { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.8s; }
+.mt:not(.is-on) .mt-tick path { stroke-dashoffset: 1; }
+@media (prefers-reduced-motion: reduce) { .mt * { transition: none !important; animation: none !important; } }
