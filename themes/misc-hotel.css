@@ -28,7 +28,7 @@
 }
 .mh-pg { position: absolute; }
 .mh-fix { position: absolute; pointer-events: none; }
-.mh.is-loop .mh-pg { will-change: transform; }
+.mh.is-away .mh-pg { will-change: transform; }
 .mh-w { background: #fff; }
 .mh-g { background: #e7e7e7; }
 
