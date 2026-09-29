@@ -1,0 +1,135 @@
+/* ── Older work, rebuilt: PEOPLEPOST hotel page ──────────── */
+/* Built at the image's own size (1198 wide) and scaled into its tile; see
+   misc-hotel.js. The window scrolls its page under a sticky search bar. */
+.live-hotel { position: relative; display: block; overflow: hidden; background: #dcece3; }
+.mh { position: absolute; inset: 0; overflow: hidden; }
+.mh-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: linear-gradient(180deg, #cfe6d8 0%, #e9f3ee 100%);
+  font-family: "Lato", "Helvetica Neue", Arial, sans-serif;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+.mh-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
+.mh-stage span.mh-run { position: static; display: inline; }
+.mh-stage svg { display: block; overflow: visible; }
+.mh-img { position: absolute; display: block; }
+.mh-t { color: #555; }
+
+/* The window: a clip for the page and the sticky bar. */
+.mh-win {
+  background: #e7e7e7;
+  overflow: hidden;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 0 22px rgba(20, 60, 45, 0.14);
+}
+.mh-pg { position: absolute; }
+.mh-fix { position: absolute; pointer-events: none; }
+.mh.is-loop .mh-pg { will-change: transform; }
+.mh-w { background: #fff; }
+.mh-g { background: #e7e7e7; }
+
+/* Nav */
+.mh-nav { color: #919191; }
+.mh-navrule { background: linear-gradient(90deg, #f2f2f2 0 1px, #f9f9f9 1px 2px); }
+
+/* Sticky search bar */
+.mh-bar { background: linear-gradient(180deg, #3cb2ce 0 1px, #20a7c7 1px); }
+.mh.is-stuck .mh-bar { box-shadow: 0 2px 5px rgba(0, 40, 55, 0.22); }
+.mh-ph { color: #a8d5e3; }
+
+/* Header */
+.mh-title { color: #252525; font-weight: 300; }
+.mh-price { color: #20a7c7; font-weight: 300; }
+.mh-addr { color: #929292; }
+.mh-link { color: #20a7c7; }
+.mh-best { color: #75c72f; }
+.mh-low { color: #939393; }
+.mh-rule2 { background: linear-gradient(90deg, #e3e3e3 0 1px, #f1f1f1 1px 2px); }
+.mh-btn { background: #20a7c7; border-radius: 2px; }
+.mh-btn-t { color: #fff; font-weight: 700; }
+.mh-rv { color: #26a9c8; }
+.mh-rec { color: #9e9e9e; }
+.mh-rec-b { color: #31aecb; }
+.mh-hr { background: #ebebeb; }
+
+/* Cards */
+.mh-card {
+  background: #fff;
+  box-shadow: -1px 0 0 #ededed, 1px 0 0 #ededed, 0 -1px 0 #ededed, 0 2px 3px rgba(0, 0, 0, 0.07);
+}
+.mh-sbar { background: #ccc; border-radius: 3px; }
+.mh-h2 { color: #272727; }
+.mh-field { border: 1px solid #dcdcdc; border-radius: 1px; background: #fff; }
+.mh-fld-t { color: #bbb; }
+.mh-div { background: #e8e8e8; }
+
+/* Rooms */
+.mh-rowhl { background: #f5fbfd; opacity: 0; transition: opacity 0.22s ease; }
+.mh-rowhl.is-on { opacity: 1; }
+.mh-room { color: #25a9c8; }
+.mh-fac-l { color: #989898; }
+.mh-fac-v { color: #474747; }
+.mh-vbar { background: #dcdcdc; }
+.mh-guest { color: #9b9b9b; }
+.mh-money { color: #252525; }
+.mh-vrule { background: #ebebeb; }
+.mh-nl { color: #939393; }
+.mh-av { color: #77c830; }
+.mh-few { color: #ef8a2a; }
+.mh-nld { background: #dcdcdc; border-radius: 50%; }
+.mh-book { background: #20a7c7; border-radius: 2px; transition: background 0.12s ease, transform 0.12s ease; }
+.mh-book.is-hover { background: #1993b0; }
+.mh-book.is-press { background: #157b94; transform: scale(0.96); }
+.mh-stage span.mh-flow { display: flex; align-items: baseline; white-space: nowrap; }
+.mh-stage span.mh-flow > span, .mh-stage span.mh-chips > span, .mh-stage span.mh-crumbs > span { position: static; display: inline-block; }
+.mh-stage span.mh-flow > i { display: inline-block; }
+
+/* Reviews */
+.mh-score { color: #20a7c7; font-weight: 300; }
+.mh-cap { color: #8c8c8c; font-weight: 700; letter-spacing: 1px; }
+.mh-sub { color: #9b9b9b; }
+.mh-rname { color: #4a4a4a; }
+.mh-track { background: #e8e8e8; border-radius: 4px; overflow: hidden; }
+.mh-fill { background: #20a7c7; border-radius: 4px; transform-origin: 0 50%; transform: scaleX(0); transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); transition-delay: calc(var(--i, 0) * 70ms); }
+.mh.is-fill .mh-fill { transform: scaleX(var(--v, 1)); }
+.mh-val { color: #4a4a4a; font-weight: 700; }
+.mh-rcard { border: 1px solid #ececec; border-radius: 2px; background: #fff; }
+.mh-rn { color: #333; font-weight: 700; }
+.mh-rd { color: #a5a5a5; }
+.mh-chip-s { background: #20a7c7; border-radius: 2px; }
+.mh-chip-st { color: #fff; font-weight: 700; }
+.mh-rtx { color: #6a6a6a; }
+.mh-help { color: #9b9b9b; }
+.mh-help-n { color: #9b9b9b; transition: color 0.2s ease; }
+.mh-thumb path { transition: fill 0.2s ease; }
+.mh-helpg.is-up .mh-help-n { color: #20a7c7; }
+.mh-helpg.is-up .mh-thumb path { fill: #20a7c7; }
+
+/* Amenities and footer */
+.mh-stage span.mh-chips { display: flex; gap: 10px; }
+.mh-chips > span { border: 1px solid #d9d9d9; border-radius: 15px; height: 29px; line-height: 27px; padding: 0 14px; font-size: 12.5px; color: #6a6a6a; }
+.mh-chips > span.is-on { border-color: #20a7c7; color: #20a7c7; }
+.mh-chips > span small { font-size: 11px; color: #a5a5a5; margin-left: 6px; }
+.mh-foot { background: #fff; border-top: 1px solid #ddd; }
+.mh-foot-t { color: #8f8f8f; letter-spacing: 1.2px; }
+.mh-foot-c { color: #a5a5a5; }
+
+/* Scrollbar thumb: only while the page is away from the top. */
+.mh-sb { background: rgba(0, 0, 0, 0.26); border-radius: 2px; opacity: 0; transition: opacity 0.25s ease; }
+.mh.is-away .mh-sb { opacity: 1; }
+
+/* Motion: a short intro, then a loop driven from script. The rest state
+   (and reduced motion) is the screenshot. */
+@keyframes mh-rise { from { opacity: 0; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
+@keyframes mh-draw { from { stroke-dashoffset: 1.06; } to { stroke-dashoffset: 0; } }
+@keyframes mh-pop { from { opacity: 0; scale: 0.2; } to { opacity: 1; scale: 1; } }
+.mh-ck path { stroke-dasharray: 1 2; stroke-dashoffset: 0; }
+.mh-stars path { transform-box: fill-box; transform-origin: 50% 55%; }
+.mh.is-intro .mh-rise { animation: mh-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.mh.is-intro .mh-ck path { animation: mh-draw 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(0.3s + var(--i, 0) * 0.08s); }
+.mh.is-intro .mh-stars path { animation: mh-pop 0.35s cubic-bezier(0.3, 1.4, 0.5, 1) backwards; animation-delay: calc(0.2s + var(--i, 0) * 0.07s); }
+@media (prefers-reduced-motion: reduce) { .mh * { transition: none !important; animation: none !important; } }
