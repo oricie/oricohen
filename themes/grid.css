@@ -1127,6 +1127,166 @@ h1 {
   border-radius: 30px;
 }
 
+/* ── The Jedox Integrator, playing inside the sheet ─────── */
+/* Built at the screenshot's own size (2856 by 2048) and scaled to the
+   frame; see jedox-flow.js. */
+.live-flow {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 2856 / 2048;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f9f9f9;
+  box-shadow: 0 10px 30px -12px rgba(20, 20, 40, 0.28),
+              0 1px 3px rgba(20, 20, 40, 0.06);
+}
+.jf { position: absolute; inset: 0; overflow: hidden; }
+.jf-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  background: #f9f9f9;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1f1f1f;
+  -webkit-font-smoothing: antialiased;
+}
+.jf-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
+.jf-stage svg { display: block; }
+
+.jf-rail { background: #ffffff; border-right: 2px solid #cad5e2; }
+.jf-rail-on { background: #eff6ff; border-radius: 12px; }
+.jf-rule { border-top: 2px solid #cecece; }
+.jf-top { background: #ffffff; border-bottom: 2px solid #cecece; }
+.jf-crumb { font-size: 30px; font-weight: 600; line-height: 96px; color: #45556c; }
+.jf-ai { background: #ebf2ff; border-radius: 10px; color: #0042ae; font-size: 26px; font-weight: 600; line-height: 64px; }
+.jf-dot { background: #e63879; border-radius: 50%; }
+.jf-vr { border-left: 2px solid #e2e8f0; }
+.jf-avatar { background: #e2e8f0; border-radius: 50%; color: #314158; font-size: 24px; line-height: 48px; text-align: center; }
+.jf-bar { background: #ffffff; border-bottom: 2px solid #cecece; }
+.jf-title { font-size: 25px; font-weight: 700; line-height: 96px; }
+.jf-save { background: #075ae2; border-radius: 10px; color: #ffffff; font-size: 26px; font-weight: 600; line-height: 64px; text-align: center; }
+
+.jf-panel { background: #ffffff; border: 2px solid #cecece; border-radius: 16px; overflow: hidden; }
+.jf-label { font-size: 24px; font-weight: 600; line-height: 40px; }
+.jf-h { font-size: 27px; font-weight: 600; line-height: 40px; color: #202020; }
+.jf-h2 { font-size: 31px; font-weight: 700; line-height: 94px; color: #202020; }
+.jf-input { background: #ffffff; border: 2px solid #cecece; border-radius: 10px; }
+.jf-input-t { font-size: 24px; line-height: 60px; }
+.jf-table { border: 2px solid #cecece; border-radius: 12px; overflow: hidden; background: #ffffff; }
+.jf-thead { border-bottom: 2px solid #cecece; }
+.jf-th { font-size: 24px; font-weight: 700; line-height: 64px; color: #000000; }
+.jf-iconbtn { background: #f2f2f2; border-radius: 6px; }
+.jf-tr { border-bottom: 2px solid #cecece; background: #ffffff; }
+.jf-tr:last-child { border-bottom: 0; }
+.jf-td { font-size: 24px; line-height: 95px; }
+.jf-tr--ph .jf-td { color: #a5a5a5; }
+.jf-cb { border: 2px solid #cecece; border-radius: 6px; background: #ffffff; }
+.jf-muted { font-size: 24px; line-height: 48px; color: #a5a5a5; }
+.jf-flow-t { font-size: 24px; font-weight: 700; line-height: 48px; }
+.jf-flowpanel { border-right-width: 0; }
+.jf-canvas { background: #f9f9f9; border-top: 2px solid #e0e0e0; overflow: hidden; }
+
+.jf-edge { fill: none; stroke: #000000; stroke-width: 2; }
+.jf-head { fill: none; stroke: #000000; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.jf-port { fill: #ffffff; stroke: #000000; stroke-width: 2; }
+.jf-pulse { fill: #155dfc; opacity: 0; filter: drop-shadow(0 0 6px rgba(21, 93, 252, 0.7)); }
+
+.jf-node {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.02), 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+.jf-tile { border-radius: 10px; }
+.jf-kind { font-size: 20px; line-height: 40px; color: #5b5b5b; }
+.jf-name { font-size: 24px; line-height: 42px; color: #1f1f1f; }
+.jf-zoom { background: #ffffff; border-radius: 16px; box-shadow: 0 0 0 2px #ececec, 0 6px 14px rgba(0, 0, 0, 0.05); }
+.jf-zoom-on { background: #dcebff; border-radius: 10px; }
+
+.jf-aipanel { background: #ffffff; border-left: 2px solid #cecece; }
+.jf-bub { border-radius: 18px; }
+.jf-bub--ai { background: #f9fafb; }
+.jf-bub--me { background: #dcebff; }
+.jf-line { font-size: 28px; line-height: 34px; color: #1f1f1f; }
+.jf-kb { background: #dcebff; border-radius: 50%; color: #0042ae; font-size: 18px; font-weight: 700; line-height: 26px; text-align: center; }
+.jf-ask { border: 2px solid #0042ae; border-radius: 16px; background: #ffffff; }
+.jf-caret { background: #1f1f1f; }
+.jf-know { background: #ebf2ff; border-radius: 8px; color: #155dfc; font-size: 26px; line-height: 64px; }
+.jf-send { background: #f2f2f2; border-radius: 8px; }
+
+/* Playing */
+.jf.is-resetting * { transition: none !important; animation: none !important; }
+.jf-node {
+  opacity: 0;
+  transform: translateY(18px) scale(0.97);
+  transition: opacity 0.4s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition-delay: calc(var(--d) * 0.26s);
+}
+.jf.is-graph .jf-node { opacity: 1; transform: none; }
+.jf-edge {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.45s ease;
+  transition-delay: calc(0.3s + var(--d) * 0.26s);
+}
+.jf.is-graph .jf-edge { stroke-dashoffset: 0; }
+.jf-head, .jf-port { opacity: 0; transition: opacity 0.2s ease; transition-delay: calc(0.62s + var(--d) * 0.26s); }
+.jf-port { transition-delay: calc(0.3s + var(--d) * 0.26s); }
+.jf.is-graph .jf-head, .jf.is-graph .jf-port { opacity: 1; }
+.jf.is-running .jf-pulse { opacity: 1; }
+.jf-node.is-hot { box-shadow: 0 0 0 3px #155dfc, 0 8px 22px rgba(21, 93, 252, 0.18); }
+
+.jf-fn { opacity: 0; transform: translateX(-12px); transition: opacity 0.35s ease, transform 0.45s ease, background 0.3s ease; transition-delay: calc(0.4s + var(--i) * 0.12s); }
+.jf.is-rows .jf-fn { opacity: 1; transform: none; }
+.jf-fn--pick .jf-edit { stroke: #5b5b5b !important; transition: stroke 0.3s ease; }
+.jf.is-pick .jf-fn--pick { background: #ebf2ff; transition-delay: 0s; }
+.jf.is-pick .jf-fn--pick .jf-edit { stroke: #155dfc !important; }
+
+.jf-bub--me, .jf-ans, .jf-fb { opacity: 0; transform: translateY(12px); transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+.jf.is-asked .jf-bub--me { opacity: 1; transform: none; }
+.jf.is-thinking .jf-ans, .jf.is-writing .jf-ans, .jf.is-answered .jf-ans { opacity: 1; transform: none; }
+.jf.is-answered .jf-fb { opacity: 1; transform: none; }
+.jf-typing { opacity: 0; }
+.jf.is-thinking .jf-typing { opacity: 1; }
+.jf-typing span { border-radius: 50%; background: #90a1b9; animation: jf-dot 1s ease-in-out infinite; animation-delay: calc(var(--k) * 0.15s); }
+@keyframes jf-dot { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-6px); opacity: 1; } }
+.jf-kb { opacity: 0; transform: scale(0.5); transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.jf.is-answered .jf-kb { opacity: 1; transform: none; }
+.jf-caret { animation: jf-blink 1.06s steps(1) infinite; }
+@keyframes jf-blink { 50% { opacity: 0; } }
+
+/* Resting: the product's hover states, nothing more. */
+.jf:not(.is-idle) .jf-stage { pointer-events: none; }
+.jf.is-idle .jf-node,
+.jf.is-idle .jf-tr,
+.jf.is-idle .jf-input,
+.jf.is-idle .jf-save,
+.jf.is-idle .jf-ai,
+.jf.is-idle .jf-know,
+.jf.is-idle .jf-send,
+.jf.is-idle .jf-stage svg { transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.22s ease, stroke 0.18s ease, transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1); transition-delay: 0s; }
+.jf.is-idle .jf-node:hover { transform: translateY(-3px); box-shadow: 0 0 0 2px #9db8f5, 0 12px 26px -10px rgba(15, 23, 43, 0.25); }
+.jf.is-idle .jf-tr:not(.jf-fn--pick):hover { background: #f8fafc; }
+.jf.is-idle .jf-input:hover { border-color: #9a9a9a; }
+.jf.is-idle .jf-save:hover { background: #0648c2; }
+.jf.is-idle .jf-ai:hover, .jf.is-idle .jf-know:hover { background: #dce8ff; }
+.jf.is-idle .jf-send:hover { background: #e4e4e4; }
+.jf.is-idle .jf-tr > svg:hover,
+.jf.is-idle .jf-node > svg:hover,
+.jf.is-idle .jf-fb > svg:hover,
+.jf.is-idle .jf-rail > svg:hover,
+.jf.is-idle .jf-zoom > svg:hover {
+  background: #f1f5f9;
+  box-shadow: 0 0 0 10px #f1f5f9;
+  border-radius: 4px;
+  stroke: #155dfc !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jf * { transition: none !important; animation: none !important; }
+}
+
 /* ── Grid view ──────────────────────────────────────────── */
 .work.is-grid .work-stack {
   display: grid;
