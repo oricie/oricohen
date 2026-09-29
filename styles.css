@@ -385,7 +385,7 @@ body {
   outline-offset: 3px;
 }
 
-.sheet-shot img {
+.sheet-shot > img {
   display: block;
   width: 100%;
   height: auto;
