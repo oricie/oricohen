@@ -7,8 +7,8 @@
  * by its right edge.
  *
  * When the tile comes into view the three lines draw across the chart, the
- * gauge sweeps to 76% and the figures count up. After that it keeps a
- * little life: the newest point on each line breathes.
+ * gauge sweeps to 76% and the figures count up — quickly, once — and then
+ * it holds still.
  */
 (function () {
   var W = 1198, H = 1058;
@@ -206,7 +206,7 @@
 
     // Fit: cover the tile, a little closer than the image, framed on the
     // interface rather than on the backdrop above it.
-    var FOCUS = [520, 720], ZOOM = 1.12;
+    var FOCUS = [729, 700], ZOOM = 1.35;
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
       var k = Math.max(w / W, h / H) * ZOOM;
@@ -230,8 +230,8 @@
     }
     function play() {
       ui.classList.add('is-on');
-      counts.forEach(function (c) { count(c[0], c[1], 1400); });
-      count(pct, '76%', 1600);
+      counts.forEach(function (c) { count(c[0], c[1], 900); });
+      count(pct, '76%', 1000);
     }
     if (reduce) { ui.classList.add('is-on', 'is-still'); return; }
     counts.forEach(function (c) { c[0].textContent = c[1].indexOf('%') > -1 ? '0%' : '0'; });

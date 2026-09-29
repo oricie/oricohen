@@ -1443,13 +1443,12 @@ h1 {
 
 /* ── The Lucky Card's grid ──────────────────────────────── */
 /* Five pieces in an uneven grid, mirrored between its two halves: a large
-   tile beside two stacked small ones, then the other way round. Two are
-   rebuilt in code and play; the others are images that drift slowly, each
-   on its own clock. */
+   tile beside two stacked wide ones, then a tall one beside a large one.
+   When a tile comes into view its content settles in, quickly, once. */
 .lk-grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  grid-auto-rows: 250px;
+  grid-auto-rows: 290px;
   gap: 16px;
   max-width: 1440px;
   margin: 44px auto 0;
@@ -1461,11 +1460,10 @@ h1 {
   background: #1f1f23;
   box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.55);
 }
-.lk-a { grid-column: 1 / span 7; grid-row: span 2; }
-.lk-b { grid-column: 8 / span 5; }
-.lk-c { grid-column: 8 / span 5; }
-.lk-d { grid-column: 1 / span 5; grid-row: span 2; }
-.lk-e { grid-column: 6 / span 7; grid-row: span 2; }
+.lk-big:first-child { grid-column: 1 / span 7; grid-row: span 2; }
+.lk-wide { grid-column: 8 / span 5; }
+.lk-tall { grid-column: 1 / span 5; grid-row: span 2; }
+.lk-phones { grid-column: 6 / span 7; grid-row: span 2; }
 .lk-tile > img {
   position: absolute;
   inset: 0;
@@ -1475,37 +1473,42 @@ h1 {
   pointer-events: none;
   -webkit-user-drag: none;
 }
-.lk-b { background: #f6b58c; }
-.lk-c { background: #9fd3e4; }
-.lk-e { background: #6f86f2; }
-.lk-b > img { object-position: 50% 78%; animation: lk-drift-b 19s ease-in-out infinite alternate; }
-.lk-c > img { object-position: 50% 55%; animation: lk-drift-c 23s ease-in-out infinite alternate; }
-.lk-e > img { object-position: 50% 45%; animation: lk-drift-e 27s ease-in-out infinite alternate; }
-@keyframes lk-drift-b { from { transform: scale(1.06) translate(1.5%, 1%); } to { transform: scale(1.16) translate(-2%, -2%); } }
-@keyframes lk-drift-c { from { transform: scale(1.14) translate(-1.5%, 1%); } to { transform: scale(1.04) translate(1.5%, -1%); } }
-@keyframes lk-drift-e { from { transform: scale(1.05) translate(-1%, -1.5%); } to { transform: scale(1.15) translate(2%, 1.5%); } }
-.lk-a { background: #84c7c4; }
-.lk-d { background: #6fd3d8; }
+.lk-big:first-child { background: #6f86f2; }
+.lk-hotel { background: #9fd3e4; }
+.lk-hotel > img { object-position: 50% 21%; }
+.lk-phones { background: #f6b58c; }
+.lk-phones > img { object-position: 50% 78%; }
+.live-dash.lk-tile { background: #efe7da; }
+.live-tech.lk-tile { background: #dcd6f1; }
+
+/* The entrance: the picture settles from a touch closer, and fades up. */
+.lk-img > img { opacity: 0; transform: scale(1.07); }
+.lk-img.is-seen > img {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.45s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--lk-delay, 0s);
+}
 
 @media (max-width: 700px) {
   .lk-grid { grid-template-columns: 1fr; grid-auto-rows: auto; gap: 12px; margin-top: 28px; }
-  .lk-tile, .lk-a, .lk-b, .lk-c, .lk-d, .lk-e { grid-column: auto; grid-row: auto; aspect-ratio: 1198 / 1058; border-radius: 12px; }
+  .lk-tile, .lk-big:first-child, .lk-wide, .lk-tall, .lk-phones { grid-column: auto; grid-row: auto; aspect-ratio: 1198 / 1058; border-radius: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lk-tile > img { animation: none; transform: none; }
+  .lk-img > img { opacity: 1; transform: none; }
 }
 
 /* ── Older work, rebuilt: the exam dashboard ────────────── */
 /* Built at the image's own size (1198 by 1058) and scaled to cover its
    tile; see misc-dash.js. */
-.live-dash { position: relative; display: block; overflow: hidden; background: #84c7c4; }
+.live-dash { position: relative; display: block; overflow: hidden; background: #efe7da; }
 .md { position: absolute; inset: 0; overflow: hidden; }
 .md-stage {
   position: absolute;
   left: 0;
   top: 0;
   transform-origin: 0 0;
-  background: linear-gradient(172deg, #84c7c4 0%, #8ec9c7 30%, #a9d4d2 58%, #d6e8e7 80%, #f0f0f0 100%);
+  background: linear-gradient(172deg, #e8ddcc 0%, #ece3d6 40%, #f3eee6 80%, #f7f4ef 100%);
   font-family: "Heebo", "Assistant", Arial, "Helvetica Neue", sans-serif;
   direction: ltr;
   -webkit-font-smoothing: antialiased;
@@ -1514,7 +1517,7 @@ h1 {
 .md-stage svg { display: block; overflow: visible; }
 .md-t { font-size: 13px; line-height: 24px; direction: rtl; color: #555; }
 .md-c { text-align: center; }
-.md-win { box-shadow: 0 10px 40px rgba(20, 60, 60, 0.28); }
+.md-win { box-shadow: 0 12px 40px rgba(70, 50, 20, 0.22); }
 .md-top { background: #e1e1e1; }
 .md-nav { color: #7a7a7a; font-size: 12.5px; }
 .md-side { background: #1986db; }
@@ -1552,14 +1555,12 @@ h1 {
 .md-chart-t { color: #ffffff; font-size: 14px; }
 .md-axis { color: #2aa2e6; font-size: 13px; direction: ltr; }
 
-.md-line { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.6s cubic-bezier(0.45, 0, 0.2, 1); transition-delay: calc(0.2s + var(--i) * 0.25s); }
+.md-line { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0, 0.1, 1); transition-delay: calc(0.1s + var(--i) * 0.1s); }
 .md.is-on .md-line { stroke-dashoffset: 0; }
-.md-dot { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(0.3); transition: opacity 0.2s ease, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); transition-delay: calc(0.3s + var(--i) * 0.25s + var(--j) * 0.13s); }
+.md-dot { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(0.3); transition: opacity 0.2s ease, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1); transition-delay: calc(0.15s + var(--i) * 0.1s + var(--j) * 0.06s); }
 .md.is-on .md-dot { opacity: 1; transform: none; }
-.md-arc { stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 1.6s cubic-bezier(0.3, 0, 0.2, 1) 0.2s; }
+.md-arc { stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 1s cubic-bezier(0.3, 0, 0.1, 1) 0.1s; }
 .md.is-on .md-arc { stroke-dashoffset: 24; }
-.md.is-on:not(.is-still) .md-dot--last { animation: md-breathe 2.8s ease-in-out 2.6s infinite; }
-@keyframes md-breathe { 0%, 100% { transform: none; } 50% { transform: scale(1.6); } }
 @media (prefers-reduced-motion: reduce) { .md * { transition: none !important; animation: none !important; } }
 
 /* ── Grid view ──────────────────────────────────────────── */
