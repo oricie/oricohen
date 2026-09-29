@@ -1189,12 +1189,27 @@ h1 {
 .jf-cb { border: 2px solid #cecece; border-radius: 6px; background: #ffffff; }
 .jf-muted { font-size: 24px; line-height: 48px; color: #a5a5a5; }
 .jf-flow-t { font-size: 24px; font-weight: 700; line-height: 48px; }
-.jf-flowpanel { border-right-width: 0; }
 .jf-canvas { background: #f9f9f9; border-top: 2px solid #e0e0e0; overflow: hidden; }
 
-.jf-edge { fill: none; stroke: #000000; stroke-width: 2; }
-.jf-head { fill: none; stroke: #000000; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.jf-port { fill: #ffffff; stroke: #000000; stroke-width: 2; }
+/* The drawer. Closed, the flowgraph runs to the right margin and the graph
+   sits centred in it; opened, the drawer slides in, the panel narrows to
+   meet it and the graph glides back to centre in what is left. */
+.jf .jf-flowpanel { width: 1776px !important; }
+.jf.is-drawer .jf-flowpanel { width: 1090px !important; border-right-width: 0; }
+.jf-flowpanel .jf-canvas { width: auto !important; right: 0; }
+.jf-graph { transform: translateX(343px); }
+.jf.is-drawer .jf-graph { transform: none; }
+.jf-aipanel { transform: translateX(101%); }
+.jf.is-drawer .jf-aipanel { transform: none; }
+.jf-flowpanel, .jf-graph, .jf-aipanel {
+  transition: width 0.75s cubic-bezier(0.65, 0, 0.25, 1), transform 0.75s cubic-bezier(0.65, 0, 0.25, 1);
+}
+.jf-ai { transition: background 0.15s ease, transform 0.15s ease; }
+.jf.is-press .jf-ai { background: #cddcff; transform: scale(0.96); }
+
+.jf-edge { fill: none; stroke: #8793a6; stroke-width: 1.8; }
+.jf-head { fill: none; stroke: #8793a6; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.jf-port { fill: #ffffff; stroke: #8793a6; stroke-width: 1.8; }
 .jf-pulse { fill: #155dfc; opacity: 0; filter: drop-shadow(0 0 6px rgba(21, 93, 252, 0.7)); }
 
 .jf-node {

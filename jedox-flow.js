@@ -3,12 +3,13 @@
  * Built at the screenshot's own size — 2856 by 2048, positions and colours
  * measured off it — and scaled to its frame, like the other rebuilt screens.
  *
- * It plays once each time the sheet opens: the flowgraph assembles itself
- * top to bottom, each connector drawing after the step it leaves, and a
- * pulse of data runs through it from the CSV connection to the last load.
- * Meanwhile the field transform's functions fill in and one is picked, and
- * the question about the date format function goes to JedoxAI, which types
- * its answer. It ends on the screenshot's own frame and stays there, with
+ * It plays once each time the sheet opens. The flowgraph has the width to
+ * itself and assembles top to bottom, each connector drawing after the step
+ * it leaves, and a pulse of data runs through it from the CSV connection to
+ * the last load, while the field transform's functions fill in and one is
+ * picked. Then JedoxAI is opened: its drawer slides in, the flowgraph
+ * narrows and the graph glides to stay centred, and the question about the
+ * date format function goes in and the answer is typed out. It ends on the screenshot's own frame and stays there, with
  * the product's hover states from then on. Nothing opens or navigates.
  */
 (function () {
@@ -110,7 +111,7 @@
     ['M1866 610C1866 646 1886 655 1922 655H2092C2124 655 2128 670 2128 694', 0],
     ['M1592 794C1592 842 1570 858 1532 858H1356C1320 858 1314 876 1314 918', 1],
     ['M1592 794C1592 842 1614 860 1652 860H1828C1860 860 1866 880 1866 924', 1],
-    ['M2128 794C2128 818 2134 832 2144 846', 1],
+    ['M2128 794C2128 836 2150 856 2196 862H2330', 1],
     ['M1314 1018V1110', 2],
     ['M1866 1024V1110', 2],
     ['M1314 1210C1314 1234 1328 1242 1356 1242H1542C1572 1242 1580 1254 1580 1272', 3],
@@ -246,15 +247,22 @@
     put(fp, el('span', 'jf-label jf-flow-t', at(32, 22, null, 48), 'Flowgraph'));
     put(fp, el('span', 'jf-vr', at(168, 32, 0, 30)));
     put(fp, el('span', 'jf-muted', at(186, 22, null, 48), 'Edit Mode'));
-    put(fp, iconAt('close', 1034, 46, 30, '#1f1f1f', 2));
+    // The close sits against the panel's right edge, which moves.
+    var fx = put(fp, iconAt('close', 1034, 46, 30, '#1f1f1f', 2));
+    fx.style.left = 'auto'; fx.style.right = '39px';
     var cv = put(fp, el('span', 'jf-canvas', at(0, 90, 1088, 1698)));
+    // The graph itself, so it can glide to stay centred as the panel narrows.
+    var gl = put(cv, el('span', 'jf-graph', at(0, 0, 1088, 1698)));
     // Canvas coordinates are the screenshot's, less the canvas's origin.
     var OX = 1049, OY = 318;
     var eg = '';
     EDGES.forEach(function (e, i) {
-      eg += '<path class="jf-edge" style="--d:' + e[1] + '" pathLength="1" d="' + e[0] + '"/>';
+      // The JSON branch runs on to steps outside the view; it fades as it goes.
+      eg += '<path class="jf-edge" style="--d:' + e[1] + (i === 4 ? ';stroke:url(#jf-fade)' : '') + '" pathLength="1" d="' + e[0] + '"/>';
     });
-    var edges = put(cv, svg(STAGE_W, STAGE_H, '<g transform="translate(' + (-OX) + ' ' + (-OY) + ')">' + eg +
+    eg = '<defs><linearGradient id="jf-fade" gradientUnits="userSpaceOnUse" x1="2150" y1="0" x2="2330" y2="0">' +
+         '<stop offset="0" stop-color="#8793a6"/><stop offset="1" stop-color="#8793a6" stop-opacity="0"/></linearGradient></defs>' + eg;
+    var edges = put(gl, svg(STAGE_W, STAGE_H, '<g transform="translate(' + (-OX) + ' ' + (-OY) + ')">' + eg +
       '<g class="jf-heads"></g><circle class="jf-pulse" r="9" cx="0" cy="0"/></g>',
       'position:absolute;left:0;top:0;overflow:visible', 'jf-edges'));
     var paths = edges.querySelectorAll('.jf-edge');
@@ -270,7 +278,7 @@
     });
 
     var nodes = NODES.map(function (n) {
-      var c = put(cv, el('span', 'jf-node', at(n[0] - OX, n[1] - OY, 480, 96) + '--d:' + n[6]));
+      var c = put(gl, el('span', 'jf-node', at(n[0] - OX, n[1] - OY, 480, 96) + '--d:' + n[6]));
       var t = put(c, el('span', 'jf-tile', at(16, 16, 64, 64) + 'background:' + n[4]));
       put(t, iconAt(n[5], 32, 32, 40, '#ffffff', 1.8));
       put(c, el('span', 'jf-kind', at(96, 12, null, 40), n[2]));
@@ -371,20 +379,24 @@
       })(t0);
     }
 
-    var REST = 'jf is-graph is-rows is-pick is-asked is-answered is-idle';
+    var REST = 'jf is-graph is-rows is-pick is-drawer is-asked is-answered is-idle';
     function settle() { ui.className = REST; fill(); }
     function play() {
       ui.className = 'jf is-resetting';
       lineEls.forEach(function (n) { n.textContent = ''; });
       void ui.offsetWidth;
       ui.classList.remove('is-resetting');
-      later(200,  function () { ui.classList.add('is-graph', 'is-rows'); });
-      later(2200, function () { ui.classList.add('is-pick'); });
-      later(2900, run);
-      later(3300, function () { ui.classList.add('is-asked'); });
-      later(4000, function () { ui.classList.add('is-thinking'); });
-      later(5200, function () { ui.classList.remove('is-thinking'); ui.classList.add('is-writing'); type(0); });
-      later(10600, function () { ui.classList.add('is-idle'); });
+      later(200,   function () { ui.classList.add('is-graph', 'is-rows'); });
+      later(2200,  function () { ui.classList.add('is-pick'); });
+      later(2600,  run);
+      // JedoxAI is asked for: the button takes the press, the drawer comes
+      // in, and the flowgraph makes room for it.
+      later(5700,  function () { ui.classList.add('is-press'); });
+      later(5900,  function () { ui.classList.remove('is-press'); ui.classList.add('is-drawer'); });
+      later(6900,  function () { ui.classList.add('is-asked'); });
+      later(7500,  function () { ui.classList.add('is-thinking'); });
+      later(8600,  function () { ui.classList.remove('is-thinking'); ui.classList.add('is-writing'); type(0); });
+      later(14200, function () { ui.classList.add('is-idle'); });
     }
     if (reduce) { settle(); return; }
     if (window.IntersectionObserver) {
