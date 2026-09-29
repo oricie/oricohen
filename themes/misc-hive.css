@@ -1,0 +1,169 @@
+/* ── Older work, rebuilt: beehive, a BI feed for online gaming ─────────
+   Two phones in one CSS 3D scene, lying on a peach backdrop, with the apps
+   built in code inside them and a prototype flow playing on a loop; see
+   misc-hive.js. Each app is laid out at 375 by 812. */
+.live-hive { position: relative; display: block; overflow: hidden; background: #fbc1a0; }
+.mb {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f9b28a 0%, #fbbc98 20%, #fcc3a2 32%, #fcc8ad 42%, #fcd6c1 62%, #fddfcc 81%, #ffe8db 100%);
+  -webkit-font-smoothing: antialiased;
+  direction: ltr;
+  contain: strict;
+  pointer-events: none;
+  user-select: none;
+}
+.mb-scene { position: absolute; inset: 0; }
+.mb-rig { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.mb-shadow { position: absolute; border-radius: 60px; pointer-events: none; }
+.mb-shadow--far {
+  background: rgba(150, 70, 30, 0.3);
+  filter: blur(40px);
+  transform: translate3d(-34px, 60px, -27px);
+}
+.mb-shadow--near {
+  background: rgba(110, 50, 25, 0.34);
+  filter: blur(8px);
+  transform: translate3d(-4px, 8px, -26.5px);
+}
+
+/* The device: a graphite case, a flat grey rim, the notch */
+.mb-phone { position: absolute; width: 407px; height: 844px; transform-style: preserve-3d; }
+.mb-edge {
+  position: absolute; inset: 0; border-radius: 60px;
+  background: linear-gradient(135deg, #4a4a4c 0%, #3a3a3b 40%, #2f2f30 70%, #3e3e40 100%);
+}
+.mb-edge--back { background: #262627; }
+.mb-key { position: absolute; width: 5px; border-radius: 2px; background: linear-gradient(90deg, #2a2a2b, #5a5a5c 50%, #2c2c2d); }
+.mb-bottom {
+  position: absolute; left: 58px; top: 844.4px; width: 291px; height: 26px;
+  transform-origin: 50% 0; transform: rotateX(-90deg);
+  background: linear-gradient(180deg, #4a4a4c 0%, #353536 50%, #2c2c2d 100%);
+}
+.mb-bottom i { position: absolute; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: #1a1a1b; box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12); }
+.mb-bottom b { position: absolute; left: 124px; top: 7px; width: 42px; height: 11px; border-radius: 6px; background: #1a1a1b; box-shadow: inset 0 0 0 1.5px #555, 0 1px 0 rgba(255, 255, 255, 0.12); }
+.mb-face { position: absolute; inset: 0; transform: translateZ(0.5px); transform-style: flat; isolation: isolate; }
+.mb-frame {
+  position: absolute; inset: 0; border-radius: 60px; background: #696969;
+  box-shadow: inset 0 0 0 1.6px #8f8f8f, inset 0 0 0 3px #6f6f6f;
+}
+.mb-bezel { position: absolute; inset: 12px; border-radius: 48px; background: #333; }
+.mb-screen {
+  position: absolute; left: 16px; top: 16px; width: 375px; height: 812px;
+  border-radius: 44px; overflow: hidden; background: #111;
+}
+.mb-notch {
+  position: absolute; left: 84px; top: 0; width: 207px; height: 30px; z-index: 50;
+  border-radius: 0 0 20px 20px; background: #222;
+}
+.mb-notch::before, .mb-notch::after {
+  content: ""; position: absolute; top: 0; width: 8px; height: 8px;
+  background: radial-gradient(circle at 0 100%, transparent 7.5px, #222 8px);
+}
+.mb-notch::before { left: -8px; background: radial-gradient(circle at 0 100%, transparent 7.5px, #222 8px); }
+.mb-notch::after { right: -8px; background: radial-gradient(circle at 100% 100%, transparent 7.5px, #222 8px); }
+.mb-grille { position: absolute; left: 76px; top: 8px; width: 52px; height: 6px; border-radius: 3px; background: #4a4a4a; }
+.mb-cam { position: absolute; left: 140px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: #0f1016; box-shadow: inset 0 0 0 2px #2c2c33; }
+.mb-glare {
+  position: absolute; inset: 0; z-index: 51; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0) 45%);
+}
+
+/* The apps, at 375 by 812 */
+.mb-app {
+  position: absolute; left: 0; top: 0; width: 375px; height: 812px; overflow: hidden;
+  font-family: "Montserrat", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  color: #fff; background: #111;
+}
+.mb-app div, .mb-app span { box-sizing: border-box; }
+.mb-app svg { display: block; overflow: visible; }
+.mb-a { position: absolute; }
+.mb-t { position: absolute; white-space: nowrap; line-height: 1; }
+.mb-sb { position: absolute; left: 0; top: 0; width: 375px; height: 44px; z-index: 30; color: #fff; }
+.mb-sb-time { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+.mb-press { position: absolute; inset: 0; border-radius: inherit; background: rgba(255, 255, 255, 0.12); opacity: 0; pointer-events: none; }
+.mb-dim { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 40; }
+
+/* Feed: header, pills, cards */
+.mb-logo {
+  position: absolute; clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  background: conic-gradient(from 20deg, #ffd21f, #ff7a1a, #ff2d7e, #9a3cff, #2e7bff, #19d3c5, #7be04a, #ffd21f);
+}
+.mb-logo-in { position: absolute; background: #111; clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%); }
+.mb-word { font-size: 38px; font-weight: 300; letter-spacing: -0.5px; color: #fff; }
+.mb-pill { position: absolute; border-radius: 8px; background: #1d1d1d; overflow: hidden; }
+.mb-pill-l { font-size: 14px; font-weight: 600; color: #f2f2f2; }
+.mb-view { position: absolute; overflow: hidden; }
+.mb-pane { position: absolute; left: 0; top: 0; width: 375px; height: 569px; background: #111; }
+.mb-card { position: absolute; border-radius: 12px; background: #1d1d1d; overflow: hidden; }
+.mb-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; }
+.mb-ttl { font-size: 17px; font-weight: 600; color: #fff; letter-spacing: -0.2px; }
+.mb-sub { font-size: 12.5px; color: #8d8d93; }
+.mb-bar { position: absolute; border-radius: 4px; background: #3a3a44; transform-origin: 50% 100%; }
+.mb-chip { position: absolute; border-radius: 13px; border: 1px solid #3a3a42; font-size: 12px; font-weight: 600; line-height: 24px; text-align: center; color: #d6d6dc; }
+.mb-chip--on { border-color: #4f43fd; color: #9c95ff; }
+.mb-spin {
+  position: absolute; border-radius: 50%; opacity: 0;
+  border: 2.5px solid #333; border-top-color: #8b83ff;
+}
+
+/* Total revenue */
+.mb-calc { position: absolute; background: #1d1d1d; overflow: hidden; }
+.mb-ctl { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; color: #fff; }
+.mb-month { font-size: 14px; font-weight: 500; color: #d8d8dc; }
+.mb-wd { font-size: 12px; color: #6e6e74; }
+.mb-day { font-size: 13.5px; color: #d2d2d6; }
+.mb-cap { position: absolute; border-radius: 15px; background: #463fd2; }
+.mb-six { position: absolute; border-radius: 50%; background: #7f7bd8; }
+.mb-klbl { font-size: 12.5px; color: #a0a0a6; }
+.mb-kval { font-size: 40px; font-weight: 300; letter-spacing: -1px; color: #fff; }
+.mb-input { position: absolute; border-radius: 10px; background: #2c2c2e; border: 1px solid transparent; transition: border-color 0.25s ease; }
+.mb-input.is-focus { border-color: #5a50f5; }
+.mb-ph { font-size: 14px; color: #7a7a80; }
+.mb-typed { font-size: 14px; color: #fff; }
+.mb-caret { display: inline-block; width: 1.5px; height: 17px; margin-left: 1px; vertical-align: -3.5px; background: #7a70ff; opacity: 0; }
+.mb-input.is-focus .mb-caret { animation: mb-blink 1s steps(1) infinite; }
+@keyframes mb-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.mb-send { position: absolute; border-radius: 8px; background: #4f43fd; opacity: 0; }
+.mb-toast { position: absolute; border-radius: 15px; background: #4f43fd; opacity: 0; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
+.mb-toast-l { font-size: 12px; font-weight: 600; color: #fff; }
+
+/* Tab bar */
+.mb-tabs { position: absolute; z-index: 10; }
+.mb-tab-l { font-size: 10px; color: #8d8d93; }
+.mb-home { position: absolute; border-radius: 3px; background: #fff; }
+
+/* Insight */
+.mb-sheet { position: absolute; border-radius: 14px 14px 0 0; background: #1d1d1d; overflow: hidden; }
+.mb-close { position: absolute; border-radius: 50%; background: #ececec; }
+.mb-body { font-size: 15px; color: #e6e6ea; }
+.mb-row { position: absolute; }
+.mb-hl { position: absolute; background: rgba(255, 255, 255, 0.07); opacity: 0; }
+.mb-rl { font-size: 14px; color: #d4d4d8; }
+.mb-rp { font-size: 12px; color: #7d7d83; }
+.mb-bar2 { position: absolute; border-radius: 4px; background: #4f43fd; overflow: hidden; }
+.mb-bar2-l { font-size: 14px; font-weight: 700; letter-spacing: 0.3px; color: #fff; }
+.mb-psheet { position: absolute; z-index: 30; border-radius: 18px 18px 0 0; background: #26262b; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.4); }
+.mb-grab { position: absolute; border-radius: 3px; background: #4a4a52; }
+.mb-ps-t { font-size: 17px; font-weight: 600; color: #fff; }
+.mb-ps-s { font-size: 13px; color: #8b83ff; }
+.mb-ps-n { font-size: 11.5px; color: #b4b4ba; }
+.mb-av { position: absolute; border-radius: 50%; }
+.mb-av-l { font-size: 16px; font-weight: 700; color: #fff; }
+.mb-av-ok { position: absolute; border-radius: 50%; background: #4f43fd; box-shadow: 0 0 0 2.5px #26262b; }
+
+/* The finger */
+.mb-tap { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 60; pointer-events: none; opacity: 0; }
+.mb-tap-dot {
+  position: absolute; left: -21px; top: -21px; width: 42px; height: 42px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+.mb-tap-ring { position: absolute; left: -21px; top: -21px; width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); opacity: 0; }
+
+/* Test mode: the two screens alone, flat, side by side */
+.mb--flat { background: #d8d8d8; contain: none; }
+.mb--flat .mb-scene { position: static; display: flex; gap: 12px; }
+.mb--flat .mb-screen { position: relative; left: 0; top: 0; flex: none; border-radius: 0; transform: none; }
