@@ -104,34 +104,50 @@
     put(p, icon('chev', 13, '#45556c', 1.8, 'flex:none;margin-left:' + (i === 3 ? '10px' : 'auto')));
   });
 
+  // The dashboard is laid out for two widths: the whole page while the
+  // JedoxAI drawer is closed, and the screenshot's narrower one once it is
+  // open. Cards and charts are built in proportions, not fixed positions, so
+  // when the drawer slides in they reflow as the product does — the bars
+  // close up, the line stretches with them, the OPEX card gives up a month
+  // under the drawer. Widths live in CSS (.ui-rev, .ui-opx, .ui-tbl).
+  function plotBox(card, x, right) {
+    return put(card, el('span', 'ui-plot', 'left:' + x + 'px;right:' + right + 'px;top:74px;height:197px'));
+  }
+  function yAxis(plot, vals, h) {
+    vals.forEach(function (v, i) {
+      var y = i * h / (vals.length - 1);
+      if (plot.dataset.grid) put(plot, el('span', 'ui-grid-h', 'left:0;width:100%;top:' + y + 'px;height:0'));
+      put(plot, el('span', 'ui-axis-l', 'right:calc(100% + 7px);top:' + (y - 7) + 'px', String(v)));
+    });
+    put(plot, el('span', 'ui-axis-y', 'left:0;top:0;width:0;height:' + h + 'px'));
+    put(plot, el('span', 'ui-axis-x', 'left:0;width:100%;top:' + h + 'px;height:0'));
+  }
+
   // Revenue card.
-  var rev = put(st, el('span', 'ui-card', at(81, 142, 648, 326)));
+  var rev = put(st, el('span', 'ui-card ui-rev', at(81, 142, null, 326)));
   put(rev, el('span', 'ui-card-t', at(20, 12), 'Revenue Forecast vs. Actuals'));
-  var PLOT = { x: 85, y: 74, w: 537, h: 197 };           // 0..1600
-  [1600, 1200, 800, 400, 0].forEach(function (v, i) {
-    var y = PLOT.y + i * PLOT.h / 4;
-    put(rev, el('span', 'ui-grid-h', at(PLOT.x, y, PLOT.w, 0)));
-    put(rev, el('span', 'ui-axis-l', 'right:' + (648 - PLOT.x + 7) + 'px;top:' + (y - 7) + 'px', String(v)));
-  });
-  put(rev, el('span', 'ui-axis-y', at(PLOT.x, PLOT.y, 0, PLOT.h)));
-  put(rev, el('span', 'ui-axis-x', at(PLOT.x, PLOT.y + PLOT.h, PLOT.w, 0)));
+  var PH = 197, PW = 537;                                 // the plot, as the screenshot has it
+  var plot = plotBox(rev, 85, 26);
+  plot.dataset.grid = '1';
+  yAxis(plot, [1600, 1200, 800, 400, 0], PH);
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var BAR = [933, 1113, 1212, 1096, 1194, 1264, 1165, 1299, 1212, 1368, 1299];
   var LINE = [1090, 1130, 1230, 1112, 1287, 1316, 1200, 1356, 1287, 1432, 1316, 1484];
-  var cx = function (i) { return 107.5 + i * 44.8; };
-  var cy = function (v) { return PLOT.y + PLOT.h - v / 1600 * PLOT.h; };
+  var col = function (i) { return ((i + 0.5) * 100 / 12).toFixed(4) + '%'; };
+  var px = function (i) { return (i + 0.5) * PW / 12; };    // the same, in the plot's own units
+  var py = function (v) { return PH - v / 1600 * PH; };
   MONTHS.forEach(function (m, i) {
-    put(rev, el('span', 'ui-grid-v', at(cx(i), PLOT.y, 0, PLOT.h)));
-    put(rev, el('span', 'ui-axis-m', 'left:' + (cx(i) - 20) + 'px;top:' + (PLOT.y + PLOT.h + 6) + 'px', m));
+    put(plot, el('span', 'ui-grid-v', 'left:' + col(i) + ';top:0;width:0;height:' + PH + 'px'));
+    put(plot, el('span', 'ui-axis-m', 'left:calc(' + col(i) + ' - 20px);top:' + (PH + 6) + 'px', m));
     if (i < BAR.length) {
-      var hgt = BAR[i] / 1600 * PLOT.h;
-      put(rev, el('span', 'ui-bar', at(cx(i) - 17, PLOT.y + PLOT.h - hgt, 34, hgt) + '--i:' + i));
+      var hgt = BAR[i] / 1600 * PH;
+      put(plot, el('span', 'ui-bar', 'left:calc(' + col(i) + ' - 17px);width:34px;top:' + (PH - hgt) + 'px;height:' + hgt + 'px;--i:' + i));
     }
   });
-  // One smooth line over the bars: a monotone-ish curve through the
-  // points, a soft wash under it, and a single marker on the last month.
+  // One smooth line over the bars, a soft wash behind them, a marker on the
+  // last month. The line's SVG stretches with the plot; its stroke does not.
   function smooth(vals) {
-    var p = vals.map(function (v, i) { return [cx(i), cy(v)]; }), d = 'M' + p[0][0].toFixed(1) + ' ' + p[0][1].toFixed(1);
+    var p = vals.map(function (v, i) { return [px(i), py(v)]; }), d = 'M' + p[0][0].toFixed(1) + ' ' + p[0][1].toFixed(1);
     for (var i = 0; i < p.length - 1; i++) {
       var p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2, t = 0.16;
       d += 'C' + (p1[0] + (p2[0] - p0[0]) * t).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) * t).toFixed(1) + ' ' +
@@ -140,56 +156,55 @@
     }
     return d;
   }
+  function stretch(inner, cls) {
+    var s2 = svg(PW, PH, inner, 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible');
+    s2.setAttribute('preserveAspectRatio', 'none');
+    if (cls) s2.setAttribute('class', cls);
+    return s2;
+  }
   var lineD = smooth(LINE), last = LINE.length - 1;
-  var areaD = lineD + 'L' + cx(last).toFixed(1) + ' ' + (PLOT.y + PLOT.h) + 'L' + cx(0).toFixed(1) + ' ' + (PLOT.y + PLOT.h) + 'Z';
-  // The wash sits behind the bars; the line and its marker over them.
-  rev.insertBefore(svg(648, 326,
+  var areaD = lineD + 'L' + px(last).toFixed(1) + ' ' + PH + 'L' + px(0).toFixed(1) + ' ' + PH + 'Z';
+  plot.insertBefore(stretch(
     '<defs><linearGradient id="ui-wash" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0" stop-color="#7fb2ff" stop-opacity=".32"/><stop offset="1" stop-color="#7fb2ff" stop-opacity="0"/></linearGradient></defs>' +
-    '<path class="ui-area" d="' + areaD + '" fill="url(#ui-wash)"/>',
-    'position:absolute;left:0;top:0;overflow:visible'), rev.firstChild);
-  put(rev, svg(648, 326,
-    '<path class="ui-line ui-line--solid" d="' + lineD + '" fill="none" stroke="#8ab8ff" stroke-width="2.4" stroke-linecap="round" pathLength="1"/>' +
-    '<g class="ui-dots"><circle cx="' + cx(last).toFixed(1) + '" cy="' + cy(LINE[last]).toFixed(1) + '" r="8" fill="#8ab8ff" opacity=".25"/>' +
-      '<circle cx="' + cx(last).toFixed(1) + '" cy="' + cy(LINE[last]).toFixed(1) + '" r="4" fill="#fff" stroke="#5f97f2" stroke-width="2"/></g>',
-    'position:absolute;left:0;top:0;overflow:visible'));
+    '<path class="ui-area" d="' + areaD + '" fill="url(#ui-wash)"/>'), plot.firstChild);
+  put(plot, stretch('<path class="ui-line ui-line--solid" d="' + lineD + '" fill="none" stroke="#8ab8ff" stroke-width="2.4" ' +
+    'stroke-linecap="round" vector-effect="non-scaling-stroke"/>'));
+  var mark = put(plot, el('span', 'ui-dots', 'left:calc(' + col(last) + ' - 8px);top:' + (py(LINE[last]) - 8) + 'px;width:16px;height:16px'));
+  put(mark, svg(16, 16, '<circle cx="8" cy="8" r="8" fill="#8ab8ff" opacity=".25"/><circle cx="8" cy="8" r="4" fill="#fff" stroke="#5f97f2" stroke-width="2"/>'));
 
-  // OPEX card — it runs on under the AI panel, as in the product.
-  var opx = put(st, el('span', 'ui-card', at(745, 142, 470, 326)));
+  // OPEX card — with the drawer open it runs on under it, as in the product.
+  var opx = put(st, el('span', 'ui-card ui-opx', at(745, 142, null, 326)));
   put(opx, el('span', 'ui-card-t', at(21, 12), 'OPEX Summary'));
-  var OP = { x: 86, y: 74, w: 380, h: 197 };             // 0..380
-  [380, 285, 190, 95, 0].forEach(function (v, i) {
-    var y = OP.y + i * OP.h / 4;
-    put(opx, el('span', 'ui-axis-l', 'right:' + (470 - OP.x + 7) + 'px;top:' + (y - 7) + 'px', String(v)));
-  });
-  put(opx, el('span', 'ui-axis-y', at(OP.x, OP.y, 0, OP.h)));
-  put(opx, el('span', 'ui-axis-x', at(OP.x, OP.y + OP.h, OP.w, 0)));
-  var STACK = [[.482, .707, .826, .924], [.507, .746, .880, .982], [.496, .728, .859, .953]];
+  var oplot = plotBox(opx, 86, 4);
+  yAxis(oplot, [380, 285, 190, 95, 0], PH);
+  var STACK = [[.482, .707, .826, .924], [.507, .746, .880, .982], [.496, .728, .859, .953], [.515, .752, .872, .968]];
   var SHADES = ['#00355e', '#4a6b88', '#6b9bd1', '#a8bed6'];
-  STACK.forEach(function (s, i) {
-    var x = 97 + i * 107;
-    var col = put(opx, el('span', 'ui-stack', at(x, OP.y, 86, OP.h) + '--i:' + i));
+  STACK.forEach(function (sv, i) {
+    var x = 11 + i * 107;
+    var c = put(oplot, el('span', 'ui-stack', at(x, 0, 86, PH) + '--i:' + i));
     for (var k = 3; k >= 0; k--) {
-      var lo = k ? s[k - 1] : 0;
-      put(col, el('span', null, 'position:absolute;left:0;right:0;bottom:' + (lo * 100) + '%;height:' +
-        ((s[k] - lo) * 100) + '%;background:' + SHADES[k]));
+      var lo = k ? sv[k - 1] : 0;
+      put(c, el('span', null, 'position:absolute;left:0;right:0;bottom:' + (lo * 100) + '%;height:' +
+        ((sv[k] - lo) * 100) + '%;background:' + SHADES[k]));
     }
-    if (i < 2) put(opx, el('span', 'ui-axis-m', 'left:' + (x + 23) + 'px;top:' + (OP.y + OP.h + 6) + 'px', ['Jan', 'Feb'][i]));
+    put(oplot, el('span', 'ui-axis-m', 'left:' + (x + 23) + 'px;top:' + (PH + 6) + 'px', ['Jan', 'Feb', 'Mar', 'Apr'][i]));
   });
 
-  // Table.
-  var tbl = put(st, el('span', 'ui-card ui-table', at(81, 495, 1100, 260)));
-  var head = put(tbl, el('span', 'ui-th', at(0, 0, 1100, 37)));
+  // Table: the quarter columns share whatever width the table has.
+  var tbl = put(st, el('span', 'ui-card ui-table ui-tbl', at(81, 495, null, 260)));
+  var head = put(tbl, el('span', 'ui-th', 'left:0;top:0;width:100%;height:37px'));
   put(head, el('span', 'ui-th-k', at(17, 0, null, 37), 'Region / Product'));
+  var qx = function (i, off) { return 'calc(174px + ' + i + ' * (213px + (100% - 1100px) / 4) + ' + (off || 0) + 'px)'; };
+  var qw = 'calc(213px + (100% - 1100px) / 4)';
   ['Q1', 'Q2', 'Q3', 'Q4'].forEach(function (q, i) {
-    var x0 = 174 + i * 213;
-    put(tbl, el('span', 'ui-vr', at(x0, 0, 0, 260)));
-    var h = put(head, el('span', 'ui-th-q', at(x0, 0, 213, 37)));
+    put(tbl, el('span', 'ui-vr', 'left:' + qx(i) + ';top:0;width:0;height:260px'));
+    var h = put(head, el('span', 'ui-th-q', 'left:' + qx(i) + ';top:0;width:' + qw + ';height:37px'));
     put(h, el('span', null, null, q));
     put(h, icon('sort', 12, '#8b95a3', 1.8, 'margin-left:7px'));
-    put(tbl, el('span', 'ui-vr ui-vr--sub', at(x0 + 111, 37, 0, 223)));
-    put(tbl, el('span', 'ui-sub', at(x0 + 17, 37, 90, 35), 'Revenue'));
-    put(tbl, el('span', 'ui-sub', at(x0 + 128, 37, 80, 35), 'Profit'));
+    put(tbl, el('span', 'ui-vr ui-vr--sub', 'left:' + qx(i, 111) + ';top:37px;width:0;height:223px'));
+    put(tbl, el('span', 'ui-sub', 'left:' + qx(i, 17) + ';top:37px;width:90px;height:35px', 'Revenue'));
+    put(tbl, el('span', 'ui-sub', 'left:' + qx(i, 128) + ';top:37px;width:80px;height:35px', 'Profit'));
   });
   var ROWS = [
     ['North America', ['223,000', '77,000', '247,000', '87,000', '138,000', '48,000', '168,000', '62,000']],
@@ -198,20 +213,18 @@
     ['',              ['164,000', '47,000', '0', '0', '0', '0', '0', '0']]
   ];
   ROWS.forEach(function (r, ri) {
-    var y = 72 + ri * 37;
-    var row = put(tbl, el('span', 'ui-tr', at(0, y, 1100, 37) + '--i:' + ri));
+    var row = put(tbl, el('span', 'ui-tr', 'left:0;top:' + (72 + ri * 37) + 'px;width:100%;height:37px;--i:' + ri));
     if (r[0]) {
       put(row, icon('right', 12, '#62748e', 1.8, 'position:absolute;left:18px;top:12px'));
       put(row, el('span', 'ui-tr-k', at(39, 0, 130, 37), r[0]));
     }
     r[1].forEach(function (v, ci) {
-      var x = 174 + Math.floor(ci / 2) * 213 + (ci % 2 ? 128 : 17);
-      put(row, el('span', 'ui-td' + (ci % 2 ? ' ui-td--b' : ''), at(x, 0, 95, 37), '$' + v));
+      put(row, el('span', 'ui-td' + (ci % 2 ? ' ui-td--b' : ''), 'left:' + qx(Math.floor(ci / 2), ci % 2 ? 128 : 17) + ';top:0;width:95px;height:37px', '$' + v));
     });
   });
 
   // JedoxAI panel.
-  var ai = put(st, el('span', 'ui-ai', at(1077, 47, 351, STAGE_H - 47)));
+  var ai = put(st, el('span', 'ui-ai ui-drawer', at(1077, 47, 351, STAGE_H - 47)));
   var ah = put(ai, el('span', 'ui-ai-h', at(0, 0, 351, 47)));
   put(ah, el('span', null, 'position:absolute;left:16px;line-height:47px;font-weight:600', 'JedoxAI'));
   put(ah, icon('hist', 16, '#45556c', 1.7, 'position:absolute;left:289px;top:15px'));
@@ -273,7 +286,7 @@
   }
 
   function settle() {
-    ui.className = 'ui is-charts is-rows is-asked is-cmp is-und is-code is-dsc';
+    ui.className = 'ui is-charts is-rows is-drawer is-asked is-cmp is-und is-code is-dsc';
     para1.textContent = TEXT1;
     para2.textContent = TEXT2;
   }
@@ -288,13 +301,17 @@
     later(60,   function () { ui.classList.remove('is-leaving'); });
     later(300,  function () { ui.classList.add('is-charts'); });
     later(1300, function () { ui.classList.add('is-rows'); });
-    later(2100, function () { ui.classList.add('is-asked'); });
-    later(2700, function () { ui.classList.add('is-cmp'); });
-    later(3400, function () { ui.classList.add('is-und'); type(para1, TEXT1, 0, 18); });
-    later(6600, function () { ui.classList.add('is-code'); });
-    later(7300, function () { ui.classList.add('is-dsc'); type(para2, TEXT2, 0, 18); });
-    later(11200, function () { ui.classList.add('is-leaving'); });
-    later(11800, play);
+    // JedoxAI is asked for: the pill takes the press, the drawer slides in
+    // and the dashboard reflows to make room.
+    later(2500, function () { ui.classList.add('is-press'); });
+    later(2700, function () { ui.classList.remove('is-press'); ui.classList.add('is-drawer'); });
+    later(3700, function () { ui.classList.add('is-asked'); });
+    later(4300, function () { ui.classList.add('is-cmp'); });
+    later(5000, function () { ui.classList.add('is-und'); type(para1, TEXT1, 0, 18); });
+    later(8200, function () { ui.classList.add('is-code'); });
+    later(8900, function () { ui.classList.add('is-dsc'); type(para2, TEXT2, 0, 18); });
+    later(12800, function () { ui.classList.add('is-leaving'); });
+    later(13400, play);
   }
 
   if (reduce) { settle(); return; }

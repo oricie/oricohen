@@ -465,6 +465,23 @@ h1 {
 .ui-filter-v { color: #0f172b; font-weight: 600; }
 
 .ui-card { background: #ffffff; border-radius: 6px; box-shadow: 0 1px 2px rgba(15, 23, 43, 0.05); overflow: hidden; }
+.ui-plot { position: absolute; }
+
+/* The two layouts: the full page with the drawer closed, and the
+   screenshot's with it open. */
+.ui-rev { width: 725px; }
+.ui-opx { left: 822px !important; width: 525px; }
+.ui-tbl { width: 1266px; }
+.ui.is-drawer .ui-rev { width: 648px; }
+.ui.is-drawer .ui-opx { left: 745px !important; width: 470px; }
+.ui.is-drawer .ui-tbl { width: 1100px; }
+.ui-rev, .ui-opx, .ui-tbl, .ui-drawer {
+  transition: width 0.7s cubic-bezier(0.65, 0, 0.25, 1), left 0.7s cubic-bezier(0.65, 0, 0.25, 1), transform 0.7s cubic-bezier(0.65, 0, 0.25, 1);
+}
+.ui-drawer { transform: translateX(101%); box-shadow: -10px 0 30px -18px rgba(15, 23, 43, 0.35); }
+.ui.is-drawer .ui-drawer { transform: none; }
+.ui-pill { transition: background 0.15s ease, transform 0.15s ease; }
+.ui.is-press .ui-pill { background: #d6e5ff; transform: scale(0.95); }
 .ui-card-t { font-size: 14.5px; font-weight: 600; color: #3f4555; }
 
 .ui-grid-h { border-top: 1px dashed #e2e8f0; }
@@ -490,10 +507,10 @@ h1 {
 .ui.is-charts .ui-bar,
 .ui.is-charts .ui-stack { transform: scaleY(1); }
 
-.ui-line { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.5s; }
+.ui-line { clip-path: inset(0 100% 0 0); transition: clip-path 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.5s; }
 .ui-area { opacity: 0; transition: opacity 0.8s ease 1.1s; }
 .ui-dots { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(0.5); transition: opacity 0.3s ease 1.6s, transform 0.4s cubic-bezier(0.3, 1.6, 0.5, 1) 1.6s; }
-.ui.is-charts .ui-line--solid { stroke-dashoffset: 0; }
+.ui.is-charts .ui-line--solid { clip-path: inset(0 0 0 0); }
 .ui.is-charts .ui-area,
 .ui.is-charts .ui-dots { opacity: 1; transform: none; }
 
