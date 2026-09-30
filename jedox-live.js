@@ -118,7 +118,6 @@
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var BAR = [933, 1113, 1212, 1096, 1194, 1264, 1165, 1299, 1212, 1368, 1299];
   var LINE = [1090, 1130, 1230, 1112, 1287, 1316, 1200, 1356, 1287, 1432, 1316, 1484];
-  var DASH = [1120, 1154, 1247, 1130, 1310, 1333, 1223, 1380, 1310, 1461, 1339, 1507];
   var cx = function (i) { return 107.5 + i * 44.8; };
   var cy = function (v) { return PLOT.y + PLOT.h - v / 1600 * PLOT.h; };
   MONTHS.forEach(function (m, i) {
@@ -129,18 +128,30 @@
       put(rev, el('span', 'ui-bar', at(cx(i) - 17, PLOT.y + PLOT.h - hgt, 34, hgt) + '--i:' + i));
     }
   });
-  function path(vals) {
-    return vals.map(function (v, i) { return (i ? 'L' : 'M') + cx(i).toFixed(1) + ' ' + cy(v).toFixed(1); }).join(' ');
+  // One smooth line over the bars: a monotone-ish curve through the
+  // points, a soft wash under it, and a single marker on the last month.
+  function smooth(vals) {
+    var p = vals.map(function (v, i) { return [cx(i), cy(v)]; }), d = 'M' + p[0][0].toFixed(1) + ' ' + p[0][1].toFixed(1);
+    for (var i = 0; i < p.length - 1; i++) {
+      var p0 = p[i - 1] || p[i], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2] || p2, t = 0.16;
+      d += 'C' + (p1[0] + (p2[0] - p0[0]) * t).toFixed(1) + ' ' + (p1[1] + (p2[1] - p0[1]) * t).toFixed(1) + ' ' +
+           (p2[0] - (p3[0] - p1[0]) * t).toFixed(1) + ' ' + (p2[1] - (p3[1] - p1[1]) * t).toFixed(1) + ' ' +
+           p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
+    }
+    return d;
   }
-  function dots(vals, color) {
-    return vals.map(function (v, i) {
-      return '<circle cx="' + cx(i).toFixed(1) + '" cy="' + cy(v).toFixed(1) + '" r="3.2" fill="#fff" stroke="' + color + '" stroke-width="1.6"/>';
-    }).join('');
-  }
+  var lineD = smooth(LINE), last = LINE.length - 1;
+  var areaD = lineD + 'L' + cx(last).toFixed(1) + ' ' + (PLOT.y + PLOT.h) + 'L' + cx(0).toFixed(1) + ' ' + (PLOT.y + PLOT.h) + 'Z';
+  // The wash sits behind the bars; the line and its marker over them.
+  rev.insertBefore(svg(648, 326,
+    '<defs><linearGradient id="ui-wash" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#7fb2ff" stop-opacity=".32"/><stop offset="1" stop-color="#7fb2ff" stop-opacity="0"/></linearGradient></defs>' +
+    '<path class="ui-area" d="' + areaD + '" fill="url(#ui-wash)"/>',
+    'position:absolute;left:0;top:0;overflow:visible'), rev.firstChild);
   put(rev, svg(648, 326,
-    '<path class="ui-line ui-line--dash" d="' + path(DASH) + '" fill="none" stroke="#a9bfdf" stroke-width="2.2" stroke-dasharray="6 5"/>' +
-    '<path class="ui-line ui-line--solid" d="' + path(LINE) + '" fill="none" stroke="#6b9bd1" stroke-width="2.2"/>' +
-    '<g class="ui-dots">' + dots(DASH, '#a9bfdf') + dots(LINE, '#6b9bd1') + '</g>',
+    '<path class="ui-line ui-line--solid" d="' + lineD + '" fill="none" stroke="#8ab8ff" stroke-width="2.4" stroke-linecap="round" pathLength="1"/>' +
+    '<g class="ui-dots"><circle cx="' + cx(last).toFixed(1) + '" cy="' + cy(LINE[last]).toFixed(1) + '" r="8" fill="#8ab8ff" opacity=".25"/>' +
+      '<circle cx="' + cx(last).toFixed(1) + '" cy="' + cy(LINE[last]).toFixed(1) + '" r="4" fill="#fff" stroke="#5f97f2" stroke-width="2"/></g>',
     'position:absolute;left:0;top:0;overflow:visible'));
 
   // OPEX card — it runs on under the AI panel, as in the product.
