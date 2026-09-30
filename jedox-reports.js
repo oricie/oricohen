@@ -46,6 +46,19 @@
     flow:    '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>',
     gear:    '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   };
+  // The rail's glyphs, shared with the other Jedox screens.
+  L.pen   = '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/><circle cx="11" cy="13" r="1.3"/>';
+  L.chart = '<path d="M4 20h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-4"/>';
+  L.doc   = '<path d="M6 3h8l4 4v14H6z"/><path d="M9 11h2M13 11h2M9 14h2M13 14h2M9 17h2M13 17h2"/>';
+  L.cal   = '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>';
+  L.fold  = '<path d="M3 6h7l2 2h9v11H3z"/><path d="M9 14v3M12 12v5M15 13v4"/>';
+  L.users = '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5a3.5 3.5 0 0 1 0 7M21 20c0-2.6-1.6-4.8-4-5.6"/>';
+  L.cam   = '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>';
+  L.bell  = '<path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/>';
+  L.spark = '<path d="M12 3c.5 4.5 3.5 7.5 8 8-4.5.5-7.5 3.5-8 8-.5-4.5-3.5-7.5-8-8 4.5-.5 7.5-3.5 8-8z"/><path d="M19 3v3M17.5 4.5h3"/>';
+  L.gear2 = '<circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.6 2.6 3-.6.9 2.9 2.8 1.2-.9 2.9 1.6 2.5-2.4 1.9.1 3-3 .4-1.6 2.6L12 19.8l-2.9 2.1-1.6-2.6-3-.4.1-3-2.4-1.9 1.6-2.5-.9-2.9 2.8-1.2.9-2.9 3 .6z"/>';
+  L.home2 = '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>';
+
   function icon(name, size, color, css, sw) {
     var s = document.createElementNS(SVGNS, 'svg');
     s.setAttribute('viewBox', '0 0 24 24');
@@ -74,16 +87,16 @@
     ui.setAttribute('aria-hidden', 'true');
     var st = put(ui, el('span', 'jr-stage', 'width:' + W + 'px;height:' + H + 'px'));
 
-    // Rail.
+    // Rail: the same as the other Jedox screens, scaled to this one's width.
     var rail = put(st, el('span', 'jr-rail', at(0, 0, 53, H)));
-    put(rail, el('span', 'jr-logo', at(0, 8, 53, 40), 'X.'));
-    put(rail, el('span', 'jr-rail-on', at(7, 63, 38, 38)));
-    [['chart', 82, '#1c4fa8'], ['sheet', 137], ['table', 193], ['db', 268], ['flow', 324]].forEach(function (r) {
-      put(rail, icon(r[0], 25, r[2] || '#555a60', 'left:13px;top:' + (r[1] - 12.5) + 'px', 1.8));
+    put(rail, el('span', 'jr-rail-on', at(6.5, 102.5, 40, 43)));
+    ['home2', 'pen', 'chart', 'doc', 'cal', 'fold', 'db', 'users', 'cam'].forEach(function (n, i) {
+      put(rail, icon(n, 19, i === 2 ? '#3f6fd6' : '#7b8aa0', 'left:17px;top:' + (30 + i * 47 - 9.5) + 'px', 1.6));
     });
-    put(rail, el('span', 'jr-rule', at(8, 230, 37, 0)));
-    put(rail, icon('gear', 25, '#555a60', 'left:13px;top:1041px', 1.8));
-    put(rail, el('span', 'jr-av', at(7, 1095, 38, 38), 'OC'));
+    put(rail, el('span', 'jr-rule jr-rule--rail', at(0, 991, 53, 0)));
+    [['bell', 1025], ['spark', 1066], ['gear2', 1109]].forEach(function (r) {
+      put(rail, icon(r[0], 19, '#7b8aa0', 'left:17px;top:' + (r[1] - 9.5) + 'px', 1.6));
+    });
 
     // Top bar.
     var top = put(st, el('span', 'jr-top', at(53, 0, W - 53, 53)));

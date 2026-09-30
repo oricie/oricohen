@@ -1494,11 +1494,10 @@ h1 {
 .jr-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
 .jr-stage svg { display: block; }
 
-.jr-rail { background: #fff; border-right: 1px solid #e3e5e8; }
-.jr-logo { font-size: 30px; font-weight: 800; line-height: 40px; text-align: center; color: #22345e; font-style: italic; letter-spacing: -1px; }
-.jr-rail-on { background: #ebf2ff; border-radius: 8px; }
+.jr-rail { background: #fff; border-right: 1.5px solid #dfe4ec; }
+.jr-rule--rail { border-top: 1.5px solid #e3e7ee; }
+.jr-rail-on { background: #edf2fc; border-radius: 9px; }
 .jr-rule { border-top: 1px solid #e3e5e8; }
-.jr-av { background: #2b2b2b; border-radius: 50%; color: #fff; font-size: 16px; line-height: 38px; text-align: center; }
 .jr-top { background: #fff; border-bottom: 1px solid #e3e5e8; }
 .jr-top-t { font-size: 18px; font-weight: 700; line-height: 52px; color: #1d2126; }
 .jr-vr { border-left: 1px solid #e3e5e8; }
