@@ -1548,6 +1548,10 @@ h1 {
 .jr.is-grid .jr-path--l { opacity: 0; }
 .jr.is-grid .jr-path--g { opacity: 1; }
 .jr.is-grid .jr-more { left: 345px; top: 22px; opacity: 1; }
+/* The switch itself is instant; only the hover lift animates in the grid. */
+.jr.is-grid .jr-table, .jr.is-grid .jr-ic, .jr.is-grid .jr-name, .jr.is-grid .jr-path,
+.jr.is-grid .jr-more, .jr.is-grid .jr-thumb { transition: none; }
+.jr.is-grid .jr-item { transition: box-shadow 0.25s ease, border-color 0.3s ease, transform 0.25s ease; transition-delay: 0s; }
 
 /* Entrance: the rows come in one by one. */
 .jr-item { opacity: 0; }
