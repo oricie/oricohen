@@ -1643,7 +1643,7 @@ h1 {
 }
 .md-stage span { position: absolute; display: block; white-space: nowrap; box-sizing: border-box; }
 .md-stage svg { display: block; overflow: visible; }
-.md-t { font-size: 13px; line-height: 24px; direction: rtl; color: #555; }
+.md-t { font-size: 13px; line-height: 24px; color: #555; }
 .md-c { text-align: center; }
 .md-win { box-shadow: 0 12px 40px rgba(70, 50, 20, 0.22); }
 .md-top { background: #e1e1e1; }
@@ -1689,6 +1689,11 @@ h1 {
 .md.is-on .md-dot { opacity: 1; transform: none; }
 .md-arc { stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 1s cubic-bezier(0.3, 0, 0.1, 1) 0.1s; }
 .md.is-on .md-arc { stroke-dashoffset: 24; }
+.md.is-on .md-arc { transition-delay: 0s; }
+.md-pick { background: rgba(255, 255, 255, 0.16); transition: top 0.45s cubic-bezier(0.65, 0, 0.25, 1); }
+.md.is-press .md-pick { background: rgba(255, 255, 255, 0.26); }
+.md-cursor { left: 0; top: 0; width: 16px; height: 24px; opacity: 0; z-index: 5; transition-property: transform, opacity; transition-timing-function: cubic-bezier(0.45, 0, 0.2, 1); }
+.md.is-cursor .md-cursor { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .md * { transition: none !important; animation: none !important; } }
 
 /* ── Grid view ──────────────────────────────────────────── */
