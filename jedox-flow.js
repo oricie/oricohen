@@ -402,7 +402,9 @@
     if (window.IntersectionObserver) {
       var seen = new IntersectionObserver(function (es) {
         if (es.some(function (e) { return e.isIntersecting; })) { seen.disconnect(); play(); }
-      }, { threshold: 0.25 });
+      // A close-up in the grid view shows a small part of the screen, so
+      // any of it being in view is enough.
+      }, { threshold: host.closest('.mo-chunk') ? 0.01 : 0.25 });
       seen.observe(host);
     } else play();
   }

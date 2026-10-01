@@ -23,18 +23,18 @@
   // A desktop screen sits on a coloured backdrop, the way the Lucky Card's
   // pieces bring their own.
   var SNIPPETS = [
-    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 7, 1, 5]],
+    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 7, 1, 5], [350, 112, 840, 340, 2000]],
     ['Lucky Card', 'A video review app', 'live-video', 'mo-tall', '', [1, 4, 17, 11]],
     ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 5, 12, 5], [964, 473, 675, 339, 2000]],
-    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [6, 4, 12, 5]],
+    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [10, 3, 12, 5], [2155, 194, 701, 760, 2856]],
     ['Lucky Card', 'Beehive', 'live-hive', 'mo-square', '', [8, 5, 7, 5]],
     ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6], [40, 336, 1512, 608, 2000]],
-    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [10, 3, 12, 5]],
+    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [6, 4, 12, 5]],
     ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4', [5, 8, 17, 5]],
     ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3', [1, 7, 34, 5]],
     ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall', '', [8, 5, 1, 6]],
     ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8', [5, 5, 22, 6]],
-    ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0', [8, 5, 28, 5]],
+    ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0', [8, 5, 28, 5], [1430, 590, 565, 420, 2000]],
     ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide', '', [10, 3, 22, 6]],
     ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6', [1, 7, 28, 6]],
     ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0', [8, 5, 33, 6]]
@@ -47,6 +47,19 @@
       if (t && t.textContent.trim() === project) return items[i].querySelector('.work-card');
     }
     return null;
+  }
+
+  // A close-up keeps its proportions and fits inside its tile, however wide
+  // or tall the tile is.
+  function fitChunk(shot, chunk, ar) {
+    function fit() {
+      var cs = getComputedStyle(shot);
+      var w = shot.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      var h = shot.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      chunk.style.width = (h > 0 ? Math.min(w, h * ar) : w) + 'px';
+    }
+    fit();
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(shot);
   }
 
   var mosaic = null;
@@ -85,6 +98,7 @@
           chunk.appendChild(live);
           shot.appendChild(chunk);
           shot.classList.add('mo-close');
+          fitChunk(shot, chunk, c[2] / c[3]);
         } else shot.appendChild(live);
       }
       tile.appendChild(shot);

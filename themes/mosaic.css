@@ -63,7 +63,7 @@
 
 /* A close-up: one piece of a screen as a card of its own, floating on the
    backdrop rather than running off it. */
-.mo-close { padding: 32px; justify-content: center; }
+.mo-close { padding: 32px; justify-content: center; align-items: center; }
 .mo-bg > .mo-chunk {
   position: relative;
   overflow: hidden;
