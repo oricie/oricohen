@@ -141,7 +141,7 @@
     put(plot, el('span', 'ui-axis-m', 'left:calc(' + col(i) + ' - 20px);top:' + (PH + 6) + 'px', m));
     if (i < BAR.length) {
       var hgt = BAR[i] / 1600 * PH;
-      put(plot, el('span', 'ui-bar', 'left:calc(' + col(i) + ' - 17px);width:34px;top:' + (PH - hgt) + 'px;height:' + hgt + 'px;--i:' + i));
+      put(plot, el('span', 'ui-bar', 'left:calc(' + col(i) + ' - 11px);width:22px;top:' + (PH - hgt) + 'px;height:' + hgt + 'px;--i:' + i));
     }
   });
   // One smooth line over the bars, a soft wash behind them, a marker on the
