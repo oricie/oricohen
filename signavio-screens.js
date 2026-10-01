@@ -414,8 +414,8 @@
     html(ai, 'sx-ai-h', at(20, 14, null, 36), 'Process<i>.</i>AI');
     ic(ai, 'sparkle', 134, 22, 20, '#0a6ed1', 2);
     ic(ai, 'morev', 311, 30, 22, '#1d2d3e', 2);
-    put(ai, el('span', 'sx-ai-lay', at(29, 62, 282, 30) + 'background:#80b1ec'));
-    put(ai, el('span', 'sx-ai-lay', at(17, 68, 306, 30) + 'background:#408be2'));
+    put(ai, el('span', 'sx-ai-lay sx-ai-lay--1', at(29, 62, 282, 30) + 'background:#80b1ec'));
+    put(ai, el('span', 'sx-ai-lay sx-ai-lay--2', at(17, 68, 306, 30) + 'background:#408be2'));
     var imp = put(ai, el('span', 'sx-ai-main', at(5, 76, 339, 48)));
     ic(imp, 'screen', 25, 24, 18, '#fff', 2);
     put(imp, el('span', null, at(46, 0, null, 48), 'Improve Source to Pay'));

@@ -253,3 +253,16 @@
 .sx.sx-aiseq.is-dots1 .sx-dots--1, .sx.sx-aiseq.is-dots2 .sx-dots--2 { display: block !important; }
 .sx-dots span { width: 7px; height: 7px; border-radius: 50%; background: #8396a8; animation: sx-dot 0.9s ease-in-out infinite; animation-delay: calc(var(--k) * 0.15s); }
 @keyframes sx-dot { 0%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* The stacked "Improve Source to Pay" cards, in the close-up: in from the
+   sides like the bubbles below, fanning up from behind and breathing. */
+.sx.sx-aiseq .sx-ai-main { left: 22px !important; width: 306px !important; }
+.sx.sx-aiseq .sx-ai-lay--2 { left: 36px !important; width: 278px !important; }
+.sx.sx-aiseq .sx-ai-lay--1 { left: 52px !important; width: 246px !important; }
+.sx.sx-aiseq .sx-ai-lay { translate: 0 14px; opacity: 0; transition: translate 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease; }
+.sx.sx-aiseq .sx-ai-lay--1 { transition-delay: 0.12s; }
+.sx.sx-aiseq.is-ai0 .sx-ai-lay { translate: 0 0; opacity: 1; }
+.sx.sx-aiseq.is-ai0 .sx-ai-lay--2 { animation: sx-breathe 3.4s ease-in-out 0.6s infinite; }
+.sx.sx-aiseq.is-ai0 .sx-ai-lay--1 { animation: sx-breathe 3.4s ease-in-out 1s infinite; --lift: -4px; }
+@keyframes sx-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--lift, -2.5px)); } }
+@media (prefers-reduced-motion: reduce) { .sx.sx-aiseq .sx-ai-lay { animation: none !important; } }
