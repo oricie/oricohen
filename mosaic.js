@@ -14,24 +14,26 @@
   var stack = section && section.querySelector('.work-stack');
   if (!stack) return;
 
-  // [project, what it is, live class or image, tile shape]
+  // [project, what it is, live class or image, tile shape, backdrop]
+  // A desktop screen sits on a coloured backdrop, the way the Lucky Card's
+  // pieces bring their own.
   var SNIPPETS = [
-    ['Jedox', 'Reports', 'live-reports'],
+    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb'],
     ['Lucky Card', 'A video review app', 'live-video', 'mo-tall'],
-    ['SAP Signavio', 'Hub', 'live-sghub'],
-    ['Jedox', 'Integrator', 'live-flow'],
+    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4'],
+    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc'],
     ['Lucky Card', 'Beehive', 'live-hive', 'mo-square'],
-    ['SAP Signavio', 'Process Insights', 'live-sgrec'],
+    ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5'],
     ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide'],
-    ['Jedox', 'Workspace home', 'live-home'],
-    ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp'],
+    ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4'],
+    ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3'],
     ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall'],
-    ['Jedox', 'Canvas', 'live-canvas'],
-    ['SAP Signavio', 'My Inbox', 'live-sginbox'],
+    ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8'],
+    ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0'],
     ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide'],
-    ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp'],
-    ['SAP Signavio', 'Process explorer', 'img:images/signavio-03-process-explorer.webp'],
-    ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp']
+    ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6'],
+    ['SAP Signavio', 'Process explorer', 'img:images/signavio-03-process-explorer.webp', '', '#fbe0c8'],
+    ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0']
   ];
 
   function cardFor(project) {
@@ -56,7 +58,8 @@
       tile.setAttribute('aria-label', s[0] + ': ' + s[1] + '. Open the project.');
 
       var shot = document.createElement('div');
-      shot.className = 'mo-shot ' + (s[3] || '');
+      shot.className = 'mo-shot ' + (s[3] || '') + (s[4] ? ' mo-bg' : '');
+      if (s[4]) shot.style.background = s[4];
       if (s[2].indexOf('img:') === 0) {
         var img = document.createElement('img');
         img.src = s[2].slice(4); img.alt = ''; img.loading = 'lazy'; img.draggable = false;
