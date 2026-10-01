@@ -61,6 +61,17 @@
 .mo-bg > img { width: 100%; }
 .mo-bg > * { flex: none; }
 
+/* A close-up: one piece of a screen as a card of its own, floating on the
+   backdrop rather than running off it. */
+.mo-close { padding: 32px; justify-content: center; }
+.mo-bg > .mo-chunk {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 40px -14px rgba(20, 20, 40, 0.34), 0 1px 3px rgba(20, 20, 40, 0.08) !important;
+}
+.mo-chunk > div { position: absolute; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }
+
 /* Otherwise the screens bring their own frame inside a sheet; here the tile is the frame. */
 .mo-shot:not(.mo-bg) > div { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }
 .mo-shot > img { display: block; width: 100%; height: auto; }
@@ -72,6 +83,7 @@
 @media (max-width: 1100px) {
   .work.is-grid .work-mosaic { grid-auto-rows: 40px; gap: 14px; }
   .mo-bg { padding: 22px 22px 0; }
+  .mo-close { padding: 22px; }
 }
 @media (max-width: 640px) {
   /* One column; each tile takes a shape of its own instead. */
@@ -81,6 +93,7 @@
   .mo-shot.mo-tall { aspect-ratio: 4 / 5; }
   .mo-shot.mo-square { aspect-ratio: 1 / 1; }
   .mo-bg { padding: 18px 18px 0; }
+  .mo-close { padding: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mo-tile, .work-mosaic.is-in .mo-tile { opacity: 1; transform: none; transition: none; }

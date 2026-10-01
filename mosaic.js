@@ -15,7 +15,9 @@
   if (!stack) return;
 
   // [project, what it is, live class or image, tile shape, backdrop,
-  //  [first column, columns, first row, rows] in the bento grid]
+  //  [first column, columns, first row, rows] in the bento grid,
+  //  and, for a close-up, the part of the screen it shows:
+  //  [x, y, width, height, the screen's own width], in the screen's pixels]
   // The grid is placed by hand in four bands that each pack the full width,
   // so it is uneven but has no holes.
   // A desktop screen sits on a coloured backdrop, the way the Lucky Card's
@@ -23,10 +25,10 @@
   var SNIPPETS = [
     ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 7, 1, 5]],
     ['Lucky Card', 'A video review app', 'live-video', 'mo-tall', '', [1, 4, 17, 11]],
-    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 5, 12, 5]],
+    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 5, 12, 5], [964, 473, 675, 339, 2000]],
     ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [6, 4, 12, 5]],
     ['Lucky Card', 'Beehive', 'live-hive', 'mo-square', '', [8, 5, 7, 5]],
-    ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6]],
+    ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6], [40, 336, 1512, 608, 2000]],
     ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [10, 3, 12, 5]],
     ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4', [5, 8, 17, 5]],
     ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3', [1, 7, 34, 5]],
@@ -70,7 +72,20 @@
         var live = document.createElement('div');
         live.className = s[2];
         live.setAttribute('aria-hidden', 'true');
-        shot.appendChild(live);
+        if (s[6]) {
+          // A close-up: one piece of the screen, lifted out as a card of its
+          // own. The whole screen is still there, just larger and moved, so
+          // the piece fills the card and plays as it does in place.
+          var c = s[6], chunk = document.createElement('div');
+          chunk.className = 'mo-chunk';
+          chunk.style.aspectRatio = c[2] + ' / ' + c[3];
+          live.style.width = (c[4] / c[2] * 100) + '%';
+          live.style.left = (-c[0] / c[2] * 100) + '%';
+          live.style.top = (-c[1] / c[3] * 100) + '%';
+          chunk.appendChild(live);
+          shot.appendChild(chunk);
+          shot.classList.add('mo-close');
+        } else shot.appendChild(live);
       }
       tile.appendChild(shot);
 
