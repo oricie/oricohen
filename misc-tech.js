@@ -368,6 +368,15 @@
     if (host.dataset.zoom) zoom = parseFloat(host.dataset.zoom);
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
+      // A box to show, as x,y,w,h on the stage: it fills the tile around its
+      // centre, cropping whichever way the tile is narrower.
+      if (host.dataset.box) {
+        var bx = host.dataset.box.split(',').map(Number);
+        var kb = Math.max(w / bx[2], h / bx[3]);
+        st.style.transform = 'translate(' + (w / 2 - (bx[0] + bx[2] / 2) * kb) + 'px,' +
+          (h / 2 - (bx[1] + bx[3] / 2) * kb) + 'px) scale(' + kb + ')';
+        return;
+      }
       if (view && view.from != null) {
         var kk = h / (view.to - view.from);
         st.style.transform = 'translate(' + (w / 2 - view.cx * kk) + 'px,' + (-view.from * kk) + 'px) scale(' + kk + ')';

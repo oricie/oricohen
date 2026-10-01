@@ -17,19 +17,20 @@
   // [project, what it is, live class or image, tile shape, backdrop,
   //  [first column, columns, first row, rows] in the bento grid,
   //  and, for a close-up, the part of the screen it shows:
-  //  [x, y, width, height, the screen's own width], in the screen's pixels]
+  //  [x, y, width, height, the screen's own width], in the screen's pixels,
+  //  and anything the screen itself is told, as data attributes]
   // The grid is placed by hand in four bands that each pack the full width,
   // so it is uneven but has no holes.
   // A desktop screen sits on a coloured backdrop, the way the Lucky Card's
   // pieces bring their own.
   var SNIPPETS = [
-    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 7, 1, 5], [350, 112, 840, 340, 2000]],
+    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 7, 1, 5], [964, 473, 675, 339, 2000]],
+    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 5, 12, 5], [350, 112, 840, 340, 2000]],
     ['Lucky Card', 'A video review app', 'live-video', 'mo-tall', '', [1, 4, 17, 11]],
-    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 5, 12, 5], [964, 473, 675, 339, 2000]],
-    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [10, 3, 12, 5], [2155, 194, 701, 760, 2856]],
+    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [10, 3, 12, 5], [1040, 480, 1112, 1280, 2856]],
     ['Lucky Card', 'Beehive', 'live-hive', 'mo-square', '', [8, 5, 7, 5]],
     ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6], [40, 336, 1512, 608, 2000]],
-    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [6, 4, 12, 5]],
+    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [6, 4, 12, 5], null, { box: '200,246,695,560' }],
     ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4', [5, 8, 17, 5]],
     ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3', [1, 7, 34, 5]],
     ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall', '', [8, 5, 1, 6]],
@@ -85,6 +86,7 @@
         var live = document.createElement('div');
         live.className = s[2];
         live.setAttribute('aria-hidden', 'true');
+        if (s[7]) for (var k in s[7]) live.dataset[k] = s[7][k];
         if (s[6]) {
           // A close-up: one piece of the screen, lifted out as a card of its
           // own. The whole screen is still there, just larger and moved, so
