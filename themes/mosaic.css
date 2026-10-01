@@ -70,7 +70,9 @@
   border-radius: 12px !important;
   box-shadow: 0 16px 40px -14px rgba(20, 20, 40, 0.34), 0 1px 3px rgba(20, 20, 40, 0.08) !important;
 }
-.mo-chunk > div { position: absolute; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }
+.mo-chunk { background: #fff; }
+.mo-chunk-in { position: absolute; top: 0; bottom: 0; overflow: hidden; }
+.mo-chunk-in > div { position: absolute; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }
 
 /* Otherwise the screens bring their own frame inside a sheet; here the tile is the frame. */
 .mo-shot:not(.mo-bg) > div { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }

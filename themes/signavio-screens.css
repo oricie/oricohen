@@ -266,3 +266,10 @@
 .sx.sx-aiseq.is-ai0 .sx-ai-lay--1 { animation: sx-breathe 3.4s ease-in-out 1s infinite; --lift: -4px; }
 @keyframes sx-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--lift, -2.5px)); } }
 @media (prefers-reduced-motion: reduce) { .sx.sx-aiseq .sx-ai-lay { animation: none !important; } }
+
+/* Swipe to archive, in the close-up. */
+.sx-swipe { background: #d9363e; border-radius: 10px; }
+.sx-swipe-a { right: 19px; top: 0; height: 52px; display: flex !important; align-items: center; color: #fff; font-size: 15px; font-weight: 600; }
+.mo-chunk .sx--inbox .sx-step { transition: background 0.25s ease, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.mo-chunk .sx--inbox .sx-step.is-swiped { transform: translateX(-128px); box-shadow: 6px 0 14px -10px rgba(29, 45, 62, 0.35); }
+.sx.is-idle .sx-step:hover { transform: translateX(-128px); }

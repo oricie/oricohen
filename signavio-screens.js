@@ -648,7 +648,16 @@
     put(pn, el('span', 'sx-tbl-t', at(16, 542, null, 24), 'Steps'));
     var STEPS = [['Review Current Model Errors', 'CW', 1], ['Review Comments', 'OH'], ['Update Process Flows', 'WP'],
                  ['Test Updated Model', 'WP'], ['Document Changes and Send for Approval', 'OH']];
+    var closeUp = !!host.closest('.mo-chunk');
     var stepEls = STEPS.map(function (p, i) {
+      // In the close-up a step can be swiped aside, mobile style, to show
+      // the archive action under it.
+      if (closeUp) {
+        var u = put(pn, el('span', 'sx-swipe', at(19, 576 + i * 67.6, 532, 52)));
+        var ua = put(u, el('span', 'sx-swipe-a'));
+        put(ua, icon('inbox', 18, '#fff', 2, 'position:relative;margin-right:7px'));
+        put(ua, el('span', null, 'position:relative', 'Archive'));
+      }
       var c = put(pn, el('span', 'sx-step' + (p[2] ? ' is-done' : ''), at(16, 573 + i * 67.6, 538, 58)));
       var ci = put(c, el('span', 'sx-circ', at(16, 17, 24, 24)));
       ic(ci, 'check', 12, 12, 16, '#0a58d2', 2.4);
@@ -706,8 +715,13 @@
           later(5700, function () { add.classList.add('is-press'); });
           later(5850, function () { add.classList.remove('is-press'); });
           typeIn(later, 5900);
-          later(8200, function () { ui.classList.remove('is-cursor'); });
-          later(8400, function () { ui.classList.add('is-idle'); });
+          // Then a step is swiped aside and let go again.
+          later(8000, function () { point(1880, 792, 600); });
+          later(8700, function () { ui.classList.add('is-drag'); stepEls[2].classList.add('is-swiped'); point(1760, 792, 450); });
+          later(10000, function () { stepEls[2].classList.remove('is-swiped'); point(1880, 792, 400); });
+          later(10300, function () { ui.classList.remove('is-drag'); });
+          later(10700, function () { ui.classList.remove('is-cursor'); });
+          later(10900, function () { ui.classList.add('is-idle'); });
           return;
         }
         later(5500, function () { ui.classList.remove('is-cursor'); });
