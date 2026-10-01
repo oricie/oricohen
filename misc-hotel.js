@@ -359,8 +359,32 @@
     if (view && view.focus) { focus = view.focus; zoom = view.zoom; }
     if (host.dataset.focus) focus = host.dataset.focus.split(',').map(Number);
     if (host.dataset.zoom) zoom = parseFloat(host.dataset.zoom);
+    // A box to show, as x,y,w,h on the stage, filling the tile around its
+    // centre. With data-pan, a box wider than the tile is not cut once and
+    // left: the view drifts across it, right to left and back.
+    var box = host.dataset.box ? host.dataset.box.split(',').map(Number) : null;
+    var reduceMo = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var pan = box && host.dataset.pan && !reduceMo, panT0 = null;
+    function place(p) {
+      var w = host.clientWidth, h = host.clientHeight;
+      var kb = Math.max(w / box[2], h / box[3]), vw = w / kb;
+      var cx = box[0] + box[2] / 2, cy = box[1] + box[3] / 2;
+      if (vw < box[2]) cx = box[0] + box[2] - vw / 2 - (box[2] - vw) * p;
+      st.style.transform = 'translate(' + (w / 2 - cx * kb) + 'px,' + (h / 2 - cy * kb) + 'px) scale(' + kb + ')';
+    }
+    // 7 s across, 2 s held at each end.
+    function panAt(t) {
+      var c = t % 18000, x;
+      if (c < 2000) x = 0; else if (c < 9000) x = (c - 2000) / 7000; else if (c < 11000) x = 1; else x = 1 - (c - 11000) / 7000;
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+    if (pan) (function tick(now) {
+      if (panT0 == null) panT0 = now;
+      if (host.isConnected) { place(panAt(now - panT0)); requestAnimationFrame(tick); }
+    })(performance.now());
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
+      if (box) { place(pan ? 0 : 0.5); return; }
       if (view && view.from != null) {
         var kk = view.k || w / view.span;
         st.style.transform = 'translate(' + (w / 2 - view.cx * kk) + 'px,' + (-view.from * kk) + 'px) scale(' + kk + ')';
