@@ -420,7 +420,7 @@
     ic(imp, 'screen', 25, 24, 18, '#fff', 2);
     put(imp, el('span', null, at(46, 0, null, 48), 'Improve Source to Pay'));
     var clip = put(ai, el('span', 'sx-ai-clip', at(0, 130, 350, 862)));
-    var me = put(clip, el('span', 'sx-bub sx-in', at(22, 12, 306, 67) + '--d:3'));
+    var me = put(clip, el('span', 'sx-bub sx-me sx-in', at(22, 12, 306, 67) + '--d:3'));
     put(me, el('span', 'sx-pav', at(12, 11, 26, 26) + 'background:#fff3b8;color:#a5671c;font-size:11px;line-height:26px', 'CW'));
     html(me, 'sx-bub-t', at(53, 13, null, null), 'I want to improve an existing<br>process');
     ic(me, 'pencil', 279, 24, 18, '#556b82', 1.8);
@@ -433,10 +433,18 @@
       });
       return m;
     }
-    msg(97, 322, 'From the 8 major processes areas in your company, I found <b>Source to Pay</b> as promising process area with high improvement potential in comparison to all other process areas. Also this area has the highest need as your performance is below your set benchmarks.<br><br>Would you like to analyse and fix <b>Source to Pay</b>?',
+    var m1 = msg(97, 322, 'From the 8 major processes areas in your company, I found <b>Source to Pay</b> as promising process area with high improvement potential in comparison to all other process areas. Also this area has the highest need as your performance is below your set benchmarks.<br><br>Would you like to analyse and fix <b>Source to Pay</b>?',
       [[53, 130, 0, 'Analyse and Fix'], [197, 41, 1, 'Fix']], 4);
-    msg(439, 450, 'Your process area <b>Source to Pay</b> has 4 sub-processes. The recommendation is to start with <b>Procure to Receipt</b> and it’s <b>Purchase order item creation to invoice receipt</b> step.<br><br>The best run score is below benchmark and there are several improvement recommendations available to improve key metrics by 30-50%.<br><br>Would you like to apply the recommended fix directly? Or would you like to see the analysis to explore all recommendations?',
+    var m2 = msg(439, 450, 'Your process area <b>Source to Pay</b> has 4 sub-processes. The recommendation is to start with <b>Procure to Receipt</b> and it’s <b>Purchase order item creation to invoice receipt</b> step.<br><br>The best run score is below benchmark and there are several improvement recommendations available to improve key metrics by 30-50%.<br><br>Would you like to apply the recommended fix directly? Or would you like to see the analysis to explore all recommendations?',
       [[53, 76, 0, 'Analyse'], [142, 86, 1, 'Apply Fix']], 5);
+    m1.classList.add('sx-ai-msg--1'); m2.classList.add('sx-ai-msg--2');
+    // In the grid view's close-up of this panel the conversation plays out.
+    var aiseq = !!host.closest('.mo-chunk');
+    if (aiseq) ui.classList.add('sx-aiseq');
+    [97, 439].forEach(function (y, i) {
+      var d = put(clip, el('span', 'sx-dots sx-dots--' + (i + 1), at(22, y, 74, 40)));
+      for (var k = 0; k < 3; k++) put(d, el('span', null, 'left:' + (20 + k * 13) + 'px;top:17px;--k:' + k));
+    });
     var inp = put(ai, el('span', 'sx-ai-in', at(21, 1013, 306, 37)));
     put(inp, el('span', 'sx-ph', at(9, 0, null, 35), 'How can AI support you?'));
     ic(inp, 'send', 287, 18, 20, '#1d2d3e', 1.8);
@@ -483,9 +491,18 @@
     show(0);
     return {
       ui: ui,
-      rest: function () { ui.classList.add('is-in', 'is-idle'); PICK.forEach(function (r) { rows[r].classList.add('is-on'); }); show(3); },
+      rest: function () { ui.classList.add('is-in', 'is-idle', 'is-ai0', 'is-ai1', 'is-ai2'); PICK.forEach(function (r) { rows[r].classList.add('is-on'); }); show(3); },
       play: function (later) {
         point(700, 700, 0);
+        if (aiseq) {
+          // The conversation plays out: the question, a moment of thinking,
+          // the first answer streaming in, then the second.
+          later(400, function () { ui.classList.add('is-ai0'); });
+          later(900, function () { ui.classList.add('is-dots1'); });
+          later(2100, function () { ui.classList.remove('is-dots1'); ui.classList.add('is-ai1'); });
+          later(4000, function () { ui.classList.add('is-dots2'); });
+          later(5100, function () { ui.classList.remove('is-dots2'); ui.classList.add('is-ai2'); });
+        }
         later(120, function () { ui.classList.add('is-in'); });
         var t = 1700;
         later(t, function () { ui.classList.add('is-cursor'); point(70, 452, 650); });
@@ -640,7 +657,27 @@
       return c;
     });
     var add = put(pn, el('span', 'sx-add', at(16, 911, 538, 37)));
-    put(add, el('span', 'sx-ph', at(9, 0, null, 36), 'Add Steps, @ to mention users'));
+    var ph = put(add, el('span', 'sx-ph', at(9, 0, null, 36), 'Add Steps, @ to mention users'));
+    // In the grid view's close-up the input comes alive too: a new step is
+    // typed, with someone mentioned in it.
+    var close = !!host.closest('.mo-chunk');
+    var typed = put(add, el('span', 'sx-typed', at(10, 0, null, 36)));
+    var tText = put(typed, el('span', null, 'position:relative'));
+    var tMention = put(typed, el('span', 'sx-mention', 'position:relative'));
+    put(typed, el('span', 'sx-caret', 'position:relative'));
+    var LINE = 'Share the new flows with ', WHO = '@Wendy Patterson';
+    function typeIn(later, t0) {
+      add.classList.add('is-focus');
+      ph.style.opacity = '0';
+      var all = LINE + WHO;
+      for (var i = 1; i <= all.length; i++) (function (i) {
+        later(t0 + i * 55, function () {
+          tText.textContent = all.slice(0, Math.min(i, LINE.length));
+          tMention.textContent = i > LINE.length ? all.slice(LINE.length, i) : '';
+          tMention.classList.toggle('is-on', i > LINE.length);
+        });
+      })(i);
+    }
     put(pn, el('span', 'sx-foot', at(16, 981, null, 22), 'Last Edit: Dec 13, 2022 by Adrian Webster'));
     put(pn, el('span', 'sx-foot', at(16, 1003, null, 22), 'Creation Date: Nov 27, 2022 by Claire Westfield'));
 
@@ -651,7 +688,10 @@
     function tick() { stepEls[1].classList.add('is-done'); metaSel.textContent = '2 / 5'; }
     return {
       ui: ui,
-      rest: function () { ui.classList.add('is-in', 'is-idle', 'is-panel'); sel.classList.add('is-sel'); tick(); },
+      rest: function () {
+        ui.classList.add('is-in', 'is-idle', 'is-panel'); sel.classList.add('is-sel'); tick();
+        if (close) { add.classList.add('is-focus'); ph.style.opacity = '0'; tText.textContent = LINE; tMention.textContent = WHO; tMention.classList.add('is-on'); }
+      },
       play: function (later) {
         point(900, 900, 0);
         later(120, function () { ui.classList.add('is-in'); });
@@ -661,6 +701,15 @@
         later(3500, function () { point(1466, 718, 700); });
         later(4350, function () { stepEls[1].classList.add('is-press'); });
         later(4500, function () { stepEls[1].classList.remove('is-press'); tick(); });
+        if (close) {
+          later(5000, function () { point(1520, 978, 600); });
+          later(5700, function () { add.classList.add('is-press'); });
+          later(5850, function () { add.classList.remove('is-press'); });
+          typeIn(later, 5900);
+          later(8200, function () { ui.classList.remove('is-cursor'); });
+          later(8400, function () { ui.classList.add('is-idle'); });
+          return;
+        }
         later(5500, function () { ui.classList.remove('is-cursor'); });
         later(5800, function () { ui.classList.add('is-idle'); });
       }

@@ -30,13 +30,13 @@
     ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [10, 3, 12, 5], [1040, 480, 1112, 1280, 2856]],
     ['Lucky Card', 'Beehive', 'live-hive', 'mo-square', '', [1, 4, 23, 5]],
     ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6], [40, 336, 1512, 608, 2000]],
+    ['SAP Signavio', 'Process.AI', 'live-sgrec', '', '#cfe3f3', [10, 3, 22, 6], [1597, 60, 342, 560, 2000]],
     ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [6, 4, 12, 5], null, { box: '200,246,695,560' }],
     ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4', [5, 8, 17, 5]],
-    ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3', [1, 7, 34, 5]],
     ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall', '', [1, 4, 17, 6]],
-    ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8', [5, 5, 22, 6]],
+    ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8', [1, 7, 34, 5]],
     ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0', [8, 5, 28, 5], [1430, 590, 565, 420, 2000]],
-    ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide', '', [10, 3, 22, 6], null, { box: '92,243,1012,837', pan: '1' }],
+    ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide', '', [5, 5, 22, 6], null, { box: '92,243,1012,837', slide: '1' }],
     ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6', [1, 7, 28, 6]],
     ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0', [8, 5, 33, 6]]
   ];

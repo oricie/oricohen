@@ -359,32 +359,21 @@
     if (view && view.focus) { focus = view.focus; zoom = view.zoom; }
     if (host.dataset.focus) focus = host.dataset.focus.split(',').map(Number);
     if (host.dataset.zoom) zoom = parseFloat(host.dataset.zoom);
-    // A box to show, as x,y,w,h on the stage, filling the tile around its
-    // centre. With data-pan, a box wider than the tile is not cut once and
-    // left: the view drifts across it, right to left and back.
+    // A box to show, as x,y,w,h on the stage. With data-slide it is the
+    // whole window, contained in the tile with a margin, and it comes and
+    // goes as a card: in from the right, one pass of the page, out to the
+    // left (driven by the loop below).
     var box = host.dataset.box ? host.dataset.box.split(',').map(Number) : null;
-    var reduceMo = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var pan = box && host.dataset.pan && !reduceMo, panT0 = null;
-    function place(p) {
-      var w = host.clientWidth, h = host.clientHeight;
-      var kb = Math.max(w / box[2], h / box[3]), vw = w / kb;
+    var slide = !!(box && host.dataset.slide), slideX = 0;
+    function place() {
+      var w = host.clientWidth, h = host.clientHeight, m = slide ? Math.min(w, h) * 0.07 : 0;
+      var kb = slide ? Math.min((w - 2 * m) / box[2], (h - 2 * m) / box[3]) : Math.max(w / box[2], h / box[3]);
       var cx = box[0] + box[2] / 2, cy = box[1] + box[3] / 2;
-      if (vw < box[2]) cx = box[0] + box[2] - vw / 2 - (box[2] - vw) * p;
-      st.style.transform = 'translate(' + (w / 2 - cx * kb) + 'px,' + (h / 2 - cy * kb) + 'px) scale(' + kb + ')';
+      st.style.transform = 'translate(' + (w / 2 - cx * kb + slideX * w).toFixed(2) + 'px,' + (h / 2 - cy * kb).toFixed(2) + 'px) scale(' + kb + ')';
     }
-    // 7 s across, 2 s held at each end.
-    function panAt(t) {
-      var c = t % 18000, x;
-      if (c < 2000) x = 0; else if (c < 9000) x = (c - 2000) / 7000; else if (c < 11000) x = 1; else x = 1 - (c - 11000) / 7000;
-      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    }
-    if (pan) (function tick(now) {
-      if (panT0 == null) panT0 = now;
-      if (host.isConnected) { place(panAt(now - panT0)); requestAnimationFrame(tick); }
-    })(performance.now());
     function fit() {
       var w = host.clientWidth, h = host.clientHeight;
-      if (box) { place(pan ? 0 : 0.5); return; }
+      if (box) { place(); return; }
       if (view && view.from != null) {
         var kk = view.k || w / view.span;
         st.style.transform = 'translate(' + (w / 2 - view.cx * kk) + 'px,' + (-view.from * kk) + 'px) scale(' + kk + ')';
@@ -450,11 +439,20 @@
       if (!visible || document.hidden) { last = null; return; }
       if (last != null) tl += Math.min(50, now - last);
       last = now;
-      update(tl % TL);
+      if (slide) {
+        // In (0.7 s), one pass of the page, out (0.6 s), a beat empty.
+        var IN = 700, OUT = 600, GAP = 400, C = IN + TL + OUT + GAP, c = tl % C;
+        if (c < IN) slideX = 1.1 * (1 - outq(c / IN));
+        else if (c < IN + TL) slideX = 0;
+        else if (c < IN + TL + OUT) slideX = -1.1 * Math.pow((c - IN - TL) / OUT, 3);
+        else slideX = 1.1;
+        place();
+        update(Math.max(0, Math.min(TL - 1, c - IN)));
+      } else update(tl % TL);
       raf = requestAnimationFrame(tick);
     }
     function kick() { if (!raf && looping && visible && !document.hidden) raf = requestAnimationFrame(tick); }
-    function startLoop() { if (looping) return; looping = true; ui.classList.add('is-loop'); kick(); }
+    function startLoop() { if (looping) return; looping = true; if (slide) tl = 700; ui.classList.add('is-loop'); kick(); }
 
     // The intro delays follow each element's height, so the page settles top down.
     function stagger() {

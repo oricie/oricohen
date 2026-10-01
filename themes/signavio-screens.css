@@ -219,3 +219,37 @@
 .sx.is-idle .sx-task:not(.is-sel):hover { border-color: #aab4be; box-shadow: 0 6px 16px -10px rgba(29, 45, 62, 0.3); }
 .sx.is-idle .sx-step:hover { background: #f5f6f7; }
 .sx.is-idle .sx-chip:not(.is-on):hover { background: #f5f6f7; }
+
+/* My Inbox, as a close-up in the grid view: softer steps, solid checks and
+   an input that is being typed into. (The sheet keeps the screenshot's look.) */
+.sx-typed { display: flex !important; align-items: center; font-size: 15px; color: #1d2d3e; }
+.sx-mention { color: #0a58d2; font-weight: 600; border-radius: 4px; transition: background 0.2s ease; }
+.sx-mention.is-on { background: #e5f0fd; padding: 0 3px; margin-left: 1px; }
+.sx-caret { width: 1.5px; height: 18px; background: #0a58d2; margin-left: 2px; opacity: 0; }
+.sx-add.is-focus .sx-caret { opacity: 1; animation: sx-blink 1s steps(1) infinite; }
+@keyframes sx-blink { 50% { opacity: 0; } }
+.mo-chunk .sx--inbox .sx-step { border: 0; background: #f4f6f8; border-radius: 10px; transition: background 0.25s ease; }
+.mo-chunk .sx--inbox .sx-step.is-done { background: #eef5fe; }
+.mo-chunk .sx--inbox .sx-step .sx-circ { border: 2px solid #c3cbd4; }
+.mo-chunk .sx--inbox .sx-step.is-done .sx-circ { background: #0a58d2; border-color: #0a58d2; }
+.mo-chunk .sx--inbox .sx-step .sx-circ svg { color: #fff !important; stroke-width: 3.4 !important; }
+.mo-chunk .sx--inbox .sx-step.is-done .sx-step-t { color: #556b82; }
+.mo-chunk .sx--inbox .sx-add { border: 1.5px solid #dfe3e8; border-radius: 10px; background: #fff; transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease; }
+.mo-chunk .sx--inbox .sx-add.is-focus { border-color: #0a58d2; box-shadow: 0 0 0 4px rgba(10, 88, 210, 0.12); }
+.mo-chunk .sx--inbox .sx-add.is-press { transform: scale(0.99); }
+
+/* Process.AI, as a close-up in the grid view: the conversation plays out. */
+.sx.sx-aiseq .sx-bub.sx-in { opacity: 0; transform: translateY(12px); transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1); transition-delay: 0s; }
+.sx.sx-aiseq.is-ai0 .sx-bub.sx-me,
+.sx.sx-aiseq.is-ai1 .sx-bub.sx-ai-msg--1,
+.sx.sx-aiseq.is-ai2 .sx-bub.sx-ai-msg--2 { opacity: 1; transform: none; }
+.sx.sx-aiseq .sx-ai-msg .sx-ai-t { clip-path: inset(0 0 100% 0); transition: clip-path 1.6s cubic-bezier(0.3, 0, 0.5, 1) 0.15s; }
+.sx.sx-aiseq.is-ai1 .sx-ai-msg--1 .sx-ai-t,
+.sx.sx-aiseq.is-ai2 .sx-ai-msg--2 .sx-ai-t { clip-path: inset(0 0 0 0); }
+.sx.sx-aiseq .sx-ai-btn { opacity: 0; transform: scale(0.9); transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1); transition-delay: 1.6s; }
+.sx.sx-aiseq.is-ai1 .sx-ai-msg--1 .sx-ai-btn,
+.sx.sx-aiseq.is-ai2 .sx-ai-msg--2 .sx-ai-btn { opacity: 1; transform: none; }
+.sx-dots { display: none !important; background: #f5f6f7; border-radius: 14px; }
+.sx.sx-aiseq.is-dots1 .sx-dots--1, .sx.sx-aiseq.is-dots2 .sx-dots--2 { display: block !important; }
+.sx-dots span { width: 7px; height: 7px; border-radius: 50%; background: #8396a8; animation: sx-dot 0.9s ease-in-out infinite; animation-delay: calc(var(--k) * 0.15s); }
+@keyframes sx-dot { 0%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
