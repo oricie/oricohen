@@ -3,9 +3,11 @@
 .work-mosaic { display: none; }
 .work.is-grid .work-stack { display: none; }
 .work.is-grid .work-mosaic {
-  display: block;
-  columns: 3;
-  column-gap: 20px;
+  /* A bento: twelve columns, tiles of uneven widths and heights, packed. */
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: 58px;
+  gap: 18px;
   /* Break the text column, but keep a margin from the window edges. */
   width: 100vw;
   margin-left: calc(50% - 50vw);
@@ -15,8 +17,7 @@
 
 .mo-tile {
   display: block;
-  break-inside: avoid;
-  margin-bottom: 26px;
+  min-width: 0;
   cursor: pointer;
   outline: none;
   opacity: 0;
@@ -31,6 +32,8 @@
 
 .mo-shot {
   position: relative;
+  height: 100%;
+  box-sizing: border-box;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 10px 30px -14px rgba(20, 20, 40, 0.3), 0 1px 3px rgba(20, 20, 40, 0.06);
@@ -42,13 +45,21 @@
 
 /* A desktop screen on its backdrop: inset at the top and sides, running
    off the bottom edge. */
-.mo-bg { padding: 7% 7% 0; }
+.mo-bg {
+  padding: 32px 32px 0;
+  display: flex;
+  flex-direction: column;
+  /* A screen shorter than its tile sits on the bottom edge; a taller one
+     shows its top and runs off. */
+  justify-content: safe flex-end;
+}
 .mo-bg > div, .mo-bg > img {
   border-radius: 8px 8px 0 0 !important;
   box-shadow: 0 12px 34px -12px rgba(20, 20, 40, 0.32), 0 1px 3px rgba(20, 20, 40, 0.08) !important;
-  margin: 0 0 -5% !important;
+  margin: 0 !important;
 }
 .mo-bg > img { width: 100%; }
+.mo-bg > * { flex: none; }
 
 /* Otherwise the screens bring their own frame inside a sheet; here the tile is the frame. */
 .mo-shot:not(.mo-bg) > div { border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; }
@@ -56,18 +67,20 @@
 
 /* The Lucky Card pieces fill whatever box they are given. */
 .mo-tall > div, .mo-square > div, .mo-wide > div { position: absolute; inset: 0; }
-.mo-tall { aspect-ratio: 4 / 5; }
-.mo-square { aspect-ratio: 1 / 1; }
-.mo-wide { aspect-ratio: 4 / 3; }
 
-.mo-cap { display: flex; gap: 8px; margin-top: 10px; font-size: 13px; line-height: 18px; }
-.mo-cap b { font-weight: 500; color: var(--ink, #111); }
-.mo-cap span { color: var(--ink-mute, #8a8a8a); }
 
-@media (max-width: 1100px) { .work.is-grid .work-mosaic { columns: 2; } }
+@media (max-width: 1100px) {
+  .work.is-grid .work-mosaic { grid-auto-rows: 40px; gap: 14px; }
+  .mo-bg { padding: 22px 22px 0; }
+}
 @media (max-width: 640px) {
-  .work.is-grid .work-mosaic { columns: 1; padding: 0 16px 8px; }
-  .mo-tile { margin-bottom: 20px; }
+  /* One column; each tile takes a shape of its own instead. */
+  .work.is-grid .work-mosaic { display: block; padding: 0 16px 8px; }
+  .mo-tile { margin-bottom: 16px; grid-column: auto !important; grid-row: auto !important; }
+  .mo-shot { height: auto; aspect-ratio: 4 / 3; }
+  .mo-shot.mo-tall { aspect-ratio: 4 / 5; }
+  .mo-shot.mo-square { aspect-ratio: 1 / 1; }
+  .mo-bg { padding: 18px 18px 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mo-tile, .work-mosaic.is-in .mo-tile { opacity: 1; transform: none; transition: none; }

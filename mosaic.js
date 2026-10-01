@@ -14,26 +14,28 @@
   var stack = section && section.querySelector('.work-stack');
   if (!stack) return;
 
-  // [project, what it is, live class or image, tile shape, backdrop]
+  // [project, what it is, live class or image, tile shape, backdrop,
+  //  [first column, columns, first row, rows] in the bento grid]
+  // The grid is placed by hand in four bands that each pack the full width,
+  // so it is uneven but has no holes.
   // A desktop screen sits on a coloured backdrop, the way the Lucky Card's
   // pieces bring their own.
   var SNIPPETS = [
-    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb'],
-    ['Lucky Card', 'A video review app', 'live-video', 'mo-tall'],
-    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4'],
-    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc'],
-    ['Lucky Card', 'Beehive', 'live-hive', 'mo-square'],
-    ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5'],
-    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide'],
-    ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4'],
-    ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3'],
-    ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall'],
-    ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8'],
-    ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0'],
-    ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide'],
-    ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6'],
-    ['SAP Signavio', 'Process explorer', 'img:images/signavio-03-process-explorer.webp', '', '#fbe0c8'],
-    ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0']
+    ['Jedox', 'Reports', 'live-reports', '', '#dfe3fb', [1, 7, 1, 5]],
+    ['Lucky Card', 'A video review app', 'live-video', 'mo-tall', '', [1, 4, 17, 11]],
+    ['SAP Signavio', 'Hub', 'live-sghub', '', '#f7d9c4', [1, 5, 12, 5]],
+    ['Jedox', 'Integrator', 'live-flow', '', '#cfe6dc', [6, 4, 12, 5]],
+    ['Lucky Card', 'Beehive', 'live-hive', 'mo-square', '', [8, 5, 7, 5]],
+    ['SAP Signavio', 'Process Insights', 'live-sgrec', '', '#e4dcf5', [1, 7, 6, 6]],
+    ['Lucky Card', 'TechWars', 'live-tech', 'mo-wide', '', [10, 3, 12, 5]],
+    ['Jedox', 'Workspace home', 'live-home', '', '#f3e6c4', [5, 8, 17, 5]],
+    ['SAP Signavio', 'Galaxy Viewer', 'img:images/signavio-04-galaxy-viewer.webp', '', '#cfe3f3', [1, 7, 34, 5]],
+    ['Lucky Card', 'Exam dashboard', 'live-dash', 'mo-tall', '', [8, 5, 1, 6]],
+    ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8', [5, 5, 22, 6]],
+    ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0', [8, 5, 28, 5]],
+    ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide', '', [10, 3, 22, 6]],
+    ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6', [1, 7, 28, 6]],
+    ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0', [8, 5, 33, 6]]
   ];
 
   function cardFor(project) {
@@ -72,12 +74,8 @@
       }
       tile.appendChild(shot);
 
-      var cap = document.createElement('span');
-      cap.className = 'mo-cap';
-      cap.innerHTML = '<b></b><span></span>';
-      cap.firstChild.textContent = s[0];
-      cap.lastChild.textContent = s[1];
-      tile.appendChild(cap);
+      tile.style.gridColumn = s[5][0] + ' / span ' + s[5][1];
+      tile.style.gridRow = s[5][2] + ' / span ' + s[5][3];
 
       function open() { var c = cardFor(s[0]); if (c) c.click(); }
       tile.addEventListener('click', open);
