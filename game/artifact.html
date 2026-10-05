@@ -4576,7 +4576,11 @@ const W=()=>innerWidth,H=()=>innerHeight;
 // biggest FPS lever on hi-DPI screens. PCF (not PCFSoft) shadows are markedly cheaper to filter.
 const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,powerPreference:'high-performance'});
 renderer.setSize(W(),H());
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));   // was 1.5: the upscale read as soft next to the HUD
+// ADAPTIVE RESOLUTION. A fixed 2x render was too heavy on many machines, 1x is soft on
+// retina. Start at 1.5 and let measured frame time decide: step down when frames run long,
+// creep back up when there's headroom. Decided on ~45-frame windows with a cooldown.
+const QUAL={pr:Math.min(devicePixelRatio||1,1.5),min:0.75,max:Math.min(devicePixelRatio||1,2),acc:0,n:0,cool:0};
+renderer.setPixelRatio(QUAL.pr);
 // device-pixel render size: the scene render target must match the canvas' actual pixel buffer,
 // otherwise the 3D is rendered at 1x (CSS px) and upscaled to the device buffer -> soft/pixelated
 // next to the crisp HUD. RW()/RH() give the true pixel dimensions to size sceneRT with.
@@ -4846,7 +4850,8 @@ const skyMat=new THREE.ShaderMaterial({
     float hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
       return mix(mix(hsh(i),hsh(i+vec2(1,0)),f.x),mix(hsh(i+vec2(0,1)),hsh(i+vec2(1,1)),f.x),f.y);}
-    float fbm(vec2 p){float s=0.0,a=0.5;for(int i=0;i<5;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s;}
+    float fbm(vec2 p){float s=0.0,a=0.5;for(int i=0;i<4;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s;}
+    float fbm2(vec2 p){float s=0.0,a=0.5;for(int i=0;i<2;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s+0.18;}
     void main(){
       vec3 d=normalize(vDir);
       float y=d.y, mu=dot(d,uSunDir);
@@ -4868,7 +4873,7 @@ const skyMat=new THREE.ShaderMaterial({
         vec2 uv=d.xz/(y+0.10)*0.55+vec2(uTime*0.0035,uTime*0.0012);
         float n=fbm(uv*1.3);
         float cov=smoothstep(0.62-uCloudCov*0.36,0.86,n);
-        float lit=fbm(uv*1.3+uSunDir.xz*0.09);            // offset tap ~ cheap self-shadowing
+        float lit=fbm2(uv*1.3+uSunDir.xz*0.09);           // offset tap ~ cheap self-shadowing
         float l=clamp((n-lit)*3.2+0.5+side*0.35,0.0,1.0);
         vec3 cc=mix(uCloudDark,uCloudLit,l);
         c=mix(c,cc,cov*smoothstep(0.0,0.20,y)*0.92);
@@ -5075,7 +5080,7 @@ function updateTOD(dt,now){
   groundHaze.forEach(gh=>gh.material.color.setHex(s.fog));
   if(window.__bldgMats)window.__bldgMats.forEach(b=>{if(b.mat.emissiveMap)b.mat.emissiveIntensity=s.win*(b.winGain||1);});
   if(typeof rain!=='undefined'){rain.visible=s.rain>0.02;rain.material.opacity=0.14*s.rain;}
-  const step=Math.round(TOD.t*10);
+  const step=Math.round(TOD.t*3);                       // dusk / sunset / blue hour / night
   if(step!==TOD.env){TOD.env=step;buildEnv(s);}
 }
 
@@ -8632,9 +8637,7 @@ for(let i=0;i<2;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.06,2.8,.3),d
 tailRotor.position.set(.4,1.6,10.9);heli.add(tailRotor);
 heli.position.set(0,45,120);scene.add(heli);
 // ---------- REAL-TIME REFLECTION PROBE (dynamic cubemap for PBR reflections) ----------
-const cubeRT=new THREE.WebGLCubeRenderTarget(64,{format:THREE.RGBAFormat,generateMipmaps:true,minFilter:THREE.LinearMipmapLinearFilter});
-const cubeCam=new THREE.CubeCamera(2,1200,cubeRT);
-scene.add(cubeCam);
+// (the real-time cube reflection probe that lived here was removed — see the loop note)
 // ---------- APACHE-STYLE REBUILD (matched to reference images, now real PBR) ----------
 {
   const keep=new Set([rotor,tailRotor,disc,navR,navG,strobe,navRGlow,navGGlow,strobeGlow,heliKeyLight,heliRimLight]);
@@ -8655,10 +8658,10 @@ scene.add(cubeCam);
     for(let i=0;i<60;i++){g.fillStyle=`rgba(${Math.random()<.5?235:60},${Math.random()<.5?235:60},${Math.random()<.5?235:60},.10)`;
       g.fillRect(Math.random()*w,Math.random()*h,2+Math.random()*14,1+Math.random()*2);}   // scuffs
   },256,256,true);
-  const gm=new THREE.MeshStandardMaterial({color:0x5a6150,map:panelTex,metalness:0.06,roughness:0.66,envMap:cubeRT.texture,envMapIntensity:0.45});
-  const gm2=new THREE.MeshStandardMaterial({color:0x474d40,map:panelTex,metalness:0.08,roughness:0.62,envMap:cubeRT.texture,envMapIntensity:0.45});
-  const dk=new THREE.MeshStandardMaterial({color:0x1d1f1e,metalness:0.25,roughness:0.6,envMap:cubeRT.texture,envMapIntensity:0.5});
-  const glz=new THREE.MeshPhysicalMaterial({color:0x2a3a3c,metalness:0.0,roughness:0.06,transparent:true,opacity:.72,envMap:cubeRT.texture,envMapIntensity:1.4,clearcoat:0.8});
+  const gm=new THREE.MeshStandardMaterial({color:0x5a6150,map:panelTex,metalness:0.06,roughness:0.66,envMapIntensity:0.45});
+  const gm2=new THREE.MeshStandardMaterial({color:0x474d40,map:panelTex,metalness:0.08,roughness:0.62,envMapIntensity:0.45});
+  const dk=new THREE.MeshStandardMaterial({color:0x1d1f1e,metalness:0.25,roughness:0.6,envMapIntensity:0.5});
+  const glz=new THREE.MeshPhysicalMaterial({color:0x2a3a3c,metalness:0.0,roughness:0.06,transparent:true,opacity:.72,envMapIntensity:1.4,clearcoat:0.8});
   const add=m=>{m.castShadow=true;heli.add(m);return m;};
   // slab-sided fuselage
   const fus=add(new THREE.Mesh(new THREE.BoxGeometry(1.9,1.6,5.4),gm));fus.position.set(0,0,0.8);
@@ -9858,7 +9861,7 @@ const horC=horizonCanvasEl.getContext('2d');
 const tacC=tacCanvasEl.getContext('2d');
 const hudCv=document.getElementById('hud');
 const hudX=hudCv.getContext('2d');
-const DPR=()=>Math.min(devicePixelRatio||1,3);   // match the DOM panels' native crispness
+const DPR=()=>Math.min(devicePixelRatio||1,2);   // 3x meant clearing+redrawing a ~12-megapixel canvas every frame
 function sizeHUD(){
   hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());
   hudCv.style.width=W()+'px';hudCv.style.height=H()+'px';   // CSS size != backing size
@@ -11799,7 +11802,7 @@ function renderIntelLog(){
        +  '<span class="st '+cls+'">'+(brg||st)+'</span></div>';
   });
   html+='</div>';
-  el.innerHTML=html;
+  if(el.__html!==html){el.innerHTML=html;el.__html=html;}
 }
 // Two levels of objective text, deliberately different lengths:
 //   missionHeadline() -> the short label in the HUD's top-centre pill
@@ -12361,10 +12364,24 @@ loadMeta();
 
 let last=performance.now(),screenT=0;
 let __frame=0;
+function adaptQuality(ms){
+  QUAL.acc+=ms;QUAL.n++;QUAL.cool-=ms;
+  if(QUAL.n<45)return;
+  const avg=QUAL.acc/QUAL.n;QUAL.acc=0;QUAL.n=0;
+  if(QUAL.cool>0)return;
+  let np=QUAL.pr;
+  if(avg>22)np=Math.max(QUAL.min,QUAL.pr-0.25);          // under ~45fps: shed pixels
+  else if(avg<13&&QUAL.pr<QUAL.max)np=Math.min(QUAL.max,QUAL.pr+0.125);   // headroom: earn some back
+  if(np!==QUAL.pr){
+    QUAL.pr=np;renderer.setPixelRatio(np);renderer.setSize(W(),H());sceneRT.setSize(RW(),RH());
+    QUAL.cool=2500;
+  }
+}
 function loop(now){
   requestAnimationFrame(loop);
   const dt=Math.min((now-last)/1000,0.05);last=now;
-  if((__frame++&1)===0)renderer.shadowMap.needsUpdate=true; // refresh shadows every 2nd frame (see setup)
+  if((__frame++%3)===0)renderer.shadowMap.needsUpdate=true; // static city: every 3rd frame is enough
+  adaptQuality(Math.min(100,now-last));
   if(!gameOver&&interiorMode){ // ON FOOT inside a venue — the city sim is paused while you're indoors
     updateInterior(dt);
     drawFootHUD(now);
@@ -12911,12 +12928,9 @@ function loop(now){
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
     moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
     moonHalo.position.copy(moonSprite.position);
-    if(!cockpitMode && Math.floor(now/200)%5===0){
-      heli.visible=false;
-      cubeCam.position.copy(heli.position);
-      cubeCam.update(renderer,scene);
-      heli.visible=true;
-    }
+    // (live reflection probe removed: `Math.floor(now/200)%5===0` was true for a whole 200ms
+    //  window every second, so ~12 consecutive frames re-rendered the entire city 6 extra times —
+    //  a hitch every second. The airframe is matte now and reads the sky environment instead.)
     sun.position.copy(heli.position).addScaledVector(TOD.lightDir,620);
     sun.target=heli;
     rim.position.copy(heli.position).add(new THREE.Vector3(-200,120,260));
