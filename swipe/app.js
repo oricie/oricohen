@@ -49,7 +49,7 @@
   const vcache = new Map();
   function rebuild(it) {
     const k = key(it);
-    if (!vcache.has(k)) vcache.set(k, MM.makeVariant(MM.parseBrief(it.text, it.name), it.seed));
+    if (!vcache.has(k)) vcache.set(k, MM.makeVariant(MM.parseBrief(it.text, it.name), it.seed, it.dir));
     return vcache.get(k);
   }
   const isSaved = v => saved.some(s => s.seed === v.seed && s.text === briefInput.text && (s.name || '') === (briefInput.name || ''));
@@ -102,22 +102,45 @@
     startDeck({ text, name: $('#brief-name').value.trim() });
   });
   $('#back').onclick = () => { $('#deck').classList.add('hidden'); $('#brief').classList.remove('hidden'); };
-  $('#count').textContent = saved.length;
+  syncCount();
+  $('#brief-yours').onclick = () => openYours();
 
   /* ───────── deck ───────── */
-  function startDeck(input) {
+  async function startDeck(input) {
     briefInput = input; lastBrief = input; persist();
     brief = MM.parseBrief(input.text, input.name);
-    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; history = []; queue = [];
+    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; history = []; queue = []; dirs = []; dirsOff = false;
+    const go = $('.go'); go.disabled = true; go.firstChild.textContent = 'Designing for you… ';
+    await fetchDirs(30000);
+    go.disabled = false; go.firstChild.textContent = 'Start swiping ';
     cards.forEach(c => c.el.remove()); cards = []; stage.innerHTML = '';
     $('#brief').classList.add('hidden'); $('#deck').classList.remove('hidden');
     $('#brief-chip').innerHTML = '<b>' + esc(input.name || input.text.split(/[.!?]/)[0]) + '</b>';
     fill();
     scrollTo(0, 0);
   }
-  function nextVariant() { return queue.shift() || MM.makeVariant(brief, seedBase + next++); }
+  /* Claude-written directions, fetched from server.js when available. Cards without one use the built-in rules. */
+  let dirs = [], dirsBusy = false, dirsOff = false;
+  async function fetchDirs(wait) {
+    if (dirsBusy || dirsOff) return; dirsBusy = true;
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), wait || 45000);
+    try {
+      const r = await fetch('/api/brand', { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: briefInput.text, name: briefInput.name, n: 8, exclude: dirs.map(d => d && d.name).filter(Boolean) }) });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (Array.isArray(j.directions) && j.directions.length) dirs = dirs.concat(j.directions); else throw new Error('empty');
+    } catch (e) { if (!dirs.length) dirsOff = true; }
+    clearTimeout(t); dirsBusy = false;
+  }
+  function nextVariant() {
+    const q = queue.shift(); if (q) return q;
+    const seed = seedBase + next, dir = dirs[next] || null; next++;
+    if (dirs.length && next >= dirs.length - 3) fetchDirs();
+    return { v: MM.makeVariant(brief, seed, dir), dir };
+  }
   function fill() {
-    while (cards.length < 4) { const v = nextVariant(); cards.push(makeCard(v)); }
+    while (cards.length < 4) { const q = nextVariant(); cards.push(makeCard(q.v, q.dir)); }
     layout();
   }
   function layout() {
@@ -131,7 +154,7 @@
     requestAnimationFrame(fitAllLogos);
   }
 
-  function makeCard(v) {
+  function makeCard(v, dir) {
     ensureFonts(v);
     const el = document.createElement('article'); el.className = 'card';
     el.innerHTML =
@@ -143,7 +166,7 @@
     if (!v.nameGiven) tile.insertAdjacentHTML('beforeend', '<span class="suggest" style="color:' + v.pal.ink + '">name idea</span>');
     $('.slot', el).replaceWith(tile);
     mountFrame($('.frame', el), v);
-    const card = { v, el };
+    const card = { v, el, dir };
     gesture(card);
     return card;
   }
@@ -180,9 +203,9 @@
     const m = $('.stamp.' + dir, el); if (m) m.style.opacity = 1;
     el.classList.remove('drag'); el.classList.add('fly');
     el.style.transform = 'translate(' + sign * (innerWidth + 200) + 'px,' + (-30) + 'px) rotate(' + sign * 28 + 'deg)';
-    history.push({ v: card.v, dir });
+    history.push({ v: card.v, dir, cdir: card.dir });
     if (dir === 'like') {
-      saved.unshift({ seed: card.v.seed, text: briefInput.text, name: briefInput.name || '', at: Date.now() });
+      saved.unshift({ seed: card.v.seed, text: briefInput.text, name: briefInput.name || '', dir: card.dir || null, at: Date.now() });
       vcache.set(key(saved[0]), card.v);
       persist(); bump();
       toast('♥ It’s yours: find it in Yours');
@@ -190,8 +213,9 @@
     fill();
     setTimeout(() => { el.remove(); busy = false; }, 380);
   }
+  function syncCount() { $('#count').textContent = $('#count2').textContent = saved.length; $('#brief-yours').classList.toggle('hidden', !saved.length); }
   function bump() {
-    $('#count').textContent = saved.length;
+    syncCount();
     const b = $('#open-yours'); b.classList.remove('pulse'); void b.offsetWidth; b.classList.add('pulse');
   }
   function undo() {
@@ -199,10 +223,10 @@
     const h = history.pop();
     if (h.dir === 'like') {
       const i = saved.findIndex(s => s.seed === h.v.seed && s.text === briefInput.text);
-      if (i > -1) saved.splice(i, 1); persist(); $('#count').textContent = saved.length;
+      if (i > -1) saved.splice(i, 1); persist(); syncCount();
     }
-    if (cards.length >= 4) { const last = cards.pop(); last.el.remove(); queue.unshift(last.v); }
-    const c = makeCard(h.v);
+    if (cards.length >= 4) { const last = cards.pop(); last.el.remove(); queue.unshift({ v: last.v, dir: last.dir }); }
+    const c = makeCard(h.v, h.cdir);
     c.el.classList.add('drag');
     c.el.style.transform = 'translate(' + (h.dir === 'like' ? 1 : -1) * innerWidth + 'px,0) rotate(' + (h.dir === 'like' ? 24 : -24) + 'deg)';
     cards.unshift(c); layout();
@@ -279,7 +303,7 @@
       const t = e.target.closest('button'); if (!t) return;
       if (t.hasAttribute('data-close')) closeTop();
       else if (t.hasAttribute('data-remove')) {
-        saved = saved.filter(s => s !== it); persist(); $('#count').textContent = saved.length; closeTop(); openYours(); toast('Removed');
+        saved = saved.filter(s => s !== it); persist(); syncCount(); closeTop(); openYours(); toast('Removed');
       } else if (t.hasAttribute('data-kit')) { t.textContent = 'Building…'; download(await MM.brandKitZip(v), slug(v) + '-brand-kit.zip'); t.textContent = '⬇ Download brand kit (.zip)'; }
       else if (t.hasAttribute('data-site')) download(new Blob([MM.siteHTML(v)], { type: 'text/html' }), slug(v) + '-site.html');
       else if (t.hasAttribute('data-logo')) download(new Blob([await MM.logoSVG(v)], { type: 'image/svg+xml' }), slug(v) + '-logo.svg');

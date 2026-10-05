@@ -239,6 +239,24 @@
   ];
 
   /* ───────── brief ───────── */
+  function moodFrom(low) {
+    let modes = {}, fonts = {}, sat = null, n = 0;
+    MOODS.forEach(m => { if (m.re.test(low)) { modes = sum(modes, m.modes); fonts = sum(fonts, m.fonts); sat = sat ? [Math.min(sat[0], m.sat[0]), Math.max(sat[1], m.sat[1])] : m.sat; n++; } });
+    return { modes, fonts, sat: sat || [55, 90], n };
+  }
+  const str = (x, max) => (typeof x === 'string' && x.trim() ? x.trim().slice(0, max) : null);
+  /* Merge a Claude-written direction ({name, head, sub, ...}) over an industry's template copy. Anything invalid is ignored. */
+  function applyDir(ind, d) {
+    const c = Object.assign({}, ind);
+    const s1 = str(d.sub, 200); if (s1) c.sub = s1;
+    const e = str(d.eyebrow, 40); if (e) c.eyebrow = e;
+    if (Array.isArray(d.cta) && d.cta.length >= 2 && str(d.cta[0], 28) && str(d.cta[1], 28)) c.cta = [str(d.cta[0], 28), str(d.cta[1], 28)];
+    if (Array.isArray(d.nav) && d.nav.length >= 4) c.nav = d.nav.slice(0, 4).map(x => str(x, 18) || '·');
+    if (Array.isArray(d.feats) && d.feats.length >= 3 && d.feats.slice(0, 3).every(f => Array.isArray(f) && str(f[0], 40) && str(f[1], 140))) c.feats = d.feats.slice(0, 3).map(f => [str(f[0], 40), str(f[1], 140)]);
+    if (Array.isArray(d.quote) && str(d.quote[0], 140) && str(d.quote[1], 60)) c.quote = [str(d.quote[0], 140), str(d.quote[1], 60)];
+    if (Array.isArray(d.stats) && d.stats.length >= 3 && d.stats.slice(0, 3).every(x => Array.isArray(x) && str(String(x[0]), 12) && str(x[1], 30))) c.stats = d.stats.slice(0, 3).map(x => [str(String(x[0]), 12), str(x[1], 30)]);
+    return c;
+  }
   function parseBrief(text, nameField) {
     text = (text || '').trim();
     let name = (nameField || '').trim();
@@ -250,10 +268,9 @@
     const low = text.toLowerCase();
     let ind = 'generic';
     for (const k of ORDER) { if (IND[k].re.test(low)) { ind = k; break; } }
-    let modes = {}, fonts = {}, sat = null, hit = [];
-    MOODS.forEach(m => { if (m.re.test(low)) { modes = sum(modes, m.modes); fonts = sum(fonts, m.fonts); sat = sat ? [Math.min(sat[0], m.sat[0]), Math.max(sat[1], m.sat[1])] : m.sat; hit.push(1); } });
+    const mood = moodFrom(low);
     const glyphHint = (GLYPH_HINTS.find(h => h[0].test(low)) || [])[1] || null;
-    return { text, name, ind, mood: { modes, fonts, sat: sat || [55, 90], n: hit.length }, glyphHint, nameGiven: !!name };
+    return { text, name, ind, mood, glyphHint, nameGiven: !!name };
   }
 
   /* ───────── palette ───────── */
@@ -294,17 +311,21 @@
   const FEEL = { dark: 'Nocturne', color: 'Pop', cream: 'Warm', light: 'Clean' };
   const TYPE = { serif: 'editorial', sans: 'modern', round: 'friendly', mono: 'technical', bold: 'loud' };
 
-  function makeVariant(brief, seed) {
+  function makeVariant(brief, seed, dir) {
     const r = mulberry32((seed * 2654435761) >>> 0 ^ 0x9e3779b9);
-    const ind = IND[brief.ind];
-    const mood = brief.mood;
-    const pal = makePalette(r, ind, mood);
+    dir = dir && typeof dir === 'object' ? dir : null;
+    const base = IND[brief.ind];
+    const ind = dir ? applyDir(base, dir) : base;
+    const dm = dir && str(dir.mood, 80) ? moodFrom(dir.mood.toLowerCase()) : null;
+    const mood = dm && dm.n ? dm : brief.mood;
+    const hue = dir && isFinite(dir.hue) ? [[+dir.hue - 10, +dir.hue + 10]] : base.hue;
+    const pal = makePalette(r, Object.assign({}, ind, { hue }), mood);
     const fw = sum(ind.fonts, mood.n ? sum(mood.fonts, mood.fonts) : {});
     const cat = wpick(r, fw);
     const d = pick(r, BY_CAT[cat]);
     const b = pick(r, BODY[cat]);
-    const glyph = brief.glyphHint && r() < .6 ? brief.glyphHint : pick(r, ind.glyphs);
-    const name = brief.name || pick(r, ind.names);
+    const glyph = dir && G[dir.glyph] ? dir.glyph : brief.glyphHint && r() < .6 ? brief.glyphHint : pick(r, ind.glyphs);
+    const name = brief.name || (dir && str(dir.name, 26)) || pick(r, ind.names);
     const logoStyle = LOGO_STYLES[(seed * 2 + (r() < .3 ? 1 : 0)) % LOGO_STYLES.length];
     const layout = LAYOUTS[(seed + 1 + (r() < .25 ? 1 : 0)) % LAYOUTS.length];
     const radius = pick(r, [0, 6, 14, 22, 32]);
@@ -312,10 +333,10 @@
     const wcase = cat === 'bold' ? 'upper' : cat === 'mono' ? 'lower' : wpick(r, { normal: 5, upper: cat === 'serif' ? 1 : 2, lower: 1 });
     return {
       seed, name, ind: brief.ind, nameGiven: brief.nameGiven,
-      head: pick(r, ind.heads).replace(/\{n\}/g, name),
+      head: ((dir && str(dir.head, 90)) || pick(r, ind.heads)).replace(/\{n\}/g, name), copy: ind, ai: !!dir,
       pal, fonts: { d, b, w: FONTS[d].h, cat }, glyph, logoStyle, layout, radius, rb,
       container: pick(r, CONTAINERS), wcase, dot: r() < .3, art: pick(r, ARTS), artSeed: (r() * 1e9) | 0,
-      label: FEEL[pal.mode] + ' ' + TYPE[cat]
+      label: (dir ? '✦ ' : '') + FEEL[pal.mode] + ' ' + TYPE[cat]
     };
   }
 
@@ -498,7 +519,7 @@
   }
 
   function siteHTML(v) {
-    const ind = IND[v.ind], P = v.pal, n = esc(v.name);
+    const ind = v.copy, P = v.pal, n = esc(v.name);
     const nav = logoHTML(v, { style: navStyle(v), size: 26 });
     const ic = '<span class="ic">' + markSVG(v, { container: 'none', colors: [P.onPrimary, P.primary] }) + '</span>';
     const sub = ind.sub.replace(/\{n\}/g, n);
@@ -577,6 +598,6 @@
 
   global.MM = {
     parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, tokensCSS, paletteList,
-    brandKitZip, fontsHref, LOGO_CSS, IND, mix
+    brandKitZip, fontsHref, LOGO_CSS, IND, mix, GLYPHS: Object.keys(G)
   };
 })(window);

@@ -23,7 +23,9 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 /* ── Brief ── */
 #brief { display: grid; place-items: center; padding: 32px 20px 56px; }
 .brief-in { width: 100%; max-width: 620px; }
-.logo-mark { font: 800 20px var(--disp); display: inline-flex; gap: 8px; align-items: center; margin-bottom: 40px; }
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+.logo-mark { font: 800 20px var(--disp); display: inline-flex; gap: 8px; align-items: center; }
+.go:disabled { opacity: .7; cursor: progress; transform: none; }
 .logo-mark .heart { background: var(--grad); color: #fff; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 15px; }
 h1 { font: 800 clamp(40px, 8vw, 68px)/1 var(--disp); letter-spacing: -.035em; }
 h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
