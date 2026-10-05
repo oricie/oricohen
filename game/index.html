@@ -30,10 +30,11 @@
     /* type — mono, uppercase, letterspaced. Four sizes, no more. */
     --f: 'Barlow Semi Condensed','Arial Narrow',sans-serif;   /* condensed sans: far more legible than thin mono */
     --hs: 1;                               /* HUD scale, set from the viewport in sizeHUD() */
-    --t-micro: calc(11px * var(--hs));     /* unit suffixes, sub-labels */
-    --t-label: calc(13px * var(--hs));     /* field names, headers */
-    --t-body:  calc(15px * var(--hs));     /* prose: objectives, dialogue */
-    --t-val:   calc(18px * var(--hs));     /* numeric readouts */
+    --t-micro: calc(10px * var(--hs));     /* unit suffixes, sub-labels */
+    --t-label: calc(11px * var(--hs));     /* field names, headers */
+    --t-body:  calc(13px * var(--hs));     /* prose: objectives, dialogue */
+    --t-val:   calc(16px * var(--hs));     /* numeric readouts */
+    --hcol: 216px;                         /* both HUD columns share one width (pre-scale) */
     /* spacing: 4px grid */
     --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
   }
@@ -73,18 +74,18 @@
   #dlgTxt .item  { color:var(--ui-warn); font-weight:bold; }
   #dlgTxt .place { color:var(--ui); font-weight:bold; }
   #dlgHint { font-size:var(--t-micro); letter-spacing:.1em; color:var(--ui-dim); text-align:right; margin-top:var(--s2); }
-  #intelLog { right:var(--s3); top:168px; width:max-content; color:var(--ui-hi);
-    padding:5px 6px; display:none; transform:scale(var(--hs)); transform-origin:top right; }
+  #intelLog { right:var(--s3); top:168px; width:var(--hcol); color:var(--ui-hi);
+    padding:5px 6px 6px; display:none; transform:scale(var(--hs)); transform-origin:top right; }
   #intelLog b { color:var(--ui); letter-spacing:.14em; }
   #intelLog .ros { display:flex; flex-direction:row; gap:3px; margin-top:4px; }
-  #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; width:52px;
+  #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1 1 0; min-width:0;
     background:rgba(95,242,255,.05); border:1px solid var(--ui-faint); padding:2px; }
   #intelLog .cm.unk { opacity:.40; filter:grayscale(1); }      /* not yet located */
-  #intelLog .cm img { width:40px; height:40px; display:block; image-rendering:pixelated; }
+  #intelLog .cm img { width:32px; height:32px; display:block; image-rendering:pixelated; }
   #intelLog .cmi { display:flex; flex-direction:column; align-items:center; line-height:1.1; }
-  #intelLog .cmi b { font-size:11px; letter-spacing:.06em; }
+  #intelLog .cmi b { font-size:10px; letter-spacing:.04em; }
   #intelLog .rl, #intelLog .pk { display:none; }               /* shown in the hoist panel instead */
-  #intelLog .st { font-size:9px; letter-spacing:.04em; padding:1px 2px; border:1px solid currentColor; white-space:nowrap; }
+  #intelLog .st { font-size:8px; letter-spacing:.02em; padding:1px 2px; border:1px solid currentColor; white-space:nowrap; }
   #intelLog .st-mis { color:var(--ui-dim); }
   #intelLog .st-loc { color:var(--ui); }
   #intelLog .st-ab  { color:var(--ui-warn); }
@@ -95,34 +96,38 @@
   #intelLog .done { color:var(--ui-dim); text-decoration:line-through; }
   /* ACTION PROMPT — the one thing to do right now, big, with the key to press.
      Only shown when the game is waiting on the player; otherwise the screen is quiet. */
-  #actPrompt { left:50%; top:57%; transform:translate(-50%,-50%); display:none; align-items:center;
-    gap:calc(12px * var(--hs)); padding:calc(8px * var(--hs)) calc(18px * var(--hs)); white-space:nowrap;
+  #actPrompt { left:50%; top:60%; transform:translate(-50%,-50%); display:none; align-items:center;
+    gap:calc(10px * var(--hs)); padding:calc(6px * var(--hs)) calc(14px * var(--hs)) calc(6px * var(--hs)) calc(8px * var(--hs)); white-space:nowrap;
     background:rgba(1,12,18,.82); border:1px solid var(--ui-line); box-shadow:0 0 24px rgba(0,0,0,.6); }
   #actPrompt.on { display:flex; animation:actIn .25s ease-out; }
-  #actPrompt .key { font-size:calc(22px * var(--hs)); font-weight:700; color:#001218; background:var(--ui);
-    min-width:calc(34px * var(--hs)); text-align:center; padding:calc(2px * var(--hs)) calc(8px * var(--hs));
+  #actPrompt .key { font-size:calc(17px * var(--hs)); font-weight:700; color:#001218; background:var(--ui);
+    min-width:calc(28px * var(--hs)); text-align:center; padding:calc(1px * var(--hs)) calc(7px * var(--hs));
     border-radius:4px; box-shadow:0 3px 0 #0a7f8c, 0 0 14px rgba(95,242,255,.5); }
   #actPrompt .key.ic { background:transparent; color:var(--ui); box-shadow:none; padding:0; }
   #actPrompt .txt { display:flex; flex-direction:column; line-height:1.15; }
-  #actPrompt .a { font-size:calc(21px * var(--hs)); font-weight:700; letter-spacing:.06em; color:var(--ui-hi); }
-  #actPrompt .s { font-size:var(--t-label); letter-spacing:.1em; color:var(--ui); }
+  #actPrompt .a { font-size:calc(16px * var(--hs)); font-weight:700; letter-spacing:.06em; color:var(--ui-hi); }
+  #actPrompt .s { font-size:var(--t-micro); letter-spacing:.08em; color:var(--ui-dim); }
   #actPrompt.warn { border-color:var(--ui-warn); }
   #actPrompt.warn .s { color:var(--ui-warn); }
   @keyframes actIn { from { transform:translate(-50%,-30%) scale(1.06); } to { transform:translate(-50%,-50%) scale(1); } }
   body.on-foot #actPrompt { top:63%; }
   body.on-foot #taskPanel { display:none; }      /* the action prompt says it, bigger */
   /* MISSION STEPS — the whole loop for the current lead, so "what next" is always answered */
-  #steps { left:var(--s3); top:150px; display:none; background:rgba(1,12,18,.80); padding:calc(6px * var(--hs)) calc(10px * var(--hs));
-    min-width:calc(200px * var(--hs)); }
-  #steps .hd { font-size:var(--t-micro); letter-spacing:.16em; color:var(--ui-dim); margin-bottom:calc(4px * var(--hs)); }
-  #steps .r { display:flex; align-items:center; gap:calc(8px * var(--hs)); font-size:calc(14px * var(--hs));
-    line-height:1.55; letter-spacing:.04em; color:var(--ui-dim); }
+  #steps { left:var(--s3); top:110px; display:none; width:calc(var(--hcol) * var(--hs));
+    padding:calc(6px * var(--hs)) calc(10px * var(--hs)) calc(7px * var(--hs)); }
+  #steps .hd { font-size:var(--t-label); font-weight:700; letter-spacing:.06em; color:var(--ui); white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; padding-bottom:calc(4px * var(--hs)); margin-bottom:calc(3px * var(--hs));
+    border-bottom:1px solid var(--ui-faint); }
+  #steps .r { display:flex; align-items:center; gap:calc(6px * var(--hs)); font-size:var(--t-body);
+    line-height:1.45; letter-spacing:.02em; color:var(--ui-dim); white-space:nowrap; }
   #steps .r i { font-style:normal; width:calc(16px * var(--hs)); text-align:center; }
-  #steps .r.done { color:rgba(70,224,138,.75); }
-  #steps .r.done span { text-decoration:line-through; text-decoration-color:rgba(70,224,138,.5); }
+  #steps .r.done { color:rgba(70,224,138,.55); }
   #steps .r.cur { color:var(--ui-hi); font-weight:700; }
   #steps .r.cur i { color:var(--ui); }
-  #steps .r em { font-style:normal; color:var(--ui-warn); margin-left:auto; padding-left:8px; font-weight:600; }
+  #steps .r span { overflow:hidden; text-overflow:ellipsis; }
+  #steps .r em { font-style:normal; color:var(--ui-warn); margin-left:auto; padding-left:6px; font-weight:600; }
+  /* desktop: the STEPS panel and action prompt carry the objective; the bottom box would repeat it */
+  @media (min-width:621px) and (min-height:521px) { body:not(.on-foot) #taskPanel { display:none; } }
   #help { bottom:var(--s2); left:50%; transform:translateX(-50%); font-size:var(--t-label); letter-spacing:.06em;
     color:var(--ui-dim); opacity:.8; text-align:center; width:calc(100vw - 2 * (215px * var(--hs) + 30px)); transition:opacity 1.2s; text-shadow:0 0 4px #000; }
   /* TSD — the scanner. Title bar sits flush on top of the map, one continuous frame. */
@@ -273,7 +278,7 @@ renderer.setSize(W(),H());
 // ADAPTIVE RESOLUTION. A fixed 2x render was too heavy on many machines, 1x is soft on
 // retina. Start at 1.5 and let measured frame time decide: step down when frames run long,
 // creep back up when there's headroom. Decided on ~45-frame windows with a cooldown.
-const QUAL={pr:Math.min(devicePixelRatio||1,1.5),min:0.75,max:Math.min(devicePixelRatio||1,2),acc:0,n:0,cool:0};
+const QUAL={pr:Math.min(devicePixelRatio||1,1.5),min:Math.min(devicePixelRatio||1,1),max:Math.min(devicePixelRatio||1,2),acc:0,n:0,cool:0};
 renderer.setPixelRatio(QUAL.pr);
 // device-pixel render size: the scene render target must match the canvas' actual pixel buffer,
 // otherwise the 3D is rendered at 1x (CSS px) and upscaled to the device buffer -> soft/pixelated
@@ -505,7 +510,7 @@ const TOD_KEYS=[
 const TOD_COLORS=new Set(['sunCol','hemiSky','hemiGnd','zen','belt','hor','solar','glow','cloudLit','cloudDark','fog']);
 const SUN_AZ=new THREE.Vector3(-0.45,0,0.89).normalize();   // west-south-west: behind the opening view
 const MOON_DIR=new THREE.Vector3(0.35,0.82,-0.45).normalize();
-const TOD={t:0,target:0,pinned:null,env:-1,
+const TOD={t:0.80,target:0.80,pinned:null,env:-1,
   cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3()};
 const _ca=new THREE.Color(),_cb=new THREE.Color();
 function todSample(t){
@@ -729,7 +734,10 @@ function buildEnv(s){
 }
 
 // campaign pacing: dusk at the first shop, full night for the last run home
-const TOD_STAGES=[0.00,0.24,0.48,0.74,1.00];
+// It is NIGHT from the first minute — "is this afternoon?" was the wrong question to leave open.
+// The campaign starts in the last of the blue hour with every window lit and sinks to deep night.
+const TOD_STAGES=[0.80,0.86,0.92,0.96,1.00];
+const TOD_START=TOD_STAGES[0];
 function todForStage(st){ return missionDone?1:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
 // manual override: key T steps through the day, ?tod=0..1 pins it
 const TOD_PIN_STEPS=[0,0.25,0.5,1];
@@ -1258,6 +1266,16 @@ function buildRoadAxis(majorsAt,avoid){
 const ROADS_X=buildRoadAxis([-352,-32,288],[]).filter(r=>r.p<RIVER.x0-26||r.p>RIVER.x1+26); // run along z
 const ROADS_Z=buildRoadAxis([HWY_Z,64,384],[RAIL_Z]);                                       // run along x
 const laneRoads={x:ROADS_X.filter(r=>r.w>10),z:ROADS_Z.filter(r=>r.w>10)};
+// Is (x,z) on a carriageway or its sidewalk (plus `pad` metres)? Every prop that stands on the
+// ground — trees, lanterns, torii — asks this first. Trees were being dropped by random scatter
+// and fixed spacing with no idea where the streets were, so they stood in the middle of junctions.
+function roadAt(x,z,pad){
+  pad=pad||0;
+  for(const r of ROADS_X){const hw=r.w/2+(r.w>10?SW:0)+pad;if(Math.abs(x-r.p)<hw&&z<SEA_Z0+hw)return true;}
+  for(const r of ROADS_Z){if(r.p>SEA_Z0)continue;const hw=r.w/2+(r.w>10?SW:0)+pad;if(Math.abs(z-r.p)<hw)return true;}
+  return false;
+}
+window.__roadAt=roadAt;
 function pickLane(onX){
   const arr=onX?laneRoads.z:laneRoads.x;
   const r=arr[Math.floor(Math.random()*arr.length)];
@@ -1270,8 +1288,14 @@ function pickLane(onX){
 const groundTex=tex((g,w,h)=>{
   // matte worn ASPHALT for open ground (was a purple tiled-plaza look): dark neutral base, fine
   // aggregate grain, hairline cracks, oil blotches — no tile rectangles, no purple tint.
-  g.fillStyle='#232327';g.fillRect(0,0,w,h);
-  for(let i=0;i<6000;i++){const v=Math.random()*24;g.fillStyle=`rgba(${30+v},${30+v},${34+v},.42)`;g.fillRect(Math.random()*w,Math.random()*h,1.5,1.5);}
+  // open lots and plazas are CONCRETE SLAB, not asphalt: a different value and a joint grid, so
+  // the eye can always tell carriageway (dark, smooth) from ground you'd walk on
+  g.fillStyle='#3d3c3a';g.fillRect(0,0,w,h);
+  for(let i=0;i<6000;i++){const v=Math.random()*26;g.fillStyle=`rgba(${48+v},${47+v},${45+v},.42)`;g.fillRect(Math.random()*w,Math.random()*h,1.5,1.5);}
+  {const n=12,c=w/n;for(let i=0;i<n;i++)for(let j=0;j<n;j++){const t=Math.random()*0.10-0.05;
+     g.fillStyle=t>0?`rgba(255,250,240,${t})`:`rgba(0,0,0,${-t*1.6})`;g.fillRect(i*c,j*c,c,c);}
+   g.strokeStyle='rgba(12,12,12,.55)';g.lineWidth=1.6;
+   for(let i=0;i<=n;i++){g.beginPath();g.moveTo(i*c,0);g.lineTo(i*c,h);g.stroke();g.beginPath();g.moveTo(0,i*c);g.lineTo(w,i*c);g.stroke();}}
   for(let i=0;i<1500;i++){g.fillStyle=`rgba(9,9,11,${.3+Math.random()*.4})`;g.fillRect(Math.random()*w,Math.random()*h,1.5,1.5);} // dark aggregate flecks
   for(let i=0;i<26;i++){ // faint hairline cracks
     g.strokeStyle=`rgba(11,11,13,${.22+Math.random()*.3})`;g.lineWidth=1;let x=Math.random()*w,y=Math.random()*h;
@@ -1487,10 +1511,29 @@ asphaltNormalTex.repeat.set(4,110);
 // darkened to sit in the neon-night grade — lane markings are still painted on top by each generator.
 let ASPHALT_IMG=null, ASPHALT_NOR=null;
 function drawAsphaltPhoto(g,w,h){
-  const tile=w;
-  for(let y=0;y<h;y+=tile) g.drawImage(ASPHALT_IMG,0,0,ASPHALT_IMG.width,ASPHALT_IMG.height,0,y,w,tile);
-  g.fillStyle='rgba(9,9,13,0.55)';g.fillRect(0,0,w,h);           // darken to the scene's night grade
-  g.fillStyle='rgba(60,55,80,0.05)';g.fillRect(0,0,w,h);         // faint cool cast
+  // The photo used to be stretched ONE tile across the whole carriageway, so a 26 m avenue showed
+  // stones the size of a fist-per-pixel — pale gravel, not road. Tile it 4x finer, desaturate,
+  // and take it down to real wet-night asphalt value (~8-12% albedo).
+  const tile=w/4;
+  for(let y=0;y<h;y+=tile)for(let x=0;x<w;x+=tile)g.drawImage(ASPHALT_IMG,0,0,ASPHALT_IMG.width,ASPHALT_IMG.height,x,y,tile,tile);
+  g.globalCompositeOperation='saturation';g.fillStyle='#000';g.fillRect(0,0,w,h);g.globalCompositeOperation='source-over';
+  g.fillStyle='rgba(8,8,10,0.70)';g.fillRect(0,0,w,h);
+  // the city's wear: resurfacing patches, tar-sealed cracks, oil drips down the lanes
+  for(let i=0;i<5;i++){
+    const pw=w*(0.15+Math.random()*0.4),ph=h*(0.02+Math.random()*0.06),px=Math.random()*(w-pw),py=Math.random()*h;
+    g.fillStyle=`rgba(${Math.random()<.5?'4,4,6':'40,40,42'},${0.25+Math.random()*0.25})`;g.fillRect(px,py,pw,ph);
+    g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1.2;g.strokeRect(px,py,pw,ph);
+  }
+  g.lineCap='round';
+  for(let i=0;i<22;i++){
+    let x=Math.random()*w,y=Math.random()*h;g.strokeStyle=`rgba(2,2,3,${0.5+Math.random()*0.4})`;g.lineWidth=1+Math.random()*2.2;
+    g.beginPath();g.moveTo(x,y);for(let k=0;k<6;k++){x+=(Math.random()-.5)*w*0.12;y+=(Math.random()-.3)*h*0.012;g.lineTo(x,y);}g.stroke();
+  }
+  for(let i=0;i<30;i++){
+    const x=Math.random()*w,y=Math.random()*h,r=2+Math.random()*7;
+    const gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,'rgba(0,0,0,.5)');gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=gr;g.beginPath();g.ellipse(x,y,r*0.7,r*2.2,0,0,7);g.fill();
+  }
 }
 function asphaltBase(g,w,h,fallbackFill){
   if(ASPHALT_IMG){drawAsphaltPhoto(g,w,h);}
@@ -1721,21 +1764,58 @@ function addRoad(axis,r){
   mesh.receiveShadow=true;scene.add(mesh);
   (window.__roadMeshes||(window.__roadMeshes=[])).push({mesh,r}); // tracked for the real-asphalt swap
   if(r.w<=10)return; // alleys: no sidewalks/curbs
+  // Sidewalks stop at every junction. They used to be one raised box per road running the full
+  // width of the city, so a kerb strip crossed straight over every intersection and you could not
+  // tell pavement from carriageway. Now each block side gets its own slab with a kerb face on all
+  // four sides; the north-south walks own the corner squares, the east-west walks stop short of them.
+  const cross=(axis==='x'?ROADS_Z.filter(q=>q.p<=SEA_Z0):ROADS_X).slice().sort((a,b)=>a.p-b.p);
+  const lo=-CITY, hi=axis==='x'?SEA_Z0:CITY;
+  const cutHW=q=>q.w/2+(axis==='z'&&q.w>10?SW:0);
+  let a=lo;
+  const segs=[];
+  cross.forEach(q=>{const e0=q.p-cutHW(q),e1=q.p+cutHW(q);if(e0>a+0.5)segs.push([a,Math.min(e0,hi)]);a=Math.max(a,e1);});
+  if(hi>a+0.5)segs.push([a,hi]);
   [-1,1].forEach(sd=>{
-    const off=r.w/2+SW/2;
-    // sidewalk is now a single raised BOX (not a flat plane): the top face is the walkable
-    // texture, the vertical side faces are the weathered kerb wall — real relief/depth instead
-    // of a painted-flat decal, and one mesh instead of two (fewer draw calls than before).
-    const boxGeo=axis==='x'?new THREE.BoxGeometry(SW,CURB_H,LAND_LEN):new THREE.BoxGeometry(CITY*2,CURB_H,SW);
-    const sw2=new THREE.Mesh(boxGeo,[curbFaceMat,curbFaceMat,sidewalkMat,curbBottomMat,curbFaceMat,curbFaceMat]);
-    if(axis==='x')sw2.position.set(r.p+sd*off,CURB_H/2,LAND_CZ);
-    else sw2.position.set(0,CURB_H/2,r.p+sd*off);
-    sw2.receiveShadow=true;
-    scene.add(sw2);
+    const c=r.p+sd*(r.w/2+SW/2);
+    segs.forEach(([a0,a1])=>{ if(a1-a0>0.6)SW_SEGS.push({axis,c,a0,a1}); });
   });
 }
+const SW_SEGS=[];
 ROADS_X.forEach(r=>addRoad('x',r));
 ROADS_Z.forEach(r=>addRoad('z',r));
+{
+  // build every sidewalk slab into two merged meshes: walk tops + kerb walls (2 draw calls total)
+  const TP=[],TN=[],TU=[],KP=[],KN=[],KU=[];
+  const V=(axis,ac,al,y)=>axis==='x'?[ac,y,al]:[al,y,ac];         // (across, along) -> world
+  const quad=(P,N,U,pts,uvs,n)=>{
+    const t=[[0,1,2],[0,2,3]];
+    // wind so the face points along n
+    const e1=[pts[1][0]-pts[0][0],pts[1][1]-pts[0][1],pts[1][2]-pts[0][2]],e2=[pts[2][0]-pts[0][0],pts[2][1]-pts[0][1],pts[2][2]-pts[0][2]];
+    const cr=[e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]];
+    const flip=(cr[0]*n[0]+cr[1]*n[1]+cr[2]*n[2])<0;
+    t.forEach(tri=>{(flip?[tri[0],tri[2],tri[1]]:tri).forEach(i=>{P.push(...pts[i]);N.push(...n);U.push(...uvs[i]);});});
+  };
+  const KL=9.6, LREF=CITY*2;                                      // kerb tile length, walk texture span
+  SW_SEGS.forEach(({axis,c,a0,a1})=>{
+    const x0=c-SW/2,x1=c+SW/2,h=CURB_H;
+    quad(TP,TN,TU,[V(axis,x0,a0,h),V(axis,x1,a0,h),V(axis,x1,a1,h),V(axis,x0,a1,h)],
+      [[0,a0/LREF],[1,a0/LREF],[1,a1/LREF],[0,a1/LREF]],[0,1,0]);
+    const nAc=s2=>axis==='x'?[s2,0,0]:[0,0,s2], nAl=s2=>axis==='x'?[0,0,s2]:[s2,0,0];
+    const L=(a1-a0)/KL, Wd=SW/KL;
+    [[x0,-1],[x1,1]].forEach(([xc,s2])=>quad(KP,KN,KU,[V(axis,xc,a0,0),V(axis,xc,a1,0),V(axis,xc,a1,h),V(axis,xc,a0,h)],
+      [[0,0],[L,0],[L,1],[0,1]],nAc(s2)));
+    [[a0,-1],[a1,1]].forEach(([ac,s2])=>quad(KP,KN,KU,[V(axis,x0,ac,0),V(axis,x1,ac,0),V(axis,x1,ac,h),V(axis,x0,ac,h)],
+      [[0,0],[Wd,0],[Wd,1],[0,1]],nAl(s2)));
+  });
+  const mk=(P,N,U,mat)=>{const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));g.computeBoundingSphere();
+    const m=new THREE.Mesh(g,mat);m.receiveShadow=true;m.frustumCulled=false;scene.add(m);return m;};
+  const kt=curbFaceTex.clone();kt.needsUpdate=true;kt.repeat.set(1,1);kt.wrapS=kt.wrapT=THREE.RepeatWrapping;
+  window.__kerbMat=new THREE.MeshStandardMaterial({map:kt,color:0xa2a4ae,roughness:0.86,metalness:0.1,envMapIntensity:0.65});
+  mk(TP,TN,TU,sidewalkMat);mk(KP,KN,KU,window.__kerbMat);
+  window.__swStats={segments:SW_SEGS.length};
+}
 
 // ---------- STREET-LEVEL RELIEF DETAIL: manholes, gutter drain grates, expansion-seam lines,
 // and sparse kerb props (bollards/cones/barrier) — everything here is a handful of shared
@@ -1752,6 +1832,7 @@ function scatterRoadPoints(count,minW){
     const along=(Math.random()-0.5)*CITY*1.9;
     const wx=useX?r.p:along, wz=useX?along:r.p;
     if(wx>RIVER.x0-8&&wx<RIVER.x1+8)continue; // skip the river band
+    if(useX?ROADS_Z.some(q=>Math.abs(wz-q.p)<q.w/2+SW+1):ROADS_X.some(q=>Math.abs(wx-q.p)<q.w/2+SW+1))continue; // not in a junction
     pts.push({useX,r,along,wx,wz});
   }
   return pts;
@@ -3547,8 +3628,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const trunkMat=new THREE.MeshLambertMaterial({color:0x3a2a1e});
   const leafCols=[new THREE.Color(0x2f4428),new THREE.Color(0x3a4a2a),new THREE.Color(0x2a3d2c),new THREE.Color(0x44532f)];   // same stock as the street trees
   const treeItems=[], lantItems=[];
-  const addTree=(x,z,h)=>treeItems.push({x,z,s:h/11.5,ry:Math.random()*Math.PI*2,c:leafCols[Math.floor(Math.random()*leafCols.length)]});
-  const addLantern=(x,z)=>lantItems.push({x,z,ry:Math.random()*Math.PI*2});
+  const addTree=(x,z,h)=>roadAt(x,z,2)?0:treeItems.push({x,z,s:h/11.5,ry:Math.random()*Math.PI*2,c:leafCols[Math.floor(Math.random()*leafCols.length)]});
+  const addLantern=(x,z)=>roadAt(x,z,0.5)?0:lantItems.push({x,z,ry:Math.random()*Math.PI*2});
   const clearAround=(x,z,r)=>{for(let i=buildings.length-1;i>=0;i--){const b=buildings[i];const dx=b.m.position.x-x,dz=b.m.position.z-z;if(dx*dx+dz*dz<r*r){scene.remove(b.m);buildings.splice(i,1);}}};
 
   function makeTorii(s){
@@ -3591,7 +3672,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 
   const toriiSpots=[[-60,-360],[150,300],[-380,-40],[380,170],[-150,70],[240,-250],[70,430],[-260,-300],[420,-150],[-40,250],[190,-430],[-430,330]];
   toriiSpots.forEach(([x,z])=>{ if(x>440&&x<560)return; if(z>560)return; if(Math.abs(z-192)<12||Math.abs(z+288)<12)return;
-    clearAround(x,z,15); const t=makeTorii(11+Math.random()*4);t.position.set(x,0,z);t.rotation.y=Math.random()*Math.PI;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
+    if(roadAt(x,z,7))return;               // a torii in the middle of a junction reads as a placement bug
+    clearAround(x,z,15); const t=makeTorii(11+Math.random()*4);t.position.set(x,0,z);t.rotation.y=Math.random()<.5?0:Math.PI/2;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
 
   let placed=0,tries=0;
   while(placed<18&&tries<220){tries++; const x=(Math.random()-0.5)*1000,z=(Math.random()-0.5)*1000;
@@ -3823,6 +3905,8 @@ function lampRow(axis,r){
       if(Math.random()<0.12)return;
       const off=r.w/2+1.0;
       const x=axis==='x'?r.p+sd*off:a+(sd>0?23:0), z=axis==='x'?a+(sd>0?23:0):r.p+sd*off;
+      if(axis==='x'?(z>SEA_Z0-2||ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+SW+1.5))
+                   :(ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+SW+1.5)||Math.abs(x-riverCX(z))<RIVER_HW+10))return;   // no poles in a junction
       const warm=Math.random()<0.5; // alternate warm-sodium / cool-mercury lamps for colour variance
       const pole=new THREE.Mesh(new THREE.CylinderGeometry(.13,.17,9.5,6),lampMat);
       pole.position.set(x,4.75,z);scene.add(pole);
@@ -4225,6 +4309,7 @@ const CANOPY_GEOS=Array.from({length:6},()=>{
   const g=mergeGeos(geos,mats);g.computeVertexNormals();return g;
 });
 function plantTree(x,z,sc){
+  if(sc===1&&roadAt(x,z,1.5))return;      // park trees: never on a street (avenue trees pass sc<1 and sit on the walk)
   sc=(sc||1)*(0.85+Math.random()*0.4);
   const t=new THREE.Group();
   const tr=new THREE.Mesh(trunkG,trunkM);tr.position.y=2.2*sc;tr.scale.setScalar(sc);t.add(tr);
@@ -4233,9 +4318,17 @@ function plantTree(x,z,sc){
   t.position.set(x,0,z);scene.add(t);
 }
 treeSpots.forEach(([x,z])=>plantTree(x,z,1));
-ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z).forEach(r=>{
-  for(let a=-500;a<=500;a+=64){
-    [-1,1].forEach(sd=>{if(Math.random()<0.3)return;plantTree(a+11,r.p+sd*(r.w/2+SW+1.6),0.8);});
+// avenue trees stand IN the sidewalk, 0.9 m back from the kerb, at a regular pitch — and
+// skip any spot that falls in a cross street, over the river or on the bay front
+ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z&&r.p<SEA_Z0).forEach(r=>{
+  for(let a=-520;a<=520;a+=16){
+    [-1,1].forEach(sd=>{
+      const x=a+(sd>0?8:0), z=r.p+sd*(r.w/2+0.9);
+      if(ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+(q.w>10?SW:0)+2.5))return;
+      if(Math.abs(x-riverCX(z))<RIVER_HW+14)return;
+      if(Math.random()<0.18)return;
+      plantTree(x,z,0.62);
+    });
   }
 });
 
@@ -5560,15 +5653,17 @@ const DPR=()=>Math.min(devicePixelRatio||1,2);   // 3x meant clearing+redrawing 
 // laptop was unreadable; the canvas HUD is drawn in logical units and blown up by this,
 // and the DOM panels read the same factor through the --hs custom property.
 let HUD_S=1;
+const FLT_H=92, ARM_H=146, COL_W=216;   // fixed panel heights: nothing below them ever jumps
 function sizeHUD(){
-  HUD_S=Math.max(1,Math.min(1.7,Math.min(W()/1000,H()/620)));
+  HUD_S=Math.max(0.9,Math.min(1.25,Math.min(W()/1280,H()/780)));
   document.documentElement.style.setProperty('--hs',HUD_S.toFixed(3));
   hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());
   hudCv.style.width=W()+'px';hudCv.style.height=H()+'px';   // CSS size != backing size
   // DOM panels that sit under canvas panels follow them down as the HUD scales
   const il=document.getElementById('intelLog'),st=document.getElementById('steps');
-  if(il)il.style.top=W()>=620&&H()>520?Math.round((12+166+8)*HUD_S)+'px':'';  // under ARMAMENT (max height)
-  if(st)st.style.top=Math.round((12+118+10)*HUD_S)+'px';              // under FLIGHT (max height)
+  // two columns, flush: FLIGHT over STEPS on the left, ARMAMENT over CREW on the right
+  if(il)il.style.top=W()/HUD_S>=620&&H()>520?Math.round((12+ARM_H+6)*HUD_S)+'px':'';
+  if(st)st.style.top=Math.round((12+FLT_H+6)*HUD_S)+'px';
 }
 sizeHUD();
 // ============================================================================
@@ -5944,6 +6039,12 @@ function tape(cx,cy,h,val,step,unit,side,warnLow){
 }
 
 // --- heading tape (top centre) ---
+// local time: 22:10 at the first shop, past 02:00 by the last; also creeps with real play time
+let runClock0=performance.now();
+function clockText(){
+  const m=(22*60+10)+Math.max(0,(TOD.t-TOD_START)/(1-TOD_START))*230+(performance.now()-runClock0)/1000/4;
+  const mm=Math.floor(m)%(24*60);return String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');
+}
 function headingTape(cx,y,w,hdg){
   const x=hudX;
   x.save();x.beginPath();x.rect(cx-w/2,y-2,w,28);x.clip();
@@ -6017,8 +6118,12 @@ function drawHUD(now){
 
   // ---------------- TOP-LEFT: flight status ----------------
   if(!cockpitMode){
-    const pw=compact?190:226, ph=(mult>1?118:100);
-    hudPanel(M,M,pw,ph,compact?'FLIGHT':'FLIGHT · '+pilotName.toUpperCase());
+    const pw=compact?190:COL_W, ph=FLT_H;
+    hudPanel(M,M,pw,ph,compact?'FLIGHT':'FLIGHT · '+pilotName.toUpperCase().slice(0,10));
+    hudX.font=T(UI.label,true);hudX.textAlign='right';
+    if(mult>1){hudX.fillStyle=UI.warn;hudX.fillText('x'+mult.toFixed(1)+' · '+streak,M+pw-UI.PAD,M+15);}
+    else{hudX.fillStyle=UI.hi;hudX.fillText(clockText()+' JST',M+pw-UI.PAD,M+15);}
+    hudX.textAlign='left';
     const ix=M+UI.PAD, iw=pw-UI.PAD*2;
     let iy=M+38;
     hudRow(ix,iy,iw,'SCORE',String(score));iy+=UI.ROW;
@@ -6030,10 +6135,6 @@ function drawHUD(now){
       hudX.strokeRect(ix-3,iy-12,iw+6,17);hudX.lineWidth=1;
     }
     iy+=UI.ROW;
-    if(mult>1){
-      hudX.fillStyle=UI.warn;hudX.font=T(UI.body,true);hudX.textAlign='left';
-      hudX.fillText('x'+mult.toFixed(1)+' COMBO · '+streak,ix,iy);iy+=UI.ROW;
-    }
     // hull: segmented meter, colour is the only status signal
     const hcol=hp>60?UI.ui:hp>30?UI.warn:UI.alert;
     hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);hudX.textAlign='left';hudX.fillText('HULL',ix,iy);
@@ -6043,7 +6144,7 @@ function drawHUD(now){
   }
 
   // ---------------- TOP-CENTRE: current objective ----------------
-  if(!compact&&!cockpitMode){
+  if(false){                                   // superseded by the STEPS panel header
     const headline=missionHeadline();
     hudX.font=T(15,true);
     const mpW=Math.min(w*0.56,Math.max(hudX.measureText(headline).width+48,220));
@@ -6059,9 +6160,9 @@ function drawHUD(now){
 
   // ---------------- TOP-RIGHT: armament ----------------
   if(!cockpitMode){
-    const pw=compact?170:196, px=w-M-pw, py=M;
-    const rowH=compact?18:20;
-    const ph=30+4*rowH+40+(guidedWpn?16:0);
+    const pw=compact?170:COL_W, px=w-M-pw, py=M;
+    const rowH=18;
+    const ph=compact?30+4*rowH+40+(guidedWpn?16:0):ARM_H;
     hudPanel(px,py,pw,ph,'ARMAMENT');
     const ix=px+UI.PAD, iw=pw-UI.PAD*2;
     let iy=py+38;
@@ -6072,7 +6173,7 @@ function drawHUD(now){
         hudX.fillStyle='rgba(255,194,58,.13)';hudX.fillRect(px+4,iy-12,pw-8,rowH);
         hudX.strokeStyle=UI.warn;hudX.strokeRect(px+4.5,iy-11.5,pw-9,rowH-1);
       }
-      hudX.font=T(compact?12:13,sel);
+      hudX.font=T(UI.body,sel);
       hudX.fillStyle=sel?UI.warn:out?'rgba(255,59,82,.55)':UI.dim;
       hudX.textAlign='left';hudX.fillText('['+(k+1)+'] '+names[k],ix,iy);
       hudX.textAlign='right';hudX.fillText(ammo[k]===Infinity?'∞':String(ammo[k]),ix+iw,iy);
@@ -6163,7 +6264,7 @@ function drawHUD(now){
   if(winch.crew||(now-crewBoardT)<2600){
     const boarding=!winch.crew&&crewBoardWho;
     const c=boarding?crewBoardWho:winch.crew;
-    const pw=272,ph=84,px=cx-pw/2,py=Math.min(h-150,cy+86);
+    const pw=300,ph=boarding?84:100,px=cx-pw/2,py=Math.min(h-150-ph+84,cy+70);
     hudPanel(px,py,pw,ph,boarding?'CREW ABOARD':'HOIST');
     const av=crewAvatar(c);
     hudX.drawImage(av,px+UI.PAD,py+26,52,52);
@@ -6176,11 +6277,14 @@ function drawHUD(now){
       hudX.fillStyle=UI.ok;hudX.font=T(UI.label,true);
       hudX.fillText(c.perk,tx,py+70);
     }else{
+      // he is ON THE CABLE — say how it's going and the one thing to fix, big
       const frac=winch.t/EXTRACT_TIME, good=!winch.fail;
       hudBar(tx,py+60,tw,7,frac,good?UI.ui:UI.warn,12);
-      hudX.font=T(UI.micro,true);
+      hudX.font=T(15,true);
       hudX.fillStyle=good?UI.ui:UI.warn;
-      hudX.fillText(good?('HOISTING '+Math.round(frac*100)+'%'):('⚠ '+winch.fail),tx,py+78);
+      hudX.fillText(good?('HOLD STEADY · '+Math.round(frac*100)+'%'):('⚠ '+winch.fail),tx,py+82);
+      hudX.font=T(UI.micro);hudX.fillStyle=UI.dim;
+      hudX.fillText(good?'keep the hover until he is aboard':'on the cable — fix it or he pays back out',tx,py+95);
     }
     hudX.textAlign='left';
   }
@@ -7465,7 +7569,7 @@ function buildVenueMarkers(){
       c.fillStyle='#eafcff';c.font=`bold ${Math.round(h*0.26)}px monospace`;c.textAlign='center';c.textBaseline='middle';
       c.fillText(v.name,w/2,h*0.36);
       c.fillStyle='#ffd24a';c.font=`bold ${Math.round(h*0.3)}px ${MINCHO}`;c.fillText(v.jp,w/2,h*0.68);
-    },256,128),transparent:true,depthWrite:false}));
+    },512,256),transparent:true,depthWrite:false}));
     board.position.set(0,15,0);g.add(board);
     v.marker=g;v.board=board;v.chev=chev;v.tdl=tdl;v.ring=ring;scene.add(g);
     g.visible=false; // revealed by refreshStageMarkers() — one objective at a time
@@ -7526,6 +7630,7 @@ function objectiveText(){
   if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
   if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — SET DOWN ON THE NAVY SHIP IN THE BAY';
   const pend=stagePendingCrew();
+  if(winch.crew)return 'HOISTING '+winch.crew.call+' — '+(winch.fail?winch.fail:'HOLD STEADY')+' ('+Math.round(winch.t/EXTRACT_TIME*100)+'%)';
   if(pend.length)return 'LEAD '+(stage+1)+'/'+VENUES.length+' — HOVER LOW AND SLOW OVER '+pend.map(c=>c.call).join(' & ')+' TO RUN THE HOIST';
   const v=activeVenue();
   if(v)return 'LEAD '+(stage+1)+'/'+VENUES.length+' — LAND ON THE CYAN PAD AT '+v.name+' '+v.jp+' AND PRESS E';
@@ -7577,14 +7682,14 @@ function updateGuide(){
     if(g===6)html='<div class="hd">OPERATION COMPLETE</div><div class="r done"><i>✓</i><span>ALL 5 CREW HOME</span></div>';
     else{
       const rows=[
-        ['FLY TO '+v.name, g===0&&dist?dist+' m':''],
+        ['FLY TO THE SHOP', g===0&&dist?dist+' m':''],
         ['LAND ON THE CYAN PAD',''],
         ['GO INSIDE','E'],
         ['TALK TO THE OWNER','F'],
-        ['HOIST '+(who?who.rank+' '+who.call:'THE CREW'), g===4?'LOW + SLOW':''],
+        [(winch.crew?'HOISTING ':'HOIST ')+(who?who.call:'THE CREW'), g===4?(winch.crew?Math.round(winch.t/EXTRACT_TIME*100)+'%':'LOW · SLOW'):''],
         ['FLY TO THE NAVY SHIP', g===5&&ship?ship+' m':''],
       ];
-      html='<div class="hd">LEAD '+(Math.min(stage,VENUES.length-1)+1)+' / '+VENUES.length+' · WHAT TO DO</div>';
+      html='<div class="hd">LEAD '+(Math.min(stage,VENUES.length-1)+1)+'/'+VENUES.length+' · '+v.name+'</div>';
       rows.forEach((r,i)=>{
         const cls=i<g?'done':i===g?'cur':'';
         html+='<div class="r '+cls+'"><i>'+(i<g?'✓':i===g?'▶':(i+1))+'</i><span>'+r[0]+'</span>'+(r[1]&&i>=g?'<em>'+r[1]+'</em>':'')+'</div>';
@@ -7595,7 +7700,7 @@ function updateGuide(){
   }
   // ---- action prompt (flight only; the interior sets its own below) ----
   if(interiorMode)return;
-  if(winch.crew){setAct(null);return;}                       // the HOIST panel takes over
+  if(winch.crew){setAct(null);return;}   // he is on the cable: the HOIST card shows live status
   const nv=nearestVenue();
   if(nv&&!nv.visited){setAct('E','GO INSIDE '+nv.name,'you are on the pad');return;}
   if(g===1){
@@ -8051,7 +8156,7 @@ function resetRunState(){
   if(interiorMode)exitVenue();
   CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
   VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
-  aboard=[];missionDone=false;stage=0;TOD.target=todForStage(0);TOD.t=TOD.pinned!==null?TOD.pinned:0;
+  aboard=[];missionDone=false;stage=0;TOD.target=todForStage(0);TOD.t=TOD.pinned!==null?TOD.pinned:TOD_START;runClock0=performance.now();
   winch.crew=null;winch.t=0;if(winch.line)winch.line.visible=false;
   crewBoardWho=null;window.__deckState=null;
   ammoMax=BASE_AMMO_MAX.slice();
@@ -8729,6 +8834,8 @@ function loop(now){
     VENUES.forEach(v=>{
       if(!v.marker||!v.marker.visible)return;
       v.board.lookAt(cam.position);
+      {const d=Math.hypot(heli.position.x-v.x,heli.position.z-v.z);   // a guide from afar, out of the way once you're there
+       v.board.material.opacity=THREE.MathUtils.clamp((d-18)/30,0,1);v.board.visible=v.board.material.opacity>0.01;}
       const t=now/1000;
       v.chev.forEach((c,i)=>{
         let y=8+((i*9)-(t*11)%36+36)%36;
