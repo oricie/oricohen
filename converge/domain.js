@@ -8,7 +8,7 @@
 
   const P = {
     finance: {
-      re: /financ|fp&a|planning|budget|forecast|account|treasury|cfo|p&l|ledger/, name: 'Meridian', kind: 'Financial planning platform', users: 'Finance teams',
+      re: /financ|fp&a|planning|budget|forecast|account|treasury|cfo|p&l|ledger|תכנון פיננסי|תקציב|פיננס|תזרים|חשבונאות/, name: 'Meridian', kind: 'Financial planning platform', users: 'Finance teams',
       cur: '$', unit: 'M', e: ['cost center', 'Cost centers'], labels: { home: 'Overview', workflow: 'Planning cycle', table: 'Cost centers', insights: 'Scenarios', approvals: 'Approvals', settings: 'Settings' },
       groups: { home: 'Plan', workflow: 'Plan', table: 'Plan', insights: 'Analyze', approvals: 'Operate', settings: 'Admin' },
       names: ['Marketing, EMEA', 'R&D Platform', 'Field Sales, NA', 'Customer Success', 'Data Infrastructure', 'People Operations', 'Legal & Compliance', 'Brand & Content', 'Security Engineering', 'Partner Programs', 'Finance Operations', 'Cloud Hosting', 'Product Design', 'Inside Sales', 'IT Services', 'Facilities', 'Recruiting', 'Payments Team'],
@@ -25,7 +25,7 @@
       settings: [['Planning calendar', [['Fiscal year starts', 'April'], ['Planning cycle length', '10 weeks'], ['Forecast cadence', 'Monthly']]], ['Dimensions & hierarchies', [['Cost center hierarchy', '4 levels'], ['Currency', 'USD, EUR, GBP'], ['Entities', '6 legal entities']]], ['Approval policies', [['Auto-approve under', '$100K'], ['CFO sign-off over', '$500K'], ['Require comments on overruns', 'on']]], ['Integrations', [['ERP', 'NetSuite · synced 2h ago'], ['HRIS', 'Workday · synced 1d ago'], ['Warehouse', 'Snowflake · live']]]]
     },
     erp: {
-      re: /erp|procure|inventory|supply|manufactur|warehouse|logistic|order|purchas/, name: 'Foundry', kind: 'ERP for operations', users: 'Operations teams',
+      re: /erp|procure|inventory|supply|manufactur|warehouse|logistic|order|purchas|מלאי|רכש|ייצור|לוגיסטי|מחסן|ספקים/, name: 'Foundry', kind: 'ERP for operations', users: 'Operations teams',
       cur: '$', unit: 'K', e: ['purchase order', 'Purchase orders'], labels: { home: 'Operations', workflow: 'Procure to pay', table: 'Purchase orders', insights: 'Supply insights', approvals: 'Approvals', settings: 'Settings' },
       groups: { home: 'Operate', workflow: 'Operate', table: 'Operate', insights: 'Analyze', approvals: 'Operate', settings: 'Admin' },
       names: ['Steel coil, 2mm', 'Bearings kit B-440', 'Packaging, retail', 'Hydraulic pumps', 'Aluminium extrusions', 'Control boards v3', 'Fasteners, assorted', 'Cable assemblies', 'Lubricants, bulk', 'Safety equipment', 'Pallets, EUR', 'Sensors, flow', 'Gaskets, nitrile', 'Motors, 3-phase', 'Paint, industrial', 'Filters, HEPA'],
@@ -42,7 +42,7 @@
       settings: [['Procurement policy', [['Auto-approve under', '$5K'], ['Three-way match tolerance', '2%'], ['Preferred suppliers only', 'on']]], ['Warehouses', [['Locations', '5 sites'], ['Cycle count', 'Weekly'], ['Safety stock rule', 'Per item class']]], ['Roles', [['Buyers', '14 people'], ['Approvers', '6 people'], ['Auditors', '3 people']]], ['Integrations', [['Accounting', 'Connected'], ['Carrier tracking', 'Connected'], ['EDI partners', '23 active']]]]
     },
     crm: {
-      re: /crm|sales|pipeline|customer|lead|deal|account manag/, name: 'Harbor', kind: 'CRM for sales teams', users: 'Sales teams',
+      re: /crm|sales|pipeline|customer|lead|deal|account manag|מכירות|לקוחות|עסקאות|פייפליין/, name: 'Harbor', kind: 'CRM for sales teams', users: 'Sales teams',
       cur: '$', unit: 'K', e: ['opportunity', 'Opportunities'], labels: { home: 'Pipeline', workflow: 'Deal desk', table: 'Opportunities', insights: 'Forecast', approvals: 'Approvals', settings: 'Settings' },
       groups: { home: 'Sell', workflow: 'Sell', table: 'Sell', insights: 'Analyze', approvals: 'Operate', settings: 'Admin' },
       names: ['Northwind Logistics', 'Acme Retail Group', 'Helios Energy', 'Brightwave Media', 'Orbital Health', 'Kestrel Bank', 'Lumen Foods', 'Atlas Mobility', 'Verde Capital', 'Polar Systems', 'Cobalt Insurance', 'Tidewater Marine', 'Summit Education', 'Aurora Telecom', 'Ironbridge Steel', 'Zenith Pharma'],
@@ -59,7 +59,7 @@
       settings: [['Pipeline', [['Stages', '6 stages'], ['Forecast categories', 'Commit, Best case, Pipeline'], ['Close date required', 'on']]], ['Discount policy', [['Rep limit', '10%'], ['Manager limit', '20%'], ['Deal desk over', '20%']]], ['Roles', [['Reps', '48 people'], ['Managers', '9 people'], ['Revenue ops', '4 people']]], ['Integrations', [['Email & calendar', 'Connected'], ['Billing', 'Stripe'], ['Data warehouse', 'BigQuery']]]]
     },
     bi: {
-      re: /\bbi\b|analytic|dashboard|metric|insight|report|data platform|warehouse|business intelligence/, name: 'Lumen', kind: 'BI & analytics platform', users: 'Analysts and operators',
+      re: /\bbi\b|analytic|dashboard|metric|insight|report|data platform|warehouse|business intelligence|דוחות|נתונים|אנליטיקה|בינה עסקית/, name: 'Lumen', kind: 'BI & analytics platform', users: 'Analysts and operators',
       cur: '', unit: '', e: ['metric', 'Metrics'], labels: { home: 'Home', workflow: 'Analysis', table: 'Metrics', insights: 'Explore', approvals: 'Alerts', settings: 'Settings' },
       groups: { home: 'Explore', workflow: 'Explore', table: 'Explore', insights: 'Explore', approvals: 'Monitor', settings: 'Admin' },
       names: ['Weekly active users', 'Net revenue retention', 'Checkout conversion', 'Support first response', 'Gross margin', 'Churn, 30 day', 'Feature adoption', 'CAC payback', 'Pipeline velocity', 'NPS', 'Error rate', 'Time to value', 'Trial to paid', 'Order defect rate'],
@@ -76,7 +76,7 @@
       settings: [['Data sources', [['Warehouse', 'BigQuery · live'], ['Product events', 'Segment'], ['CRM', 'Salesforce · hourly']]], ['Metric definitions', [['Governed metrics', '84'], ['Certified', '51'], ['Require review to change', 'on']]], ['Access', [['Viewers', '320 people'], ['Editors', '41 people'], ['Row-level rules', '12']]], ['Alerts', [['Delivery', 'Slack, email'], ['Quiet hours', '19:00 to 07:00'], ['Anomaly sensitivity', 'Medium']]]]
     },
     dev: {
-      re: /develop|devtool|engineer|deploy|incident|ci\b|cicd|observab|api|infra|platform eng|sre|code|git/, name: 'Relay', kind: 'Developer platform', users: 'Engineering teams',
+      re: /develop|devtool|engineer|deploy|incident|ci\b|cicd|observab|api|infra|platform eng|sre|code|git|מפתחים|פיתוח|תקלות|פריסה|סביבת פיתוח/, name: 'Relay', kind: 'Developer platform', users: 'Engineering teams',
       cur: '', unit: '', e: ['service', 'Services'], labels: { home: 'Overview', workflow: 'Incident response', table: 'Services', insights: 'Reliability', approvals: 'Deploy gates', settings: 'Settings' },
       groups: { home: 'Build', workflow: 'Operate', table: 'Build', insights: 'Operate', approvals: 'Operate', settings: 'Admin' },
       names: ['checkout-api', 'auth-service', 'search-indexer', 'billing-worker', 'notifications', 'edge-gateway', 'media-pipeline', 'recs-ranker', 'orders-db', 'feature-flags', 'webhooks', 'identity-sync', 'reports-batch', 'cdn-config'],
@@ -93,7 +93,7 @@
       settings: [['Environments', [['Production', '3 regions'], ['Staging', '1 region'], ['Preview', 'per pull request']]], ['Deploy policy', [['Require passing checks', 'on'], ['Freeze window', 'Fri 16:00 to Mon 09:00'], ['Auto-rollback on errors', 'on']]], ['Access', [['Engineers', '142 people'], ['On-call', '18 people'], ['Admins', '5 people']]], ['Integrations', [['Source control', 'GitHub'], ['Chat', 'Slack'], ['Paging', 'PagerDuty']]]]
     },
     admin: {
-      re: /admin|identity|access|permission|iam|user manage|compliance|governance|audit|security/, name: 'Keystone', kind: 'Admin & access platform', users: 'IT and security admins',
+      re: /admin|identity|access|permission|iam|user manage|compliance|governance|audit|security|הרשאות|זהויות|ניהול משתמשים|אבטחת מידע|ציות/, name: 'Keystone', kind: 'Admin & access platform', users: 'IT and security admins',
       cur: '', unit: '', e: ['user', 'Users'], labels: { home: 'Overview', workflow: 'Access reviews', table: 'Users & access', insights: 'Risk', approvals: 'Requests', settings: 'Settings' },
       groups: { home: 'Govern', workflow: 'Govern', table: 'Manage', insights: 'Govern', approvals: 'Manage', settings: 'Admin' },
       names: ['Aiko Tanaka', 'Marcus Lee', 'Noa Levi', 'Elena Petrova', 'Ibrahim Yusuf', 'Hannah Weiss', 'Tomás Ribeiro', 'Sofia Alvarez', 'Lukas Brandt', 'Priya Raman', 'Daniel Okafor', 'Maya Chen', 'Jonas Berg', 'Amara Nwosu'],

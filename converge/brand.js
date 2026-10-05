@@ -149,8 +149,10 @@
   function screensFor(d, n) { return [{ id: 'site', state: { screen: 'site' } }, { id: 'scroll', state: { screen: 'scroll' } }, { id: 'brand', state: { screen: 'brand' } }].slice(0, n); }
   const LB = { site: 'Website', scroll: 'Page', brand: 'Brand board' };
 
-  const BRAND_KEYS = /platform|\berp\b|\bcrm\b|saas|dashboard|enterprise|analytic|admin|developer|b2b|internal tool|workflow|portal|console|compliance|\bapi\b|software for|planning|data platform|business intelligence|\bbi\b|\bapp\b/i;
-  const detectKind = t => BRAND_KEYS.test(t || '') ? 'product' : 'brand';
+  // Strong signals of a complex product, then signals of a brand/website. English and Hebrew.
+  const COMPLEX = /\b(erp|crm|enterprise|dashboard|analytics|back.?office|admin (console|panel|platform)|internal tool|workflow|b2b|saas|platform|developer tools?|data platform|business intelligence|bi)\b|פלטפורמ|מערכת (ניהול|לניהול|ארגונית)|דשבורד|אנליטיקה|ארגוני|תוכנה ל|תכנון פיננסי|ניהול (מלאי|לקוחות|הרשאות)|סאס/i;
+  const BRANDY = /\b(logo|branding|brand|landing page|website|portfolio|shop|store|restaurant|caf[eé]|bakery|bagel|studio|salon|boutique|bar|clinic|gym|florist|hotel)\b|לוגו|מיתוג|אתר|תיק עבודות|חנות|מסעדה|בית קפה|מאפיי|בייגל|סטודיו|מספרה|בוטיק|קליניקה|יוגה|פיצרי/i;
+  const detectKind = t => { t = t || ''; const c = COMPLEX.test(t), b = BRANDY.test(t); if (b && !/\b(erp|crm|enterprise|dashboard|analytics|admin (console|panel))\b|ארגוני|דשבורד/i.test(t)) return 'brand'; return c ? 'product' : 'brand'; };
 
   g.BRAND = {
     model: { AXES, ARCH, AX: {}, learn: MD.learn, meters, summary, reaction, closing, makeDirection, initialDirections, nextDirection, finalDirection, ready: MD.ready },

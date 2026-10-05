@@ -201,3 +201,5 @@ h1 em{background:var(--grad);-webkit-background-clip:text;background-clip:text;c
 .mhead h3{font:800 1.4rem var(--disp);letter-spacing:-.02em}.sh h3{font:800 1.8rem var(--disp);letter-spacing:-.03em}.tree>li>b{font:700 1.3rem var(--disp)}
 .tag{font-weight:600}
 .chips.eg{margin:0;max-width:none;gap:8px}
+
+.ktag{font:600 .66rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--acc);background:var(--soft);padding:5px 10px;border-radius:99px;white-space:nowrap}@media(max-width:820px){.ktag{display:none}}

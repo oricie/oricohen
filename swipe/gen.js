@@ -102,7 +102,7 @@
   /* ───────── industries ───────── */
   const IND = {
     security: {
-      re: /secur|cyber|protect|firewall|threat|pentest|infosec|privacy|vpn|antivirus|encrypt/, hue: [[185, 215], [245, 275], [150, 168]],
+      re: /secur|cyber|protect|firewall|threat|pentest|infosec|privacy|vpn|antivirus|encrypt|אבטחה|סייבר/, hue: [[185, 215], [245, 275], [150, 168]],
       modes: { dark: 3, light: 2, cream: 0, color: 0 }, fonts: { sans: 4, mono: 2, bold: 1 }, glyphs: ['shield', 'lock', 'hex', 'bolt', 'node'],
       names: ['Aegis', 'Vantage', 'Sentra', 'Bastion', 'Halcyon', 'Ironwood', 'Cipherly', 'Warden', 'Northguard', 'Lumen Secure'],
       eyebrow: 'Cyber security platform', nav: ['Platform', 'Solutions', 'Pricing', 'Docs'],
@@ -112,7 +112,7 @@
       quote: ['We cut our response time from hours to minutes.', 'Head of IT, Series B fintech'], stats: [['99.99%', 'Uptime'], ['< 5 min', 'Mean time to respond'], ['2,400+', 'Teams protected']]
     },
     pets: {
-      re: /\bpets?\b|\bdogs?\b|\bcats?\b|\bvet\b|veterin|groom|kennel|puppy|kitten|animal/, hue: [[18, 45], [160, 190], [330, 350]],
+      re: /\bpets?\b|\bdogs?\b|\bcats?\b|\bvet\b|veterin|groom|kennel|puppy|kitten|animal|כלב|חתול|וטרינר|חיות/, hue: [[18, 45], [160, 190], [330, 350]],
       modes: { color: 3, light: 2, cream: 2, dark: 0 }, fonts: { round: 4, bold: 1, sans: 1 }, glyphs: ['paw', 'heart', 'leaf', 'sun'],
       names: ['Happy Tails', 'Good Boy', 'Paws & Co', 'Whisker', 'Wag Club', 'Pawsitive', 'Fetch', 'Purrfect'],
       eyebrow: 'For the ones who love back', nav: ['Services', 'Team', 'Prices', 'Contact'],
@@ -122,7 +122,7 @@
       quote: ['My nervous pup actually runs to the door.', 'A relieved owner'], stats: [['3k+', 'Pets cared for'], ['4.9★', 'Owner rating'], ['7 days', 'Open weekly']]
     },
     kids: {
-      re: /\bkids?\b|child|toy|school|learn|educat|tutor|nursery|daycare|montessori|teach|course|academy/, hue: [[40, 55], [190, 210], [330, 350], [270, 285]],
+      re: /\bkids?\b|child|toy|school|learn|educat|tutor|nursery|daycare|montessori|teach|course|academy|ילדים|גן ילדים|חוג|בית ספר|לימוד/, hue: [[40, 55], [190, 210], [330, 350], [270, 285]],
       modes: { color: 4, light: 2, cream: 1, dark: 0 }, fonts: { round: 5, bold: 2 }, glyphs: ['book', 'sun', 'spark', 'heart', 'flower', 'peak'],
       names: ['Little Sprouts', 'Tiny Tinkers', 'Wonder Nook', 'Pip & Pals', 'Giggle Garden', 'Bright Bees', 'Cloud Nine', 'Moonbeam'],
       eyebrow: 'Learn & play', nav: ['Programs', 'Our team', 'Schedule', 'Contact'],
@@ -132,7 +132,7 @@
       quote: ['She talks about it all the way home.', 'Parent of a 6 year old'], stats: [['500+', 'Happy families'], ['1:6', 'Teacher to child'], ['4.9★', 'Parent rating']]
     },
     health: {
-      re: /fitness|\bgym\b|yoga|pilates|wellness|health|clinic|dental|dentist|therap|massage|\bspa\b|nutrition|physio|medical|meditat|coach|workout|climb/, hue: [[150, 190], [330, 350], [10, 25]],
+      re: /fitness|\bgym\b|yoga|pilates|wellness|health|clinic|dental|dentist|therap|massage|\bspa\b|nutrition|physio|medical|meditat|coach|workout|climb|יוגה|כושר|קליניקה|פיזיותרפיה|תזונה|טיפול|ספורט/, hue: [[150, 190], [330, 350], [10, 25]],
       modes: { light: 4, cream: 2, color: 2, dark: 1 }, fonts: { sans: 3, round: 2, serif: 1 }, glyphs: ['pulse', 'heart', 'leaf', 'sun', 'drop', 'peak'],
       names: ['Stride', 'Kindred Fit', 'Alive', 'Sol Studio', 'Ember', 'Bloom Move', 'Pulse & Co', 'Anchor'],
       eyebrow: 'Feel better, daily', nav: ['Classes', 'Coaches', 'Pricing', 'Contact'],
@@ -142,7 +142,7 @@
       quote: ['I finally look forward to Mondays.', 'Member since 2024'], stats: [['12k+', 'Sessions a month'], ['96%', 'Members stay'], ['7 days', 'Open each week']]
     },
     fashion: {
-      re: /fashion|cloth|apparel|boutique|beauty|salon|jewel|cosmetic|skincare|makeup|\bhair\b|barber|perfume|shoe|sneaker|tailor|lingerie|streetwear/, hue: [[330, 360], [20, 40], [260, 290]],
+      re: /fashion|cloth|apparel|boutique|beauty|salon|jewel|cosmetic|skincare|makeup|\bhair\b|barber|perfume|shoe|sneaker|tailor|lingerie|streetwear|אופנה|בוטיק|תכשיט|מספרה|קוסמטיקה|איפור|סלון/, hue: [[330, 360], [20, 40], [260, 290]],
       modes: { cream: 3, dark: 3, light: 2, color: 1 }, fonts: { serif: 5, sans: 2, bold: 1 }, glyphs: ['spark', 'flower', 'drop', 'heart', 'orbit'],
       names: ['Maison Noor', 'Atelier Vale', 'Thread & Co', 'Linden', 'Ode Studio', 'Sable', 'Oro', 'Marlowe'],
       eyebrow: 'New season', nav: ['Shop', 'Collections', 'About', 'Journal'],
@@ -152,7 +152,7 @@
       quote: ['I get asked where it’s from every single time.', 'A happy customer'], stats: [['100', 'Pieces per drop'], ['30 days', 'Free returns'], ['EU', 'Made in small studios']]
     },
     finance: {
-      re: /financ|\bbank|invest|insurance|\blaw\b|legal|lawyer|attorney|account|\btax\b|wealth|consult|advis|mortgage|fintech|payroll|bookkeep/, hue: [[205, 230], [150, 165], [255, 270]],
+      re: /financ|\bbank|invest|insurance|\blaw\b|legal|lawyer|attorney|account|\btax\b|wealth|consult|advis|mortgage|fintech|payroll|bookkeep|עורך דין|עורכת דין|ייעוץ|חשבונאות|ביטוח|מס\b/, hue: [[205, 230], [150, 165], [255, 270]],
       modes: { light: 4, dark: 2, cream: 1, color: 0 }, fonts: { sans: 4, serif: 2 }, glyphs: ['pillar', 'hex', 'peak', 'orbit', 'shield', 'spark'],
       names: ['Evergreen Capital', 'Northbridge', 'Clarity Advisors', 'Keystone', 'Harbor & Pine', 'Ledgerly', 'Meridian', 'Trellis'],
       eyebrow: 'Plain-English money', nav: ['Services', 'Pricing', 'About', 'Contact'],
@@ -162,7 +162,7 @@
       quote: ['First time money has made sense to me.', 'Client since 2022'], stats: [['$2.4B', 'Under care'], ['0', 'Hidden fees'], ['15 yrs', 'Of experience']]
     },
     food: {
-      re: /bagel|bakery|bread|cafe|café|coffee|restaurant|pizza|\bfood|\bdeli\b|donut|doughnut|pastry|kitchen|burger|taco|sushi|ice.?cream|diner|brunch|catering|bistro|\bbar\b|\bpub\b|\btea\b|cake|dessert|chocolate|juice|smoothie|brewery/, hue: [[4, 48]],
+      re: /bagel|bakery|bread|cafe|café|coffee|restaurant|pizza|\bfood|\bdeli\b|donut|doughnut|pastry|kitchen|burger|taco|sushi|ice.?cream|diner|brunch|catering|bistro|\bbar\b|\bpub\b|\btea\b|cake|dessert|chocolate|juice|smoothie|brewery|בייגל|מאפיי|קפה|מסעדה|פיצה|בישול|קייטרינג|בר\b|גלידה|שוקולד|עוגות|דוכן/, hue: [[4, 48]],
       modes: { cream: 3, color: 3, light: 2, dark: 0 }, fonts: { serif: 3, round: 3, bold: 2, sans: 1 }, glyphs: ['bagel', 'cup', 'sun', 'spark', 'leaf', 'heart'],
       names: ['Rise & Rye', 'Knead', 'Hole Story', 'Round Trip', 'Seeded', 'The Daily Roll', 'Crumb', 'Golden Hour', 'Hearth & Hole', 'Proof'],
       eyebrow: 'Fresh daily', nav: ['Menu', 'Our story', 'Visit', 'Order'],
@@ -172,7 +172,7 @@
       quote: ['The only place I’ll queue for.', 'A very loyal regular'], stats: [['6am', 'Doors open'], ['100%', 'Made in-house'], ['4.9★', 'Neighborhood rating']]
     },
     travel: {
-      re: /travel|hotel|\btours?\b|hostel|camp|surf|resort|adventure|hiking|\btrip|airbnb|\bbnb\b|vacation|outdoor|expedition|safari|cruise/, hue: [[175, 215], [15, 30], [40, 50]],
+      re: /travel|hotel|\btours?\b|hostel|camp|surf|resort|adventure|hiking|\btrip|airbnb|\bbnb\b|vacation|outdoor|expedition|safari|cruise|טיול|מלון|תיירות|צימר|אכסני/, hue: [[175, 215], [15, 30], [40, 50]],
       modes: { light: 3, cream: 2, color: 2, dark: 1 }, fonts: { sans: 3, serif: 2, bold: 1 }, glyphs: ['wave', 'peak', 'sun', 'orbit', 'drop', 'leaf'],
       names: ['Wander Well', 'Driftwood', 'Roam & Co', 'Compass Rose', 'Far & Away', 'Salt Route', 'Wayfarer', 'Tidewater'],
       eyebrow: 'Go somewhere', nav: ['Destinations', 'Experiences', 'Stories', 'Contact'],
@@ -182,7 +182,7 @@
       quote: ['Best trip we’ve ever taken, hands down.', 'Maya & Dan'], stats: [['60+', 'Destinations'], ['4.9★', 'Traveler rating'], ['24/7', 'Trip support']]
     },
     eco: {
-      re: /plant|garden|flower|\beco\b|eco-|organic|farm|sustain|vegan|nature|florist|soap|candle|zero.?waste|refill/, hue: [[95, 160], [20, 40]],
+      re: /plant|garden|flower|\beco\b|eco-|organic|farm|sustain|vegan|nature|florist|soap|candle|zero.?waste|refill|צמחים|גינה|פרחים|אורגני|קיימות|טבעוני|נרות|סבון/, hue: [[95, 160], [20, 40]],
       modes: { cream: 4, light: 2, color: 1, dark: 0 }, fonts: { serif: 3, round: 2, sans: 2 }, glyphs: ['leaf', 'flower', 'sun', 'drop', 'peak'],
       names: ['Pure Root', 'Moss & Co', 'Wild Clover', 'Fern', 'Terra Nova', 'Willow & Sage', 'Clay & Cedar', 'Greenhouse'],
       eyebrow: 'Grown with care', nav: ['Shop', 'Our story', 'Journal', 'Contact'],
@@ -192,7 +192,7 @@
       quote: ['I switched and never looked back.', 'Verified customer'], stats: [['100%', 'Recyclable packaging'], ['0', 'Nasties'], ['50+', 'Local partners']]
     },
     home: {
-      re: /furniture|interior|architect|real.?estate|property|renovat|construction|plumb|builder|decor|\bhome\b|carpent|landscap|cleaning/, hue: [[20, 40], [195, 215], [100, 140]],
+      re: /furniture|interior|architect|real.?estate|property|renovat|construction|plumb|builder|decor|\bhome\b|carpent|landscap|cleaning|ריהוט|עיצוב פנים|אדריכל|נדל|שיפוצ|קבלן/, hue: [[20, 40], [195, 215], [100, 140]],
       modes: { cream: 3, light: 3, dark: 1, color: 1 }, fonts: { serif: 3, sans: 3 }, glyphs: ['house', 'hex', 'sun', 'leaf'],
       names: ['Hearth & Beam', 'Studio Oak', 'Haven', 'Joist', 'Plinth', 'Oak & Linen', 'Cornerstone', 'Kiln'],
       eyebrow: 'Spaces that feel right', nav: ['Projects', 'Services', 'About', 'Contact'],
@@ -202,7 +202,7 @@
       quote: ['They understood our home better than we did.', 'Homeowner'], stats: [['300+', 'Projects'], ['12 yrs', 'Of craft'], ['On time', 'Every time']]
     },
     tech: {
-      re: /saas|software|platform|\bapps?\b|\bai\b|cloud|\bdata\b|\bdev|\bapi\b|startup|analytics|dashboard|automation|tool|crm|productivity|tech/, hue: [[215, 270], [160, 175], [330, 350]],
+      re: /saas|software|platform|\bapps?\b|\bai\b|cloud|\bdata\b|\bdev|\bapi\b|startup|analytics|dashboard|automation|tool|crm|productivity|tech|סטארטאפ|אפליקציה|תוכנה|בינה מלאכותית/, hue: [[215, 270], [160, 175], [330, 350]],
       modes: { light: 3, dark: 3, color: 1, cream: 0 }, fonts: { sans: 4, mono: 1, round: 1, bold: 1 }, glyphs: ['hex', 'orbit', 'spark', 'bolt', 'node', 'wave'],
       names: ['Fieldnote', 'Planar', 'Nimbus Labs', 'Tandem', 'Beacon', 'Relay', 'Meridian', 'Stackwell', 'Cadence', 'Quill'],
       eyebrow: 'Meet your new workflow', nav: ['Product', 'Solutions', 'Pricing', 'Resources'],
