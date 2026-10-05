@@ -3,18 +3,23 @@
   'use strict';
   const $ = (s, e) => (e || document).querySelector(s), $$ = (s, e) => Array.from((e || document).querySelectorAll(s));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const D = window.DOMAIN, M = window.MODEL, PR = window.PRODUCT;
+  const D = window.DOMAIN, MP = window.MODEL, PP = window.PRODUCT, BR = window.BRAND, MM = window.MM;
+  let M = MP, PR = PP;   // swapped when the kind of thing being made changes
   const STORE = 'converge.v1';
   const TYPES = [['', 'Auto-detect'], ['finance', 'Planning & finance'], ['erp', 'ERP'], ['crm', 'CRM'], ['bi', 'BI & analytics'], ['dev', 'Developer tools'], ['admin', 'Admin & access']];
+  const KINDS = [['auto', 'Let Converge decide'], ['brand', 'Brand & website'], ['product', 'Complex product']];
+  const KHINT = { auto: 'Converge reads your description and picks the right kind of exploration.', brand: 'A shop, studio, restaurant, portfolio or small business. You get a logo, colours, type and a website.', product: 'A platform, ERP, CRM, analytics or developer tool. You get a clickable product experience.' };
   const EXAMPLES = [
-    ['Financial planning', 'An enterprise financial planning platform for finance teams.', ''],
-    ['ERP for manufacturers', 'An ERP for mid-size manufacturers to manage procurement, inventory and suppliers.', ''],
-    ['CRM for field sales', 'A CRM for enterprise field sales teams who live in the pipeline.', ''],
-    ['Developer platform', 'A developer platform for engineering teams to ship, monitor and respond to incidents.', ''],
-    ['BI & analytics', 'A BI platform that helps operators understand what changed in the business.', ''],
-    ['Access console', 'An admin console for identity and access reviews across the company.', '']
+    ['Bagel shop', 'I’m opening a bagel shop in Brooklyn. I need a logo, website and branding. Warm and a bit playful.', 'brand', ''],
+    ['Yoga studio', 'A calm, boutique yoga studio. Logo, brand and a website where people can book classes.', 'brand', ''],
+    ['Dog grooming', 'A friendly dog grooming salon called Wag Club. Logo, website and branding.', 'brand', ''],
+    ['Financial planning', 'An enterprise financial planning platform for finance teams.', 'product', ''],
+    ['ERP for manufacturers', 'An ERP for mid-size manufacturers to manage procurement, inventory and suppliers.', 'product', ''],
+    ['CRM for field sales', 'A CRM for enterprise field sales teams who live in the pipeline.', 'product', ''],
+    ['Developer platform', 'A developer platform for engineering teams to ship, monitor and respond to incidents.', 'product', ''],
+    ['Access console', 'An admin console for identity and access reviews across the company.', 'product', '']
   ];
-  const S = { view: 'brief', brief: { text: '', users: '', problem: '', type: '' }, hist: [], shown: [], deck: [], cur: null, final: null, ctx: null, seedBase: 0, next: 0, readyAt: 7, tp: false, tpUser: false, rtab: 'Prototype', busy: false, note: '' };
+  const S = { view: 'brief', kind: 'product', brief: { text: '', users: '', problem: '', type: '', kind: 'auto', name: '' }, hist: [], shown: [], deck: [], cur: null, final: null, ctx: null, seedBase: 0, next: 0, readyAt: 7, tp: false, tpUser: false, rtab: 'Prototype', busy: false, note: '' };
 
   /* ───────── utils ───────── */
   let toastT; function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2400); }
@@ -24,24 +29,31 @@
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
   async function copy(t, msg) { try { await navigator.clipboard.writeText(t); toast(msg || 'Copied'); } catch (e) { toast('Select and copy manually'); } }
-  function save() { try { localStorage.setItem(STORE, JSON.stringify({ brief: S.brief, seedBase: S.seedBase, hist: S.hist.map(h => ({ vec: h.vec, seed: h.seed, r: h.r, name: h.name, letter: h.letter })), view: S.view === 'result' ? 'result' : 'swipe', readyAt: S.readyAt })); } catch (e) { } }
+  function save() { try { localStorage.setItem(STORE, JSON.stringify({ kind: S.kind, brief: S.brief, seedBase: S.seedBase, hist: S.hist.map(h => ({ vec: h.vec, seed: h.seed, r: h.r, name: h.name, letter: h.letter })), view: S.view === 'result' ? 'result' : 'swipe', readyAt: S.readyAt })); } catch (e) { } }
   function load() { try { return JSON.parse(localStorage.getItem(STORE)); } catch (e) { return null; } }
 
   const ro = new ResizeObserver(es => es.forEach(e => e.target.style.setProperty('--k', (e.target.clientWidth / 1280).toFixed(4))));
   const fit = el => { ro.observe(el); el.style.setProperty('--k', (el.clientWidth / 1280 || .3).toFixed(4)); };
   function host(parent, d, state, o) { const h = document.createElement('div'); h.className = 'h'; parent.appendChild(h); const c = PR.mount(h, d, Object.assign({ state }, o || {})); return c; }
   const ARCHN = d => M.ARCH[d.arch].names[0];
-  const LB = { home: 'Home', table: 'Table', workflow: 'Workflow', insights: 'Insights', approvals: 'Approvals', settings: 'Settings', detail: 'Detail' };
+  const LB = Object.assign({}, BR.LB, { home: 'Home', table: 'Table', workflow: 'Workflow', insights: 'Insights', approvals: 'Approvals', settings: 'Settings', detail: 'Detail' });
+  function setKind(k) { S.kind = k; M = k === 'brand' ? BR.model : MP; PR = k === 'brand' ? BR.render : PP; }
+  const FIRST = () => S.kind === 'brand' ? 'site' : 'home';
+  const resolveKind = b => b.kind === 'brand' || b.kind === 'product' ? b.kind : BR.detectKind([b.text, b.problem, b.users].join(' '));
   function screensFor(d, n) {
+    if (S.kind === 'brand') return BR.screensFor(d, n);
     const f = d.flags, pref = ['home', f.wizard ? 'workflow' : 'table', f.charts ? 'insights' : 'detail', f.ai ? 'approvals' : f.cfg ? 'settings' : 'workflow', 'table', 'insights', 'settings'];
     const out = []; pref.forEach(s => { if (!out.includes(s)) out.push(s); });
     return out.slice(0, n).map(s => s === 'detail' ? { id: 'detail', state: { screen: 'table', row: 2 } } : { id: s, state: { screen: s } });
   }
 
   /* ───────── flow control ───────── */
-  function newCtx() { const key = D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 }; }
+  function newCtx() {
+    if (S.kind === 'brand') { const brief = MM.parseBrief([S.brief.text, S.brief.problem].join(' '), S.brief.name); return { kind: 'brand', packKey: 'brand', pack: { name: brief.name || 'Your brand', kind: 'Brand & website' }, brief, used: new Set(), count: 0 }; }
+    const key = D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 };
+  }
   function startExplore() {
-    S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
+    setKind(resolveKind(S.brief)); S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
     S.deck = M.initialDirections(S.ctx, S.seedBase); go('dirs'); save();
   }
   function startSwipe(i) { S.cur = S.deck[i || 0]; S.shown = [S.cur]; S.note = 'start'; go('swipe'); }
@@ -91,22 +103,34 @@
   /* ───────── 1 · brief ───────── */
   function vBrief() {
     const B = S.brief, saved = load(), resumable = saved && saved.hist && saved.hist.length;
-    $('#view').innerHTML = '<section class="brief"><svg class="lines" viewBox="0 0 600 800" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">' + Array.from({ length: 11 }, (_, i) => '<path d="M' + (620) + ' ' + (i * 80 - 40) + 'C380 ' + (i * 70 + 40) + ' 330 ' + (330 + i * 12) + ' 150 400"/>').join('') + '</svg><div class="brief-in">' +
-      '<span class="mono">Converge · Product exploration</span><h1>Describe the <em>product.</em></h1>' +
-      '<label class="field"><span class="mono">What are you building?</span><textarea id="bt" class="big" rows="2" maxlength="240" placeholder="An enterprise financial planning platform for finance teams.">' + esc(B.text) + '</textarea></label>' +
-      '<div class="opt"><label class="field"><span class="mono">Target users, optional</span><input id="bu" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(B.users) + '"></label><label class="field"><span class="mono">Main problem, optional</span><input id="bp" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(B.problem) + '"></label></div>' +
-      '<div class="types" id="types"><span class="mono" style="align-self:center;margin-right:6px">Product type</span>' + TYPES.map(t => '<button class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>' +
+    $('#view').innerHTML = '<section class="brief"><svg class="lines" viewBox="0 0 600 800" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">' + Array.from({ length: 11 }, (_, i) => '<path d="M620 ' + (i * 80 - 40) + 'C380 ' + (i * 70 + 40) + ' 330 ' + (330 + i * 12) + ' 150 400"/>').join('') + '</svg><div class="brief-in">' +
+      '<span class="mono">Converge · Design exploration</span><h1>Describe what you’re <em>making.</em></h1>' +
+      '<label class="field"><span class="mono">A shop, a studio, a platform, a tool</span><textarea id="bt" class="big" rows="2" maxlength="240" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea></label>' +
+      '<div class="types" id="kinds"><span class="mono" style="align-self:center;margin-right:6px">What kind</span>' + KINDS.map(k => '<button class="tchip ' + (B.kind === k[0] ? 'on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>').join('') + '</div><p class="khint" id="khint"></p>' +
+      '<div id="opts"></div>' +
       '<div class="cta-row"><button class="pill ink lg" id="go">Explore directions <span>→</span></button><span class="mono">About two minutes</span>' + (resumable ? '<span class="resume">' + saved.hist.length + ' reactions saved <button class="pill sm ink" id="resume">Continue</button></span>' : '') + '</div>' +
       '<div class="eg">' + EXAMPLES.map((e, i) => '<a data-e="' + i + '">' + e[0] + '</a>').join('') + '</div></div></section>';
-    const ta = $('#bt'); const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }; ta.oninput = grow; grow();
+    const ta = $('#bt'); const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    const eff = () => B.kind === 'auto' ? BR.detectKind([ta.value, ($('#bp') || {}).value].join(' ')) : B.kind;
+    let shown = null;
+    const opts = () => {
+      const k = eff(); if (k === shown) { $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind]; return; }
+      const keep = { name: ($('#bn') || {}).value, users: ($('#bu') || {}).value, problem: ($('#bp') || {}).value }; shown = k;
+      $('#opts').innerHTML = k === 'brand' ?
+        '<div class="opt"><label class="field"><span class="mono">Business name, optional</span><input id="bn" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="mono">Who is it for, optional</span><input id="bu" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
+        '<div class="opt"><label class="field"><span class="mono">Target users, optional</span><input id="bu" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="mono">Main problem, optional</span><input id="bp" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="types" id="types"><span class="mono" style="align-self:center;margin-right:6px">Product type</span>' + TYPES.map(t => '<button class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+      $$('#types .tchip').forEach(b => b.onclick = () => { B.type = b.dataset.t; $$('#types .tchip').forEach(x => x.classList.toggle('on', x === b)); });
+      $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind];
+    };
+    ta.oninput = () => { grow(); if (B.kind === 'auto') opts(); }; grow(); opts();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#go').click(); } };
-    $$('.tchip').forEach(b => b.onclick = () => { S.brief.type = b.dataset.t; $$('.tchip').forEach(x => x.classList.toggle('on', x === b)); });
-    $$('.eg a').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; S.brief.type = e[2]; grow(); $$('.tchip').forEach(x => x.classList.toggle('on', x.dataset.t === e[2])); });
-    $('#go').onclick = () => { S.brief.text = ta.value.trim() || EXAMPLES[0][1]; S.brief.users = $('#bu').value.trim(); S.brief.problem = $('#bp').value.trim(); startExplore(); };
+    $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
+    $$('.eg a').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); });
+    $('#go').onclick = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; startExplore(); };
     const rs = $('#resume'); if (rs) rs.onclick = () => resume(saved);
   }
   function resume(saved) {
-    S.brief = saved.brief; S.ctx = newCtx(); S.seedBase = saved.seedBase; S.deck = M.initialDirections(S.ctx, S.seedBase); S.next = 1; S.readyAt = saved.readyAt || 7; S.hist = [];
+    S.brief = saved.brief; setKind(saved.kind || 'product'); S.ctx = newCtx(); S.seedBase = saved.seedBase; S.deck = M.initialDirections(S.ctx, S.seedBase); S.next = 1; S.readyAt = saved.readyAt || 7; S.hist = [];
     saved.hist.forEach((h, i) => { const known = S.deck.find(d => d.seed === h.seed && d.name === h.name); const d = known || M.makeDirection(h.vec, h.seed, S.ctx, { name: h.name, letter: h.letter }); S.hist.push({ d, r: h.r, vec: h.vec, seed: h.seed, name: h.name, letter: h.letter }); S.next = Math.max(S.next, i + 2); });
     S.shown = S.hist.map(h => h.d); S.tp = S.hist.length >= 3; S.tpUser = false;
     if (saved.view === 'result') { S.final = M.finalDirection(S.hist, S.ctx, S.seedBase + 999); S.rtab = 'Prototype'; go('result'); }
@@ -116,7 +140,7 @@
   /* ───────── 2 · directions ───────── */
   function vDirs() {
     const p = S.ctx.pack;
-    $('#view').innerHTML = '<section class="dirs"><div class="dhead"><div><span class="mono">' + esc(p.kind) + '</span><h2>Six ways this product could <em>exist.</em></h2><p>Each is a complete product experience, with its own navigation, density and way of working. Start swiping and react to them. Every reaction shapes what you see next.</p></div><div style="display:flex;gap:10px"><button class="pill" id="d-back">← Edit brief</button><button class="pill ink lg" id="d-go">Start swiping <span>→</span></button></div></div><div class="grid" id="dg"></div></section>';
+    $('#view').innerHTML = '<section class="dirs"><div class="dhead"><div><span class="mono">' + esc(p.kind) + '</span><h2>Six ways this ' + (S.kind === 'brand' ? 'brand' : 'product') + ' could <em>' + (S.kind === 'brand' ? 'look and feel.' : 'exist.') + '</em></h2><p>' + (S.kind === 'brand' ? 'Each is a complete brand: logo, colours, type and a working website. ' : 'Each is a complete product experience, with its own navigation, density and way of working. ') + 'Start swiping and react to them. Every reaction shapes what you see next.</p></div><div style="display:flex;gap:10px"><button class="pill" id="d-back">← Edit brief</button><button class="pill ink lg" id="d-go">Start swiping <span>→</span></button></div></div><div class="grid" id="dg"></div></section>';
     const g = $('#dg');
     S.deck.forEach((d, i) => {
       const a = document.createElement('button'); a.className = 'dcard-o'; a.setAttribute('aria-label', 'Start with ' + d.name);
@@ -138,8 +162,8 @@
     const el = $('#ribbon'); if (!el) return; const d = S.cur, last = S.hist[S.hist.length - 1];
     let h;
     const tg = a => a.map(x => '<span class="t">' + esc(x) + '</span>').join(' ');
-    if (S.note === 'start' || !last) h = '<div><span class="t p">Start here</span></div><div class="sub2">React to what you see. Swipe right if this could be your product, left if it could not.</div>';
-    else if (S.note === 'explore') h = '<div><span class="t p">New direction</span></div><div class="sub2">Moving away from your product so far, to show you something different.</div>';
+    if (S.note === 'start' || !last) h = '<div><span class="t p">Start here</span></div><div class="sub2">React to what you see. Swipe right if this could be your ' + (S.kind === 'brand' ? 'brand' : 'product') + ', left if it could not.</div>';
+    else if (S.note === 'explore') h = '<div><span class="t p">New direction</span></div><div class="sub2">Moving away from your ' + (S.kind === 'brand' ? 'brand' : 'product') + ' so far, to show you something different.</div>';
     else h = '<div><span class="t p">' + (last.r > 0 ? 'You liked' : 'You passed on') + '</span> <b>' + esc(last.name) + '</b></div><div class="sub2">' + (d.why && d.why.push.length ? 'Pushing further on ' + tg(d.why.push) + ' &nbsp;·&nbsp; ' : '') + (d.why ? 'Now testing ' + tg(d.why.probe) : '') + '</div>';
     if (M.closing(S.hist) && !isReady()) h = '<div><span class="close-note">We’re getting close. <button id="r-ready">Show my product</button></span></div>' + h;
     el.innerHTML = h; const b = $('#r-ready'); if (b) b.onclick = () => startConverge();
@@ -184,7 +208,7 @@
   function openProto(d, reactable) {
     PR.ensureFonts(d);
     const m = modal('<div class="mbox"><div class="mhead"><h3>' + esc(d.name) + ' <span class="mono" style="margin-left:8px">Direction ' + d.letter + ' · click through it</span></h3><div style="display:flex;gap:8px">' + (reactable ? '<button class="pill" id="m-no">← Not for me</button><button class="pill ink" id="m-yes">Like →</button>' : '') + '<button class="pill" id="m-x">Close</button></div></div><div class="mbody"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(d.pack.name.toLowerCase()) + '.app</span></div><div class="fit live" id="mf"></div></div><p class="hint">This is a working prototype. Open records, step through the workflow, change settings.</p></div></div>');
-    const f = $('#mf', m); fit(f); host(f, d, { screen: 'home' }, { interactive: true });
+    const f = $('#mf', m); fit(f); host(f, d, { screen: FIRST() }, { interactive: true });
     $('#m-x').onclick = closeModal; const n = $('#m-no'), y = $('#m-yes'); if (n) { n.onclick = () => { closeModal(); react(-1); }; y.onclick = () => { closeModal(); react(1); }; }
   }
   function openHistory() {
@@ -192,7 +216,7 @@
     const g = $('#hg', m);
     S.hist.forEach((h, i) => {
       const c = document.createElement('div'); c.className = 'hi'; c.innerHTML = '<div class="fit"></div><div class="x"><h5>' + esc(h.name) + '</h5><div class="tags">' + h.d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div><div class="r"><button class="pill sm ' + (h.r > 0 ? 'ink' : '') + '" data-r="1">Like</button><button class="pill sm ' + (h.r < 0 ? 'ink' : '') + '" data-r="-1">Not for me</button><button class="pill sm" data-o="1">Open</button></div></div>';
-      g.appendChild(c); const f = $('.fit', c); fit(f); host(f, h.d, { screen: 'home' });
+      g.appendChild(c); const f = $('.fit', c); fit(f); host(f, h.d, { screen: FIRST() });
       $$('button', c).forEach(b => b.onclick = () => { if (b.dataset.o) { openProto(h.d, false); return; } h.r = +b.dataset.r; save(); renderTaste(); $$('button[data-r]', c).forEach(x => x.classList.toggle('ink', +x.dataset.r === h.r)); toast('Taste updated'); if (S.final) toast('Taste updated. Refine or re-explore to apply it.'); });
     });
     $('#m-x', m).onclick = closeModal; $('#m-reset', m).onclick = () => { closeModal(); $('#b-reset') ? $('#b-reset').click() : 0; };
@@ -207,14 +231,15 @@
   function vResult() {
     const d = S.final, p = d.pack, b = blend(d); PR.ensureFonts(d);
     document.body.classList.remove('tp-open');
-    $('#view').innerHTML = '<section class="res"><div class="rh"><div><span class="mono">Your product</span><h1>' + esc(p.name) + '</h1><p class="lede">' + esc(productLine(d)) + ' Closest to <em>' + esc(b.a) + '</em>, tempered by <em>' + esc(b.b) + '</em>. ' + esc(M.summary(b.L)) + '</p><div class="tags" style="margin-top:14px">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div></div></div>' +
-      '<div class="rtabs">' + ['Prototype', 'Experience', 'System'].map(t => '<button data-t="' + t + '" class="' + (S.rtab === t ? 'on' : '') + '">' + t + '</button>').join('') + '</div><div id="rb"></div></section>' +
-      '<div class="ctabar"><button class="pill acc lg" id="c-build">Build<span class="x"> this product</span> →</button><button class="pill lg" id="c-more">Explore<span class="x"> another direction</span></button><button class="pill lg" id="c-ref">Refine<span class="x"> my product</span></button><button class="pill lg" id="c-fig"><span class="x">Export to </span>Figma</button></div>';
+    $('#view').innerHTML = '<section class="res"><div class="rh"><div><span class="mono">' + (isB() ? 'Your brand' : 'Your product') + '</span><h1>' + esc(p.name) + '</h1><p class="lede">' + esc(isB() ? productLineB(d) : productLine(d)) + ' Closest to <em>' + esc(b.a) + '</em>, tempered by <em>' + esc(b.b) + '</em>. ' + esc(M.summary(b.L)) + '</p><div class="tags" style="margin-top:14px">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div></div></div>' +
+      '<div class="rtabs">' + ['Prototype', 'Experience', 'System'].map(t => '<button data-t="' + t + '" class="' + (S.rtab === t ? 'on' : '') + '">' + (isB() ? { Prototype: 'Website', Experience: 'Brand', System: 'System' }[t] : t) + '</button>').join('') + '</div><div id="rb"></div></section>' +
+      '<div class="ctabar"><button class="pill acc lg" id="c-build">' + (isB() ? 'Use<span class="x"> this brand</span>' : 'Build<span class="x"> this product</span>') + ' →</button><button class="pill lg" id="c-more">Explore<span class="x"> another direction</span></button><button class="pill lg" id="c-ref">Refine<span class="x"> my ' + (isB() ? 'brand' : 'product') + '</span></button><button class="pill lg" id="c-fig"><span class="x">Export to </span>Figma</button></div>';
     $$('.rtabs button').forEach(x => x.onclick = () => { S.rtab = x.dataset.t; $$('.rtabs button').forEach(y => y.classList.toggle('on', y === x)); renderTab(); });
-    $('#c-build').onclick = openBuild; $('#c-fig').onclick = openFigma; $('#c-ref').onclick = openRefine; $('#c-more').onclick = exploreMore;
+    $('#c-build').onclick = () => isB() ? openBuildB() : openBuild(); $('#c-fig').onclick = () => isB() ? openFigmaB() : openFigma(); $('#c-ref').onclick = openRefine; $('#c-more').onclick = exploreMore;
     renderTab();
   }
-  function renderTab() { const b = $('#rb'); b.innerHTML = ''; ({ Prototype: tProto, Experience: tExp, System: tSys })[S.rtab](b); }
+  const isB = () => S.kind === 'brand';
+  function renderTab() { const b = $('#rb'); b.innerHTML = ''; (isB() ? { Prototype: tBProto, Experience: tBExp, System: tBSys } : { Prototype: tProto, Experience: tExp, System: tSys })[S.rtab](b); }
   function tProto(b) {
     const d = S.final, p = d.pack;
     b.innerHTML = '<div class="pto"><nav class="snav"><span class="mono">Screens</span>' + PR.SCREENS.map(s => '<button data-s="' + s + '" class="' + (s === 'home' ? 'on' : '') + '">' + esc(p.labels[s]) + '</button>').join('') + '</nav><div><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(p.name.toLowerCase()) + '.app</span></div><div class="fit live" id="pf"></div></div><p class="hint">A working prototype. Open a row, step through the workflow, approve a request, change a setting.</p></div></div>';
@@ -274,11 +299,67 @@
     wrap.innerHTML = '<div class="sh"><span class="mono">Refine</span><h3>Adjust your product</h3><p class="d">Each slider is something your reactions taught us. Change it and the prototype updates.</p>' + M.AXES.map((a, i) => '<div class="slr"><div class="t"><span>' + a.name + '</span></div><input type="range" min="-95" max="95" value="' + Math.round(vec[i] * 100) + '" data-i="' + i + '" aria-label="' + a.name + '"><div class="e"><span>' + a.lo + '</span><span>' + a.hi + '</span></div></div>').join('') + '<button class="pill ink lg" id="r-done" style="margin-top:8px">Done</button></div>';
     document.body.appendChild(wrap); wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
     $('#r-done', wrap).onclick = () => wrap.remove();
-    $$('input[type=range]', wrap).forEach(r => r.oninput = () => { vec[+r.dataset.i] = r.value / 100; clearTimeout(t); t = setTimeout(() => { S.final = M.makeDirection(vec, d.seed, { ...S.ctx, used: new Set(), count: 0 }, { name: d.pack.name, final: true }); renderTab(); const h = $('.res .tags'); if (h) h.innerHTML = S.final.tags.map(x => '<span class="tag">' + esc(x) + '</span>').join(''); }, 140); });
+    $$('input[type=range]', wrap).forEach(r => r.oninput = () => { vec[+r.dataset.i] = r.value / 100; clearTimeout(t); t = setTimeout(() => { S.final = M.makeDirection(vec, d.seed, { ...S.ctx, used: new Set(), count: 0 }, isB() ? { final: true } : { name: d.pack.name, final: true }); renderTab(); const h = $('.res .tags'); if (h) h.innerHTML = S.final.tags.map(x => '<span class="tag">' + esc(x) + '</span>').join(''); }, 140); });
   }
   function exploreMore() {
     S.shown.push(S.final); S.readyAt = S.hist.length + 3; S.note = 'explore'; S.tp = true; S.tpUser = false;
     S.cur = nextCard(); S.view = 'swipe'; go('swipe');
+  }
+
+
+  /* ───────── brand & website result ───────── */
+  const domainOf = d => d.v.name.toLowerCase().replace(/[^a-z0-9]+/g, '') + '.com';
+  function productLineB(d) {
+    const L = M.learn(S.hist), top = L.taste.map((t, i) => [i, Math.abs(t) * L.conf[i]]).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([i]) => L.taste[i] > 0 ? M.AXES[i].adjHi2 : M.AXES[i].adjLo2);
+    return (/^[aeiou]/i.test(top[0] || 'a') ? 'An ' : 'A ') + top.join(', ') + ' brand and website.';
+  }
+  function tBProto(b) {
+    const d = S.final;
+    b.innerHTML = '<div class="pto"><nav class="snav"><span class="mono">Views</span>' + ['site', 'scroll', 'brand'].map(s => '<button data-s="' + s + '" class="' + (s === 'site' ? 'on' : '') + '">' + LB[s] + '</button>').join('') + '</nav><div><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(domainOf(d)) + '</span></div><div class="fit live" id="pf"></div></div><p class="hint">A working website. Scroll inside the frame, or switch to the brand board to see the logo, colours and type together.</p></div></div>';
+    const f = $('#pf', b); fit(f); const ctl = host(f, d, { screen: 'site' }, { interactive: true, onChange: st => $$('.snav button', b).forEach(x => x.classList.toggle('on', x.dataset.s === st.screen)) });
+    $$('.snav button', b).forEach(x => x.onclick = () => ctl.go(x.dataset.s)); S.ctl = ctl;
+  }
+  function tBExp(b) {
+    const d = S.final, v = d.v, c = v.copy, P = v.pal, n = esc(v.name);
+    const sections = [['Navigation', c.nav.join(' · ') + ' and a primary button'], ['Hero', 'Headline “' + v.head + '” with “' + c.cta[0] + '” and “' + c.cta[1] + '”'], ['Proof', c.stats.map(x => x[0] + ' ' + x[1].toLowerCase()).join(' · ')], ['Why ' + v.name, c.feats.map(x => x[0]).join(' · ')], ['Testimonial', '“' + c.quote[0] + '”'], ['Call to action', '“Ready when you are.” with “' + c.cta[0] + '”'], ['Footer', 'Logo, copyright and links']];
+    const fl = [['First visit', ['Land on the hero', 'Read the headline', 'Scan the proof', 'Tap “' + c.cta[0] + '”']], ['Browsing', ['Open ' + c.nav[0], 'Compare ' + c.nav[1], 'Read a testimonial', 'Contact']], ['Returning', ['Open the site', c.nav[3], c.cta[0], 'Done']]];
+    const arts = { poster: 'A bold poster built from the mark and two overlapping shapes.', pattern: 'A repeating pattern of the mark in two colours.', arcs: 'Concentric arcs rising from the base, with the mark on top.', collage: 'A four-tile collage of colour blocks, the mark and stripes.' };
+    const pats = [['Colour', d.decisions[0][1] + '.'], ['Typography', v.fonts.d + ' for headlines and ' + v.fonts.b + ' for text.'], ['Logo', d.decisions[2][1] + '.'], ['Layout', d.decisions[3][1] + '.'], ['Shape', d.decisions[4][1] + '. Buttons are ' + (v.rb >= 999 ? 'pills' : v.rb === 0 ? 'square' : 'lightly rounded') + '.'], ['Imagery', arts[v.art] + ' Photography, where used: ' + v.photoQ + ', natural light.']];
+    b.innerHTML = '<div class="sec"><h3>Brand board</h3><p class="d">The logo, colour and type working together.</p><div class="frame"><div class="fit" id="bb"></div></div></div>' +
+      '<div class="sec"><h3>Voice</h3><p class="d">How ' + n + ' sounds on the page.</p><div class="two"><div class="box"><span class="mono">Headline</span><h4 style="font:' + v.fonts.w + ' 2.2rem/1.05 \'' + v.fonts.d + '\',var(--disp);margin:8px 0 12px;letter-spacing:-.02em">' + esc(v.head) + '</h4><p style="color:#41454d">' + esc(c.sub.replace(/\{n\}/g, v.name)) + '</p></div><div class="box"><span class="mono">Tone</span><div class="tags" style="margin-top:12px">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div><p style="color:#41454d;margin-top:14px">' + esc(d.philosophy) + '</p></div></div></div>' +
+      '<div class="sec"><h3>Website structure</h3><p class="d">One page, seven sections.</p><div class="box"><ul class="pats">' + sections.map(x => '<li><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span></li>').join('') + '</ul></div></div>' +
+      '<div class="sec"><h3>Visitor journeys</h3><div class="box flows">' + fl.map(x => '<div class="fl"><h5>' + esc(x[0]) + '</h5><div class="st">' + x[1].map(s => '<span>' + esc(s) + '</span>').join('<i>→</i>') + '</div></div>').join('') + '</div></div>' +
+      '<div class="sec"><h3>Art direction</h3><div class="box"><ul class="pats">' + pats.map(x => '<li><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span></li>').join('') + '</ul></div></div>';
+    const f = $('#bb', b); fit(f); host(f, d, { screen: 'brand' });
+  }
+  const tokensCSSB = d => MM.tokensCSS(d.v);
+  function tokensJSONB(d) { const v = d.v, P = v.pal, c = x => ({ value: x, type: 'color' }); return JSON.stringify({ global: { color: { background: c(P.bg), surface: c(P.surface), ink: c(P.ink), muted: c(P.muted), line: c(P.line), primary: c(P.primary), accent: c(P.accent), 'on-primary': c(P.onPrimary), 'on-accent': c(P.onAccent) }, borderRadius: { default: { value: String(v.radius), type: 'borderRadius' }, button: { value: String(v.rb), type: 'borderRadius' } }, fontFamilies: { display: { value: v.fonts.d, type: 'fontFamilies' }, body: { value: v.fonts.b, type: 'fontFamilies' } }, fontWeights: { display: { value: String(v.fonts.w), type: 'fontWeights' } } } }, null, 2); }
+  function tBSys(b) {
+    const d = S.final, v = d.v, P = v.pal;
+    const sw = [['Background', P.bg], ['Surface', P.surface], ['Ink', P.ink], ['Muted', P.muted], ['Primary', P.primary], ['Accent', P.accent], ['Line', P.line], ['On primary', P.onPrimary], ['On accent', P.onAccent], ['Mark', P.primary]].slice(0, 10);
+    b.innerHTML = '<div class="sec"><h3>Brand kit</h3><p class="d">Everything needed to launch ' + esc(v.name) + ': a working website, the logo as SVG, the icon, and the colours and fonts as CSS.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="pill acc lg" id="k-zip">Download brand kit (.zip)</button><button class="pill lg" id="k-site">Website .html</button><button class="pill lg" id="k-logo">Logo .svg</button></div></div>' +
+      '<div class="sec"><h3>Design tokens</h3><div class="sw-row">' + sw.map(x => '<div class="swt"><i style="background:' + x[1] + '"></i><span><b>' + x[0] + '</b>' + x[1].toUpperCase() + '</span></div>').join('') + '</div><div class="two" style="margin-top:20px"><div class="box"><span class="mono">Type</span><table class="tk"><tr><td>Display</td><td style="font-family:\'' + v.fonts.d + '\';font-size:1.1rem">' + v.fonts.d + '</td></tr><tr><td>Body</td><td style="font-family:\'' + v.fonts.b + '\'">' + v.fonts.b + '</td></tr><tr><td>Headline case</td><td>' + ({ upper: 'Uppercase', lower: 'Lowercase', normal: 'Sentence case' })[v.wcase] + '</td></tr></table></div><div class="box"><span class="mono">Shape</span><table class="tk"><tr><td>Corner radius</td><td>' + v.radius + 'px</td></tr><tr><td>Buttons</td><td>' + (v.rb >= 999 ? 'Pill' : v.rb + 'px') + '</td></tr><tr><td>Logo container</td><td>' + v.container + '</td></tr></table></div></div><div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"><button class="pill" id="k-css">Copy CSS</button><button class="pill" id="k-dcss">Download tokens.css</button><button class="pill" id="k-json">Download Figma tokens (.json)</button></div></div>' +
+      '<div class="sec"><h3>Components</h3><p class="d">A starter set in the brand’s style.</p><div class="kit" id="kit"></div></div>';
+    BR.render.mountKit($('#kit', b), d); const nm = v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    $('#k-zip', b).onclick = async () => { toast('Building your kit…'); download(await MM.brandKitZip(v), nm + '-brand-kit.zip', 'application/zip'); };
+    $('#k-site', b).onclick = () => download(MM.siteHTML(v), nm + '-site.html', 'text/html'); $('#k-logo', b).onclick = async () => download(await MM.logoSVG(v), nm + '-logo.svg', 'image/svg+xml');
+    $('#k-css', b).onclick = () => copy(tokensCSSB(d), 'CSS copied'); $('#k-dcss', b).onclick = () => download(tokensCSSB(d), nm + '-tokens.css', 'text/css'); $('#k-json', b).onclick = () => download(tokensJSONB(d), nm + '-figma-tokens.json', 'application/json');
+  }
+  function specB(d) {
+    const v = d.v, P = v.pal, c = v.copy, lr = M.learn(S.hist);
+    return '# ' + v.name + ': brand and website\n\n' + productLineB(d) + '\n\nBrief: ' + S.brief.text + '\n\n## Taste profile\n' + M.AXES.map((a, i) => '- ' + a.name + ': ' + (Math.abs(lr.taste[i]) < .1 ? 'neutral' : (lr.taste[i] > 0 ? a.hi : a.lo)) + ' (confidence ' + Math.round(lr.conf[i] * 100) + '%)').join('\n') + '\n\n## Identity\n' + d.decisions.map(x => '- ' + x[0] + ': ' + x[1]).join('\n') + '\n\n## Colour\n' + [['Background', P.bg], ['Surface', P.surface], ['Ink', P.ink], ['Primary', P.primary], ['Accent', P.accent]].map(x => '- ' + x[0] + ': ' + x[1]).join('\n') + '\n\n## Voice\nHeadline: ' + v.head + '\nSub: ' + c.sub.replace(/\{n\}/g, v.name) + '\nButtons: ' + c.cta.join(' / ') + '\n\n## Website\n' + c.nav.join(', ') + '. Hero, proof (' + c.stats.map(x => x[0]).join(', ') + '), three features, testimonial, call to action, footer.\n\n## Tokens\n```css\n' + tokensCSSB(d) + '```\n';
+  }
+  function openBuildB() {
+    const d = S.final, v = d.v, nm = v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const m = modal('<div class="mbox" style="max-width:720px"><div class="mhead"><h3>Use ' + esc(v.name) + '</h3><button class="pill" id="m-x">Close</button></div><div class="mbody"><p style="color:#33363d;margin-bottom:6px">The kit is ready to use: open <b>index.html</b> in a browser or upload it to any host, put the logo wherever you need it, and drop the colours and fonts into your tools.</p><div class="pre" id="pp"></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="pill acc lg" id="b-zip">Download brand kit (.zip)</button><button class="pill lg" id="b-site">Website .html</button><button class="pill lg" id="b-logo">Logo .svg</button><button class="pill lg" id="b-md">Brand guide (.md)</button></div></div></div>');
+    $('#pp', m).textContent = [nm + '/', '  index.html    a complete, responsive website', '  logo.svg      primary logo', '  mark.svg      icon / avatar / favicon', '  brand.css     colours, fonts and radii as CSS variables', '  README.txt'].join('\n');
+    $('#m-x', m).onclick = closeModal; $('#b-zip', m).onclick = async () => { toast('Building your kit…'); download(await MM.brandKitZip(v), nm + '-brand-kit.zip', 'application/zip'); };
+    $('#b-site', m).onclick = () => download(MM.siteHTML(v), nm + '-site.html', 'text/html'); $('#b-logo', m).onclick = async () => download(await MM.logoSVG(v), nm + '-logo.svg', 'image/svg+xml'); $('#b-md', m).onclick = () => download(specB(d), nm + '-brand-guide.md', 'text/markdown');
+  }
+  function openFigmaB() {
+    const d = S.final, nm = d.v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const m = modal('<div class="mbox" style="max-width:640px"><div class="mhead"><h3>Export to Figma</h3><button class="pill" id="m-x">Close</button></div><div class="mbody"><p style="color:#33363d;margin-bottom:14px">Download the colours, fonts and radii as a Tokens Studio file, then import them into Figma as variables or styles. The logo is available as SVG, which Figma opens directly.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="pill acc lg" id="f-json">Download Figma tokens (.json)</button><button class="pill lg" id="f-logo">Logo .svg</button></div></div></div>');
+    $('#m-x', m).onclick = closeModal; $('#f-json', m).onclick = () => download(tokensJSONB(d), nm + '-figma-tokens.json', 'application/json'); $('#f-logo', m).onclick = async () => download(await MM.logoSVG(d.v), nm + '-logo.svg', 'image/svg+xml');
   }
 
   /* ───────── keys ───────── */

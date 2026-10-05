@@ -276,12 +276,13 @@
   }
 
   /* ───────── palette ───────── */
-  function makePalette(r, ind, mood) {
+  function makePalette(r, ind, mood, force) {
     const hr = pick(r, ind.hue);
-    const h = range(r, hr[0], hr[1]);
+    let h = range(r, hr[0], hr[1]);
     const modes = sum(ind.modes, mood.n ? sum(mood.modes, mood.modes) : {});
-    const mode = wpick(r, modes);
-    const s = range(r, mood.sat[0], mood.sat[1]);
+    let mode = wpick(r, modes);
+    let s = range(r, mood.sat[0], mood.sat[1]);
+    if (force) { if (force.hue != null) h = force.hue; if (force.sat != null) s = force.sat; if (force.mode) mode = force.mode; }
     const off = pick(r, [30, -30, 40, -40, 25, -25, 180, 150, -150]); // mostly analogous, some complementary
     let P;
     if (mode === 'dark') {
@@ -313,7 +314,10 @@
   const FEEL = { dark: 'Nocturne', color: 'Pop', cream: 'Warm', light: 'Clean' };
   const TYPE = { serif: 'editorial', sans: 'modern', round: 'friendly', mono: 'technical', bold: 'loud' };
 
-  function makeVariant(brief, seed, dir) {
+  /* ov: optional design overrides {pal:{hue,sat,mode}, cat, logoStyle, layout, radius, container, wcase, dot, art, usePhoto}.
+     Used by Converge to steer a variant from a taste vector. */
+  function makeVariant(brief, seed, dir, ov) {
+    ov = ov || {};
     const r = mulberry32((seed * 2654435761) >>> 0 ^ 0x9e3779b9);
     dir = dir && typeof dir === 'object' ? dir : null;
     const base = IND[brief.ind];
@@ -321,24 +325,24 @@
     const dm = dir && str(dir.mood, 80) ? moodFrom(dir.mood.toLowerCase()) : null;
     const mood = dm && dm.n ? dm : brief.mood;
     const hue = dir && isFinite(dir.hue) ? [[+dir.hue - 10, +dir.hue + 10]] : base.hue;
-    const pal = makePalette(r, Object.assign({}, ind, { hue }), mood);
+    const pal = makePalette(r, Object.assign({}, ind, { hue }), mood, ov.pal);
     const fw = sum(ind.fonts, mood.n ? sum(mood.fonts, mood.fonts) : {});
-    const cat = wpick(r, fw);
+    const cat = ov.cat || wpick(r, fw);
     const d = pick(r, BY_CAT[cat]);
     const b = pick(r, BODY[cat]);
     const glyph = dir && G[dir.glyph] ? dir.glyph : brief.glyphHint && r() < .6 ? brief.glyphHint : pick(r, ind.glyphs);
     const name = brief.name || (dir && str(dir.name, 26)) || pick(r, ind.names);
-    const logoStyle = LOGO_STYLES[(seed * 2 + (r() < .3 ? 1 : 0)) % LOGO_STYLES.length];
-    const layout = LAYOUTS[(seed + 1 + (r() < .25 ? 1 : 0)) % LAYOUTS.length];
-    const radius = pick(r, [0, 6, 14, 22, 32]);
+    const logoStyle = ov.logoStyle || LOGO_STYLES[(seed * 2 + (r() < .3 ? 1 : 0)) % LOGO_STYLES.length];
+    const layout = ov.layout || LAYOUTS[(seed + 1 + (r() < .25 ? 1 : 0)) % LAYOUTS.length];
+    const radius = ov.radius != null ? ov.radius : pick(r, [0, 6, 14, 22, 32]);
     const rb = radius === 0 ? 0 : radius >= 22 ? 999 : radius;
-    const wcase = cat === 'bold' ? 'upper' : cat === 'mono' ? 'lower' : wpick(r, { normal: 5, upper: cat === 'serif' ? 1 : 2, lower: 1 });
+    const wcase = ov.wcase || (cat === 'bold' ? 'upper' : cat === 'mono' ? 'lower' : wpick(r, { normal: 5, upper: cat === 'serif' ? 1 : 2, lower: 1 }));
     return {
       seed, name, ind: brief.ind, nameGiven: brief.nameGiven,
       head: ((dir && str(dir.head, 90)) || pick(r, ind.heads)).replace(/\{n\}/g, name), copy: ind, ai: !!dir,
       pal, fonts: { d, b, w: FONTS[d].h, cat }, glyph, logoStyle, layout, radius, rb,
-      container: pick(r, CONTAINERS), wcase, dot: r() < .3, art: pick(r, ARTS), artSeed: (r() * 1e9) | 0,
-      photoQ: (dir && str(dir.photo, 60)) || PHOTO_Q[brief.ind], usePhoto: r() < .65, photo: null,
+      container: ov.container || pick(r, CONTAINERS), wcase, dot: ov.dot != null ? ov.dot : r() < .3, art: ov.art || pick(r, ARTS), artSeed: (r() * 1e9) | 0,
+      photoQ: (dir && str(dir.photo, 60)) || PHOTO_Q[brief.ind], usePhoto: ov.usePhoto != null ? ov.usePhoto : r() < .65, photo: null,
       label: (dir ? '✦ ' : '') + FEEL[pal.mode] + ' ' + TYPE[cat]
     };
   }
