@@ -493,13 +493,13 @@ const TOD_KEYS=[
    hemiSky:0x7d86a8, hemiGnd:0x5a4a40, hemiI:0.78, cityI:0.05,
    zen:0x37466e, belt:0xb98384, hor:0x7f87a0, solar:0xffa86a, glow:0xff8a50, glowI:0.85,
    cloudLit:0xf2a68c, cloudDark:0x5f5a6e, cloudCov:0.46,
-   fog:0x838aa0, fogD:0.00105, exp:1.00, win:0.18, rain:0.00, moon:0.15, sunDisc:0.7},
+   fog:0x838aa0, fogD:0.00105, exp:1.00, win:0.34, rain:0.00, moon:0.15, sunDisc:0.7},
   // blue hour — sun gone, deep blue overhead, city lit, residual glow in the west
   {t:0.50, sunEl:-5.0, sunCol:0xff8a5a, sunI:0.00, moonI:0.10,
    hemiSky:0x4a5878, hemiGnd:0x3f352e, hemiI:0.72, cityI:0.14,
    zen:0x15203e, belt:0x404a6a, hor:0x55607a, solar:0xb8735a, glow:0xa05a40, glowI:0.45,
    cloudLit:0x6d6478, cloudDark:0x2a2c3c, cloudCov:0.55,
-   fog:0x4c5468, fogD:0.00128, exp:1.08, win:0.40, rain:0.00, moon:0.55, sunDisc:0.0},
+   fog:0x4c5468, fogD:0.00128, exp:1.08, win:0.52, rain:0.00, moon:0.55, sunDisc:0.0},
   // night — low overcast lit from below by sodium and LED, light rain
   {t:1.00, sunEl:-25,  sunCol:0xff8a5a, sunI:0.00, moonI:0.12,
    hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
@@ -510,7 +510,7 @@ const TOD_KEYS=[
 const TOD_COLORS=new Set(['sunCol','hemiSky','hemiGnd','zen','belt','hor','solar','glow','cloudLit','cloudDark','fog']);
 const SUN_AZ=new THREE.Vector3(-0.45,0,0.89).normalize();   // west-south-west: behind the opening view
 const MOON_DIR=new THREE.Vector3(0.35,0.82,-0.45).normalize();
-const TOD={t:0.80,target:0.80,pinned:null,env:-1,
+const TOD={t:0.30,target:0.30,pinned:null,env:-1,
   cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3()};
 const _ca=new THREE.Color(),_cb=new THREE.Color();
 function todSample(t){
@@ -645,6 +645,11 @@ function makeGroundHazeTex(){
     gr.addColorStop(0,'rgba(255,255,255,.4)');gr.addColorStop(.55,'rgba(255,255,255,.2)');gr.addColorStop(1,'rgba(255,255,255,0)');
     g.fillStyle=gr;g.fillRect(bx-br,by-br,br*2,br*2);
   }
+  // feather to zero at every edge: blobs clipped by the canvas border left hard straight edges,
+  // which up close at night read as a dark floating slab in the sky
+  g.globalCompositeOperation='destination-in';
+  const em=g.createRadialGradient(128,70,10,128,70,128);em.addColorStop(0,'rgba(0,0,0,1)');em.addColorStop(0.5,'rgba(0,0,0,1)');em.addColorStop(1,'rgba(0,0,0,0)');
+  g.setTransform(1,0,0,140/256,0,0);g.fillStyle=em;g.fillRect(0,0,256,256);
   return new THREE.CanvasTexture(cv);
 }
 const hazeTexVariants=[makeGroundHazeTex(),makeGroundHazeTex(),makeGroundHazeTex()];
@@ -734,11 +739,12 @@ function buildEnv(s){
 }
 
 // campaign pacing: dusk at the first shop, full night for the last run home
-// It is NIGHT from the first minute — "is this afternoon?" was the wrong question to leave open.
-// The campaign starts in the last of the blue hour with every window lit and sinks to deep night.
-const TOD_STAGES=[0.80,0.86,0.92,0.96,1.00];
+// EVENING, unmistakably: the sun is already on/under the horizon at the first shop, every
+// window and street lamp is on, and it sinks into blue hour by the last. Full night (t=1) was
+// tried and lost what makes the city read as real — the sky glow and the raking key light.
+const TOD_STAGES=[0.30,0.38,0.46,0.54,0.62];
 const TOD_START=TOD_STAGES[0];
-function todForStage(st){ return missionDone?1:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
+function todForStage(st){ return missionDone?TOD_STAGES[TOD_STAGES.length-1]:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
 // manual override: key T steps through the day, ?tod=0..1 pins it
 const TOD_PIN_STEPS=[0,0.25,0.5,1];
 {const q=new URLSearchParams(location.search).get('tod'); if(q!==null&&!isNaN(+q))TOD.pinned=THREE.MathUtils.clamp(+q,0,1);}
@@ -6042,7 +6048,7 @@ function tape(cx,cy,h,val,step,unit,side,warnLow){
 // local time: 22:10 at the first shop, past 02:00 by the last; also creeps with real play time
 let runClock0=performance.now();
 function clockText(){
-  const m=(22*60+10)+Math.max(0,(TOD.t-TOD_START)/(1-TOD_START))*230+(performance.now()-runClock0)/1000/4;
+  const m=(18*60+35)+Math.max(0,(TOD.t-TOD_START)/(TOD_STAGES[4]-TOD_START))*85+(performance.now()-runClock0)/1000/4;
   const mm=Math.floor(m)%(24*60);return String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');
 }
 function headingTape(cx,y,w,hdg){
@@ -8539,7 +8545,8 @@ function loop(now){
       hostage.beam.material.opacity=0.1+0.08*Math.sin(now/260);
     }
     clouds.forEach(cl=>{cl.position.x+=2*dt;if(cl.position.x>1400)cl.position.x=-1400;cl.lookAt(cam.position);});
-    groundHaze.forEach(gh=>{gh.position.x+=1.1*dt;if(gh.position.x>1400)gh.position.x=-1400;gh.lookAt(cam.position);});
+    groundHaze.forEach(gh=>{gh.position.x+=1.1*dt;if(gh.position.x>1400)gh.position.x=-1400;gh.lookAt(cam.position);
+      gh.visible=gh.position.distanceToSquared(cam.position)>260*260;});   // a haze card only works from afar
     // rain fall + wrap
     const rp=rainGeo.attributes.position.array;
     for(let i=0;i<rainCount;i++){
