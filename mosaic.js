@@ -37,7 +37,7 @@
     ['Jedox', 'Canvas', 'live-canvas', '', '#f5d3d8', [1, 7, 34, 5]],
     ['SAP Signavio', 'My Inbox', 'live-sginbox', '', '#e9ddd0', [8, 5, 28, 5], [1430, 590, 565, 420, 2000, 22]],
     ['Lucky Card', 'A hotel page', 'live-hotel', 'mo-wide', '', [5, 5, 22, 6], null, { box: '92,243,1012,837', slide: '1' }],
-    ['Jedox', 'Financial review', 'img:images/jedox-01-financial-review.webp', '', '#c9cdf6', [1, 7, 28, 6]],
+    ['Lucky Card', 'A video review app on the web', 'live-vweb', '', '#c9c3f4', [1, 7, 28, 6]],
     ['Jedox', 'Dynatable', 'img:images/jedox-03-dynatable.webp', '', '#d7ecd0', [8, 5, 33, 6]]
   ];
 
