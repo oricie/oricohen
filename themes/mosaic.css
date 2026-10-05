@@ -60,6 +60,13 @@
 }
 .mo-bg > img { width: 100%; }
 .mo-bg > * { flex: none; }
+/* A whole frame floating in the middle of its backdrop, padded evenly. */
+.mo-bg.mo-whole { padding: 32px; justify-content: center; align-items: center; }
+.mo-bg.mo-whole > img {
+  width: auto !important; height: auto; max-width: 100%; max-height: 100%;
+  flex: 0 1 auto; min-height: 0;
+  border-radius: 10px !important;
+}
 
 /* A close-up: one piece of a screen as a card of its own, floating on the
    backdrop rather than running off it. */
@@ -86,6 +93,7 @@
   .work.is-grid .work-mosaic { grid-auto-rows: 40px; gap: 14px; }
   .mo-bg { padding: 22px 22px 0; }
   .mo-close { padding: 22px; }
+  .mo-bg.mo-whole { padding: 22px; }
 }
 @media (max-width: 640px) {
   /* One column; each tile takes a shape of its own instead. */
@@ -96,6 +104,7 @@
   .mo-shot.mo-square { aspect-ratio: 1 / 1; }
   .mo-bg { padding: 18px 18px 0; }
   .mo-close { padding: 18px; }
+  .mo-bg.mo-whole { padding: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mo-tile, .work-mosaic.is-in .mo-tile { opacity: 1; transform: none; transition: none; }
