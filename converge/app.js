@@ -66,13 +66,13 @@
     const d = S.cur, before = M.learn(S.hist);
     S.hist.push({ d, r, vec: d.vec, seed: d.seed, name: d.name, letter: d.letter });
     const after = M.learn(S.hist), msg = M.reaction(before, after);
-    const card = $('.dcard'); if (card) { $('.stamp.' + (r > 0 ? 'like' : 'nope'), card).style.opacity = 1; card.classList.remove('drag'); card.classList.add('fly'); const s = r > 0 ? 1 : -1; card.style.transform = 'translate(' + s * (innerWidth * .8) + 'px,-30px) rotate(' + s * 14 + 'deg)'; }
+    const card = $('.dcard'); if (card) { $('.stamp.' + (r > 0 ? 'like' : 'nope'), card).style.opacity = 1; card.classList.remove('drag'); card.classList.add('fly'); const s = r > 0 ? 1 : -1; card.style.transform = 'translate(' + s * (innerWidth * .8) + 'px,-30px) rotate(' + s * 26 + 'deg)'; }
     const L = $('#learn'); if (L) { L.textContent = '✦ ' + msg.text; L.classList.add('on'); }
-    if (S.hist.length >= 3 && !S.tpUser) S.tp = true;
+    if (S.hist.length >= 3 && !S.tpUser && innerWidth >= 1180) S.tp = true;
     renderTaste(true); renderBar(); save();
     setTimeout(() => {
       if (isReady()) { S.busy = false; return startConverge(); }
-      S.cur = nextCard(); S.note = 'adapt'; $('#stage').innerHTML = '<div class="thinking"><i></i><i></i><i></i> Shaping the next direction</div>';
+      S.cur = nextCard(); S.note = 'adapt'; $('#stage').innerHTML = '<div class="ghost g2"></div><div class="ghost g1"></div><div class="dcard blank"><div class="thinking"><i></i><i></i><i></i> Shaping the next direction</div></div>';
       setTimeout(() => { if (S.view !== 'swipe') return; renderRibbon(); mountCard(S.cur, true); scrollTo({ top: 0, behavior: 'smooth' }); S.busy = false; setTimeout(() => { const l = $('#learn'); if (l) l.classList.remove('on'); }, 1800); }, 650);
     }, 560);
   }
@@ -132,7 +132,7 @@
   function resume(saved) {
     S.brief = saved.brief; setKind(saved.kind || 'product'); S.ctx = newCtx(); S.seedBase = saved.seedBase; S.deck = M.initialDirections(S.ctx, S.seedBase); S.next = 1; S.readyAt = saved.readyAt || 7; S.hist = [];
     saved.hist.forEach((h, i) => { const known = S.deck.find(d => d.seed === h.seed && d.name === h.name); const d = known || M.makeDirection(h.vec, h.seed, S.ctx, { name: h.name, letter: h.letter }); S.hist.push({ d, r: h.r, vec: h.vec, seed: h.seed, name: h.name, letter: h.letter }); S.next = Math.max(S.next, i + 2); });
-    S.shown = S.hist.map(h => h.d); S.tp = S.hist.length >= 3; S.tpUser = false;
+    S.shown = S.hist.map(h => h.d); S.tp = S.hist.length >= 3 && innerWidth >= 1180; S.tpUser = false;
     if (saved.view === 'result') { S.final = M.finalDirection(S.hist, S.ctx, S.seedBase + 999); S.rtab = 'Prototype'; go('result'); }
     else { S.cur = nextCard(); S.note = 'adapt'; go('swipe'); }
   }
@@ -154,7 +154,7 @@
 
   /* ───────── 3 · swipe ───────── */
   function vSwipe() {
-    $('#view').innerHTML = '<section class="sw"><div id="ribbon" class="ribbon"></div><div class="learn" id="learn"></div><div class="stage" id="stage"></div><div class="acts"><button class="bt ghost" id="a-undo" aria-label="Undo">↺<span class="lbl"> Undo</span></button><button class="bt no" id="a-no">← Not for me</button><button class="bt ghost" id="a-open" aria-label="Try it">⤢<span class="lbl"> Try it</span></button><button class="bt yes" id="a-yes">Like →</button></div><p class="mono" style="margin-top:14px">← → to react · Space to try it · Z to undo · T for your taste</p></section>';
+    $('#view').innerHTML = '<section class="sw"><div id="ribbon" class="ribbon"></div><div class="learn" id="learn"></div><div class="stage" id="stage"></div><div class="acts"><button class="rb sm" id="a-undo" aria-label="Undo" title="Undo (Z)">↺</button><button class="rb big no" id="a-no" aria-label="Not for me" title="Not for me (←)">✕</button><button class="rb big yes" id="a-yes" aria-label="Like" title="Like (→)">♥</button><button class="rb sm" id="a-open" aria-label="Try it" title="Try it (Space)">⤢</button></div><p class="mono kb">← → to react · Space to try it · Z to undo · T for your taste</p></section>';
     $('#a-no').onclick = () => react(-1); $('#a-yes').onclick = () => react(1); $('#a-undo').onclick = undo; $('#a-open').onclick = () => openProto(S.cur, true);
     renderRibbon(); mountCard(S.cur, true); document.body.classList.toggle('tp-open', S.tp);
   }
@@ -170,13 +170,13 @@
   }
   function mountCard(d, enter) {
     ensureFontsFor(d);
-    const st = $('#stage'); st.innerHTML = '';
+    const st = $('#stage'); st.innerHTML = '<div class="ghost g2"></div><div class="ghost g1"></div>';
     const tabs = screensFor(d, 4);
     const el = document.createElement('article'); el.className = 'dcard' + (enter ? ' enter' : '');
     el.innerHTML = '<div class="stamp like">Like</div><div class="stamp nope">Not for me</div>' +
       '<div class="pv" style="background:' + d.theme.raised + '"><div class="fit"></div><div class="ptabs">' + tabs.map((t, i) => '<button data-i="' + i + '" class="' + (i ? '' : 'on') + '">' + LB[t.id] + '</button>').join('') + '</div></div>' +
-      '<div class="info"><span class="mono">Direction ' + d.letter + ' · ' + (S.hist.length ? 'Round ' + (S.hist.length + 1) : 'First impression') + '</span><h2>' + esc(d.name) + '</h2><div class="tags">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div>' +
-      '<p class="ex">' + esc(d.explain) + '</p><p class="ph">' + esc(d.philosophy) + '</p><ul class="dec">' + d.decisions.slice(0, 6).map(x => '<li><b>' + x[0] + '</b>' + esc(x[1]) + '</li>').join('') + '</ul></div>';
+      '<div class="info"><div class="ih"><span class="mono">Direction ' + d.letter + ' · ' + (S.hist.length ? 'Round ' + (S.hist.length + 1) : 'First impression') + '</span><h2>' + esc(d.name) + '</h2><div class="tags">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div></div>' +
+      '<div class="it"><p class="ex">' + esc(d.explain) + '</p><p class="ph">' + esc(d.philosophy) + '</p></div><ul class="dec">' + d.decisions.slice(0, 4).map(x => '<li><b>' + x[0] + '</b>' + esc(x[1]) + '</li>').join('') + '</ul></div>';
     st.appendChild(el); const pv = $('.pv', el); fit(pv); const f = $('.fit', el);
     let ctl = host(f, d, tabs[0].state);
     $$('.ptabs button', el).forEach(b => b.onclick = e => { e.stopPropagation(); $$('.ptabs button', el).forEach(x => x.classList.toggle('on', x === b)); f.innerHTML = ''; ctl = host(f, d, tabs[+b.dataset.i].state); });
@@ -186,7 +186,7 @@
   function gesture(el) {
     let sx = 0, sy = 0, dx = 0, on = false, t0 = 0; const like = $('.stamp.like', el), nope = $('.stamp.nope', el);
     el.addEventListener('pointerdown', e => { if (S.busy || e.target.closest('.ptabs') || e.button > 0) return; on = true; sx = e.clientX; sy = e.clientY; dx = 0; t0 = performance.now(); el.setPointerCapture(e.pointerId); el.classList.add('drag'); });
-    el.addEventListener('pointermove', e => { if (!on) return; dx = e.clientX - sx; const dy = e.clientY - sy; el.style.transform = 'translate(' + dx + 'px,' + dy * .25 + 'px) rotate(' + dx / 40 + 'deg)'; like.style.opacity = Math.max(0, Math.min(1, dx / 120)); nope.style.opacity = Math.max(0, Math.min(1, -dx / 120)); });
+    el.addEventListener('pointermove', e => { if (!on) return; dx = e.clientX - sx; const dy = e.clientY - sy; el.style.transform = 'translate(' + dx + 'px,' + dy * .35 + 'px) rotate(' + dx / 18 + 'deg)'; like.style.opacity = Math.max(0, Math.min(1, dx / 120)); nope.style.opacity = Math.max(0, Math.min(1, -dx / 120)); });
     const end = () => { if (!on) return; on = false; el.classList.remove('drag'); const v = dx / Math.max(1, performance.now() - t0); if (Math.abs(dx) > 130 || (Math.abs(v) > .6 && Math.abs(dx) > 50)) react(dx > 0 ? 1 : -1); else { el.style.transform = ''; like.style.opacity = nope.style.opacity = 0; } };
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   }
@@ -196,10 +196,11 @@
     const el = $('#taste'), L = M.learn(S.hist), ms = M.meters(L);
     const show = S.tp && S.view === 'swipe' && S.hist.length > 0; document.body.classList.toggle('tp-open', show);
     const prev = animate ? $$('.mt-f', el).map(x => x.style.width) : null;
-    el.innerHTML = '<h4>What we’re learning</h4><div class="sum">' + esc(M.summary(L)) + '</div>' + ms.map((m, i) => { const w = (m.v * 100).toFixed(0); return '<div class="mt"><div class="mt-h"><span>' + m.name + '</span>' + (m.c < .2 ? '<i>still guessing</i>' : '') + '</div><div class="mt-t"><div class="mt-f" style="width:' + (prev ? prev[i] : w + '%') + ';opacity:' + (.3 + .7 * m.c).toFixed(2) + '"></div><i class="mt-d" style="left:' + (prev ? prev[i] : w + '%') + ';opacity:' + (.4 + .6 * m.c).toFixed(2) + '"></i></div><div class="mt-p"><span>' + m.lo + '</span><span>' + m.hi + '</span></div></div>'; }).join('') +
+    el.innerHTML = '<button class="pill sm tclose" id="t-x">Close</button><h4>What we’re learning</h4><div class="sum">' + esc(M.summary(L)) + '</div>' + ms.map((m, i) => { const w = (m.v * 100).toFixed(0); return '<div class="mt"><div class="mt-h"><span>' + m.name + '</span>' + (m.c < .2 ? '<i>still guessing</i>' : '') + '</div><div class="mt-t"><div class="mt-f" style="width:' + (prev ? prev[i] : w + '%') + ';opacity:' + (.3 + .7 * m.c).toFixed(2) + '"></div><i class="mt-d" style="left:' + (prev ? prev[i] : w + '%') + ';opacity:' + (.4 + .6 * m.c).toFixed(2) + '"></i></div><div class="mt-p"><span>' + m.lo + '</span><span>' + m.hi + '</span></div></div>'; }).join('') +
       '<div class="round"><h4>Round</h4><div class="dots">' + Array.from({ length: 7 }, (_, i) => '<i class="' + (i < S.hist.length ? 'on' : '') + '"></i>').join('') + '</div><p style="color:var(--mut);font-size:.9rem">' + (S.hist.length >= 5 ? 'We’re getting close.' : 'A few more reactions and we can converge.') + '</p>' + (S.hist.length >= 5 ? '<button class="pill ink" style="margin-top:12px" id="t-go">Show my product →</button>' : '') + '</div>';
     if (prev) requestAnimationFrame(() => requestAnimationFrame(() => { $$('.mt-f', el).forEach((f, i) => f.style.width = (ms[i].v * 100).toFixed(0) + '%'); $$('.mt-d', el).forEach((f, i) => f.style.left = (ms[i].v * 100).toFixed(0) + '%'); }));
     const g = $('#t-go'); if (g) g.onclick = () => startConverge();
+    const x = $('#t-x'); if (x) x.onclick = () => { S.tp = false; S.tpUser = true; renderTaste(); };
   }
 
   /* ───────── prototype modal + history ───────── */
@@ -302,7 +303,7 @@
     $$('input[type=range]', wrap).forEach(r => r.oninput = () => { vec[+r.dataset.i] = r.value / 100; clearTimeout(t); t = setTimeout(() => { S.final = M.makeDirection(vec, d.seed, { ...S.ctx, used: new Set(), count: 0 }, isB() ? { final: true } : { name: d.pack.name, final: true }); renderTab(); const h = $('.res .tags'); if (h) h.innerHTML = S.final.tags.map(x => '<span class="tag">' + esc(x) + '</span>').join(''); }, 140); });
   }
   function exploreMore() {
-    S.shown.push(S.final); S.readyAt = S.hist.length + 3; S.note = 'explore'; S.tp = true; S.tpUser = false;
+    S.shown.push(S.final); S.readyAt = S.hist.length + 3; S.note = 'explore'; S.tp = innerWidth >= 1180; S.tpUser = false;
     S.cur = nextCard(); S.view = 'swipe'; go('swipe');
   }
 

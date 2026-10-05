@@ -139,3 +139,31 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 }
 
 @media(max-width:700px){.x{display:none}.ctabar{flex-wrap:nowrap;gap:6px;padding:10px 10px calc(10px + env(safe-area-inset-bottom))}.ctabar .pill.lg{padding:12px 14px;font-size:.86rem}}
+
+/* ── Tinder-style deck: portrait card, stack behind it, round buttons (grey-blue palette) ── */
+.sw{padding-bottom:28px}
+.ribbon{min-height:50px}
+.learn{position:absolute;left:0;right:0;top:112px;margin:0;text-align:center;pointer-events:none;z-index:8;height:auto}
+.stage{width:min(100%,640px,calc(160dvh - 700px));min-width:min(100%,340px);padding-bottom:30px}
+.ghost{position:absolute;left:0;right:0;top:0;bottom:30px;border-radius:28px;background:var(--paper);box-shadow:0 0 0 1px var(--line),0 24px 50px -30px rgba(13,14,17,.4);transform-origin:50% 100%}
+.ghost.g1{transform:translateY(14px) scale(.955);opacity:.95}.ghost.g2{transform:translateY(27px) scale(.91);opacity:.75}
+.dcard{display:flex;flex-direction:column;border-radius:28px;position:relative;z-index:2;box-shadow:0 0 0 1px var(--line),0 40px 70px -40px rgba(13,14,17,.5)}
+.dcard.blank{aspect-ratio:1.05/1;align-items:center;justify-content:center;cursor:default}
+.dcard .pv{margin:12px 12px 0;border-radius:18px;align-self:auto}
+.dcard .info{display:grid;grid-template-columns:1fr 1.15fr;gap:8px 18px;padding:16px 20px 18px;min-width:0}
+.dcard .ih{display:flex;flex-direction:column;gap:6px;min-width:0}.dcard .ih h2{font:400 clamp(1.7rem,2.6vw,2.2rem)/1 var(--disp);letter-spacing:-.025em;margin:0}
+.dcard .it{min-width:0}.dcard .ex{font-size:.86rem;line-height:1.4;color:#33363d}.dcard .ph{font:italic 400 1rem/1.25 var(--disp);margin-top:6px}
+.dcard .dec{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:4px 0 0;padding-top:10px;border-top:1px solid var(--line)}
+.dcard .dec li{display:block;font-size:.76rem;line-height:1.3}.dcard .dec b{display:block;padding:0;margin-bottom:1px}
+.dcard .stamp{top:34px}
+.thinking{height:auto;padding:80px 0}
+.acts{position:sticky;bottom:14px;left:auto;right:auto;z-index:15;display:flex;align-items:center;justify-content:center;gap:18px;margin-top:6px;padding:0;background:none;pointer-events:auto;flex-wrap:nowrap}
+.rb{border-radius:50%;background:var(--paper);display:grid;place-items:center;box-shadow:0 12px 26px -12px rgba(13,14,17,.5),0 0 0 1px var(--line);transition:transform .15s,box-shadow .15s}
+.rb:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 18px 30px -12px rgba(13,14,17,.55),0 0 0 1px var(--ink)}.rb:active{transform:scale(.92)}
+.rb.big{width:78px;height:78px;font-size:30px;font-weight:700}.rb.sm{width:48px;height:48px;font-size:19px;color:var(--mut)}
+.rb.no{color:var(--neg)}.rb.yes{color:var(--acc)}
+.kb{margin-top:12px;text-align:center}
+@media(max-width:700px){.stage{width:min(100%,500px)}.dcard .info{grid-template-columns:1fr}.dcard .dec{grid-template-columns:1fr 1fr}.rb.big{width:68px;height:68px}.kb{display:none}.learn{top:96px}}
+@media(max-height:760px){.kb{display:none}}
+
+.tclose{display:none}@media(max-width:1180px){.tclose{display:inline-flex;float:right}}
