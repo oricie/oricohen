@@ -222,6 +222,8 @@
       quote: ['Exactly what we were looking for.', 'A happy customer'], stats: [['10+', 'Years of craft'], ['500+', 'Happy customers'], ['4.9★', 'Average rating']]
     }
   };
+  const PHOTO_Q = { security: 'cybersecurity technology', pets: 'happy dog', kids: 'children learning', health: 'wellness fitness', fashion: 'fashion boutique',
+    finance: 'modern office team', food: 'fresh bakery', travel: 'travel landscape', eco: 'natural plants', home: 'interior design', tech: 'modern workspace', generic: 'creative studio' };
   const ORDER = ['security', 'pets', 'kids', 'health', 'fashion', 'finance', 'food', 'travel', 'eco', 'home', 'tech'];
   const GLYPH_HINTS = [
     [/bagel|donut|doughnut/, 'bagel'], [/coffee|cafe|café|\btea\b|espresso/, 'cup'], [/lock|vault|privacy/, 'lock'], [/secur|cyber|protect/, 'shield'],
@@ -336,6 +338,7 @@
       head: ((dir && str(dir.head, 90)) || pick(r, ind.heads)).replace(/\{n\}/g, name), copy: ind, ai: !!dir,
       pal, fonts: { d, b, w: FONTS[d].h, cat }, glyph, logoStyle, layout, radius, rb,
       container: pick(r, CONTAINERS), wcase, dot: r() < .3, art: pick(r, ARTS), artSeed: (r() * 1e9) | 0,
+      photoQ: (dir && str(dir.photo, 60)) || PHOTO_Q[brief.ind], usePhoto: r() < .65, photo: null,
       label: (dir ? '✦ ' : '') + FEEL[pal.mode] + ' ' + TYPE[cat]
     };
   }
@@ -457,7 +460,7 @@
     '.hero{padding:48px 0 88px}.hero-in{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}' +
     '.eyebrow{display:inline-block;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--eyebrow);margin-bottom:22px}' +
     'h1{font-size:clamp(44px,5.6vw,84px)}.sub{font-size:20px;color:var(--muted);margin:24px 0 36px;max-width:32em}.cta{display:flex;gap:14px;flex-wrap:wrap}' +
-    '.art{aspect-ratio:600/520;width:100%}.art svg{display:block;width:100%;height:100%;border-radius:calc(var(--r)*1.4)}.art.wide{display:none;aspect-ratio:1200/380}' +
+    '.art{aspect-ratio:600/520;width:100%}.art{position:relative}.art svg{display:block;width:100%;height:100%;border-radius:calc(var(--r)*1.4)}.art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:calc(var(--r)*1.4)}.art.wide{display:none;aspect-ratio:1200/380}' +
     '.lay-center .hero-in{grid-template-columns:1fr;text-align:center;justify-items:center;gap:48px}.lay-center .sub{margin-left:auto;margin-right:auto}.lay-center .cta{justify-content:center}' +
     '.lay-center .art{display:none}.lay-center .art.wide{display:block;max-width:1100px}' +
     '.lay-bold .hero{background:var(--primary);color:var(--on-primary);padding:72px 0 96px}.lay-bold .sub,.lay-bold .eyebrow{color:var(--on-primary);opacity:.85}.lay-bold h1{font-size:clamp(52px,7.4vw,112px);line-height:.95}' +
@@ -523,19 +526,23 @@
     const nav = logoHTML(v, { style: navStyle(v), size: 26 });
     const ic = '<span class="ic">' + markSVG(v, { container: 'none', colors: [P.onPrimary, P.primary] }) + '</span>';
     const sub = ind.sub.replace(/\{n\}/g, n);
+    const ph = v.usePhoto && v.photo && /^https:\/\//.test(v.photo.url) ? v.photo : null;
+    const img = ph ? '<img src="' + esc(ph.url) + '" alt="' + esc(ph.alt || '') + '" onerror="this.remove()">' : '';
+    const credit = ph ? ' · Photo: <a href="' + esc(ph.link) + '">' + esc(ph.credit) + '</a> / Pexels' : '';
     return { body: '<header class="nav"><div class="wrap nav-in">' + nav + '<nav>' + ind.nav.map(x => '<a href="#">' + x + '</a>').join('') + '</nav><a class="btn sm" href="#">' + esc(ind.cta[0]) + '</a></div></header>' +
       '<section class="hero"><div class="wrap hero-in"><div class="copy"><span class="eyebrow">' + esc(ind.eyebrow) + '</span><h1>' + esc(v.head) + '</h1><p class="sub">' + sub + '</p>' +
       '<div class="cta"><a class="btn" href="#">' + esc(ind.cta[0]) + '</a><a class="btn ghost" href="#">' + esc(ind.cta[1]) + '</a></div></div>' +
-      '<div class="art">' + artSVG(v) + '</div><div class="art wide">' + artWide(v) + '</div></div></section>' +
+      '<div class="art">' + artSVG(v) + img + '</div><div class="art wide">' + artWide(v) + img + '</div></div></section>' +
       '<section class="stats"><div class="wrap stats-in">' + ind.stats.map(s => '<div class="stat"><b>' + esc(s[0]) + '</b><span>' + esc(s[1]) + '</span></div>').join('') + '</div></section>' +
       '<section class="feats"><div class="wrap"><h2>Why people choose ' + n + '</h2><div class="grid">' +
       ind.feats.map(f => '<div class="card">' + ic + '<h3>' + esc(f[0]) + '</h3><p>' + esc(f[1]) + '</p></div>').join('') + '</div></div></section>' +
       '<section class="quote"><div class="wrap"><blockquote>“' + esc(ind.quote[0]) + '”</blockquote><cite>' + esc(ind.quote[1]) + '</cite></div></section>' +
       '<section class="final"><div class="wrap"><div class="final-in"><h2>Ready when you are.</h2><a class="btn" href="#">' + esc(ind.cta[0]) + '</a></div></div></section>' +
-      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.</span></div></footer>' };
+      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.' + credit + '</span></div></footer>' };
   }
-  function siteHTML(v) {
+  function siteHTML(v, opts) {
     const p = siteParts(v), n = esc(v.name);
+    if (opts && opts.hero && v.photo) p.body = p.body.split(esc(v.photo.url)).join(opts.hero);
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + n + '</title>' +
       '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="' + fontsHref(v) + '">' +
       '<style>' + brandCSS(v) + SITE_CSS + LOGO_CSS + '</style></head><body class="lay-' + v.layout + '">' + p.body + '</body></html>';
@@ -592,6 +599,8 @@
     return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
   }
   async function brandKitZip(v) {
+    let heroBytes = null;
+    if (v.usePhoto && v.photo) { try { const r = await fetch(v.photo.url); if (r.ok) heroBytes = new Uint8Array(await r.arrayBuffer()); } catch (e) { } }
     const slug = v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'brand';
     const P = v.pal;
     const readme = v.name + ' brand kit\n' + '='.repeat(v.name.length + 10) + '\n\n' +
@@ -599,9 +608,10 @@
       'logo.svg     Primary logo lockup.\nmark.svg     Icon / avatar / favicon version of the mark.\nbrand.css    Colours, fonts and radii as CSS variables.\n\n' +
       'Colours\n' + paletteList(v).map(c => '  ' + c[0].padEnd(11) + c[1]).join('\n') + '\n\n' +
       'Type\n  Display  ' + v.fonts.d + '\n  Body     ' + v.fonts.b + '\n  Both are free on Google Fonts (https://fonts.google.com).\n\n' +
-      'Generated with Matchmark.\n';
+      (heroBytes ? 'Photo: ' + v.photo.credit + ' on Pexels (' + v.photo.link + '), free to use under the Pexels license.\n\n' : '') + 'Generated with Matchmark.\n';
     return zip([
-      { name: slug + '/index.html', data: siteHTML(v) },
+      { name: slug + '/index.html', data: heroBytes ? siteHTML(v, { hero: 'images/hero.jpg' }) : siteHTML(v) },
+      ...(heroBytes ? [{ name: slug + '/images/hero.jpg', data: heroBytes }] : []),
       { name: slug + '/logo.svg', data: await logoSVG(v) },
       { name: slug + '/mark.svg', data: markStandaloneSVG(v) },
       { name: slug + '/brand.css', data: tokensCSS(v) },

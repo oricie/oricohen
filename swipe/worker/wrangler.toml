@@ -1,0 +1,7 @@
+name = "matchmark-api"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Comma-separated sites allowed to call this worker.
+ALLOWED_ORIGINS = "https://oricohendesign.com"
