@@ -58,7 +58,48 @@
   function newCtx() {
     if (S.kind === 'card') { const pr = CD.parse(S.brief.text, S.brief.name, S.brief.when, S.brief.where), title = pr.heb ? pr.O.he : pr.O.label + (pr.invite ? ' invitation' : ' card'); return { kind: 'card', packKey: 'card', O: pr.O, L: pr.L, heb: pr.heb, invite: pr.invite, age: pr.age, fields: pr.F, title, pack: { name: title, kind: pr.invite ? 'Invitation' : 'Greeting card' }, used: new Set(), count: 0 }; }
     if (S.kind === 'brand') { const brief = MM.parseBrief([S.brief.text, S.brief.problem].join(' '), S.brief.name); return { kind: 'brand', packKey: 'brand', pack: { name: brief.name || 'Your brand', kind: 'Brand & website' }, brief, used: new Set(), count: 0 }; }
-    const key = D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 };
+    if (S.brief.agent) D.P.agent = S.brief.agent;
+    const key = S.brief.agent ? 'agent' : D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 };
+  }
+
+  /* ───────── Claude as the content agent ───────── */
+  const PACK_KEYS = ['name', 'kind', 'users', 'cur', 'unit', 'e', 'labels', 'groups', 'names', 'idp', 'range', 'spread', 'status', 'pctLabel', 'num', 'cols', 'kpis', 'workflow', 'inputsT', 'drivers', 'bridge', 'group', 'lines', 'series', 'trendT', 'insightT', 'people', 'act', 'ai', 'approvals', 'settings'];
+  const okArr = (a, n) => Array.isArray(a) && a.length >= n;
+  function mergePack(p, base) {
+    if (!p || typeof p !== 'object') return null;
+    const out = Object.assign({}, base); let n = 0;
+    const chk = {
+      name: x => typeof x === 'string' && x, kind: x => typeof x === 'string' && x, users: x => typeof x === 'string' && x, e: x => okArr(x, 2) && x.every(y => typeof y === 'string'),
+      labels: x => x && ['home', 'workflow', 'table', 'insights', 'approvals', 'settings'].every(k => typeof x[k] === 'string'), groups: x => x && ['home', 'workflow', 'table', 'insights', 'approvals', 'settings'].every(k => typeof x[k] === 'string'),
+      names: x => okArr(x, 8) && x.every(y => typeof y === 'string'), status: x => okArr(x, 3) && x.every(y => typeof y === 'string'), pctLabel: x => typeof x === 'string',
+      kpis: x => okArr(x, 4) && x.every(k => Array.isArray(k) && k.length >= 3), workflow: x => x && typeof x.name === 'string' && okArr(x.steps, 4) && x.steps.every(s => Array.isArray(s) && s.length >= 2),
+      inputsT: x => typeof x === 'string', drivers: x => okArr(x, 3) && x.every(d => Array.isArray(d) && d.length >= 2), bridge: x => Array.isArray(x) && x.length === 7, group: x => okArr(x, 4), lines: x => okArr(x, 4), series: x => Array.isArray(x) && x.length === 2,
+      trendT: x => typeof x === 'string', insightT: x => typeof x === 'string', people: x => typeof x === 'string', act: x => okArr(x, 3), ai: x => okArr(x, 2), approvals: x => okArr(x, 3) && x.every(a => Array.isArray(a) && a.length >= 4),
+      settings: x => okArr(x, 3) && x.every(g => Array.isArray(g) && typeof g[0] === 'string' && Array.isArray(g[1]) && g[1].length)
+    };
+    Object.keys(chk).forEach(k => { let ok = false; try { ok = !!chk[k](p[k]); } catch (e) { } if (ok) { out[k] = p[k]; n++; } });
+    ['cur', 'unit'].forEach(k => { if (typeof p[k] === 'string') out[k] = p[k]; });
+    out.re = /./; return n >= 12 ? out : null;
+  }
+  async function askAgent() {
+    if (S.kind !== 'product') return;
+    const B = S.brief; delete B.agent;
+    let sample = null; try { sample = await Promise.race([claude.use('sample'), new Promise(r => setTimeout(() => r(null), 2500))]); } catch (e) { }
+    if (!sample) return;
+    const base = D.P[D.detect([B.text, B.users, B.problem].join(' '), B.type)], tpl = {}; PACK_KEYS.forEach(k => tpl[k] = base[k]);
+    const prompt = 'You write realistic mock content for a clickable product prototype. The product: "' + [B.text, B.users && 'Users: ' + B.users, B.problem && 'Problem: ' + B.problem].filter(Boolean).join('. ') + '".\n' +
+      'Return ONE JSON object with exactly the same keys and shapes as the example below, but with content specific to THIS product: its real vocabulary, entities, statuses, workflow steps, KPIs, table columns, approvals and settings, as a domain expert would write it. Rules: realistic numbers and short labels (under 28 characters); keep the arrays at the same lengths as the example (names 12, kpis 4, workflow.steps 5, drivers 4, bridge 7, group 6, series 2, approvals 4, settings 4 groups of 3); cols must keep the same 8 column ids in the same order (name, owner, m1, m2, m3, pct, status, trend) and the same type strings, only change the labels; kpis items are [label, value, delta, 1 if good else 0]; keep "idp", "range", "spread", "num", "cur", "unit" valid (cur and unit may be empty strings); "name" is a short invented product name. Write all text in ' + (/[֐-׿]/.test(B.text) ? 'English (keep identifiers and numbers Latin, even though the brief is Hebrew)' : 'the language of the brief') + '. No commentary, JSON only.\n\nExample (for a different product):\n' + JSON.stringify(tpl);
+    try {
+      const j = await sample.json(prompt, { modelTier: 'default', cache: true });
+      const m = mergePack(j, base); if (m) { B.agent = m; B.agentOk = true; }
+    } catch (e) { /* not granted, rate limited or bad JSON: keep the built-in pack */ }
+  }
+  async function begin(skip) {
+    const b = $('#go'), r = $('#seeall'); [b, r].forEach(x => x && (x.disabled = true));
+    if (b) b.innerHTML = 'Asking Claude to write your product… <span class="dots"></span>';
+    const t = setTimeout(() => { }, 0); clearTimeout(t);
+    try { await Promise.race([askAgent(), new Promise(res => setTimeout(res, 70000))]); } catch (e) { }
+    startExplore(skip);
   }
   function startExplore(skip) {
     setKind(resolveKind(S.brief)); S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
@@ -144,8 +185,8 @@
     $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
     $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); ta.focus(); });
     const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; B.when = ($('#bw') || {}).value ? $('#bw').value.trim() : ''; B.where = ($('#bq') || {}).value ? $('#bq').value.trim() : ''; };
-    $('#bf').onsubmit = e => { e.preventDefault(); collect(); startExplore(true); };
-    $('#seeall').onclick = () => { collect(); startExplore(false); };
+    $('#bf').onsubmit = e => { e.preventDefault(); collect(); begin(true); };
+    $('#seeall').onclick = () => { collect(); begin(false); };
     const rs = $('#resume'); if (rs) rs.onclick = () => resume(saved);
   }
   function resume(saved) {
