@@ -3,12 +3,12 @@
   'use strict';
   const $ = (s, e) => (e || document).querySelector(s), $$ = (s, e) => Array.from((e || document).querySelectorAll(s));
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const D = window.DOMAIN, MP = window.MODEL, PP = window.PRODUCT, BR = window.BRAND, MM = window.MM;
+  const D = window.DOMAIN, MP = window.MODEL, PP = window.PRODUCT, BR = window.BRAND, CD = window.CARDS, MM = window.MM;
   let M = MP, PR = PP;   // swapped when the kind of thing being made changes
   const STORE = 'converge.v1';
   const TYPES = [['', 'Auto-detect'], ['finance', 'Planning & finance'], ['erp', 'ERP'], ['crm', 'CRM'], ['bi', 'BI & analytics'], ['dev', 'Developer tools'], ['admin', 'Admin & access']];
-  const KINDS = [['auto', 'Let Converge decide'], ['brand', 'Brand & website'], ['product', 'Complex product']];
-  const KHINT = { auto: 'Converge reads your description and picks the right kind of exploration.', brand: 'A shop, studio, restaurant, portfolio or small business. You get a logo, colours, type and a website.', product: 'A platform, ERP, CRM, analytics or developer tool. You get a clickable product experience.' };
+  const KINDS = [['auto', 'Let Converge decide'], ['brand', 'Brand & website'], ['product', 'Complex product'], ['card', 'Invitation or card']];
+  const KHINT = { auto: 'Converge reads your description and picks the right kind of exploration.', brand: 'A shop, studio, restaurant, portfolio or small business. You get a logo, colours, type and a website.', product: 'A platform, ERP, CRM, analytics or developer tool. You get a clickable product experience.', card: 'A birthday invite, a thank-you card, a wedding invitation. You get a finished card you can edit and download.' };
   const EXAMPLES = [
     ['Bagel shop', 'I’m opening a bagel shop in Brooklyn. I need a logo, website and branding. Warm and a bit playful.', 'brand', ''],
     ['Yoga studio', 'A calm, boutique yoga studio. Logo, brand and a website where people can book classes.', 'brand', ''],
@@ -17,9 +17,12 @@
     ['ERP for manufacturers', 'An ERP for mid-size manufacturers to manage procurement, inventory and suppliers.', 'product', ''],
     ['CRM for field sales', 'A CRM for enterprise field sales teams who live in the pipeline.', 'product', ''],
     ['Developer platform', 'A developer platform for engineering teams to ship, monitor and respond to incidents.', 'product', ''],
-    ['Access console', 'An admin console for identity and access reviews across the company.', 'product', '']
+    ['Access console', 'An admin console for identity and access reviews across the company.', 'product', ''],
+    ['Birthday invite', 'A birthday invitation for my daughter Maya’s 7th birthday. Colourful, with balloons.', 'card', ''],
+    ['Thank-you card', 'A thank-you card for my mom. Warm and heartfelt.', 'card', ''],
+    ['Wedding invite', 'A wedding invitation. Elegant and romantic.', 'card', '']
   ];
-  const S = { view: 'brief', kind: 'product', brief: { text: '', users: '', problem: '', type: '', kind: 'auto', name: '' }, hist: [], shown: [], deck: [], cur: null, final: null, ctx: null, seedBase: 0, next: 0, readyAt: 7, tp: false, tpUser: false, rtab: 'Prototype', busy: false, note: '' };
+  const S = { view: 'brief', kind: 'product', brief: { text: '', users: '', problem: '', type: '', kind: 'auto', name: '', when: '', where: '' }, hist: [], shown: [], deck: [], cur: null, final: null, ctx: null, seedBase: 0, next: 0, readyAt: 7, tp: false, tpUser: false, rtab: 'Prototype', busy: false, note: '' };
 
   /* ───────── utils ───────── */
   let toastT; function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2400); }
@@ -36,12 +39,16 @@
   const fit = el => { ro.observe(el); el.style.setProperty('--k', (el.clientWidth / 1280 || .3).toFixed(4)); };
   function host(parent, d, state, o) { const h = document.createElement('div'); h.className = 'h'; parent.appendChild(h); const c = PR.mount(h, d, Object.assign({ state }, o || {})); return c; }
   const ARCHN = d => M.ARCH[d.arch].names[0];
-  const LB = Object.assign({}, BR.LB, { home: 'Home', table: 'Table', workflow: 'Workflow', insights: 'Insights', approvals: 'Approvals', settings: 'Settings', detail: 'Detail' });
-  function setKind(k) { S.kind = k; M = k === 'brand' ? BR.model : MP; PR = k === 'brand' ? BR.render : PP; }
-  const FIRST = () => S.kind === 'brand' ? 'site' : 'home';
-  const resolveKind = b => b.kind === 'brand' || b.kind === 'product' ? b.kind : BR.detectKind([b.text, b.problem, b.users].join(' '));
+  const LB = Object.assign({}, BR.LB, CD.LB, { home: 'Home', table: 'Table', workflow: 'Workflow', insights: 'Insights', approvals: 'Approvals', settings: 'Settings', detail: 'Detail' });
+  const detectAny = t => CD.detect(t) ? 'card' : BR.detectKind(t);
+  const NOUN = () => S.kind === 'brand' ? 'brand' : S.kind === 'card' ? 'card' : 'product';
+  const isB = () => S.kind === 'brand', isC = () => S.kind === 'card';
+  function setKind(k) { S.kind = k; M = k === 'brand' ? BR.model : k === 'card' ? CD.model : MP; PR = k === 'brand' ? BR.render : k === 'card' ? CD.render : PP; }
+  const FIRST = () => S.kind === 'brand' ? 'site' : S.kind === 'card' ? 'front' : 'home';
+  const resolveKind = b => ['brand', 'product', 'card'].includes(b.kind) ? b.kind : detectAny([b.text, b.problem, b.users].join(' '));
   function screensFor(d, n) {
     if (S.kind === 'brand') return BR.screensFor(d, n);
+    if (S.kind === 'card') return CD.screensFor(d, n);
     const f = d.flags, pref = ['home', f.wizard ? 'workflow' : 'table', f.charts ? 'insights' : 'detail', f.ai ? 'approvals' : f.cfg ? 'settings' : 'workflow', 'table', 'insights', 'settings'];
     const out = []; pref.forEach(s => { if (!out.includes(s)) out.push(s); });
     return out.slice(0, n).map(s => s === 'detail' ? { id: 'detail', state: { screen: 'table', row: 2 } } : { id: s, state: { screen: s } });
@@ -49,6 +56,7 @@
 
   /* ───────── flow control ───────── */
   function newCtx() {
+    if (S.kind === 'card') { const pr = CD.parse(S.brief.text, S.brief.name, S.brief.when, S.brief.where), title = pr.heb ? pr.O.he : pr.O.label + (pr.invite ? ' invitation' : ' card'); return { kind: 'card', packKey: 'card', O: pr.O, L: pr.L, heb: pr.heb, invite: pr.invite, age: pr.age, fields: pr.F, title, pack: { name: title, kind: pr.invite ? 'Invitation' : 'Greeting card' }, used: new Set(), count: 0 }; }
     if (S.kind === 'brand') { const brief = MM.parseBrief([S.brief.text, S.brief.problem].join(' '), S.brief.name); return { kind: 'brand', packKey: 'brand', pack: { name: brief.name || 'Your brand', kind: 'Brand & website' }, brief, used: new Set(), count: 0 }; }
     const key = D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 };
   }
@@ -91,7 +99,7 @@
   /* ───────── bar ───────── */
   function renderBar() {
     const order = ['brief', 'dirs', 'swipe', 'result'], idx = order.indexOf(S.view === 'converge' ? 'result' : S.view), names = ['Brief', 'Directions', 'Taste', 'Yours'];
-    $('#bar').innerHTML = '<a class="word" id="home"><span class="hm">♥</span>Converge</a><div class="crumbs">' + names.map((n, i) => '<span class="' + (i === idx ? 'on' : i < idx ? 'dn' : '') + '">' + n + '</span>').join('') + '</div>' + (S.view !== 'brief' ? '<span class="ktag">' + (S.kind === 'brand' ? 'Brand & website' : 'Complex product') + '</span>' : '') + '<span class="sp"></span>' +
+    $('#bar').innerHTML = '<a class="word" id="home"><span class="hm">♥</span>Converge</a><div class="crumbs">' + names.map((n, i) => '<span class="' + (i === idx ? 'on' : i < idx ? 'dn' : '') + '">' + n + '</span>').join('') + '</div>' + (S.view !== 'brief' ? '<span class="ktag">' + (S.kind === 'brand' ? 'Brand & website' : S.kind === 'card' ? 'Invitation or card' : 'Complex product') + '</span>' : '') + '<span class="sp"></span>' +
       (S.hist.length ? '<button class="pill" id="b-hist">History <b>' + S.hist.length + '</b></button>' : '') + (S.hist.length && S.view === 'swipe' ? '<button class="pill" id="b-taste">Your taste</button>' : '') + (S.view !== 'brief' ? '<button class="pill" id="b-reset">Start over</button>' : '');
     $('#home').onclick = () => { if (S.view !== 'brief') { S.view = 'brief'; document.body.classList.remove('tp-open'); renderBar(); vBrief(); } };
     const h = $('#b-hist'); if (h) h.onclick = openHistory;
@@ -103,7 +111,7 @@
   /* ───────── 1 · brief ───────── */
   function vBrief() {
     const B = S.brief, saved = load(), resumable = saved && saved.hist && saved.hist.length;
-    const QUICK = [0, 1, 3, 6];
+    const QUICK = [0, 3, 8, 9];
     $('#view').innerHTML = '<section class="brief"><div class="b2"><h1>What are you <em>making?</em></h1>' +
       '<p class="lede">Describe it in a sentence. We’ll show you designs to swipe on.</p>' +
       '<form id="bf" autocomplete="off"><textarea id="bt" class="tbox" dir="auto" rows="3" maxlength="240" aria-label="What are you making?" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea>' +
@@ -115,14 +123,16 @@
       '<div id="opts" class="hidden"></div>' +
       (resumable ? '<div class="resume">' + saved.hist.length + ' reactions saved <button type="button" class="pill sm ink" id="resume">Continue</button></div>' : '') + '</form></div></section>';
     const ta = $('#bt'), grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 96) + 'px'; };
-    const eff = () => B.kind === 'auto' ? BR.detectKind([ta.value, ($('#bp') || {}).value].join(' ')) : B.kind;
+    const eff = () => B.kind === 'auto' ? detectAny([ta.value, ($('#bp') || {}).value].join(' ')) : B.kind;
     let shown = null;
-    const label = k => k === 'brand' ? 'brand & website' : 'complex product';
+    const label = k => k === 'brand' ? 'brand & website' : k === 'card' ? 'invitation or card' : 'complex product';
     const line = () => { const k = eff(); $('#ktxt').textContent = (B.kind === 'auto' ? 'Looks like a ' : 'Making a ') + label(k) + '.'; };
     const opts = () => {
       const k = eff(); line(); if (k === shown) return;
-      const keep = { name: ($('#bn') || {}).value, users: ($('#bu') || {}).value, problem: ($('#bp') || {}).value }; shown = k;
-      $('#opts').innerHTML = k === 'brand' ?
+      const keep = { name: ($('#bn') || {}).value, users: ($('#bu') || {}).value, problem: ($('#bp') || {}).value, when: ($('#bw') || {}).value, where: ($('#bq') || {}).value }; shown = k;
+      $('#opts').innerHTML = k === 'card' ?
+        '<div class="opt"><label class="field"><span class="lab">Name(s)</span><input id="bn" dir="auto" maxlength="40" placeholder="Maya, or Noa &amp; Daniel" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="lab">Date and time</span><input id="bw" dir="auto" maxlength="60" placeholder="Saturday 14 June, 4pm" value="' + esc(keep.when != null ? keep.when : B.when) + '"></label></div><div class="opt one"><label class="field"><span class="lab">Place</span><input id="bq" dir="auto" maxlength="80" placeholder="Our garden, 12 Oak Street" value="' + esc(keep.where != null ? keep.where : B.where) + '"></label></div>' :
+        k === 'brand' ?
         '<div class="opt"><label class="field"><span class="lab">Business name</span><input id="bn" dir="auto" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="lab">Who is it for</span><input id="bu" dir="auto" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
         '<div class="opt"><label class="field"><span class="lab">Target users</span><input id="bu" dir="auto" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="lab">Main problem</span><input id="bp" dir="auto" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="lab2">Product type</div><div class="chips" id="types">' + TYPES.map(t => '<button type="button" class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
       $$('#types .tchip').forEach(b => b.onclick = () => { B.type = b.dataset.t; $$('#types .tchip').forEach(x => x.classList.toggle('on', x === b)); });
@@ -133,7 +143,7 @@
     $('#more').onclick = () => { const o = $('#opts'); o.classList.toggle('hidden'); $('#more').textContent = o.classList.contains('hidden') ? 'Add details' : 'Hide details'; };
     $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
     $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); ta.focus(); });
-    const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; };
+    const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; B.when = ($('#bw') || {}).value ? $('#bw').value.trim() : ''; B.where = ($('#bq') || {}).value ? $('#bq').value.trim() : ''; };
     $('#bf').onsubmit = e => { e.preventDefault(); collect(); startExplore(true); };
     $('#seeall').onclick = () => { collect(); startExplore(false); };
     const rs = $('#resume'); if (rs) rs.onclick = () => resume(saved);
@@ -149,7 +159,7 @@
   /* ───────── 2 · directions ───────── */
   function vDirs() {
     const p = S.ctx.pack;
-    $('#view').innerHTML = '<section class="dirs"><div class="dhead"><div><span class="mono">' + esc(p.kind) + '</span><h2>Six ways this ' + (S.kind === 'brand' ? 'brand' : 'product') + ' could <em>' + (S.kind === 'brand' ? 'look and feel.' : 'exist.') + '</em></h2><p>' + (S.kind === 'brand' ? 'Each is a complete brand: logo, colours, type and a working website. ' : 'Each is a complete product experience, with its own navigation, density and way of working. ') + 'Start swiping and react to them. Every reaction shapes what you see next.</p></div><div style="display:flex;gap:10px"><button class="pill" id="d-back">← Edit brief</button><button class="pill ink lg" id="d-go">Start swiping <span>→</span></button></div></div><div class="grid" id="dg"></div></section>';
+    $('#view').innerHTML = '<section class="dirs"><div class="dhead"><div><span class="mono">' + esc(p.kind) + '</span><h2>Six ways this ' + NOUN() + ' could <em>' + (S.kind === 'product' ? 'exist.' : 'look.') + '</em></h2><p>' + (S.kind === 'brand' ? 'Each is a complete brand: logo, colours, type and a working website. ' : S.kind === 'card' ? 'Each is a finished card with its own colour, lettering and illustrations. ' : 'Each is a complete product experience, with its own navigation, density and way of working. ') + 'Start swiping and react to them. Every reaction shapes what you see next.</p></div><div style="display:flex;gap:10px"><button class="pill" id="d-back">← Edit brief</button><button class="pill ink lg" id="d-go">Start swiping <span>→</span></button></div></div><div class="grid" id="dg"></div></section>';
     const g = $('#dg');
     S.deck.forEach((d, i) => {
       const a = document.createElement('button'); a.className = 'dcard-o'; a.setAttribute('aria-label', 'Start with ' + d.name);
@@ -173,11 +183,11 @@
     let l1, l2;
     if (thinking) { l1 = S.lastMsg; l2 = 'Shaping the next direction…'; }
     else if (S.note === 'undo') { l1 = 'Undone.'; l2 = 'Back to ' + d.name + '.'; }
-    else if (S.note === 'explore') { l1 = 'Something different.'; l2 = 'Moving away from your ' + (S.kind === 'brand' ? 'brand' : 'product') + ' so far.'; }
-    else if (S.note === 'start' || !last) { l1 = 'Start here.'; l2 = 'Swipe right if this could be your ' + (S.kind === 'brand' ? 'brand' : 'product') + ', left if not.'; }
+    else if (S.note === 'explore') { l1 = 'Something different.'; l2 = 'Moving away from your ' + NOUN() + ' so far.'; }
+    else if (S.note === 'start' || !last) { l1 = 'Start here.'; l2 = 'Swipe right if this could be your ' + NOUN() + ', left if not.'; }
     else { l1 = S.lastMsg || (last.r > 0 ? 'You liked ' : 'You passed on ') + last.name + '.'; l2 = d.why && d.why.probe.length ? 'Now testing ' + list(low(d.why.probe)) + '.' : ''; }
     let h = '<div class="rl1">' + esc(l1) + '</div>' + (l2 ? '<div class="rl2">' + esc(l2) + '</div>' : '');
-    if (M.closing(S.hist) && !isReady() && !thinking) h = '<button type="button" class="close-note" id="r-ready">We’re getting close. <span>Show my ' + (S.kind === 'brand' ? 'brand' : 'product') + '</span></button>' + h;
+    if (M.closing(S.hist) && !isReady() && !thinking) h = '<button type="button" class="close-note" id="r-ready">We’re getting close. <span>Show my ' + NOUN() + '</span></button>' + h;
     el.innerHTML = h; const b = $('#r-ready'); if (b) b.onclick = () => startConverge();
   }
   function mountCard(d, enter) {
@@ -220,7 +230,7 @@
   function closeModal() { const m = $('#modal'); m.classList.add('hidden'); m.innerHTML = ''; }
   function openProto(d, reactable) {
     PR.ensureFonts(d);
-    const m = modal('<div class="mbox"><div class="mhead"><h3>' + esc(d.name) + ' <span class="mono" style="margin-left:8px">Direction ' + d.letter + ' · click through it</span></h3><div style="display:flex;gap:8px">' + (reactable ? '<button class="pill" id="m-no">← Not for me</button><button class="pill ink" id="m-yes">Like →</button>' : '') + '<button class="pill" id="m-x">Close</button></div></div><div class="mbody"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(d.pack.name.toLowerCase()) + '.app</span></div><div class="fit live" id="mf"></div></div><p class="hint">' + (S.kind === 'brand' ? 'A working website. Scroll through it, or switch to the brand board.' : 'This is a working prototype. Open records, step through the workflow, change settings.') + '</p></div></div>');
+    const m = modal('<div class="mbox"><div class="mhead"><h3>' + esc(d.name) + ' <span class="mono" style="margin-left:8px">Direction ' + d.letter + ' · click through it</span></h3><div style="display:flex;gap:8px">' + (reactable ? '<button class="pill" id="m-no">← Not for me</button><button class="pill ink" id="m-yes">Like →</button>' : '') + '<button class="pill" id="m-x">Close</button></div></div><div class="mbody"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(d.pack.name.toLowerCase()) + '.app</span></div><div class="fit live" id="mf"></div></div><p class="hint">' + (S.kind === 'card' ? 'The front of the card. Use the tabs on the swipe card to see the back and the story format.' : S.kind === 'brand' ? 'A working website. Scroll through it, or switch to the brand board.' : 'This is a working prototype. Open records, step through the workflow, change settings.') + '</p></div></div>');
     const f = $('#mf', m); fit(f); host(f, d, { screen: FIRST() }, { interactive: true });
     $('#m-x').onclick = closeModal; const n = $('#m-no'), y = $('#m-yes'); if (n) { n.onclick = () => { closeModal(); react(-1); }; y.onclick = () => { closeModal(); react(1); }; }
   }
@@ -244,15 +254,14 @@
   function vResult() {
     const d = S.final, p = d.pack, b = blend(d); PR.ensureFonts(d);
     document.body.classList.remove('tp-open');
-    $('#view').innerHTML = '<section class="res"><div class="rh"><div><span class="mono">' + (isB() ? 'Your brand' : 'Your product') + '</span><h1>' + esc(p.name) + '</h1><p class="lede">' + esc(isB() ? productLineB(d) : productLine(d)) + ' Closest to <em>' + esc(b.a) + '</em>, tempered by <em>' + esc(b.b) + '</em>. ' + esc(M.summary(b.L)) + '</p><div class="tags" style="margin-top:14px">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div></div></div>' +
-      '<div class="rtabs">' + ['Prototype', 'Experience', 'System'].map(t => '<button data-t="' + t + '" class="' + (S.rtab === t ? 'on' : '') + '">' + (isB() ? { Prototype: 'Website', Experience: 'Brand', System: 'System' }[t] : t) + '</button>').join('') + '</div><div id="rb"></div></section>' +
-      '<div class="ctabar"><button class="pill acc lg" id="c-build">' + (isB() ? 'Use<span class="x"> this brand</span>' : 'Build<span class="x"> this product</span>') + ' →</button><button class="pill lg" id="c-more">Explore<span class="x"> another direction</span></button><button class="pill lg" id="c-ref">Refine<span class="x"> my ' + (isB() ? 'brand' : 'product') + '</span></button><button class="pill lg" id="c-fig"><span class="x">Export to </span>Figma</button></div>';
+    $('#view').innerHTML = '<section class="res"><div class="rh"><div><span class="mono">' + (isC() ? 'Your design' : isB() ? 'Your brand' : 'Your product') + '</span><h1>' + esc(p.name) + '</h1><p class="lede">' + esc(isC() ? productLineC(d) : isB() ? productLineB(d) : productLine(d)) + ' Closest to <em>' + esc(b.a) + '</em>, tempered by <em>' + esc(b.b) + '</em>. ' + esc(M.summary(b.L)) + '</p><div class="tags" style="margin-top:14px">' + d.tags.map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div></div></div>' +
+      '<div class="rtabs">' + ['Prototype', 'Experience', 'System'].map(t => '<button data-t="' + t + '" class="' + (S.rtab === t ? 'on' : '') + '">' + (isC() ? { Prototype: 'Card', Experience: 'Style', System: 'Share' }[t] : isB() ? { Prototype: 'Website', Experience: 'Brand', System: 'System' }[t] : t) + '</button>').join('') + '</div><div id="rb"></div></section>' +
+      '<div class="ctabar"><button class="pill acc lg" id="c-build">' + (isC() ? 'Use<span class="x"> this design</span>' : isB() ? 'Use<span class="x"> this brand</span>' : 'Build<span class="x"> this product</span>') + ' →</button><button class="pill lg" id="c-more">Explore<span class="x"> another direction</span></button><button class="pill lg" id="c-ref">Refine<span class="x"> my ' + NOUN() + '</span></button><button class="pill lg" id="c-fig">' + (isC() ? 'Download<span class="x"> PNG</span>' : '<span class="x">Export to </span>Figma') + '</button></div>';
     $$('.rtabs button').forEach(x => x.onclick = () => { S.rtab = x.dataset.t; $$('.rtabs button').forEach(y => y.classList.toggle('on', y === x)); renderTab(); });
-    $('#c-build').onclick = () => isB() ? openBuildB() : openBuild(); $('#c-fig').onclick = () => isB() ? openFigmaB() : openFigma(); $('#c-ref').onclick = openRefine; $('#c-more').onclick = exploreMore;
+    $('#c-build').onclick = () => isC() ? goShare() : isB() ? openBuildB() : openBuild(); $('#c-fig').onclick = () => isC() ? dlPng('front', 'portrait') : isB() ? openFigmaB() : openFigma(); $('#c-ref').onclick = openRefine; $('#c-more').onclick = exploreMore;
     renderTab();
   }
-  const isB = () => S.kind === 'brand';
-  function renderTab() { const b = $('#rb'); b.innerHTML = ''; (isB() ? { Prototype: tBProto, Experience: tBExp, System: tBSys } : { Prototype: tProto, Experience: tExp, System: tSys })[S.rtab](b); }
+  function renderTab() { const b = $('#rb'); b.innerHTML = ''; (isC() ? { Prototype: tCEdit, Experience: tCStyle, System: tCShare } : isB() ? { Prototype: tBProto, Experience: tBExp, System: tBSys } : { Prototype: tProto, Experience: tExp, System: tSys })[S.rtab](b); }
   function tProto(b) {
     const d = S.final, p = d.pack;
     b.innerHTML = '<div class="pto"><nav class="snav"><span class="mono">Screens</span>' + PR.SCREENS.map(s => '<button data-s="' + s + '" class="' + (s === 'home' ? 'on' : '') + '">' + esc(p.labels[s]) + '</button>').join('') + '</nav><div><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(p.name.toLowerCase()) + '.app</span></div><div class="fit live" id="pf"></div></div><p class="hint">A working prototype. Open a row, step through the workflow, approve a request, change a setting.</p></div></div>';
@@ -309,10 +318,10 @@
   function openRefine() {
     const d = S.final; let vec = d.vec.slice(), t;
     const wrap = document.createElement('div'); wrap.className = 'sheetm';
-    wrap.innerHTML = '<div class="sh"><span class="mono">Refine</span><h3>Adjust your ' + (isB() ? 'brand' : 'product') + '</h3><p class="d">Each slider is something your reactions taught us. Change it and the prototype updates.</p>' + M.AXES.map((a, i) => '<div class="slr"><div class="t"><span>' + a.name + '</span></div><input type="range" min="-95" max="95" value="' + Math.round(vec[i] * 100) + '" data-i="' + i + '" aria-label="' + a.name + '"><div class="e"><span>' + a.lo + '</span><span>' + a.hi + '</span></div></div>').join('') + '<button class="pill ink lg" id="r-done" style="margin-top:8px">Done</button></div>';
+    wrap.innerHTML = '<div class="sh"><span class="mono">Refine</span><h3>Adjust your ' + NOUN() + '</h3><p class="d">Each slider is something your reactions taught us. Change it and the prototype updates.</p>' + M.AXES.map((a, i) => '<div class="slr"><div class="t"><span>' + a.name + '</span></div><input type="range" min="-95" max="95" value="' + Math.round(vec[i] * 100) + '" data-i="' + i + '" aria-label="' + a.name + '"><div class="e"><span>' + a.lo + '</span><span>' + a.hi + '</span></div></div>').join('') + '<button class="pill ink lg" id="r-done" style="margin-top:8px">Done</button></div>';
     document.body.appendChild(wrap); wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
     $('#r-done', wrap).onclick = () => wrap.remove();
-    $$('input[type=range]', wrap).forEach(r => r.oninput = () => { vec[+r.dataset.i] = r.value / 100; clearTimeout(t); t = setTimeout(() => { S.final = M.makeDirection(vec, d.seed, { ...S.ctx, used: new Set(), count: 0 }, isB() ? { final: true } : { name: d.pack.name, final: true }); renderTab(); const h = $('.res .tags'); if (h) h.innerHTML = S.final.tags.map(x => '<span class="tag">' + esc(x) + '</span>').join(''); }, 140); });
+    $$('input[type=range]', wrap).forEach(r => r.oninput = () => { vec[+r.dataset.i] = r.value / 100; clearTimeout(t); t = setTimeout(() => { S.final = M.makeDirection(vec, d.seed, { ...S.ctx, used: new Set(), count: 0 }, isB() || isC() ? { final: true } : { name: d.pack.name, final: true }); renderTab(); const h = $('.res .tags'); if (h) h.innerHTML = S.final.tags.map(x => '<span class="tag">' + esc(x) + '</span>').join(''); }, 140); });
   }
   function exploreMore() {
     S.shown.push(S.final); S.readyAt = S.hist.length + 3; S.note = 'explore'; S.tp = innerWidth >= 1180; S.tpUser = false;
@@ -373,6 +382,60 @@
     const d = S.final, nm = d.v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const m = modal('<div class="mbox" style="max-width:640px"><div class="mhead"><h3>Export to Figma</h3><button class="pill" id="m-x">Close</button></div><div class="mbody"><p style="color:#33363d;margin-bottom:14px">Download the colours, fonts and radii as a Tokens Studio file, then import them into Figma as variables or styles. The logo is available as SVG, which Figma opens directly.</p><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="pill acc lg" id="f-json">Download Figma tokens (.json)</button><button class="pill lg" id="f-logo">Logo .svg</button></div></div></div>');
     $('#m-x', m).onclick = closeModal; $('#f-json', m).onclick = () => download(tokensJSONB(d), nm + '-figma-tokens.json', 'application/json'); $('#f-logo', m).onclick = async () => download(await MM.logoSVG(d.v), nm + '-logo.svg', 'image/svg+xml');
+  }
+
+  /* ───────── invitation / greeting card result ───────── */
+  const slugOf = x => String(x || 'card').toLowerCase().replace(/[^a-z0-9֐-׿]+/g, '-').replace(/^-|-$/g, '') || 'card';
+  function productLineC(d) {
+    const L = M.learn(S.hist), top = L.taste.map((t, i) => [i, Math.abs(t) * L.conf[i]]).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([i]) => L.taste[i] > 0 ? M.AXES[i].adjHi2 : M.AXES[i].adjLo2);
+    return (/^[aeiou]/i.test(top[0] || 'a') ? 'An ' : 'A ') + top.join(', ') + (d.cctx.invite ? ' invitation.' : ' greeting card.');
+  }
+  async function dlPng(side, fmt) { toast('Preparing your image…'); const d = S.final; download(await CD.png(d, side, fmt, 2), slugOf(d.fields.name) + '-' + fmt + '.png', 'image/png'); }
+  function goShare() { S.rtab = 'System'; $$('.rtabs button').forEach(y => y.classList.toggle('on', y.dataset.t === 'System')); renderTab(); scrollTo({ top: 0, behavior: 'smooth' }); }
+  function whenText(iso, heb) { const x = new Date(iso); if (isNaN(x)) return ''; return x.toLocaleString(heb ? 'he-IL' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(' at ', ' · ').replace(' בשעה ', ' · '); }
+  function tCEdit(b) {
+    const d = S.final, F = d.fields, C = d.cctx, heb = C.heb, st = { side: 'front', fmt: 'portrait' };
+    const f = (id, label, val, o) => '<label class="field"><span class="lab">' + label + '</span>' + (o && o.ta ? '<textarea id="' + id + '" dir="auto" rows="3" maxlength="260" class="tbox">' + esc(val) + '</textarea>' : '<input id="' + id + '" dir="auto" maxlength="90" value="' + esc(val) + '" ' + ((o && o.type) ? 'type="' + o.type + '"' : '') + '>') + '</label>';
+    b.innerHTML = '<div class="cedit"><div class="cpv"><div class="cstage" id="cs"></div><div class="segs"><div class="seg2" id="cfmt">' + [['portrait', 'Portrait'], ['square', 'Square'], ['story', 'Story']].map(x => '<button type="button" data-f="' + x[0] + '" class="' + (x[0] === 'portrait' ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div><div class="seg2" id="cside"><button type="button" data-s="front" class="on">Front</button><button type="button" data-s="back">' + (C.invite ? 'Details' : 'Inside') + '</button></div></div></div>' +
+      '<form class="cform" id="cf" onsubmit="return false"><h3>Make it yours</h3><p class="d" style="margin:0 0 6px">Edit the words and the card updates as you type.</p>' +
+      f('cf-head', 'Headline', F.head != null ? F.head : d.head) + f('cf-name', 'Name(s)', F.name) + f('cf-line', 'Line under the name', F.line != null ? F.line : d.line) +
+      (C.invite ? f('cf-when', 'Date and time', F.when) + f('cf-iso', 'Pick a date (adds a calendar file)', F.iso || '', { type: 'datetime-local' }) + f('cf-where', 'Place', F.where) + f('cf-note', 'A note for guests', F.note, { ta: 1 })
+        : f('cf-msg', 'Message inside', F.msg != null ? F.msg : d.msg, { ta: 1 }) + f('cf-sign', 'Sign-off', F.sign || '') + f('cf-from', 'From', F.from || '')) +
+      '<div class="crow2"><button type="button" class="pill acc lg" id="cd-png">Download PNG</button><button type="button" class="pill lg" id="cd-svg">SVG</button></div></form></div>';
+    const draw = () => { const cs = $('#cs', b); cs.innerHTML = CD.svg(d, st.side, st.fmt); };
+    CD.render.ensureFonts(d); draw();
+    const map = { 'cf-head': 'head', 'cf-name': 'name', 'cf-line': 'line', 'cf-when': 'when', 'cf-where': 'where', 'cf-note': 'note', 'cf-msg': 'msg', 'cf-sign': 'sign', 'cf-from': 'from' };
+    Object.keys(map).forEach(id => { const el = $('#' + id, b); if (el) el.oninput = () => { F[map[id]] = el.value; draw(); }; });
+    const iso = $('#cf-iso', b); if (iso) iso.onchange = () => { F.iso = iso.value; const t = whenText(iso.value, heb); if (t) { F.when = t; $('#cf-when', b).value = t; } draw(); };
+    $$('#cfmt button', b).forEach(x => x.onclick = () => { st.fmt = x.dataset.f; $$('#cfmt button', b).forEach(y => y.classList.toggle('on', y === x)); draw(); });
+    $$('#cside button', b).forEach(x => x.onclick = () => { st.side = x.dataset.s; $$('#cside button', b).forEach(y => y.classList.toggle('on', y === x)); draw(); });
+    $('#cd-png', b).onclick = () => dlPng(st.side, st.fmt);
+    $('#cd-svg', b).onclick = () => download(CD.svg(d, st.side, st.fmt, { fonts: true, size: true }), slugOf(F.name) + '-' + st.fmt + '.svg', 'image/svg+xml');
+  }
+  function tCStyle(b) {
+    const d = S.final, des = d.design, P = des.pal;
+    const sw = [['Background', P.bg], ['Soft', P.soft], ['Primary', P.primary], ['Accent', P.accent], ['Ink', P.ink]];
+    b.innerHTML = '<div class="sec"><h3>The look</h3><p class="d">' + esc(d.explain) + '</p><div class="sw-row">' + sw.map(x => '<div class="swt"><i style="background:' + x[1] + '"></i><span><b>' + x[0] + '</b>' + x[1].toUpperCase() + '</span></div>').join('') + '</div></div>' +
+      '<div class="sec"><h3>Lettering</h3><div class="two"><div class="box"><span class="mono">Headline</span><div style="font:' + (CD.FONT[des.fonts.head].h || 400) + ' 2.4rem/1.1 \'' + des.fonts.head + '\',serif;margin-top:10px">' + esc(d.fields.head != null ? d.fields.head : d.head) + '</div><p style="color:#4b453d;margin-top:8px;font-size:.9rem">' + esc(des.fonts.head) + '</p></div><div class="box"><span class="mono">Name</span><div style="font:' + (CD.FONT[des.fonts.name].h || 400) + ' 2.4rem/1.1 \'' + des.fonts.name + '\',serif;margin-top:10px">' + esc(d.fields.name) + '</div><p style="color:#4b453d;margin-top:8px;font-size:.9rem">' + esc(des.fonts.name) + ' · text in ' + esc(des.fonts.body) + '</p></div></div></div>' +
+      '<div class="sec"><h3>Design decisions</h3><div class="box"><ul class="pats">' + d.decisions.map(x => '<li><b>' + esc(x[0]) + '</b><span>' + esc(x[1]) + '</span></li>').join('') + '</ul></div><div style="margin-top:16px"><button type="button" class="pill lg" id="restyle">Try another take on this style</button></div></div>';
+    $('#restyle', b).onclick = () => { const o = S.final; S.reroll = (S.reroll || 0) + 1; S.final = M.makeDirection(o.vec, o.seed + S.reroll * 101, { ...S.ctx, used: new Set(), count: 0 }, { final: true }); renderTab(); toast('Here’s another take'); };
+  }
+  function tCShare(b) {
+    const d = S.final, F = d.fields, C = d.cctx, nm = slugOf(F.name), ics = CD.icsFor(d);
+    const text = [F.head != null ? F.head : d.head, F.name + ' ' + (F.line != null ? F.line : d.line), C.invite ? F.when : '', C.invite ? F.where : '', C.invite ? F.note : (F.msg != null ? F.msg : d.msg)].filter(Boolean).join('\n');
+    b.innerHTML = '<div class="sec"><h3>Send it</h3><p class="d">Download an image to share on any chat, print at home or at a print shop, or send as a page.</p><div class="shares">' +
+      [['Portrait image', 'PNG · 5×7, ready to print', 'png-p'], ['Square image', 'PNG · for posts', 'png-s'], ['Story image', 'PNG · 9:16 for stories and status', 'png-t'], ['Vector file', 'SVG · opens in Figma and Illustrator', 'svg']].map(x => '<button type="button" class="shr" data-a="' + x[2] + '"><b>' + x[0] + '</b><span>' + x[1] + '</span></button>').join('') +
+      (C.invite ? '<button type="button" class="shr" data-a="page"><b>Invitation page</b><span>One web page with the card and details</span></button>' : '') +
+      (C.invite ? '<button type="button" class="shr' + (ics ? '' : ' off') + '" data-a="ics"><b>Calendar file</b><span>' + (ics ? 'ICS · adds the event to a calendar' : 'Pick a date in the Card tab first') + '</span></button>' : '') +
+      '<a class="shr" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(text) + '"><b>Send on WhatsApp</b><span>Opens WhatsApp with the words ready</span></a><button type="button" class="shr" data-a="copy"><b>Copy the words</b><span>Headline, details and message as text</span></button></div></div>';
+    $$('.shr[data-a]', b).forEach(x => x.onclick = async () => {
+      const a = x.dataset.a;
+      if (a === 'png-p') dlPng('front', 'portrait'); else if (a === 'png-s') dlPng('front', 'square'); else if (a === 'png-t') dlPng('front', 'story');
+      else if (a === 'svg') download(CD.svg(d, 'front', 'portrait', { fonts: true, size: true }), nm + '.svg', 'image/svg+xml');
+      else if (a === 'page') download(CD.invitePage(d), nm + '-invitation.html', 'text/html');
+      else if (a === 'ics') { if (ics) download(ics, nm + '.ics', 'text/calendar'); else toast('Pick a date in the Card tab first'); }
+      else if (a === 'copy') copy(text, 'Words copied');
+    });
   }
 
   /* ───────── keys ───────── */

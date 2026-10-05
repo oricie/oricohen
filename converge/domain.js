@@ -109,6 +109,23 @@
       approvals: [['Admin role for Marcus Lee', 'Marcus Lee', 0, 'Needs Security'], ['Access to Payroll app', 'Noa Levi', 0, 'Within policy'], ['Extend contractor access', 'Jonas Berg', 0, 'Needs Manager'], ['Add to Finance-Approvers', 'Sofia Alvarez', 0, 'Within policy']],
       settings: [['Policies', [['Review frequency', 'Quarterly'], ['Auto-revoke unused after', '90 days'], ['Require MFA', 'on']]], ['Roles', [['Role templates', '24'], ['Custom roles', '9'], ['Separation of duties', 'on']]], ['Directory', [['Identity provider', 'Okta · synced'], ['HR source', 'Workday'], ['Provisioning', 'SCIM']]], ['Audit', [['Retention', '7 years'], ['Export', 'Weekly to storage'], ['Tamper evidence', 'on']]]]
     },
+    process: {
+      re: /business process|process model|bpmn?\b|workflow|orchestrat|automation|process (design|mining|map)|תהליכים|תהליך עסקי|מודל תהליכ|אוטומציה|זרימת עבודה/, name: 'Loom', kind: 'Business process modeler', users: 'Process owners and analysts',
+      cur: '', unit: '', e: ['process', 'Processes'], labels: { home: 'Overview', workflow: 'Process designer', table: 'Processes', insights: 'Bottlenecks', approvals: 'Reviews', settings: 'Settings' },
+      groups: { home: 'Model', workflow: 'Model', table: 'Model', insights: 'Improve', approvals: 'Govern', settings: 'Admin' },
+      names: ['Invoice approval', 'Employee onboarding', 'Order to cash', 'Claims handling', 'Vendor onboarding', 'Purchase request', 'Customer complaint', 'Loan origination', 'Returns and refunds', 'Incident response', 'Contract renewal', 'Expense report'],
+      idp: 'PRC', range: [12, 95], spread: 0.1, status: ['Published', 'Published', 'In review', 'Draft', 'Needs fix'], pctLabel: 'SLA variance', num: true,
+      cols: [['name', 'Process'], ['owner', 'Owner'], ['m1', 'Steps', 'num'], ['m2', 'Avg. days', 'num'], ['m3', 'Open cases', 'num'], ['pct', 'SLA variance', 'var'], ['status', 'Status', 'status'], ['trend', 'Volume', 'spark']],
+      kpis: [['Active processes', '86', '+4 this month', 1], ['Avg. cycle time', '4.2 days', '−0.6', 1], ['Cases in flight', '1,942', '+8%', 1], ['Rule violations', '23', '+5', 0]],
+      workflow: { name: 'Invoice approval', steps: [['Receive', 'Invoice arrives by email or portal'], ['Validate', 'Match with purchase order'], ['Route', 'Assign by amount and department'], ['Approve', 'Manager signs off, or escalates'], ['Pay', 'Schedule payment and archive']] },
+      inputsT: 'Simulation inputs', drivers: [['Cases per day', 120, ''], ['Approvers', 6, ''], ['SLA (days)', 3, 'd'], ['Rework rate', 12, '%']],
+      bridge: ['Start', 'Waiting', 'Rework', 'Handoffs', 'Automation', 'Other', 'End'], group: ['Finance', 'HR', 'Sales', 'Support', 'Legal', 'Operations'],
+      lines: ['Receive', 'Validate', 'Route', 'Approve', 'Pay'], series: ['Actual', 'Target'], trendT: 'Cycle time vs target', insightT: 'Where do cases get stuck?',
+      people: 'Owner', act: ['published', 'edited', 'simulated', 'approved'],
+      ai: ['Cases wait 2.1 days at "Approve". Adding a rule for amounts under $500 would remove about 40% of the wait.', '3 processes have steps with no owner.'],
+      approvals: [['Publish Invoice approval v4', 'Maya Chen', 0, 'Needs Process owner'], ['New gateway in Claims handling', 'Daniel Okafor', 0, 'Within policy'], ['Retire Expense report v2', 'Priya Raman', 0, 'Needs Compliance'], ['Change SLA to 2 days', 'Lukas Brandt', 0, 'Within policy']],
+      settings: [['Modeling', [['Notation', 'BPMN 2.0'], ['Swimlanes', 'on'], ['Auto-layout', 'on']]], ['Governance', [['Review before publish', 'on'], ['Versioning', 'Major / minor'], ['Owner required', 'on']]], ['Automation', [['Rule engine', 'Connected'], ['Task forms', '18'], ['Webhooks', '6 active']]], ['Integrations', [['ERP', 'Connected'], ['Email', 'Connected'], ['Identity', 'SSO']]]]
+    },
     generic: {
       re: /./, name: 'Northline', kind: 'Enterprise software platform', users: 'Operations teams',
       cur: '', unit: '', e: ['record', 'Records'], labels: { home: 'Overview', workflow: 'Workflow', table: 'Records', insights: 'Insights', approvals: 'Approvals', settings: 'Settings' },
@@ -127,7 +144,7 @@
       settings: [['General', [['Workspace name', 'Northline'], ['Default view', 'Overview'], ['Notifications', 'Daily digest']]], ['Roles', [['Admins', '4 people'], ['Editors', '36 people'], ['Viewers', '210 people']]], ['Policies', [['Approval required over', 'Threshold'], ['Auto-archive after', '90 days'], ['Require comments', 'on']]], ['Integrations', [['Calendar', 'Connected'], ['Chat', 'Connected'], ['Storage', 'Connected']]]]
     }
   };
-  const ORDER = ['finance', 'erp', 'crm', 'dev', 'admin', 'bi'];
+  const ORDER = ['process', 'finance', 'erp', 'crm', 'dev', 'admin', 'bi'];
 
   function detect(text, type) {
     const t = (text || '').toLowerCase() + ' ' + (type || '').toLowerCase();
