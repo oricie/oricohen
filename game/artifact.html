@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>TOKIO NEON — HELI RESCUE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   /* ============================================================================
      HUD DESIGN TOKENS — the single source of truth for the whole instrument set.
@@ -26,11 +28,12 @@
     --ui-line:   rgba(95,242,255,.38);     /* the one hairline border weight */
     --ui-glow:   0 0 6px rgba(95,242,255,.45);
     /* type — mono, uppercase, letterspaced. Four sizes, no more. */
-    --f: 'Courier New',monospace;
-    --t-micro: 9px;                        /* unit suffixes, sub-labels */
-    --t-label: 10px;                       /* field names, headers */
-    --t-body:  11px;                       /* prose: objectives, dialogue */
-    --t-val:   14px;                       /* numeric readouts */
+    --f: 'Barlow Semi Condensed','Arial Narrow',sans-serif;   /* condensed sans: far more legible than thin mono */
+    --hs: 1;                               /* HUD scale, set from the viewport in sizeHUD() */
+    --t-micro: calc(11px * var(--hs));     /* unit suffixes, sub-labels */
+    --t-label: calc(13px * var(--hs));     /* field names, headers */
+    --t-body:  calc(15px * var(--hs));     /* prose: objectives, dialogue */
+    --t-val:   calc(18px * var(--hs));     /* numeric readouts */
     /* spacing: 4px grid */
     --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
   }
@@ -52,7 +55,7 @@
   /* shared micro-label: the "SYS: ONLINE" voice used for every field name */
   .lbl { font-size:var(--t-label); letter-spacing:.14em; color:var(--ui-dim); text-transform:uppercase; }
 
-  #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:26px; font-weight:bold; text-align:center; display:none;
+  #msg { top:34%; left:50%; transform:translate(-50%,-50%); font-size:calc(26px * var(--hs)); font-weight:bold; text-align:center; display:none;
     color:var(--ui-hi); text-shadow:0 0 14px var(--ui); width:90%; letter-spacing:.16em; }
   /* Bottom command stack: radio line above the command box, in one column. Widths are
      capped so 210px stays clear each side — TSD on the left, control cluster on the right. */
@@ -71,17 +74,17 @@
   #dlgTxt .place { color:var(--ui); font-weight:bold; }
   #dlgHint { font-size:var(--t-micro); letter-spacing:.1em; color:var(--ui-dim); text-align:right; margin-top:var(--s2); }
   #intelLog { right:var(--s3); top:168px; width:max-content; color:var(--ui-hi);
-    padding:5px 6px; display:none; }
+    padding:5px 6px; display:none; transform:scale(var(--hs)); transform-origin:top right; }
   #intelLog b { color:var(--ui); letter-spacing:.14em; }
   #intelLog .ros { display:flex; flex-direction:row; gap:3px; margin-top:4px; }
-  #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; width:46px;
+  #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; width:52px;
     background:rgba(95,242,255,.05); border:1px solid var(--ui-faint); padding:2px; }
   #intelLog .cm.unk { opacity:.40; filter:grayscale(1); }      /* not yet located */
-  #intelLog .cm img { width:36px; height:36px; display:block; image-rendering:pixelated; }
+  #intelLog .cm img { width:40px; height:40px; display:block; image-rendering:pixelated; }
   #intelLog .cmi { display:flex; flex-direction:column; align-items:center; line-height:1.1; }
-  #intelLog .cmi b { font-size:8px; letter-spacing:.06em; }
+  #intelLog .cmi b { font-size:11px; letter-spacing:.06em; }
   #intelLog .rl, #intelLog .pk { display:none; }               /* shown in the hoist panel instead */
-  #intelLog .st { font-size:7px; letter-spacing:.06em; padding:1px 2px; border:1px solid currentColor; white-space:nowrap; }
+  #intelLog .st { font-size:9px; letter-spacing:.04em; padding:1px 2px; border:1px solid currentColor; white-space:nowrap; }
   #intelLog .st-mis { color:var(--ui-dim); }
   #intelLog .st-loc { color:var(--ui); }
   #intelLog .st-ab  { color:var(--ui-warn); }
@@ -90,8 +93,38 @@
     padding:2px 5px 5px; border-left:1px solid var(--ui-faint); margin:0 0 2px 6px; }
   #intelLog .cw { color:var(--ui-warn); }
   #intelLog .done { color:var(--ui-dim); text-decoration:line-through; }
-  #help { bottom:var(--s2); left:50%; transform:translateX(-50%); font-size:var(--t-micro); letter-spacing:.06em;
-    color:var(--ui-dim); opacity:.8; text-align:center; width:95%; transition:opacity 1.2s; text-shadow:0 0 4px #000; }
+  /* ACTION PROMPT — the one thing to do right now, big, with the key to press.
+     Only shown when the game is waiting on the player; otherwise the screen is quiet. */
+  #actPrompt { left:50%; top:57%; transform:translate(-50%,-50%); display:none; align-items:center;
+    gap:calc(12px * var(--hs)); padding:calc(8px * var(--hs)) calc(18px * var(--hs)); white-space:nowrap;
+    background:rgba(1,12,18,.82); border:1px solid var(--ui-line); box-shadow:0 0 24px rgba(0,0,0,.6); }
+  #actPrompt.on { display:flex; animation:actIn .25s ease-out; }
+  #actPrompt .key { font-size:calc(22px * var(--hs)); font-weight:700; color:#001218; background:var(--ui);
+    min-width:calc(34px * var(--hs)); text-align:center; padding:calc(2px * var(--hs)) calc(8px * var(--hs));
+    border-radius:4px; box-shadow:0 3px 0 #0a7f8c, 0 0 14px rgba(95,242,255,.5); }
+  #actPrompt .key.ic { background:transparent; color:var(--ui); box-shadow:none; padding:0; }
+  #actPrompt .txt { display:flex; flex-direction:column; line-height:1.15; }
+  #actPrompt .a { font-size:calc(21px * var(--hs)); font-weight:700; letter-spacing:.06em; color:var(--ui-hi); }
+  #actPrompt .s { font-size:var(--t-label); letter-spacing:.1em; color:var(--ui); }
+  #actPrompt.warn { border-color:var(--ui-warn); }
+  #actPrompt.warn .s { color:var(--ui-warn); }
+  @keyframes actIn { from { transform:translate(-50%,-30%) scale(1.06); } to { transform:translate(-50%,-50%) scale(1); } }
+  body.on-foot #actPrompt { top:63%; }
+  body.on-foot #taskPanel { display:none; }      /* the action prompt says it, bigger */
+  /* MISSION STEPS — the whole loop for the current lead, so "what next" is always answered */
+  #steps { left:var(--s3); top:150px; display:none; background:rgba(1,12,18,.80); padding:calc(6px * var(--hs)) calc(10px * var(--hs));
+    min-width:calc(200px * var(--hs)); }
+  #steps .hd { font-size:var(--t-micro); letter-spacing:.16em; color:var(--ui-dim); margin-bottom:calc(4px * var(--hs)); }
+  #steps .r { display:flex; align-items:center; gap:calc(8px * var(--hs)); font-size:calc(14px * var(--hs));
+    line-height:1.55; letter-spacing:.04em; color:var(--ui-dim); }
+  #steps .r i { font-style:normal; width:calc(16px * var(--hs)); text-align:center; }
+  #steps .r.done { color:rgba(70,224,138,.75); }
+  #steps .r.done span { text-decoration:line-through; text-decoration-color:rgba(70,224,138,.5); }
+  #steps .r.cur { color:var(--ui-hi); font-weight:700; }
+  #steps .r.cur i { color:var(--ui); }
+  #steps .r em { font-style:normal; color:var(--ui-warn); margin-left:auto; padding-left:8px; font-weight:600; }
+  #help { bottom:var(--s2); left:50%; transform:translateX(-50%); font-size:var(--t-label); letter-spacing:.06em;
+    color:var(--ui-dim); opacity:.8; text-align:center; width:calc(100vw - 2 * (215px * var(--hs) + 30px)); transition:opacity 1.2s; text-shadow:0 0 4px #000; }
   /* TSD — the scanner. Title bar sits flush on top of the map, one continuous frame. */
   #tacwrap { bottom:var(--s4); left:var(--s3); display:flex; flex-direction:column; }
   #tacTitle { font-size:var(--t-label); letter-spacing:.16em; color:var(--ui); background:var(--ui-solid);
@@ -159,14 +192,14 @@
     #stopBtn { right:calc(var(--col) + var(--btn-pitch)); bottom:var(--floor); }
     #camBtn  { right:calc(var(--col) + var(--btn-pitch) * 2); bottom:var(--floor); }
     #tacwrap { transform:scale(.66); transform-origin:bottom left; bottom:6px; left:6px; }
-    #cmdStack { bottom:148px; width:min(340px,74vw); gap:var(--s1); }   /* clears the scaled TSD */
+    #cmdStack { bottom:132px; width:min(340px,74vw); gap:var(--s1); }   /* clears the scaled TSD */
     #taskPanel { font-size:var(--t-micro); padding:6px 10px; }
     #radioSub { font-size:var(--t-micro); }
     #dialog { bottom:132px; width:min(440px,92vw); padding:9px 12px 8px; }
     /* Compact has no room for a full dossier beside the command stack and the fire
        button, so it degrades to a narrow avatar strip: face, callsign, status. The
        lead text and perk line are dropped — they are still read out over the radio. */
-    #intelLog { top:158px; padding:2px 3px; }   /* clear the armament panel edge */
+    #intelLog { top:152px; padding:2px 3px; }   /* clear the armament panel edge */
     #intelLog > b { display:none; }          /* no room for a header at this size */
     #intelLog .ros { margin-top:0; gap:2px; }
     #intelLog .cm { width:30px; padding:1px; gap:1px; }
@@ -174,6 +207,8 @@
     #intelLog .cmi { display:none; }
     #intelLog .st { font-size:6px; padding:0 1px; }
     #help { display:none; }
+    #steps { display:none !important; }
+    #actPrompt .a { font-size:15px; } #actPrompt .key { font-size:16px; }
   }
   /* ---- NEON TITLE WORDMARK ---- */
   .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
@@ -199,6 +234,8 @@
   <div class="panel" id="taskPanel">STANDBY</div>
 </div>
 <div class="hud panel" id="intelLog"></div>
+<div class="hud" id="actPrompt"><span class="key"></span><span class="txt"><span class="a"></span><span class="s"></span></span></div>
+<div class="hud panel" id="steps"></div>
 <div class="hud panel" id="dialog"><div id="dlgWho"></div><div id="dlgTxt"></div><div id="dlgHint">▼ press F to continue</div></div>
 <div class="hud" id="help">STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK</div>
 
@@ -9862,9 +9899,19 @@ const tacC=tacCanvasEl.getContext('2d');
 const hudCv=document.getElementById('hud');
 const hudX=hudCv.getContext('2d');
 const DPR=()=>Math.min(devicePixelRatio||1,2);   // 3x meant clearing+redrawing a ~12-megapixel canvas every frame
+// HUD_S scales the whole instrument set with the screen. Text that was 10-11px on a
+// laptop was unreadable; the canvas HUD is drawn in logical units and blown up by this,
+// and the DOM panels read the same factor through the --hs custom property.
+let HUD_S=1;
 function sizeHUD(){
+  HUD_S=Math.max(1,Math.min(1.7,Math.min(W()/1000,H()/620)));
+  document.documentElement.style.setProperty('--hs',HUD_S.toFixed(3));
   hudCv.width=Math.floor(W()*DPR());hudCv.height=Math.floor(H()*DPR());
   hudCv.style.width=W()+'px';hudCv.style.height=H()+'px';   // CSS size != backing size
+  // DOM panels that sit under canvas panels follow them down as the HUD scales
+  const il=document.getElementById('intelLog'),st=document.getElementById('steps');
+  if(il)il.style.top=W()>=620&&H()>520?Math.round((12+166+8)*HUD_S)+'px':'';  // under ARMAMENT (max height)
+  if(st)st.style.top=Math.round((12+118+10)*HUD_S)+'px';              // under FLIGHT (max height)
 }
 sizeHUD();
 // ============================================================================
@@ -9878,9 +9925,9 @@ const UI={
   warn:'#ffc23a', alert:'#ff3b52', ok:'#46e08a',
   fill:'rgba(1,12,18,.74)', solid:'rgba(1,12,18,.92)', line:'rgba(95,242,255,.38)',
   ink:'#00090e',                                     // scanner ground
-  font:'"Courier New",monospace',
-  micro:9, label:10, body:11, val:14,                // the four type sizes
-  M:12, GUT:8, PAD:10, ROW:16,                       // margin, gutter, panel padding, row pitch
+  font:'"Barlow Semi Condensed","Arial Narrow",sans-serif',
+  micro:10, label:11, body:13, val:16,               // the four type sizes (logical px, x HUD_S on screen)
+  M:12, GUT:8, PAD:10, ROW:18,                       // margin, gutter, panel padding, row pitch
 };
 // Back-compat aliases: a handful of call sites elsewhere still reference these names.
 const HUD_G=UI.ui,HUD_DIM=UI.dim,HUD_FAINT=UI.faint,
@@ -9926,7 +9973,7 @@ function hudBar(x,y,w,h,frac,color,segs){
   }
 }
 const _pv=new THREE.Vector3();
-function project(v){_pv.copy(v).project(cam);return {x:(_pv.x*0.5+0.5)*W(),y:(-_pv.y*0.5+0.5)*H(),on:_pv.z<1&&_pv.z>-1};}
+function project(v){_pv.copy(v).project(cam);return {x:(_pv.x*0.5+0.5)*W()/HUD_S,y:(-_pv.y*0.5+0.5)*H()/HUD_S,on:_pv.z<1&&_pv.z>-1};}
 
 // --- TACTICAL SITUATION DISPLAY (bottom-left) ---------------------------------
 // Styled as the scanner panel: turquoise on near-black, graduated bezel, concentric
@@ -9945,10 +9992,10 @@ function drawTacMap(now){
     }
   }
   const FOOT=13;                                   // footer strip for the range/orientation labels
-  const _tdpr=DPR();
-  if(tacCanvasEl.width!==Math.floor(TAC*_tdpr)){        // (re)back the canvas at device resolution
+  const _tdpr=DPR()*HUD_S;
+  if(tacCanvasEl.width!==Math.floor(TAC*_tdpr)){        // (re)back the canvas at device res x HUD scale
     tacCanvasEl.width=tacCanvasEl.height=Math.floor(TAC*_tdpr);
-    tacCanvasEl.style.width=tacCanvasEl.style.height=TAC+'px';
+    tacCanvasEl.style.width=tacCanvasEl.style.height=Math.round(TAC*HUD_S)+'px';
   }
   tacC.setTransform(_tdpr,0,0,_tdpr,0,0);               // draw in 158-space, render at DPR
   tacC.clearRect(0,0,TAC,TAC);
@@ -10274,8 +10321,8 @@ let hudFlash=0;
 // hull, throttle and the weapon rack, and drawing both was the doubled-up readout.
 // ============================================================================
 function drawHUD(now){
-  const dpr=DPR();hudX.setTransform(dpr,0,0,dpr,0,0);
-  const w=W(),h=H();hudX.clearRect(0,0,w,h);
+  const dpr=DPR();hudX.setTransform(dpr*HUD_S,0,0,dpr*HUD_S,0,0);   // draw in logical units, scaled up
+  const w=W()/HUD_S,h=H()/HUD_S;hudX.clearRect(0,0,w,h);
   hudX.textBaseline='alphabetic';
   const cx=w/2,cy=h*0.45;
   const spdK=Math.round(CRUISE*(window.__throttle||1)*3.6);
@@ -10313,7 +10360,7 @@ function drawHUD(now){
 
   // ---------------- TOP-LEFT: flight status ----------------
   if(!cockpitMode){
-    const pw=compact?184:210, ph=(mult>1?106:90);
+    const pw=compact?190:226, ph=(mult>1?118:100);
     hudPanel(M,M,pw,ph,compact?'FLIGHT':'FLIGHT · '+pilotName.toUpperCase());
     const ix=M+UI.PAD, iw=pw-UI.PAD*2;
     let iy=M+38;
@@ -10341,22 +10388,22 @@ function drawHUD(now){
   // ---------------- TOP-CENTRE: current objective ----------------
   if(!compact&&!cockpitMode){
     const headline=missionHeadline();
-    hudX.font=T(UI.body,true);
-    const mpW=Math.min(w*0.56,Math.max(hudX.measureText(headline).width+44,200));
-    const mpX=cx-mpW/2, mpY=M+40, mpH=32;
+    hudX.font=T(15,true);
+    const mpW=Math.min(w*0.56,Math.max(hudX.measureText(headline).width+48,220));
+    const mpX=cx-mpW/2, mpY=M+50, mpH=38;
     hudPanel(mpX,mpY,mpW,mpH);
     hudX.textAlign='center';
     hudX.fillStyle=UI.dim;hudX.font=T(UI.micro);
-    hudX.fillText('OBJECTIVE',cx,mpY+12);
+    hudX.fillText('OBJECTIVE',cx,mpY+13);
     hudX.fillStyle=UI.hi;hudX.font=T(UI.body,true);
-    hudX.fillText(headline,cx,mpY+25);
+    hudX.font=T(15,true);hudX.fillText(headline,cx,mpY+31);
     hudX.textAlign='left';
   }
 
   // ---------------- TOP-RIGHT: armament ----------------
   if(!cockpitMode){
-    const pw=compact?162:184, px=w-M-pw, py=M;
-    const rowH=compact?17:18;
+    const pw=compact?170:196, px=w-M-pw, py=M;
+    const rowH=compact?18:20;
     const ph=30+4*rowH+40+(guidedWpn?16:0);
     hudPanel(px,py,pw,ph,'ARMAMENT');
     const ix=px+UI.PAD, iw=pw-UI.PAD*2;
@@ -10368,7 +10415,7 @@ function drawHUD(now){
         hudX.fillStyle='rgba(255,194,58,.13)';hudX.fillRect(px+4,iy-12,pw-8,rowH);
         hudX.strokeStyle=UI.warn;hudX.strokeRect(px+4.5,iy-11.5,pw-9,rowH-1);
       }
-      hudX.font=T(compact?10:11,sel);
+      hudX.font=T(compact?12:13,sel);
       hudX.fillStyle=sel?UI.warn:out?'rgba(255,59,82,.55)':UI.dim;
       hudX.textAlign='left';hudX.fillText('['+(k+1)+'] '+names[k],ix,iy);
       hudX.textAlign='right';hudX.fillText(ammo[k]===Infinity?'∞':String(ammo[k]),ix+iw,iy);
@@ -10431,11 +10478,11 @@ function drawHUD(now){
       col=UI.ok;
     }
     else{const v=activeVenue();if(v){tgt=new THREE.Vector3(v.x,12,v.z);label='LAND · '+v.name;}}
-    if(tgt){
+    if(tgt&&!nearestVenue()){          // on the pad the action prompt takes over
       const dist=Math.round(Math.hypot(heli.position.x-tgt.x,heli.position.z-tgt.z));
       const sp=project(tgt);
       hudX.save();
-      if(sp.on&&sp.x>30&&sp.x<w-30&&sp.y>60&&sp.y<h-60){
+      if(sp.on&&sp.x>30&&sp.x<w-30&&sp.y>118&&sp.y<h-60){   // stay below the objective pill
         hudX.strokeStyle=col;hudX.lineWidth=2;
         hudX.beginPath();hudX.arc(sp.x,sp.y,15,0,7);hudX.stroke();
         hudX.beginPath();hudX.moveTo(sp.x,sp.y-22);hudX.lineTo(sp.x-6,sp.y-32);hudX.lineTo(sp.x+6,sp.y-32);hudX.closePath();
@@ -11827,6 +11874,85 @@ function objectiveText(){
   if(v)return 'LEAD '+(stage+1)+'/'+VENUES.length+' — LAND ON THE CYAN PAD AT '+v.name+' '+v.jp+' AND PRESS E';
   return 'SCANNING FOR CREW...';
 }
+// ---------- GUIDANCE: action prompt + mission steps ----------
+// The pilot should never have to ask "what now?". #steps lists the whole loop for the
+// current lead with the active step lit; #actPrompt appears only when the game is
+// waiting on an input or a manoeuvre, with the key to press drawn as a keycap.
+let _actKey='';
+function setAct(key,a,sub,warn){
+  const el=document.getElementById('actPrompt');if(!el)return;
+  const k=key===null?'':(key+'|'+a+'|'+sub+'|'+(warn?1:0));
+  if(k===_actKey)return;_actKey=k;
+  if(key===null){el.classList.remove('on');return;}
+  const kc=el.querySelector('.key');kc.textContent=key;kc.className='key'+(key.length===1?'':' ic');
+  el.querySelector('.a').textContent=a;el.querySelector('.s').textContent=sub||'';
+  el.classList.toggle('warn',!!warn);
+  el.classList.remove('on');void el.offsetWidth;el.classList.add('on');   // replay the slide-in
+}
+function guideStep(){            // 0 fly · 1 land · 2 go inside · 3 talk · 4 hoist · 5 ferry · 6 done
+  if(missionDone)return 6;
+  const v=VENUES[stage];
+  if(v&&v.visited){
+    const left=stagePendingCrew().filter(c=>!c.aboard);
+    return left.length?4:5;
+  }
+  if(aboard.length)return 5;
+  if(interiorMode)return 3;
+  if(nearestVenue())return 2;
+  const a=activeVenue();
+  if(a&&Math.hypot(heli.position.x-a.x,heli.position.z-a.z)<45)return 1;
+  return 0;
+}
+let _stepsHtml='';
+function updateGuide(){
+  const st=document.getElementById('steps');
+  const g=guideStep();
+  const v=VENUES[Math.min(stage,VENUES.length-1)];
+  const a=activeVenue();
+  const dist=a?Math.round(Math.hypot(heli.position.x-a.x,heli.position.z-a.z)):0;
+  const left=stagePendingCrew().filter(c=>!c.aboard);
+  const who=(left[0]||aboard[0]);
+  let ship=0;
+  if(window.__navyShip){const P=window.__navyShip.padPos;ship=Math.round(Math.hypot(heli.position.x-P.x,heli.position.z-P.z));}
+  // ---- steps panel ----
+  if(st){
+    let html='';
+    if(g===6)html='<div class="hd">OPERATION COMPLETE</div><div class="r done"><i>✓</i><span>ALL 5 CREW HOME</span></div>';
+    else{
+      const rows=[
+        ['FLY TO '+v.name, g===0&&dist?dist+' m':''],
+        ['LAND ON THE CYAN PAD',''],
+        ['GO INSIDE','E'],
+        ['TALK TO THE OWNER','F'],
+        ['HOIST '+(who?who.rank+' '+who.call:'THE CREW'), g===4?'LOW + SLOW':''],
+        ['FLY TO THE NAVY SHIP', g===5&&ship?ship+' m':''],
+      ];
+      html='<div class="hd">LEAD '+(Math.min(stage,VENUES.length-1)+1)+' / '+VENUES.length+' · WHAT TO DO</div>';
+      rows.forEach((r,i)=>{
+        const cls=i<g?'done':i===g?'cur':'';
+        html+='<div class="r '+cls+'"><i>'+(i<g?'✓':i===g?'▶':(i+1))+'</i><span>'+r[0]+'</span>'+(r[1]&&i>=g?'<em>'+r[1]+'</em>':'')+'</div>';
+      });
+    }
+    if(html!==_stepsHtml){st.innerHTML=html;_stepsHtml=html;}
+    st.style.display=gameOver&&!missionDone?'none':'block';
+  }
+  // ---- action prompt (flight only; the interior sets its own below) ----
+  if(interiorMode)return;
+  if(winch.crew){setAct(null);return;}                       // the HOIST panel takes over
+  const nv=nearestVenue();
+  if(nv&&!nv.visited){setAct('E','GO INSIDE '+nv.name,'you are on the pad');return;}
+  if(g===1){
+    const alt=Math.round(heli.position.y);
+    setAct('▼','LAND ON THE CYAN PAD',dist>9?'line up — '+dist+' m':'descend — '+alt+' m',alt>11);return;
+  }
+  if(g===4&&who){
+    const d=Math.hypot(heli.position.x-who.x,heli.position.z-who.z);
+    if(d<70){setAct('▼','HOVER OVER '+who.call,'stay under 24 m, almost stopped — hoist runs '+EXTRACT_TIME+'s');return;}
+  }
+  if(window.__deckState){setAct('▼',window.__deckState,'stay over the deck to hand over the crew',window.__deckState!=='SET DOWN');return;}
+  setAct(null);
+}
+function setInteriorAct(key,a,sub){setAct(key,a,sub);}
 // ---------- enter / exit interiors ----------
 function nearestVenue(){
   const v=activeVenue(); if(!v)return null;             // only the current stage's shop can be entered
@@ -11950,8 +12076,8 @@ function talkToOwner(){
 // On-foot HUD: the flight instruments (tapes, reticle, weapon rack) make no sense indoors, so this
 // draws a minimal ground panel — where you are, who you're looking for, and the controls.
 function drawFootHUD(now){
-  const dpr=DPR();hudX.setTransform(dpr,0,0,dpr,0,0);
-  const w=W(),h=H();hudX.clearRect(0,0,w,h);
+  const dpr=DPR();hudX.setTransform(dpr*HUD_S,0,0,dpr*HUD_S,0,0);   // draw in logical units, scaled up
+  const w=W()/HUD_S,h=H()/HUD_S;hudX.clearRect(0,0,w,h);
   hudX.textBaseline='alphabetic';
   const pw=Math.min(360,w-24), M=UI.M;
   hudPanel(M,M,pw,68,'ON FOOT — '+(curVenue?curVenue.name:''));
@@ -12031,8 +12157,9 @@ function updateInterior(dt){
   const dExit=Math.hypot(fp.x-I.exit.x,fp.z-I.exit.z);
   const tp=document.getElementById('taskPanel');
   dlgCool=Math.max(0,dlgCool-dt);
+  if((__frame&1)===0)updateGuide();
   if(dlgLines){
-    tp.textContent='';
+    tp.textContent='';setAct(null);
     // advance with F, the arrow keys, Enter or Space — whichever the player reaches for
     const adv=keys['KeyF']||keys['ArrowRight']||keys['ArrowDown']||keys['Enter']||keys['Space'];
     if(adv&&dlgCool<=0){advanceDialog();dlgCool=0.28;
@@ -12040,16 +12167,17 @@ function updateInterior(dt){
   }else if(pendingGive&&I.mapPos){
     const dMap=Math.hypot(fp.x-I.mapPos.x,fp.z-I.mapPos.z);
     if(dMap<2.1){
-      tp.textContent='▶ PRESS F (or click it) — TAKE THE MAP FROM THE COUNTER';
+      tp.textContent='▶ PRESS F (or click it) — TAKE THE MAP FROM THE COUNTER';setAct('F','TAKE THE MAP','it shows where your crew is');
       if((keys['KeyF']||fp.click)&&dlgCool<=0){takeGive();keys['KeyF']=false;fp.click=false;dlgCool=0.3;}
-    }else tp.textContent='▶ THE MAP IS ON THE COUNTER — WALK UP AND TAKE IT';
+    }else{tp.textContent='▶ THE MAP IS ON THE COUNTER — WALK UP AND TAKE IT';setAct('▲','WALK TO THE COUNTER','take the map the owner left');}
     fp.click=false;
   }else{
     fp.click=false;
-    if(dTalk<2.4&&!curVenue.visited)tp.textContent='▶ PRESS F — TALK TO THE OWNER (they know where your crew is)';
-    else if(dTalk<2.4)tp.textContent='You already have this lead. Check the INTEL panel outside.';
-    else if(dExit<2.2)tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';
-    else tp.textContent=curVenue.name+' '+curVenue.jp+' — walk to the counter (F to talk) · X to leave';
+    if(dTalk<2.4&&!curVenue.visited){tp.textContent='▶ PRESS F — TALK TO THE OWNER (they know where your crew is)';setAct('F','TALK TO THE OWNER','they know where your crew is');}
+    else if(dTalk<2.4){tp.textContent='You already have this lead. Check the INTEL panel outside.';setAct('X','GO BACK TO THE HELICOPTER','walk to the door');}
+    else if(dExit<2.2&&curVenue.visited){tp.textContent='PRESS X — STEP BACK OUT TO THE HELICOPTER';setAct('X','LEAVE','back to the helicopter');}
+    else if(curVenue.visited){tp.textContent='You have the lead — walk back to the door and press X';setAct('▼','WALK TO THE DOOR','then press X to fly');}
+    else{tp.textContent=curVenue.name+' '+curVenue.jp+' — walk to the counter (F to talk) · X to leave';setAct('▲','WALK TO THE COUNTER','arrows / WASD to walk · mouse to look');}
     if(keys['KeyF']&&dTalk<2.4&&!curVenue.visited&&dlgCool<=0){startDialog(curVenue);keys['KeyF']=false;}
     if(keys['KeyX']&&dExit<2.2)exitVenue();
   }
@@ -12955,10 +13083,11 @@ function loop(now){
     if((__frame&15)===0)renderIntelLog(); // keep bearings/distances live without rebuilding every frame
     const tp=document.getElementById('taskPanel');
     const nv=nearestVenue();
-    if(nv&&!nv.visited)tp.textContent='PRESS E — GO INSIDE '+nv.name+' '+nv.jp;
+    if(nv&&!nv.visited)tp.textContent=nv.name+' '+nv.jp+' — the owner knows where your crew is';
     else if(nv)tp.textContent=nv.name+' — ALREADY SPOKE TO THE OWNER';
     else tp.textContent=objectiveText();
     if(nv&&!nv.visited&&keys['KeyE'])enterVenue(nv);
+    if((__frame&1)===0)updateGuide();
     drawHUD(now);
     radarTexMFD.needsUpdate=true;horizonTexMFD.needsUpdate=true;tacTexMFD.needsUpdate=true;
     engTexMFD.needsUpdate=true;wpnTexMFD.needsUpdate=true;
@@ -12970,6 +13099,8 @@ function loop(now){
     glarePlane.material.opacity=0.35+Math.abs(roll)*0.6+Math.abs(pitch)*0.3;
   }else{
     // cinematic menu flythrough around the tower (real-game feel)
+    if(_actKey)setAct(null);
+    {const st=document.getElementById('steps');if(st&&st.style.display!=='none')st.style.display='none';}
     const t=now/11000;
     const cx=TOWER.x+Math.cos(t)*250, cz=TOWER.z+Math.sin(t)*250;
     cam.position.lerp(new THREE.Vector3(cx,74+Math.sin(t*2.1)*30,cz),0.02);
