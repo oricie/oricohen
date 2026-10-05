@@ -23,7 +23,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 /* ── Brief ── */
 #brief { display: grid; place-items: center; padding: 32px 20px 56px; }
 .brief-in { width: 100%; max-width: 620px; }
-.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+.brief-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
 .logo-mark { font: 800 20px var(--disp); display: inline-flex; gap: 8px; align-items: center; }
 .go:disabled { opacity: .7; cursor: progress; transform: none; }
 .logo-mark .heart { background: var(--grad); color: #fff; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 15px; }
@@ -74,7 +74,8 @@ textarea:focus, input[type=text]:focus { border-color: #ff6a5a; box-shadow: 0 0 
 .browser i { width: 8px; height: 8px; border-radius: 50%; background: #ddd; }
 .browser span { margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .frame { position: absolute; inset: 24px 0 0 0; overflow: hidden; }
-.frame iframe { position: absolute; top: 0; left: 0; width: 1280px; border: 0; transform-origin: 0 0; pointer-events: none; background: #fff; }
+.frame .siteview { position: absolute; top: 0; left: 0; width: 1280px; border: 0; transform-origin: 0 0; pointer-events: none; background: #fff; overflow: hidden; }
+.fullsite { min-height: calc(100% - 61px); }
 .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; background: #fff; border-top: 1px solid var(--line); }
 .tile { position: relative; border-radius: 18px; display: grid; place-items: center; overflow: hidden; height: 112px; }
 .tile .fit { display: inline-flex; }

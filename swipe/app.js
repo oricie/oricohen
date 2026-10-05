@@ -58,15 +58,14 @@
   /* Scale a 1280px-wide iframe to fit its frame. */
   const ro = new ResizeObserver(es => es.forEach(e => fitFrame(e.target)));
   function fitFrame(frame) {
-    const f = frame.querySelector('iframe'); if (!f || !frame.clientWidth) return;
+    const f = frame.querySelector('.siteview'); if (!f || !frame.clientWidth) return;
     const s = frame.clientWidth / 1280;
     f.style.height = Math.ceil(frame.clientHeight / s) + 'px';
     f.style.transform = 'scale(' + s + ')';
   }
   function mountFrame(frame, v) {
-    const f = document.createElement('iframe');
-    f.setAttribute('sandbox', ''); f.tabIndex = -1; f.title = v.name + ' website preview'; f.loading = 'eager';
-    f.srcdoc = MM.siteHTML(v);
+    const f = document.createElement('div'); f.className = 'siteview'; f.setAttribute('aria-label', v.name + ' website preview');
+    MM.mountSite(f, v, true);
     frame.appendChild(f); ro.observe(frame); fitFrame(frame);
   }
   /* Shrink a logo so it sits comfortably in its tile. */
@@ -245,9 +244,10 @@
     requestAnimationFrame(() => requestAnimationFrame(() => { c.el.classList.remove('drag'); c.el.style.transform = ''; }));
   }
   function showSite(v) {
-    const o = document.createElement('div'); o.className = 'overlay top'; o.style.background = '#fff';
-    o.innerHTML = '<header class="ov-bar"><b style="font-family:var(--disp)">' + esc(v.name) + ' · full site</b><button class="ghost-btn">Close</button></header><iframe sandbox="allow-same-origin" style="display:block;width:100%;height:calc(100% - 61px);border:0"></iframe>';
-    $('iframe', o).srcdoc = MM.siteHTML(v);
+    const o = document.createElement('div'); o.className = 'overlay top'; o.style.background = '#fff'; o.style.overflowY = 'auto';
+    o.innerHTML = '<header class="ov-bar"><b style="font-family:var(--disp)">' + esc(v.name) + ' · full site</b><button class="ghost-btn">Close</button></header><div class="fullsite"></div>';
+    ensureFonts(v); MM.mountSite($('.fullsite', o), v, false);
+    o.addEventListener('click', e => { if (e.target.closest('a')) e.preventDefault(); }, true);
     $('button', o).onclick = () => o.remove();
     document.body.appendChild(o);
   }

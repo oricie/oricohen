@@ -518,15 +518,12 @@
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMid slice">' + tiles + '</svg>';
   }
 
-  function siteHTML(v) {
+  function siteParts(v) {
     const ind = v.copy, P = v.pal, n = esc(v.name);
     const nav = logoHTML(v, { style: navStyle(v), size: 26 });
     const ic = '<span class="ic">' + markSVG(v, { container: 'none', colors: [P.onPrimary, P.primary] }) + '</span>';
     const sub = ind.sub.replace(/\{n\}/g, n);
-    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + n + '</title>' +
-      '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="' + fontsHref(v) + '">' +
-      '<style>' + brandCSS(v) + SITE_CSS + LOGO_CSS + '</style></head><body class="lay-' + v.layout + '">' +
-      '<header class="nav"><div class="wrap nav-in">' + nav + '<nav>' + ind.nav.map(x => '<a href="#">' + x + '</a>').join('') + '</nav><a class="btn sm" href="#">' + esc(ind.cta[0]) + '</a></div></header>' +
+    return { body: '<header class="nav"><div class="wrap nav-in">' + nav + '<nav>' + ind.nav.map(x => '<a href="#">' + x + '</a>').join('') + '</nav><a class="btn sm" href="#">' + esc(ind.cta[0]) + '</a></div></header>' +
       '<section class="hero"><div class="wrap hero-in"><div class="copy"><span class="eyebrow">' + esc(ind.eyebrow) + '</span><h1>' + esc(v.head) + '</h1><p class="sub">' + sub + '</p>' +
       '<div class="cta"><a class="btn" href="#">' + esc(ind.cta[0]) + '</a><a class="btn ghost" href="#">' + esc(ind.cta[1]) + '</a></div></div>' +
       '<div class="art">' + artSVG(v) + '</div><div class="art wide">' + artWide(v) + '</div></div></section>' +
@@ -535,7 +532,23 @@
       ind.feats.map(f => '<div class="card">' + ic + '<h3>' + esc(f[0]) + '</h3><p>' + esc(f[1]) + '</p></div>').join('') + '</div></div></section>' +
       '<section class="quote"><div class="wrap"><blockquote>“' + esc(ind.quote[0]) + '”</blockquote><cite>' + esc(ind.quote[1]) + '</cite></div></section>' +
       '<section class="final"><div class="wrap"><div class="final-in"><h2>Ready when you are.</h2><a class="btn" href="#">' + esc(ind.cta[0]) + '</a></div></div></section>' +
-      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.</span></div></footer></body></html>';
+      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.</span></div></footer>' };
+  }
+  function siteHTML(v) {
+    const p = siteParts(v), n = esc(v.name);
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + n + '</title>' +
+      '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="' + fontsHref(v) + '">' +
+      '<style>' + brandCSS(v) + SITE_CSS + LOGO_CSS + '</style></head><body class="lay-' + v.layout + '">' + p.body + '</body></html>';
+  }
+  /* Draw the site into a shadow root (no iframe, so it works where iframes are blocked).
+     preview: fixed 1280px desktop layout, so vw units and the mobile media query are neutralised. */
+  function mountSite(host, v, preview) {
+    const sr = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    const i = SITE_CSS.indexOf('@media(max-width:820px)');
+    let site = SITE_CSS.slice(0, i), media = SITE_CSS.slice(i);
+    if (preview) { site = site.replace(/(\d+(?:\.\d+)?)vw/g, (m, n) => (n * 12.8).toFixed(1) + 'px'); media = ''; }
+    const css = (brandCSS(v) + site + media + LOGO_CSS).replace(/:root\{/g, ':host{').replace(/(^|\})body\{/g, '$1.site{');
+    sr.innerHTML = '<style>:host{display:block;height:100%}.site{min-height:100%}' + css + '</style><div class="site lay-' + v.layout + '">' + siteParts(v).body + '</div>';
   }
 
   /* ───────── export ───────── */
@@ -597,7 +610,7 @@
   }
 
   global.MM = {
-    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, tokensCSS, paletteList,
+    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, mountSite, tokensCSS, paletteList,
     brandKitZip, fontsHref, LOGO_CSS, IND, mix, GLYPHS: Object.keys(G)
   };
 })(window);
