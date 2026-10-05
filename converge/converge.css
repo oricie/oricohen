@@ -203,3 +203,18 @@ h1 em{background:var(--grad);-webkit-background-clip:text;background-clip:text;c
 .chips.eg{margin:0;max-width:none;gap:8px}
 
 .ktag{font:600 .66rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--acc);background:var(--soft);padding:5px 10px;border-radius:99px;white-space:nowrap}@media(max-width:820px){.ktag{display:none}}
+
+/* ── simpler, shorter brief ── */
+.brief{place-items:center;padding:clamp(16px,4vh,44px) 20px 40px}
+.b2{max-width:560px}
+.brief h1{font:800 clamp(2.4rem,6vw,3.6rem)/1 var(--disp);letter-spacing:-.04em;margin:0}
+.lede{font-size:1.05rem;margin:14px 0 22px}
+.kline{display:flex;gap:6px;align-items:center;color:var(--mut);font-size:.9rem;margin:10px 2px 0}.linkb.in{display:inline;margin:0;font-size:.9rem}
+#kinds{margin-top:10px}
+.chips.eg{margin-top:16px;align-items:center}.try{font:600 .66rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-right:2px}
+.chips.eg .tchip{padding:6px 13px;font-size:.88rem}
+.go{margin-top:20px}
+.more-row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:14px;color:var(--mut);flex-wrap:wrap}.more-row .linkb{display:inline;margin:0}
+#opts{margin-top:8px}.opt{margin-top:10px}
+.tchip{font-size:.9rem}
+@media(max-width:1180px){.taste{box-shadow:none}body.tp-open .taste{box-shadow:0 -30px 60px rgba(13,14,17,.2)}}

@@ -103,30 +103,36 @@
   /* ───────── 1 · brief ───────── */
   function vBrief() {
     const B = S.brief, saved = load(), resumable = saved && saved.hist && saved.hist.length;
-    $('#view').innerHTML = '<section class="brief"><div class="b2"><h1>Describe what you’re making.<br /><em>Swipe</em> it into shape.</h1>' +
-      '<p class="lede">A shop, a studio, a platform, a tool. Converge deals you complete designs to react to, learns what you like, and builds toward your product. Swipe right on what feels right.</p>' +
-      '<form id="bf" autocomplete="off"><label class="field"><span class="lab">What are you making?</span><textarea id="bt" class="tbox" dir="auto" rows="3" maxlength="240" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea></label>' +
-      '<div class="lab2">What kind of thing is it?</div><div class="chips" id="kinds">' + KINDS.map(k => '<button type="button" class="tchip ' + (B.kind === k[0] ? 'on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>').join('') + '</div><p class="khint" id="khint"></p>' +
-      '<div id="opts"></div>' +
-      '<div class="lab2">Or try one</div><div class="chips eg">' + EXAMPLES.map((e, i) => '<button type="button" class="tchip soft" data-e="' + i + '">' + e[0] + '</button>').join('') + '</div>' +
-      '<button class="go" id="go" type="submit">Start swiping <span>→</span></button><button type="button" class="linkb" id="seeall">or see all six directions first</button>' +
+    const QUICK = [0, 1, 3, 6];
+    $('#view').innerHTML = '<section class="brief"><div class="b2"><h1>What are you <em>making?</em></h1>' +
+      '<p class="lede">Describe it in a sentence. We’ll show you designs to swipe on.</p>' +
+      '<form id="bf" autocomplete="off"><textarea id="bt" class="tbox" dir="auto" rows="3" maxlength="240" aria-label="What are you making?" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea>' +
+      '<p class="kline"><span id="ktxt"></span> <button type="button" id="kchange" class="linkb in">Change</button></p>' +
+      '<div class="chips hidden" id="kinds">' + KINDS.map(k => '<button type="button" class="tchip ' + (B.kind === k[0] ? 'on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>' +
+      '<div class="chips eg"><span class="try">Try</span>' + QUICK.map(i => '<button type="button" class="tchip soft" data-e="' + i + '">' + EXAMPLES[i][0] + '</button>').join('') + '</div>' +
+      '<button class="go" id="go" type="submit">Start swiping <span>→</span></button>' +
+      '<div class="more-row"><button type="button" class="linkb" id="more">Add details</button><span>·</span><button type="button" class="linkb" id="seeall">See all six directions first</button></div>' +
+      '<div id="opts" class="hidden"></div>' +
       (resumable ? '<div class="resume">' + saved.hist.length + ' reactions saved <button type="button" class="pill sm ink" id="resume">Continue</button></div>' : '') + '</form></div></section>';
-    const ta = $('#bt'); const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    const ta = $('#bt'), grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight, 96) + 'px'; };
     const eff = () => B.kind === 'auto' ? BR.detectKind([ta.value, ($('#bp') || {}).value].join(' ')) : B.kind;
     let shown = null;
+    const label = k => k === 'brand' ? 'brand & website' : 'complex product';
+    const line = () => { const k = eff(); $('#ktxt').textContent = (B.kind === 'auto' ? 'Looks like a ' : 'Making a ') + label(k) + '.'; };
     const opts = () => {
-      const k = eff(); if (k === shown) { $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind]; return; }
+      const k = eff(); line(); if (k === shown) return;
       const keep = { name: ($('#bn') || {}).value, users: ($('#bu') || {}).value, problem: ($('#bp') || {}).value }; shown = k;
       $('#opts').innerHTML = k === 'brand' ?
-        '<div class="opt"><label class="field"><span class="lab">Business name <i>(optional)</i></span><input id="bn" dir="auto" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="lab">Who is it for <i>(optional)</i></span><input id="bu" dir="auto" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
-        '<div class="opt"><label class="field"><span class="lab">Target users <i>(optional)</i></span><input id="bu" dir="auto" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="lab">Main problem <i>(optional)</i></span><input id="bp" dir="auto" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="lab2">Product type</div><div class="chips" id="types">' + TYPES.map(t => '<button type="button" class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+        '<div class="opt"><label class="field"><span class="lab">Business name</span><input id="bn" dir="auto" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="lab">Who is it for</span><input id="bu" dir="auto" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
+        '<div class="opt"><label class="field"><span class="lab">Target users</span><input id="bu" dir="auto" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="lab">Main problem</span><input id="bp" dir="auto" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="lab2">Product type</div><div class="chips" id="types">' + TYPES.map(t => '<button type="button" class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
       $$('#types .tchip').forEach(b => b.onclick = () => { B.type = b.dataset.t; $$('#types .tchip').forEach(x => x.classList.toggle('on', x === b)); });
-      $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind];
     };
     ta.oninput = () => { grow(); if (B.kind === 'auto') opts(); }; grow(); opts();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#go').click(); } };
+    $('#kchange').onclick = () => $('#kinds').classList.toggle('hidden');
+    $('#more').onclick = () => { const o = $('#opts'); o.classList.toggle('hidden'); $('#more').textContent = o.classList.contains('hidden') ? 'Add details' : 'Hide details'; };
     $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
-    $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); });
+    $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); ta.focus(); });
     const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; };
     $('#bf').onsubmit = e => { e.preventDefault(); collect(); startExplore(true); };
     $('#seeall').onclick = () => { collect(); startExplore(false); };
