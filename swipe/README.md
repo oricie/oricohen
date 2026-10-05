@@ -12,7 +12,11 @@ node swipe/server.js            # http://localhost:8787
 ANTHROPIC_API_KEY=sk-ant-... node swipe/server.js
 ```
 
-Photos come from Pexels (free): add `PEXELS_API_KEY=...` from https://www.pexels.com/api. Without it the app stays graphic-only.
+Images for hero sections, picked automatically in this order:
+
+1. **Generated** (FLUX schnell on Cloudflare Workers AI, free daily allowance): set `CF_ACCOUNT_ID` and `CF_API_TOKEN` (a token with Workers AI permission). Each card's prompt is its subject plus its palette and mood; same prompt and seed always give the same picture, so a saved design stores only the seed.
+2. **Pexels photos**: set `PEXELS_API_KEY` from https://www.pexels.com/api (credited in the footer).
+3. Neither: the app stays graphic-only.
 
 `python3 -m http.server` also works for the rule-based mode (it has no `/api/brand`, so the app falls back on its own).
 
@@ -31,10 +35,12 @@ The static page can't hold API keys, so the two calls (`/api/brand` for Claude, 
 cd swipe/worker
 npx wrangler login
 npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler secret put PEXELS_API_KEY
+npx wrangler secret put PEXELS_API_KEY     # optional; skip it if you only want generated images
 npx wrangler deploy            # prints https://matchmark-api.<you>.workers.dev
 ```
 
 Then put that URL in `swipe/config.js` (`window.MATCHMARK_API = "https://matchmark-api.<you>.workers.dev"`) and merge. `ALLOWED_ORIGINS` in `worker/wrangler.toml` limits which sites may call it. `api.mjs` is shared by the Worker and `server.js`.
 
-Photos: each direction gets a search phrase from Claude, `/api/photo` returns one Pexels result, the site shows it with a credit line, and the downloaded kit contains the image as `images/hero.jpg`.
+Generated images need no extra key on the Worker: `wrangler.toml` binds Workers AI as `AI`. `/api/caps` tells the page which of the three modes this deployment has.
+
+Pexels photos: each direction gets a search phrase from Claude, `/api/photo` returns one Pexels result, the site shows it with a credit line, and the downloaded kit contains the image as `images/hero.jpg`.

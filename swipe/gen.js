@@ -521,14 +521,21 @@
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMid slice">' + tiles + '</svg>';
   }
 
+  const HUE_NAMES = [[15, 'red'], [40, 'orange'], [65, 'golden yellow'], [95, 'lime green'], [165, 'green'], [195, 'teal'], [225, 'blue'], [265, 'indigo'], [300, 'purple'], [335, 'magenta'], [360, 'red']];
+  /* Prompt for an image model: the direction's subject, styled to the card's palette and mood. */
+  function imagePrompt(v) {
+    const hn = (HUE_NAMES.find(h => v.pal.hue < h[0]) || HUE_NAMES[0])[1];
+    const light = { dark: 'moody, dark, cinematic lighting', color: 'vibrant, bold colors, studio lighting', cream: 'warm, soft natural light, cozy', light: 'bright, airy, clean, soft daylight' }[v.pal.mode];
+    return v.photoQ + ', professional photography, ' + light + ', ' + hn + ' color accents, clean composition, shallow depth of field, no text, no logos, no people';
+  }
   function siteParts(v) {
     const ind = v.copy, P = v.pal, n = esc(v.name);
     const nav = logoHTML(v, { style: navStyle(v), size: 26 });
     const ic = '<span class="ic">' + markSVG(v, { container: 'none', colors: [P.onPrimary, P.primary] }) + '</span>';
     const sub = ind.sub.replace(/\{n\}/g, n);
-    const ph = v.usePhoto && v.photo && /^https:\/\//.test(v.photo.url) ? v.photo : null;
+    const ph = v.usePhoto && v.photo && /^(https:\/\/|http:\/\/localhost)/.test(v.photo.url) ? v.photo : null;
     const img = ph ? '<img src="' + esc(ph.url) + '" alt="' + esc(ph.alt || '') + '" onerror="this.remove()">' : '';
-    const credit = ph ? ' · Photo: <a href="' + esc(ph.link) + '">' + esc(ph.credit) + '</a> / Pexels' : '';
+    const credit = ph && ph.credit ? ' · Photo: <a href="' + esc(ph.link) + '">' + esc(ph.credit) + '</a> / Pexels' : '';
     return { body: '<header class="nav"><div class="wrap nav-in">' + nav + '<nav>' + ind.nav.map(x => '<a href="#">' + x + '</a>').join('') + '</nav><a class="btn sm" href="#">' + esc(ind.cta[0]) + '</a></div></header>' +
       '<section class="hero"><div class="wrap hero-in"><div class="copy"><span class="eyebrow">' + esc(ind.eyebrow) + '</span><h1>' + esc(v.head) + '</h1><p class="sub">' + sub + '</p>' +
       '<div class="cta"><a class="btn" href="#">' + esc(ind.cta[0]) + '</a><a class="btn ghost" href="#">' + esc(ind.cta[1]) + '</a></div></div>' +
@@ -608,7 +615,7 @@
       'logo.svg     Primary logo lockup.\nmark.svg     Icon / avatar / favicon version of the mark.\nbrand.css    Colours, fonts and radii as CSS variables.\n\n' +
       'Colours\n' + paletteList(v).map(c => '  ' + c[0].padEnd(11) + c[1]).join('\n') + '\n\n' +
       'Type\n  Display  ' + v.fonts.d + '\n  Body     ' + v.fonts.b + '\n  Both are free on Google Fonts (https://fonts.google.com).\n\n' +
-      (heroBytes ? 'Photo: ' + v.photo.credit + ' on Pexels (' + v.photo.link + '), free to use under the Pexels license.\n\n' : '') + 'Generated with Matchmark.\n';
+      (heroBytes && v.photo.credit ? 'Photo: ' + v.photo.credit + ' on Pexels (' + v.photo.link + '), free to use under the Pexels license.\n\n' : '') + 'Generated with Matchmark.\n';
     return zip([
       { name: slug + '/index.html', data: heroBytes ? siteHTML(v, { hero: 'images/hero.jpg' }) : siteHTML(v) },
       ...(heroBytes ? [{ name: slug + '/images/hero.jpg', data: heroBytes }] : []),
@@ -620,7 +627,7 @@
   }
 
   global.MM = {
-    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, mountSite, tokensCSS, paletteList,
+    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, mountSite, imagePrompt, tokensCSS, paletteList,
     brandKitZip, fontsHref, LOGO_CSS, IND, mix, GLYPHS: Object.keys(G)
   };
 })(window);

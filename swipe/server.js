@@ -40,6 +40,13 @@ http.createServer(async (req, res) => {
     });
     return;
   }
+  if (url.pathname === '/api/caps') return send(res, 200, (await api).caps(process.env));
+  if (url.pathname === '/api/image' && req.method === 'GET') {
+    if (limited(req.socket.remoteAddress + 'i')) return send(res, 429, { error: 'slow down' });
+    try { const b = await (await api).image(process.env, url.searchParams.get('p'), url.searchParams.get('s')); res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' }); res.end(Buffer.from(b)); }
+    catch (e) { send(res, e.status || 502, { error: e.message }); }
+    return;
+  }
   if (url.pathname === '/api/photo' && req.method === 'GET') {
     try { send(res, 200, await (await api).photo(process.env, url.searchParams.get('q'), url.searchParams.get('i'), url.searchParams.get('o'))); }
     catch (e) { send(res, e.status || 502, { error: e.message }); }
@@ -50,4 +57,4 @@ http.createServer(async (req, res) => {
   const file = path.join(__dirname, p);
   if (!file.startsWith(__dirname + path.sep) || /server\.js$/.test(file) || file.includes(path.sep + 'worker' + path.sep)) return send(res, 404, 'not found', 'text/plain');
   fs.readFile(file, (err, data) => err ? send(res, 404, 'not found', 'text/plain') : send(res, 200, data, MIME[path.extname(file)] || 'application/octet-stream'));
-}).listen(PORT, () => console.log('Matchmark on http://localhost:' + PORT + (process.env.ANTHROPIC_API_KEY ? ' (Claude on)' : ' (no ANTHROPIC_API_KEY: rule-based copy)') + (process.env.PEXELS_API_KEY ? ' (photos on)' : ' (no PEXELS_API_KEY: graphics only)')));
+}).listen(PORT, () => console.log('Matchmark on http://localhost:' + PORT + (process.env.ANTHROPIC_API_KEY ? ' (Claude on)' : ' (no ANTHROPIC_API_KEY: rule-based copy)') + (process.env.CF_API_TOKEN ? ' (generated images on)' : '') + (process.env.PEXELS_API_KEY ? ' (Pexels on)' : '')));

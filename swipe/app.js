@@ -110,7 +110,7 @@
   async function startDeck(input) {
     briefInput = input; lastBrief = input; persist();
     brief = MM.parseBrief(input.text, input.name);
-    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; history = []; queue = []; dirs = []; dirsOff = false;
+    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; photosOff = false; caps = null; history = []; queue = []; dirs = []; dirsOff = false;
     const go = $('.go'); go.disabled = true; go.firstChild.textContent = 'Designing for you… ';
     await fetchDirs(30000);
     go.disabled = false; go.firstChild.textContent = 'Start swiping ';
@@ -167,14 +167,21 @@
   }
 
   /* Stock photo for the hero (Pexels, via /api/photo). Quietly skipped when the API or key is missing. */
-  let photosOff = false;
+  let photosOff = false, caps = null;
+  async function loadCaps() { try { const r = await fetch(API + '/api/caps'); caps = r.ok ? await r.json() : {}; } catch (e) { caps = {}; } if (!caps.image && !caps.photo) photosOff = true; }
   async function loadPhoto(card) {
     const v = card.v;
     if (photosOff || !v.usePhoto || v.photo) return;
+    if (!caps) await loadCaps(); if (photosOff) return;
     try {
-      const r = await fetch(API + '/api/photo?q=' + encodeURIComponent(v.photoQ) + '&i=' + (v.seed % 7));
-      if (!r.ok) { if (r.status === 503 || r.status === 403 || r.status === 404 && !r.headers.get('content-type')) photosOff = true; return; }
-      v.photo = await r.json();
+      if (caps.image) {          // generated: the URL is the image, same prompt + seed always gives the same picture
+        const u = new URL(API + '/api/image?s=' + v.seed + '&p=' + encodeURIComponent(MM.imagePrompt(v)), location.href).href;
+        v.photo = { url: u, alt: v.photoQ, generated: true };
+      } else {                   // Pexels
+        const r = await fetch(API + '/api/photo?q=' + encodeURIComponent(v.photoQ) + '&i=' + (v.seed % 7));
+        if (!r.ok) return;
+        v.photo = await r.json();
+      }
       const host = card.el.isConnected && $('.siteview', card.el);
       if (host) MM.mountSite(host, v, true);
     } catch (e) { photosOff = true; }

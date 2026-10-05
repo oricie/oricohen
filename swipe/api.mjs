@@ -52,3 +52,30 @@ export async function photo(env, q, i = 0, orientation = 'landscape') {
   const p = list[Math.abs(+i || 0) % list.length];
   return { url: p.src.large2x || p.src.large, thumb: p.src.medium, w: p.width, h: p.height, credit: p.photographer, link: p.url, alt: p.alt || q };
 }
+
+// What this deployment can do, so the page can pick: generated image > Pexels photo > graphics only.
+export const caps = env => ({ brand: !!env.ANTHROPIC_API_KEY, image: !!(env.AI || (env.CF_ACCOUNT_ID && env.CF_API_TOKEN)), photo: !!env.PEXELS_API_KEY });
+
+// Generate one image with FLUX schnell on Cloudflare Workers AI. Same prompt + seed = same picture.
+// In a Worker use the `AI` binding; elsewhere use the REST API with CF_ACCOUNT_ID + CF_API_TOKEN.
+export async function image(env, prompt, seed = 0) {
+  prompt = String(prompt || '').slice(0, 400).trim();
+  if (!prompt) throw Object.assign(new Error('empty prompt'), { status: 400 });
+  const input = { prompt, steps: 4, seed: Math.abs(parseInt(seed, 10) || 0) % 2147483647 };
+  const model = '@cf/black-forest-labs/flux-1-schnell';
+  let b64;
+  if (env.AI) {
+    b64 = (await env.AI.run(model, input)).image;
+  } else if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) {
+    const base = (env.CF_BASE_URL || 'https://api.cloudflare.com').replace(/\/$/, '');
+    const r = await fetch(base + '/client/v4/accounts/' + env.CF_ACCOUNT_ID + '/ai/run/' + model, {
+      method: 'POST', headers: { authorization: 'Bearer ' + env.CF_API_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify(input)
+    });
+    if (!r.ok) throw new Error('upstream ' + r.status);
+    b64 = ((await r.json()).result || {}).image;
+  } else throw Object.assign(new Error('no image backend'), { status: 503 });
+  if (!b64) throw new Error('no image returned');
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
