@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Matchmark: swipe your brand</title>
+  <meta name="description" content="Describe your business. Swipe through complete brand designs: logo, palette, type and website. Swipe right and it's yours." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Inter:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="swipe.css" />
+</head>
+<body>
+
+<!-- 1 · Brief -->
+<main id="brief" class="screen">
+  <div class="brief-in">
+    <div class="logo-mark"><span class="heart">♥</span> Matchmark</div>
+    <h1>Describe your business.<br /><em>Swipe</em> your brand.</h1>
+    <p class="lede">Tell us what you do. We’ll deal you complete designs: logo, colors, fonts and a working website. Swipe right on the one you love and it’s yours, ready to use.</p>
+
+    <form id="brief-form" autocomplete="off">
+      <label class="field">
+        <span>What do you need?</span>
+        <textarea id="brief-text" rows="4" maxlength="400" placeholder="I’m opening a bagel shop in Brooklyn. I need a logo, website and branding. Warm and a bit playful."></textarea>
+      </label>
+      <label class="field small">
+        <span>Business name <i>(optional, we’ll suggest some if you skip it)</i></span>
+        <input id="brief-name" type="text" maxlength="28" placeholder="e.g. Rise &amp; Rye" />
+      </label>
+      <div class="chips" id="chips" aria-label="Try an example"></div>
+      <button class="go" type="submit">Start swiping <span>→</span></button>
+    </form>
+  </div>
+</main>
+
+<!-- 2 · Deck -->
+<main id="deck" class="screen hidden">
+  <header class="bar">
+    <button id="back" class="ghost-btn" aria-label="Edit brief">← Brief</button>
+    <div class="brief-chip" id="brief-chip"></div>
+    <button id="open-yours" class="yours-btn" aria-label="Open your saved designs"><span>♥</span><b id="count">0</b></button>
+  </header>
+
+  <div class="stage" id="stage" aria-live="polite"></div>
+
+  <div class="actions">
+    <button id="undo" class="round sm" aria-label="Undo" title="Undo (Z)">↺</button>
+    <button id="nope" class="round big nope" aria-label="Pass" title="Pass (←)">✕</button>
+    <button id="like" class="round big like" aria-label="Keep" title="Keep (→)">♥</button>
+    <button id="peek" class="round sm" aria-label="Preview full site" title="Preview full site (Space)">⤢</button>
+  </div>
+  <p class="hint">Swipe right to keep it · left to pass · or use ← → keys</p>
+</main>
+
+<!-- 3 · Yours -->
+<aside id="yours" class="overlay hidden" aria-label="Your designs">
+  <header class="ov-bar">
+    <h2>Yours <span id="yours-n"></span></h2>
+    <button class="ghost-btn" data-close>Close</button>
+  </header>
+  <div id="yours-grid" class="yours-grid"></div>
+</aside>
+
+<!-- 4 · Detail -->
+<aside id="detail" class="overlay hidden top" aria-label="Design details"></aside>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="gen.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
