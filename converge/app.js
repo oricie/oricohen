@@ -52,9 +52,9 @@
     if (S.kind === 'brand') { const brief = MM.parseBrief([S.brief.text, S.brief.problem].join(' '), S.brief.name); return { kind: 'brand', packKey: 'brand', pack: { name: brief.name || 'Your brand', kind: 'Brand & website' }, brief, used: new Set(), count: 0 }; }
     const key = D.detect([S.brief.text, S.brief.users, S.brief.problem].join(' '), S.brief.type); return { packKey: key, pack: D.P[key], used: new Set(), count: 0 };
   }
-  function startExplore() {
+  function startExplore(skip) {
     setKind(resolveKind(S.brief)); S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
-    S.deck = M.initialDirections(S.ctx, S.seedBase); go('dirs'); save();
+    S.deck = M.initialDirections(S.ctx, S.seedBase); save(); if (skip) startSwipe(0); else go('dirs');
   }
   function startSwipe(i) { S.cur = S.deck[i || 0]; S.shown = [S.cur]; S.note = 'start'; go('swipe'); }
   const hasMore = () => S.hist.length < 30;
@@ -91,7 +91,7 @@
   /* ───────── bar ───────── */
   function renderBar() {
     const order = ['brief', 'dirs', 'swipe', 'result'], idx = order.indexOf(S.view === 'converge' ? 'result' : S.view), names = ['Brief', 'Directions', 'Taste', 'Product'];
-    $('#bar').innerHTML = '<a class="word" id="home"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4l5.5 7L3 18"/><path d="M19 4l-5.5 7 5.5 7"/><circle cx="11" cy="11" r="1.6" fill="var(--acc)" stroke="none"/></svg>Converge</a><div class="crumbs">' + names.map((n, i) => '<span class="' + (i === idx ? 'on' : i < idx ? 'dn' : '') + '">' + n + '</span>').join('') + '</div><span class="sp"></span>' +
+    $('#bar').innerHTML = '<a class="word" id="home"><span class="hm">♥</span>Converge</a><div class="crumbs">' + names.map((n, i) => '<span class="' + (i === idx ? 'on' : i < idx ? 'dn' : '') + '">' + n + '</span>').join('') + '</div><span class="sp"></span>' +
       (S.hist.length ? '<button class="pill" id="b-hist">History <b>' + S.hist.length + '</b></button>' : '') + (S.hist.length && S.view === 'swipe' ? '<button class="pill" id="b-taste">Your taste</button>' : '') + (S.view !== 'brief' ? '<button class="pill" id="b-reset">Start over</button>' : '');
     $('#home').onclick = () => { if (S.view !== 'brief') { S.view = 'brief'; document.body.classList.remove('tp-open'); renderBar(); vBrief(); } };
     const h = $('#b-hist'); if (h) h.onclick = openHistory;
@@ -103,13 +103,14 @@
   /* ───────── 1 · brief ───────── */
   function vBrief() {
     const B = S.brief, saved = load(), resumable = saved && saved.hist && saved.hist.length;
-    $('#view').innerHTML = '<section class="brief"><svg class="lines" viewBox="0 0 600 800" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">' + Array.from({ length: 11 }, (_, i) => '<path d="M620 ' + (i * 80 - 40) + 'C380 ' + (i * 70 + 40) + ' 330 ' + (330 + i * 12) + ' 150 400"/>').join('') + '</svg><div class="brief-in">' +
-      '<span class="mono">Converge · Design exploration</span><h1>Describe what you’re <em>making.</em></h1>' +
-      '<label class="field"><span class="mono">A shop, a studio, a platform, a tool</span><textarea id="bt" class="big" rows="2" maxlength="240" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea></label>' +
-      '<div class="types" id="kinds"><span class="mono" style="align-self:center;margin-right:6px">What kind</span>' + KINDS.map(k => '<button class="tchip ' + (B.kind === k[0] ? 'on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>').join('') + '</div><p class="khint" id="khint"></p>' +
+    $('#view').innerHTML = '<section class="brief"><div class="b2"><h1>Describe what you’re making.<br /><em>Swipe</em> it into shape.</h1>' +
+      '<p class="lede">A shop, a studio, a platform, a tool. Converge deals you complete designs to react to, learns what you like, and builds toward your product. Swipe right on what feels right.</p>' +
+      '<form id="bf" autocomplete="off"><label class="field"><span class="lab">What are you making?</span><textarea id="bt" class="tbox" rows="3" maxlength="240" placeholder="A bagel shop in Brooklyn, or an enterprise financial planning platform.">' + esc(B.text) + '</textarea></label>' +
+      '<div class="lab2">What kind of thing is it?</div><div class="chips" id="kinds">' + KINDS.map(k => '<button type="button" class="tchip ' + (B.kind === k[0] ? 'on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>').join('') + '</div><p class="khint" id="khint"></p>' +
       '<div id="opts"></div>' +
-      '<div class="cta-row"><button class="pill ink lg" id="go">Explore directions <span>→</span></button><span class="mono">About two minutes</span>' + (resumable ? '<span class="resume">' + saved.hist.length + ' reactions saved <button class="pill sm ink" id="resume">Continue</button></span>' : '') + '</div>' +
-      '<div class="eg">' + EXAMPLES.map((e, i) => '<a data-e="' + i + '">' + e[0] + '</a>').join('') + '</div></div></section>';
+      '<div class="lab2">Or try one</div><div class="chips eg">' + EXAMPLES.map((e, i) => '<button type="button" class="tchip soft" data-e="' + i + '">' + e[0] + '</button>').join('') + '</div>' +
+      '<button class="go" id="go" type="submit">Start swiping <span>→</span></button><button type="button" class="linkb" id="seeall">or see all six directions first</button>' +
+      (resumable ? '<div class="resume">' + saved.hist.length + ' reactions saved <button type="button" class="pill sm ink" id="resume">Continue</button></div>' : '') + '</form></div></section>';
     const ta = $('#bt'); const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
     const eff = () => B.kind === 'auto' ? BR.detectKind([ta.value, ($('#bp') || {}).value].join(' ')) : B.kind;
     let shown = null;
@@ -117,16 +118,18 @@
       const k = eff(); if (k === shown) { $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind]; return; }
       const keep = { name: ($('#bn') || {}).value, users: ($('#bu') || {}).value, problem: ($('#bp') || {}).value }; shown = k;
       $('#opts').innerHTML = k === 'brand' ?
-        '<div class="opt"><label class="field"><span class="mono">Business name, optional</span><input id="bn" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="mono">Who is it for, optional</span><input id="bu" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
-        '<div class="opt"><label class="field"><span class="mono">Target users, optional</span><input id="bu" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="mono">Main problem, optional</span><input id="bp" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="types" id="types"><span class="mono" style="align-self:center;margin-right:6px">Product type</span>' + TYPES.map(t => '<button class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+        '<div class="opt"><label class="field"><span class="lab">Business name <i>(optional)</i></span><input id="bn" maxlength="28" placeholder="We’ll suggest names if you skip it" value="' + esc(keep.name != null ? keep.name : B.name) + '"></label><label class="field"><span class="lab">Who is it for <i>(optional)</i></span><input id="bu" maxlength="80" placeholder="Neighbourhood regulars, busy parents" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label></div>' :
+        '<div class="opt"><label class="field"><span class="lab">Target users <i>(optional)</i></span><input id="bu" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="lab">Main problem <i>(optional)</i></span><input id="bp" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="lab2">Product type</div><div class="chips" id="types">' + TYPES.map(t => '<button type="button" class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
       $$('#types .tchip').forEach(b => b.onclick = () => { B.type = b.dataset.t; $$('#types .tchip').forEach(x => x.classList.toggle('on', x === b)); });
       $('#khint').textContent = (B.kind === 'auto' ? 'Looks like a ' + (k === 'brand' ? 'brand and website' : 'complex product') + '. ' : '') + KHINT[B.kind];
     };
     ta.oninput = () => { grow(); if (B.kind === 'auto') opts(); }; grow(); opts();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#go').click(); } };
     $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
-    $$('.eg a').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); });
-    $('#go').onclick = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; startExplore(); };
+    $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); });
+    const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; };
+    $('#bf').onsubmit = e => { e.preventDefault(); collect(); startExplore(true); };
+    $('#seeall').onclick = () => { collect(); startExplore(false); };
     const rs = $('#resume'); if (rs) rs.onclick = () => resume(saved);
   }
   function resume(saved) {
