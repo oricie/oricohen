@@ -40,7 +40,8 @@
     const t = $('#toast'); t.textContent = msg; t.classList.add('on');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
   }
-  function download(blob, name) {
+  async function download(blob, name) {
+    try { const dl = window.claude && await claude.use('downloads'); if (dl) { await dl.save({ filename: name, data: blob }); return; } } catch (e) { if (e && e.code === 'declined') return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
@@ -121,10 +122,21 @@
   }
   /* Claude-written directions, fetched from server.js when available. Cards without one use the built-in rules. */
   let dirs = [], dirsBusy = false, dirsOff = false;
+  const PROMPT = 'You are a senior brand strategist and copywriter. Invent 8 distinct brand directions for the business brief below. Return JSON: {"directions":[...]}. Each direction: name (1-3 words, original, never a real company; if the brief names the business reuse it exactly), head (website headline, max 9 words, specific, no clichés), sub (one sentence, write the brand name as {n}), eyebrow (2-4 words), cta ([primary,secondary], max 3 words each), nav (4 short items), feats (exactly 3 pairs [title, one sentence]), quote ([customer line, who]), stats (exactly 3 pairs [short value, label], plausible), mood (2-3 words from: luxury playful minimal bold dark warm calm professional rustic modern friendly), hue (0-360), glyph (one of: ' + MM.GLYPHS.join(' ') + '). Make them genuinely different in tone, name style, color and mood. Keep copy short and concrete.';
+  async function askClaude(signal) {
+    let sample = null;
+    try { sample = window.claude && await claude.use('sample'); } catch (e) { }
+    if (!sample) return null;
+    const used = dirs.map(d => d && d.name).filter(Boolean);
+    const j = await sample.json(PROMPT + '\n\nBrief: ' + briefInput.text + (briefInput.name ? '\nBusiness name (use exactly): ' + briefInput.name : '') + (used.length ? '\nDo not reuse these names: ' + used.join(', ') : ''), { signal, modelTier: 'quick', cache: false });
+    return j && Array.isArray(j.directions) && j.directions.length ? j.directions.slice(0, 8) : null;
+  }
   async function fetchDirs(wait) {
     if (dirsBusy || dirsOff) return; dirsBusy = true;
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), wait || 45000);
     try {
+      const viaClaude = await askClaude(ctl.signal);
+      if (viaClaude) { dirs = dirs.concat(viaClaude); clearTimeout(t); dirsBusy = false; return; }
       const r = await fetch('/api/brand', { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text: briefInput.text, name: briefInput.name, n: 8, exclude: dirs.map(d => d && d.name).filter(Boolean) }) });
       if (!r.ok) throw new Error(r.status);
@@ -232,11 +244,14 @@
     cards.unshift(c); layout();
     requestAnimationFrame(() => requestAnimationFrame(() => { c.el.classList.remove('drag'); c.el.style.transform = ''; }));
   }
-  function peek() {
-    if (!cards[0]) return;
-    const url = URL.createObjectURL(new Blob([MM.siteHTML(cards[0].v)], { type: 'text/html' }));
-    open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  function showSite(v) {
+    const o = document.createElement('div'); o.className = 'overlay top'; o.style.background = '#fff';
+    o.innerHTML = '<header class="ov-bar"><b style="font-family:var(--disp)">' + esc(v.name) + ' · full site</b><button class="ghost-btn">Close</button></header><iframe sandbox="allow-same-origin" style="display:block;width:100%;height:calc(100% - 61px);border:0"></iframe>';
+    $('iframe', o).srcdoc = MM.siteHTML(v);
+    $('button', o).onclick = () => o.remove();
+    document.body.appendChild(o);
   }
+  function peek() { if (cards[0]) showSite(cards[0].v); }
   $('#like').onclick = () => decide('like');
   $('#nope').onclick = () => decide('nope');
   $('#undo').onclick = undo;
@@ -281,7 +296,7 @@
       '<header class="ov-bar"><button class="ghost-btn" data-close>← Back</button><button class="ghost-btn" data-remove style="color:var(--nope)">Remove</button></header>' +
       '<div class="dt">' +
       '<div class="dt-hero"><div><h1>' + esc(v.name) + '</h1><p>' + esc(v.label) + ' · ' + esc(v.head) + '</p></div></div>' +
-      '<div class="dl"><button class="btn-main" data-kit>⬇ Download brand kit (.zip)</button><button class="btn-sec" data-site>Website .html</button><button class="btn-sec" data-logo>Logo .svg</button><button class="btn-sec" data-css>Colors &amp; fonts .css</button><button class="btn-sec" data-open>Open live site ↗</button></div>' +
+      '<div class="dl"><button class="btn-main" data-kit>⬇ Download brand kit (.zip)</button><button class="btn-sec" data-site>Website .html</button><button class="btn-sec" data-logo>Logo .svg</button><button class="btn-sec" data-css>Colors &amp; fonts .css</button><button class="btn-sec" data-open>View full site</button></div>' +
       '<h3>Website</h3><div class="big-frame"><div class="frame"></div></div>' +
       '<h3>Logo</h3><div class="tiles" id="dt-tiles"></div>' +
       '<h3>Colors <span style="text-transform:none;letter-spacing:0;font-weight:500">· tap to copy</span></h3><div class="swatches">' +
@@ -308,7 +323,7 @@
       else if (t.hasAttribute('data-site')) download(new Blob([MM.siteHTML(v)], { type: 'text/html' }), slug(v) + '-site.html');
       else if (t.hasAttribute('data-logo')) download(new Blob([await MM.logoSVG(v)], { type: 'image/svg+xml' }), slug(v) + '-logo.svg');
       else if (t.hasAttribute('data-css')) download(new Blob([MM.tokensCSS(v)], { type: 'text/css' }), slug(v) + '-brand.css');
-      else if (t.hasAttribute('data-open')) { const u = URL.createObjectURL(new Blob([MM.siteHTML(v)], { type: 'text/html' })); open(u, '_blank'); }
+      else if (t.hasAttribute('data-open')) showSite(v);
       else if (t.dataset.hex) { try { await navigator.clipboard.writeText(t.dataset.hex); } catch (x) { } toast('Copied ' + t.dataset.hex.toUpperCase()); }
     };
   }
