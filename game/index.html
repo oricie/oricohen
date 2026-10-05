@@ -250,8 +250,29 @@ renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
 const scene=new THREE.Scene();
-// night neon haze — deep indigo, layered with a low warm ground-haze band (see groundHaze below)
-scene.fog=new THREE.FogExp2(0x1c1732,0.00165);
+// Aerial perspective. Colour and density are driven by the time of day (updateTOD); the fog
+// chunks are extended so haze looking TOWARD the sun picks up its glow and haze looking away
+// stays cool — the single biggest cue that makes distance read as real air.
+scene.fog=new THREE.FogExp2(0xa6adbd,0.00092);
+const FOG_U={fogSunDir:{value:new THREE.Vector3(0,0.1,1)},fogSunCol:{value:new THREE.Color(0,0,0)}};
+// shared uniform objects injected into every material at compile (three clones ShaderLib
+// uniforms per material, so this is the only way one value reaches all of them live)
+function fogHook(sh){sh.uniforms.fogSunDir=FOG_U.fogSunDir;sh.uniforms.fogSunCol=FOG_U.fogSunCol;}
+THREE.Material.prototype.onBeforeCompile=fogHook;
+THREE.ShaderChunk.fog_pars_vertex='#ifdef USE_FOG\n varying float fogDepth; varying vec3 vFogView;\n#endif';
+THREE.ShaderChunk.fog_vertex='#ifdef USE_FOG\n fogDepth = - mvPosition.z; vFogView = mvPosition.xyz;\n#endif';
+THREE.ShaderChunk.fog_pars_fragment=[
+ '#ifdef USE_FOG',' uniform vec3 fogColor; varying float fogDepth; varying vec3 vFogView;',
+ ' uniform vec3 fogSunDir; uniform vec3 fogSunCol;',
+ ' #ifdef FOG_EXP2',' uniform float fogDensity;',' #else',' uniform float fogNear; uniform float fogFar;',' #endif','#endif'].join('\n');
+THREE.ShaderChunk.fog_fragment=[
+ '#ifdef USE_FOG',
+ ' #ifdef FOG_EXP2',' float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth );',
+ ' #else',' float fogFactor = smoothstep( fogNear, fogFar, fogDepth );',' #endif',
+ ' vec3 fogWDir = normalize( ( vec4( vFogView, 0.0 ) * viewMatrix ).xyz );',   // view -> world (rotation transpose)
+ ' float fogSun = pow( max( dot( fogWDir, fogSunDir ), 0.0 ), 6.0 );',
+ ' gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor + fogSunCol * fogSun, fogFactor );',
+ '#endif'].join('\n');
 // near raised from 0.1 and far cut from 4000 (biggest fixed scene radius is the sky sphere at 2000)
 // to compress the depth range and kill high-altitude z-fighting/shimmer; 0.5 still clears the closest
 // 3D cockpit dash geometry (~1.2 units from camera) so cockpit view (press C) is unaffected.
@@ -344,14 +365,15 @@ const compositeMat=new THREE.ShaderMaterial({
       vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+texture2D(tBloomWide,vUv).rgb*bloomWideStrength;
       vec3 c=s+bloom;
       float l=dot(c,vec3(0.299,0.587,0.114));
-      // night grade: teal into shadows, magenta/warm into highlights (filmic split-tone)
-      vec3 shadowTint=vec3(-0.018,0.018,0.05);
-      vec3 highTint=vec3(0.055,-0.012,0.035);
+      // near-neutral camera grade: a whisper of cool in the shadows and warm in the
+      // highlights, mild contrast, saturation left alone — realism lives in the light,
+      // not in a tint laid over it
+      vec3 shadowTint=vec3(-0.004,0.002,0.010);
+      vec3 highTint=vec3(0.012,0.004,-0.008);
       c+=shadowTint*(1.0-smoothstep(0.0,0.45,l));
       c+=highTint*smoothstep(0.5,1.0,l);
-      // filmic contrast + neon saturation punch
-      c=(c-0.5)*1.14+0.5;
-      c=mix(vec3(l),c,1.24);
+      c=(c-0.5)*1.05+0.5;
+      c=mix(vec3(l),c,1.02);
       // gentle vignette
       float vig=1.0-smoothstep(0.28,0.92,sqrt(r2));
       c*=mix(0.82,1.0,vig);
@@ -364,6 +386,9 @@ function renderPost(){
   // the active scene/camera pair — swapped to an interior room when the pilot goes inside on foot,
   // so interiors get the same bloom/tone pipeline as the city
   const _s=window.__RS||scene, _c=window.__RC||cam;
+  const _inside=!!window.__RS;
+  renderer.toneMappingExposure=_inside?1.2:(TOD.cur.exp||1.2);
+  if(_inside)FOG_U.fogSunCol.value.setRGB(0,0,0);   // rooms have their own fog; no sky glow in it
   renderer.setRenderTarget(sceneRT);renderer.render(_s,_c);
   postQuad.material=brightMat;brightMat.uniforms.tDiffuse.value=sceneRT.texture;
   renderer.setRenderTarget(brightRT);renderer.render(postScene,postCam);
@@ -397,132 +422,189 @@ function renderPost(){
   renderer.setRenderTarget(null);renderer.render(postScene,postCam);
 }
 
-// ---------- SKY: Shinjuku night gradient ----------
-const skyTex=(()=>{const cv=document.createElement('canvas');cv.width=512;cv.height=1024;
-const g=cv.getContext('2d');const gr=g.createLinearGradient(0,0,0,1024);
-gr.addColorStop(0,'#030309');gr.addColorStop(.26,'#0c0a28');gr.addColorStop(.48,'#1e1640');
-gr.addColorStop(.66,'#3c2258');gr.addColorStop(.80,'#7a3a68');gr.addColorStop(.90,'#c1567a');
-gr.addColorStop(.96,'#e3835f');gr.addColorStop(1,'#f0a468');
-g.fillStyle=gr;g.fillRect(0,0,512,1024);
-// stars — denser near zenith, fading toward horizon glow
-for(let i=0;i<700;i++){
-  const y=Math.pow(Math.random(),1.8)*600;
-  const x=Math.random()*512;
-  const s=Math.random();
-  g.fillStyle=`rgba(${220+Math.random()*35},${220+Math.random()*35},255,${0.25+s*0.6})`;
-  const sz=s<0.92?1:2;
-  g.fillRect(x,y,sz,sz);
+// ============================================================================
+// TIME OF DAY + PHYSICAL SKY
+// One rig drives the sky, the sun/moon key light, ambient, aerial-perspective
+// haze, exposure, building window light, rain, the moon and the reflection
+// environment. TOD.t: 0 = golden dusk (sun a few degrees up), ~0.45 = blue
+// hour, 1 = full night. The campaign walks it from dusk to night across the
+// five shops (todForStage); key T steps through it by hand.
+//
+// What makes a city read as real at this scale is not facade detail, it is
+// light and air: a sky with a real sun in it, haze that eats distance toward
+// the horizon colour, and neutral materials lit warm on one side and cool in
+// shadow. The palette below is built around that, not around a "look".
+// ============================================================================
+const TOD_KEYS=[
+  // golden dusk — Belt of Venus over a blue-grey earth-shadow band, low warm sun
+  {t:0.00, sunEl:10.0,  sunCol:0xffb782, sunI:2.25, moonI:0.00,
+   hemiSky:0xa9b3cc, hemiGnd:0x7a6654, hemiI:0.85, cityI:0.00,
+   zen:0x55638a, belt:0xd3a394, hor:0xa3adbf, solar:0xffcf96, glow:0xffb070, glowI:1.00,
+   cloudLit:0xffd8bc, cloudDark:0x8f8796, cloudCov:0.42,
+   fog:0xa6adbd, fogD:0.00092, exp:0.92, win:0.06, rain:0.00, moon:0.00, sunDisc:1.0},
+  // late dusk — sun on the horizon, sky going rose and violet, first lights
+  {t:0.25, sunEl:2.5,  sunCol:0xff9a62, sunI:1.25, moonI:0.00,
+   hemiSky:0x7d86a8, hemiGnd:0x5a4a40, hemiI:0.78, cityI:0.05,
+   zen:0x37466e, belt:0xb98384, hor:0x7f87a0, solar:0xffa86a, glow:0xff8a50, glowI:0.85,
+   cloudLit:0xf2a68c, cloudDark:0x5f5a6e, cloudCov:0.46,
+   fog:0x838aa0, fogD:0.00105, exp:1.00, win:0.18, rain:0.00, moon:0.15, sunDisc:0.7},
+  // blue hour — sun gone, deep blue overhead, city lit, residual glow in the west
+  {t:0.50, sunEl:-5.0, sunCol:0xff8a5a, sunI:0.00, moonI:0.10,
+   hemiSky:0x4a5878, hemiGnd:0x3f352e, hemiI:0.72, cityI:0.14,
+   zen:0x15203e, belt:0x404a6a, hor:0x55607a, solar:0xb8735a, glow:0xa05a40, glowI:0.45,
+   cloudLit:0x6d6478, cloudDark:0x2a2c3c, cloudCov:0.55,
+   fog:0x4c5468, fogD:0.00128, exp:1.08, win:0.40, rain:0.00, moon:0.55, sunDisc:0.0},
+  // night — low overcast lit from below by sodium and LED, light rain
+  {t:1.00, sunEl:-25,  sunCol:0xff8a5a, sunI:0.00, moonI:0.12,
+   hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
+   zen:0x07080c, belt:0x121318, hor:0x3a2f29, solar:0x3a2f29, glow:0x000000, glowI:0.00,
+   cloudLit:0x4a3a30, cloudDark:0x101116, cloudCov:0.85,
+   fog:0x221f1f, fogD:0.00160, exp:1.18, win:0.46, rain:1.00, moon:0.00, sunDisc:0.0},
+];
+const TOD_COLORS=new Set(['sunCol','hemiSky','hemiGnd','zen','belt','hor','solar','glow','cloudLit','cloudDark','fog']);
+const SUN_AZ=new THREE.Vector3(-0.45,0,0.89).normalize();   // west-south-west: behind the opening view
+const MOON_DIR=new THREE.Vector3(0.35,0.82,-0.45).normalize();
+const TOD={t:0,target:0,pinned:null,env:-1,
+  cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3()};
+const _ca=new THREE.Color(),_cb=new THREE.Color();
+function todSample(t){
+  t=THREE.MathUtils.clamp(t,0,1);
+  let i=0; while(i<TOD_KEYS.length-2&&t>TOD_KEYS[i+1].t)i++;
+  const A=TOD_KEYS[i],B=TOD_KEYS[i+1],f=THREE.MathUtils.smoothstep(t,A.t,B.t);
+  const o={};
+  for(const k in A){
+    if(k==='t')continue;
+    const a=A[k],b=B[k];
+    if(TOD_COLORS.has(k))o[k]=_ca.setHex(a).lerp(_cb.setHex(b),f).getHex();   // colours blend in RGB
+    else o[k]=a+(b-a)*f;
+  }
+  return o;
 }
-// faint horizontal atmospheric bands
-for(let i=0;i<5;i++){
-  const y=350+Math.random()*450;
-  const bg=g.createLinearGradient(0,y-20,0,y+20);
-  bg.addColorStop(0,'rgba(180,120,200,0)');bg.addColorStop(.5,'rgba(180,120,200,.05)');bg.addColorStop(1,'rgba(180,120,200,0)');
-  g.fillStyle=bg;g.fillRect(0,y-20,512,40);
-}
-// city glow at horizon — richer, wider light-pollution dome (warm core, cooler bleed above)
-const hg=g.createLinearGradient(0,760,0,1024);
-hg.addColorStop(0,'rgba(255,140,120,0)');hg.addColorStop(.55,'rgba(255,150,140,.16)');hg.addColorStop(1,'rgba(255,190,150,.4)');
-g.fillStyle=hg;g.fillRect(0,760,512,264);
-const hg2=g.createLinearGradient(0,880,0,1024);
-hg2.addColorStop(0,'rgba(255,90,150,0)');hg2.addColorStop(1,'rgba(255,120,150,.22)');
-g.fillStyle=hg2;g.fillRect(0,880,512,144);
-return new THREE.CanvasTexture(cv);})();
-const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,16,16),new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,fog:false}));
+
+// ---- the sky: analytic gradient + Mie glow + sun disc + an fbm cloud deck ----
+// Output is raw (no tone mapping) on purpose: scene fog is mixed in AFTER tone
+// mapping in three's material shaders, so the horizon colour here and the fog
+// colour live in the same space and distant geometry melts into the sky seam-free.
+const skyMat=new THREE.ShaderMaterial({
+  side:THREE.BackSide, depthWrite:false, fog:false,
+  uniforms:{
+    uZen:{value:new THREE.Color()}, uBelt:{value:new THREE.Color()}, uHor:{value:new THREE.Color()},
+    uSolar:{value:new THREE.Color()}, uGlow:{value:new THREE.Color()}, uGlowI:{value:1},
+    uSunDir:{value:new THREE.Vector3(0,0.1,1)}, uSunCol:{value:new THREE.Color()}, uSunDisc:{value:1},
+    uCloudLit:{value:new THREE.Color()}, uCloudDark:{value:new THREE.Color()}, uCloudCov:{value:0.4},
+    uTime:{value:0}
+  },
+  vertexShader:`varying vec3 vDir;
+    void main(){ vDir=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader:`
+    uniform vec3 uZen,uBelt,uHor,uSolar,uGlow,uSunDir,uSunCol,uCloudLit,uCloudDark;
+    uniform float uGlowI,uSunDisc,uCloudCov,uTime;
+    varying vec3 vDir;
+    float hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+      return mix(mix(hsh(i),hsh(i+vec2(1,0)),f.x),mix(hsh(i+vec2(0,1)),hsh(i+vec2(1,1)),f.x),f.y);}
+    float fbm(vec2 p){float s=0.0,a=0.5;for(int i=0;i<5;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s;}
+    void main(){
+      vec3 d=normalize(vDir);
+      float y=d.y, mu=dot(d,uSunDir);
+      float side=pow(clamp(mu*0.5+0.5,0.0,1.0),3.0);        // 0 anti-solar .. 1 toward the sun
+      float yb=max(y,0.0);
+      // horizon: blue-grey earth shadow opposite the sun, bright gold toward it
+      vec3 hor=mix(uHor,uSolar,side);
+      vec3 c=mix(hor,uBelt,smoothstep(0.0,0.17,yb));       // Belt of Venus
+      c=mix(c,uZen,smoothstep(0.10,0.80,yb));              // up into the zenith
+      // forward (Mie) scattering around the sun
+      float m=max(mu,0.0);
+      c+=uGlow*uGlowI*(pow(m,6.0)*0.30+pow(m,48.0)*0.55);
+      // the sun itself, slightly flattened near the horizon
+      c+=uSunCol*uSunDisc*3.0*smoothstep(0.99955,0.99985,mu);
+      // below the horizon: the haze itself
+      c=mix(c,hor*0.94,smoothstep(0.0,-0.06,y));
+      // cloud deck, projected onto a plane overhead; fades into the horizon haze
+      if(y>0.0){
+        vec2 uv=d.xz/(y+0.10)*0.55+vec2(uTime*0.0035,uTime*0.0012);
+        float n=fbm(uv*1.3);
+        float cov=smoothstep(0.62-uCloudCov*0.36,0.86,n);
+        float lit=fbm(uv*1.3+uSunDir.xz*0.09);            // offset tap ~ cheap self-shadowing
+        float l=clamp((n-lit)*3.2+0.5+side*0.35,0.0,1.0);
+        vec3 cc=mix(uCloudDark,uCloudLit,l);
+        c=mix(c,cc,cov*smoothstep(0.0,0.20,y)*0.92);
+      }
+      gl_FragColor=vec4(c,1.0);
+    }`
+});
+const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,32,24),skyMat);
+sky.renderOrder=-1;
 scene.add(sky);
-// moon — soft photoreal disc with a wide atmospheric corona (cheap stand-in for a moonlight "shaft")
+
+// moon: up for the blue hour, gone behind the cloud deck by full night
 const moonTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(240,244,255,1)');
-  gr.addColorStop(0.32,'rgba(220,228,255,.97)');
-  gr.addColorStop(0.6,'rgba(195,205,255,.55)');
-  gr.addColorStop(0.82,'rgba(180,190,240,.14)');
-  gr.addColorStop(1,'rgba(180,190,240,0)');
+  gr.addColorStop(0,'rgba(246,244,236,1)');gr.addColorStop(0.32,'rgba(232,230,222,.97)');
+  gr.addColorStop(0.6,'rgba(214,214,214,.5)');gr.addColorStop(0.82,'rgba(200,200,205,.12)');
+  gr.addColorStop(1,'rgba(200,200,205,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(160,170,210,.22)';
-  for(let i=0;i<6;i++){g.beginPath();g.arc(w*0.28+Math.random()*w*0.4,h*0.28+Math.random()*h*0.4,4+Math.random()*7,0,7);g.fill();}
+  g.fillStyle='rgba(150,150,160,.20)';
+  for(let i=0;i<6;i++){g.beginPath();g.arc(w*0.3+Math.random()*w*0.38,h*0.3+Math.random()*h*0.38,4+Math.random()*7,0,7);g.fill();}
 },128,128);
 const moonHaloTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(210,220,255,.22)');
-  gr.addColorStop(.4,'rgba(190,200,250,.10)');
-  gr.addColorStop(1,'rgba(190,200,250,0)');
+  gr.addColorStop(0,'rgba(220,222,230,.20)');gr.addColorStop(.4,'rgba(210,212,225,.08)');gr.addColorStop(1,'rgba(210,212,225,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },128,128);
 const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:moonHaloTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
-moonHalo.scale.set(620,620,1);
-moonHalo.position.set(-600,500,-1200);
-scene.add(moonHalo);
+moonHalo.scale.set(520,520,1);moonHalo.position.set(-600,500,-1200);scene.add(moonHalo);
 const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:moonTex,transparent:true,depthWrite:false,fog:false}));
-moonSprite.scale.set(175,175,1);
-moonSprite.position.set(-600,500,-1200);
-scene.add(moonSprite);
+moonSprite.scale.set(110,110,1);moonSprite.position.set(-600,500,-1200);scene.add(moonSprite);
 
-// distant skyline silhouette, warm/cool lit windows
-{const cv=document.createElement('canvas');cv.width=2048;cv.height=320;
-const g=cv.getContext('2d');
-let x=0;
-while(x<2048){
-  const bw=18+Math.random()*55,bh=60+Math.random()*220;
-  g.fillStyle='rgba(20,14,36,.96)';
-  g.fillRect(x,320-bh,bw,bh);
-  for(let i=0;i<bw*bh/130;i++){
-    g.fillStyle=Math.random()<.55?'rgba(255,190,140,.85)':(Math.random()<.7?'rgba(150,220,255,.8)':'rgba(255,120,220,.75)');
-    g.fillRect(x+2+Math.random()*(bw-4),320-bh+4+Math.random()*(bh-8),1.6,2.2);
-  }
-  if(Math.random()<.3){g.fillStyle='rgba(255,50,90,.9)';g.fillRect(x+bw/2,320-bh-5,2,2);}
-  x+=bw+Math.random()*12;
-}
-const t=new THREE.CanvasTexture(cv);
-const ring=new THREE.Mesh(new THREE.CylinderGeometry(1400,1400,430,48,1,true),
-  new THREE.MeshBasicMaterial({map:t,transparent:true,side:THREE.BackSide,fog:false}));
-ring.position.y=180;scene.add(ring);
-window.__ring=ring;}
+// distant skyline: a silhouette band and a separate lights band, so at dusk it
+// reads as hazy far city and at night as a glittering one — both tinted per TOD
+{const W2=2048,H2=320;
+ const sil=document.createElement('canvas');sil.width=W2;sil.height=H2;const gs=sil.getContext('2d');
+ const lit=document.createElement('canvas');lit.width=W2;lit.height=H2;const gl2=lit.getContext('2d');
+ let x=0;
+ while(x<W2){
+   const bw=18+Math.random()*55,bh=60+Math.random()*220;
+   gs.fillStyle='rgba(255,255,255,.96)';gs.fillRect(x,H2-bh,bw,bh);
+   for(let i=0;i<bw*bh/130;i++){
+     gl2.fillStyle=Math.random()<.6?'rgba(255,214,160,.9)':'rgba(214,230,255,.85)';
+     gl2.fillRect(x+2+Math.random()*(bw-4),H2-bh+4+Math.random()*(bh-8),1.6,2.2);
+   }
+   if(Math.random()<.3){gl2.fillStyle='rgba(255,40,40,.95)';gl2.fillRect(x+bw/2,H2-bh-5,2,2);}  // aviation light
+   x+=bw+Math.random()*12;
+ }
+ const geo=new THREE.CylinderGeometry(1400,1400,430,48,1,true);
+ const silMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sil),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false});
+ const litMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(lit),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false,blending:THREE.AdditiveBlending});
+ const ring=new THREE.Group();
+ const r1=new THREE.Mesh(geo,silMat),r2=new THREE.Mesh(geo,litMat);
+ ring.add(r1,r2);ring.position.y=180;scene.add(ring);
+ ring.userData={silMat,litMat};
+ window.__ring=ring;}
 
-// low magenta/cyan glow clouds (light pollution)
+// The old magenta/cyan "light pollution" blobs are gone — the sky's cloud deck
+// and the haze do that job physically now. Arrays kept: the loop still walks them.
 const clouds=[];
-function makeCloudTex(){
-  const cv=document.createElement('canvas');cv.width=256;cv.height=160;
-  const g=cv.getContext('2d');
-  const col=Math.random()<.5?'235,70,195':'70,190,255';
-  const cx=128+Math.random()*20-10,cy=90;
-  for(let i=0;i<9;i++){
-    const bx=cx+(Math.random()-.5)*160,by=cy+(Math.random()-.5)*50;
-    const br=30+Math.random()*40;
-    const gr=g.createRadialGradient(bx,by,2,bx,by,br);
-    gr.addColorStop(0,`rgba(${col},.4)`);gr.addColorStop(.55,`rgba(${col},.2)`);gr.addColorStop(1,`rgba(${col},0)`);
-    g.fillStyle=gr;g.fillRect(bx-br,by-br,br*2,br*2);
-  }
-  return new THREE.CanvasTexture(cv);
-}
-const cloudTexVariants=[makeCloudTex(),makeCloudTex(),makeCloudTex(),makeCloudTex()];
-for(let i=0;i<20;i++){
-  const ct=cloudTexVariants[Math.floor(Math.random()*cloudTexVariants.length)];
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(300+Math.random()*340,110+Math.random()*90),
-    new THREE.MeshBasicMaterial({map:ct,transparent:true,opacity:.3+Math.random()*.22,depthWrite:false,fog:false}));
-  m.position.set((Math.random()-.5)*2400,190+Math.random()*240,(Math.random()-.5)*2400);
-  scene.add(m);clouds.push(m);
-}
-// low ground-hugging haze band — layered aerial perspective so distant blocks recede into a warm/cool
-// light-pollution mist near roof height, giving the skyline real scale and depth (subject to scene fog too)
+
+// low haze band at the city edge: NEUTRAL soft masks, tinted to the haze colour
+// every frame, so the outer blocks dissolve into the same air as everything else
 const groundHaze=[];
 function makeGroundHazeTex(){
   const cv=document.createElement('canvas');cv.width=256;cv.height=140;
   const g=cv.getContext('2d');
-  const col=Math.random()<.6?'255,140,150':'180,150,235';
   for(let i=0;i<7;i++){
     const bx=128+(Math.random()-.5)*180,by=70+(Math.random()-.5)*44,br=42+Math.random()*54;
     const gr=g.createRadialGradient(bx,by,2,bx,by,br);
-    gr.addColorStop(0,`rgba(${col},.4)`);gr.addColorStop(.55,`rgba(${col},.2)`);gr.addColorStop(1,`rgba(${col},0)`);
+    gr.addColorStop(0,'rgba(255,255,255,.4)');gr.addColorStop(.55,'rgba(255,255,255,.2)');gr.addColorStop(1,'rgba(255,255,255,0)');
     g.fillStyle=gr;g.fillRect(bx-br,by-br,br*2,br*2);
   }
   return new THREE.CanvasTexture(cv);
 }
 const hazeTexVariants=[makeGroundHazeTex(),makeGroundHazeTex(),makeGroundHazeTex()];
-for(let i=0;i<28;i++){
+for(let i=0;i<20;i++){
   const ht=hazeTexVariants[Math.floor(Math.random()*hazeTexVariants.length)];
   const m=new THREE.Mesh(new THREE.PlaneGeometry(440+Math.random()*400,150+Math.random()*110),
-    new THREE.MeshBasicMaterial({map:ht,transparent:true,opacity:.16+Math.random()*.14,depthWrite:false}));
+    new THREE.MeshBasicMaterial({map:ht,transparent:true,opacity:.12+Math.random()*.10,depthWrite:false,fog:false}));
   m.position.set((Math.random()-.5)*2600,16+Math.random()*58,(Math.random()-.5)*2600);
   scene.add(m);groundHaze.push(m);
 }
@@ -531,7 +613,7 @@ for(let i=0;i<28;i++){
 // hemisphere: DESATURATED cool sky + a warm-neutral ground bounce. The old sky was a saturated
 // indigo that painted every grey surface blue and buried the concrete/asphalt texture — pulled
 // toward neutral so material albedo actually reads at night, with only a gentle cool cast.
-scene.add(new THREE.HemisphereLight(0x6f7098,0x38322e,0.6));
+const hemi=new THREE.HemisphereLight(0xa9b3cc,0x7a6654,0.85);scene.add(hemi);   // driven by updateTOD
 // KEY light: was a saturated purple (0x9a6aff) that tinted all lit surfaces violet and hid the
 // real textures — everything only showed its true grey during the neutral muzzle-flash. Swapped to
 // a desaturated cool MOONLIGHT so structures/streets are legible in normal play; the neon mood now
@@ -541,71 +623,118 @@ sun.position.set(180,300,-220);sun.castShadow=true;
 sun.shadow.mapSize.set(1024,1024); // PERF: halved from 2048 — quarter the shadow-pass texel work, fine for soft night shadows
 sun.shadow.camera.left=-260;sun.shadow.camera.right=260;
 sun.shadow.camera.top=260;sun.shadow.camera.bottom=-260;
-sun.shadow.camera.far=1000;sun.shadow.bias=-0.0004;
+sun.shadow.camera.far=1500;sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.6;   // low dusk sun: long throws
 scene.add(sun);
 const rim=new THREE.DirectionalLight(0xff5fa8,0.55);
 rim.position.set(-200,120,260);scene.add(rim);
 
-// ---------- IBL: procedural night-city environment map (PMREM, once at init) ----------
-// A DARK, neon-tinted equirect so PBR materials get believable ambient + reflections
-// without brightening the scene — the sky sphere/background stays untouched.
-(function(){
+// ---------- IBL: reflection environment, rebuilt from the time of day ----------
+// PBR materials take their ambient and their reflections from this. It used to be
+// a fixed violet night with stars painted in, which is half of why every surface
+// carried a purple cast. Now it is drawn from the same palette as the sky and
+// rebuilt in coarse steps as the light changes (PMREM is a few ms, not free).
+const _pmrem=new THREE.PMREMGenerator(renderer);
+_pmrem.compileEquirectangularShader();
+let _envRT=null;
+function buildEnv(s){
   const w=512,h=256;
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;
   const g=cv.getContext('2d');
-  // base: dark desaturated purple-indigo sky -> dark ground, matches scene mood
-  const gr=g.createLinearGradient(0,0,0,h);
-  gr.addColorStop(0,'#020207');
-  gr.addColorStop(0.30,'#0a0818');
-  gr.addColorStop(0.50,'#130f24');
-  gr.addColorStop(0.63,'#1c1330');
-  gr.addColorStop(0.72,'#241428');   // warm-ish horizon band starts
-  gr.addColorStop(0.80,'#160e18');   // ground / rooftop silhouette line
-  gr.addColorStop(1.0,'#08060a');    // nadir — dark wet street
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  // warm horizon light-pollution band (low-pollution glow, kept dim)
-  const hy=h*0.755;
-  const hg=g.createLinearGradient(0,hy-18,0,hy+18);
-  hg.addColorStop(0,'rgba(255,140,110,0)');
-  hg.addColorStop(0.5,'rgba(255,130,110,.16)');
-  hg.addColorStop(1,'rgba(255,130,110,0)');
-  g.fillStyle=hg;g.fillRect(0,hy-18,w,36);
-  // scattered neon glow bands around the horizon (billboards/signage bleed) — brightened so wet
-  // surfaces have vivid colour to mirror (this env map IS what the wet road/puddles reflect)
-  const neon=['255,60,190','70,200,255','255,200,90','190,80,255','255,90,90','80,255,180'];
-  for(let i=0;i<64;i++){
-    const x=Math.random()*w,y=hy-30+Math.random()*56;
-    const r=3+Math.random()*8;
-    const col=neon[Math.floor(Math.random()*neon.length)];
-    const rg=g.createRadialGradient(x,y,0,x,y,r);
-    rg.addColorStop(0,`rgba(${col},.6)`);rg.addColorStop(1,`rgba(${col},0)`);
-    g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);
+  const hex=n=>'#'+n.toString(16).padStart(6,'0');
+  const night=THREE.MathUtils.clamp((TOD.t-0.35)/0.65,0,1);
+  // sky half: zenith -> belt -> horizon
+  const gr=g.createLinearGradient(0,0,0,h*0.5);
+  gr.addColorStop(0,hex(s.zen));gr.addColorStop(0.72,hex(s.belt));gr.addColorStop(1,hex(s.hor));
+  g.fillStyle=gr;g.fillRect(0,0,w,h*0.5);
+  // ground half: the city seen from above — warm grey in daylight, near-black with sodium at night
+  const gg=g.createLinearGradient(0,h*0.5,0,h);
+  _ca.setHex(s.hor).multiplyScalar(0.55);
+  gg.addColorStop(0,'#'+_ca.getHexString());
+  _ca.setHex(s.hemiGnd).multiplyScalar(0.6);
+  gg.addColorStop(1,'#'+_ca.getHexString());
+  g.fillStyle=gg;g.fillRect(0,h*0.5,w,h*0.5);
+  // the sun's glow on the horizon at its azimuth (equirect: u=atan(z,x)/2pi+.5)
+  if(s.glowI>0.01){
+    const su=(Math.atan2(SUN_AZ.z,SUN_AZ.x)/(Math.PI*2)+0.5)*w;
+    const sv=h*0.5-THREE.MathUtils.clamp(s.sunEl,-4,30)/90*h*0.5;
+    _ca.setHex(s.glow);
+    const rg=g.createRadialGradient(su,sv,0,su,sv,w*0.22);
+    rg.addColorStop(0,`rgba(${_ca.r*255|0},${_ca.g*255|0},${_ca.b*255|0},${0.9*s.glowI})`);
+    rg.addColorStop(1,`rgba(${_ca.r*255|0},${_ca.g*255|0},${_ca.b*255|0},0)`);
+    g.fillStyle=rg;g.fillRect(0,0,w,h);
   }
-  // brighter neon smears — the bits that punch through strongest as reflections on wet asphalt
-  for(let i=0;i<16;i++){
-    const x=Math.random()*w,y=hy-16+Math.random()*34;
-    const col=neon[Math.floor(Math.random()*neon.length)];
-    const rg=g.createRadialGradient(x,y,0,x,y,12);
-    rg.addColorStop(0,`rgba(${col},1)`);rg.addColorStop(0.35,`rgba(${col},.5)`);rg.addColorStop(1,`rgba(${col},0)`);
-    g.fillStyle=rg;g.fillRect(x-12,y-12,24,24);
+  // signage on the horizon: this is what wet streets mirror at night, so it
+  // comes up with the dark rather than being painted into a dusk sky
+  if(night>0.01){
+    const neon=['255,70,150','90,200,255','255,205,110','255,90,80','120,255,190'];
+    const hy=h*0.5;
+    for(let i=0;i<70;i++){
+      const x=Math.random()*w,y=hy-18+Math.random()*40,r=3+Math.random()*9;
+      const col=neon[Math.floor(Math.random()*neon.length)];
+      const rg=g.createRadialGradient(x,y,0,x,y,r);
+      rg.addColorStop(0,`rgba(${col},${0.65*night})`);rg.addColorStop(1,`rgba(${col},0)`);
+      g.fillStyle=rg;g.fillRect(x-r,y-r,r*2,r*2);
+    }
   }
-  // faint stars near zenith
-  for(let i=0;i<160;i++){
-    const y=Math.pow(Math.random(),2.2)*h*0.4;
-    const x=Math.random()*w;
-    g.fillStyle=`rgba(210,215,255,${0.1+Math.random()*0.22})`;
-    g.fillRect(x,y,1,1);
-  }
-  const envTex=new THREE.CanvasTexture(cv);
-  envTex.mapping=THREE.EquirectangularReflectionMapping;
-  envTex.encoding=THREE.sRGBEncoding;
-  const pmremGen=new THREE.PMREMGenerator(renderer);
-  pmremGen.compileEquirectangularShader();
-  const envRT=pmremGen.fromEquirectangular(envTex);
-  scene.environment=envRT.texture; // ambient IBL + reflections; scene.background left alone
-  envTex.dispose();
-  pmremGen.dispose();
-})();
+  const t=new THREE.CanvasTexture(cv);
+  t.mapping=THREE.EquirectangularReflectionMapping;
+  t.encoding=THREE.sRGBEncoding;
+  const rt=_pmrem.fromEquirectangular(t);
+  t.dispose();
+  scene.environment=rt.texture;
+  if(_envRT)_envRT.dispose();
+  _envRT=rt;
+}
+
+// campaign pacing: dusk at the first shop, full night for the last run home
+const TOD_STAGES=[0.00,0.24,0.48,0.74,1.00];
+function todForStage(st){ return missionDone?1:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
+// manual override: key T steps through the day, ?tod=0..1 pins it
+const TOD_PIN_STEPS=[0,0.25,0.5,1];
+{const q=new URLSearchParams(location.search).get('tod'); if(q!==null&&!isNaN(+q))TOD.pinned=THREE.MathUtils.clamp(+q,0,1);}
+addEventListener('keydown',e=>{
+  if(e.code!=='KeyT'||interiorMode)return;
+  const cur=TOD.pinned===null?TOD.t:TOD.pinned;
+  let i=TOD_PIN_STEPS.findIndex(v=>v>cur+0.01); if(i<0)i=0;
+  TOD.pinned=TOD_PIN_STEPS[i];
+  if(typeof flashMsg==='function')flashMsg(['GOLDEN DUSK','SUNSET','BLUE HOUR','NIGHT'][i],UI.ui);
+});
+
+function updateTOD(dt,now){
+  const goal=TOD.pinned!==null?TOD.pinned:TOD.target;
+  TOD.t+=(goal-TOD.t)*Math.min(1,dt*0.12);              // night falls over ~10-20s, not in a cut
+  if(Math.abs(goal-TOD.t)<0.0008)TOD.t=goal;
+  const s=todSample(TOD.t);TOD.cur=s;
+  // sun position from elevation; the key light hands over from sun to moon
+  const el=THREE.MathUtils.degToRad(s.sunEl);
+  TOD.sunDir.copy(SUN_AZ).multiplyScalar(Math.cos(el));TOD.sunDir.y=Math.sin(el);TOD.sunDir.normalize();
+  const mf=1-THREE.MathUtils.smoothstep(s.sunEl,-3.0,1.5);   // 0 = sun is the key, 1 = moon is
+  TOD.lightDir.copy(TOD.sunDir);if(TOD.lightDir.y<0.07)TOD.lightDir.y=0.07;TOD.lightDir.normalize();
+  TOD.lightDir.lerp(MOON_DIR,mf).normalize();
+  sun.color.setHex(s.sunCol).lerp(_ca.setHex(0x9aa8c4),mf);
+  sun.intensity=s.sunI+s.moonI;
+  hemi.color.setHex(s.hemiSky);hemi.groundColor.setHex(s.hemiGnd);hemi.intensity=s.hemiI;
+  rim.color.setHex(0xff9a5c);rim.intensity=s.cityI;          // sodium/LED bounce off the low cloud
+  scene.fog.color.setHex(s.fog);scene.fog.density=s.fogD;
+  renderer.toneMappingExposure=s.exp;
+  FOG_U.fogSunDir.value.copy(TOD.sunDir);
+  FOG_U.fogSunCol.value.setHex(s.glow).multiplyScalar(s.glowI*0.5);
+  const u=skyMat.uniforms;
+  u.uZen.value.setHex(s.zen);u.uBelt.value.setHex(s.belt);u.uHor.value.setHex(s.hor);
+  u.uSolar.value.setHex(s.solar);u.uGlow.value.setHex(s.glow);u.uGlowI.value=s.glowI;
+  u.uSunDir.value.copy(TOD.sunDir);u.uSunCol.value.setHex(s.sunCol);u.uSunDisc.value=s.sunDisc;
+  u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;
+  u.uTime.value=now*0.001;
+  moonSprite.material.opacity=moonHalo.material.opacity=s.moon;
+  moonSprite.visible=moonHalo.visible=s.moon>0.01;
+  const R=window.__ring.userData;
+  R.silMat.color.setHex(s.fog).multiplyScalar(0.86-0.18*s.win);R.silMat.opacity=0.32+0.6*s.win;R.litMat.opacity=s.win;
+  groundHaze.forEach(gh=>gh.material.color.setHex(s.fog));
+  if(window.__bldgMats)window.__bldgMats.forEach(b=>{if(b.mat.emissiveMap)b.mat.emissiveIntensity=s.win*(b.winGain||1);});
+  if(typeof rain!=='undefined'){rain.visible=s.rain>0.02;rain.material.opacity=0.14*s.rain;}
+  const step=Math.round(TOD.t*10);
+  if(step!==TOD.env){TOD.env=step;buildEnv(s);}
+}
 
 // ---------- AUDIO ----------
 let AC=null;
@@ -908,131 +1037,126 @@ function normalMapFromHeight(drawHeight,w,h,strength){
   const t=new THREE.CanvasTexture(out);t.anisotropy=renderer.capabilities.getMaxAnisotropy();
   t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
 }
-function facadeTex(base,opts){return tex((g,w,h)=>{
-  const cols=(opts&&opts.cols)||10,rows=(opts&&opts.rows)||16;
-  if(opts&&opts.concrete&&window.WALL_IMG){
-    // REAL poured-concrete facade (form-tie holes + panel seams), darkened and cooled into the
-    // night grade; lit windows still draw on top so the grime shows in the spandrels between them.
-    g.drawImage(window.WALL_IMG,0,0,window.WALL_IMG.width,window.WALL_IMG.height,0,0,w,h);
-    g.fillStyle='rgba(12,11,20,0.62)';g.fillRect(0,0,w,h);
-    g.fillStyle='rgba(70,60,95,0.10)';g.fillRect(0,0,w,h);
-  }else{
-    g.fillStyle=base;g.fillRect(0,0,w,h);
-  }
-  for(let i=0;i<2200;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
-  const cw=w/cols,ch=h/rows;
-  // realistic per-floor lighting: tiers span fully-dark -> mostly-dark -> mixed -> busy -> blazing
-  // so floors read distinctly different, not a uniform grid. ROUND-4: pushed further — extra
-  // fully-dark AND near-total-blaze entries so both extremes show up more often, not just the mid
-  // tiers, per "more fully-dark vs blazing floors" feedback.
-  const tiers=[0,0,0.1,0.32,0.5,0.65,0.82,0.95,1.0];
-  const floorLit=[];
-  for(let y=0;y<rows;y++)floorLit.push(tiers[Math.floor(Math.random()*tiers.length)]);
-  for(let y=0;y<rows;y++){
-    g.fillStyle='rgba(255,220,255,.06)';g.fillRect(0,y*ch,w,2);
-    g.fillStyle='rgba(0,0,0,.38)';g.fillRect(0,y*ch+2,w,3);
-    let run=Math.random()<0.5; // lit windows cluster in runs
-    for(let x=0;x<cols;x++){
-      const px=x*cw+cw*0.16,py=y*ch+ch*0.22,ww=cw*0.68,wh=ch*0.56;
-      g.fillStyle='rgba(0,0,0,.5)';g.fillRect(px-2,py-2,ww+4,wh+4);
-      if(Math.random()<0.25)run=!run;
-      const lit=run&&Math.random()<floorLit[y]*2.2;
-      const grad=g.createLinearGradient(px,py,px,py+wh);
-      if(lit){
-        // per-window brightness jitter on top of the warm/cool/pink/blazing-white families
-        const jitter=0.72+Math.random()*0.55;
-        const mul=(c)=>Math.max(0,Math.min(255,Math.round(c*jitter)));
-        // ROUND-4: broadened the warm/cool palette families for more MATERIAL/brightness variety
-        // window-to-window (added office-green fluorescent + amber accent on top of the original
-        // tungsten/cool/pink/blazing set)
-        const r=Math.random();
-        let c0,c1;
-        if(r<0.42){c0=[255,226,166];c1=[232,169,92];}        // warm tungsten
-        else if(r<0.64){c0=[207,234,255];c1=[141,184,216];}  // cool fluorescent
-        else if(r<0.76){c0=[255,184,230];c1=[216,136,192];}  // pink/neon spill
-        else if(r<0.87){c0=[214,255,214];c1=[142,196,150];}  // office-green fluorescent
-        else if(r<0.95){c0=[255,196,120];c1=[224,120,60];}   // amber/orange accent lamp
-        else{c0=[255,250,236];c1=[244,236,208];}             // rare blazing near-white
-        grad.addColorStop(0,`rgb(${mul(c0[0])},${mul(c0[1])},${mul(c0[2])})`);
-        grad.addColorStop(1,`rgb(${mul(c1[0])},${mul(c1[1])},${mul(c1[2])})`);
-      }else{
-        grad.addColorStop(0,'#241c34');grad.addColorStop(1,'#120e1e');
-      }
-      g.fillStyle=grad;g.fillRect(px,py,ww,wh);
-      if(lit&&Math.random()<0.4){
-        // interior hint: darker vertical bar (curtain/divider)
-        g.fillStyle='rgba(20,15,25,.4)';
-        g.fillRect(px+ww*(0.2+Math.random()*0.5),py,ww*0.14,wh);
-      }
-      if(lit&&Math.random()<0.36){
-        // ROUND-4: pushed interior-scene variance further (chance up from 0.24, plus a 4th scene
-        // kind) — a person, furniture, a TV glow, or a furnished-room hint (shelving + a hanging
-        // pendant lamp) against the warm glow, so more lit windows read as "someone's inside".
-        const kind=Math.random();
-        g.fillStyle='rgba(15,12,18,.6)';
-        if(kind<0.32){
-          // person silhouette standing near the glass
-          const sx=px+ww*(0.22+Math.random()*0.56),sy=py+wh*0.98;
-          const sh=wh*(0.5+Math.random()*0.32),sw2=Math.max(1.4,sh*0.32);
-          g.beginPath();g.arc(sx,sy-sh*0.86,sw2*0.42,0,7);g.fill();
-          g.beginPath();g.moveTo(sx-sw2*0.5,sy);g.lineTo(sx-sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.35,sy-sh*0.68);g.lineTo(sx+sw2*0.5,sy);g.closePath();g.fill();
-        }else if(kind<0.58){
-          // low furniture silhouette (sofa/table) with a warm lamp accent beside it
-          const fx=px+ww*0.12,fy=py+wh*0.6,fw=ww*0.62,fh=Math.max(1.2,wh*0.32);
-          g.fillRect(fx,fy,fw,fh);
-          if(Math.random()<0.55){
-            g.fillStyle='rgba(255,220,160,.55)';
-            g.beginPath();g.arc(fx+fw*0.86,fy-wh*0.05,Math.max(1,ww*0.055),0,7);g.fill();
-          }
-        }else if(kind<0.8){
-          // flicker of a TV/monitor glow mid-room — cool rectangle patch reads as a screen
-          g.fillStyle='rgba(140,200,255,.32)';
-          g.fillRect(px+ww*0.16,py+wh*0.32,ww*0.5,wh*0.26);
-        }else{
-          // furnished-room hint: a shelving unit silhouette plus a warm hanging pendant lamp with
-          // a thin cord, so the room reads lived-in rather than just an empty lit box
-          const fx=px+ww*0.14,fy=py+wh*0.18,fw=ww*0.2,fh=wh*0.62;
-          g.fillRect(fx,fy,fw,fh);
-          for(let sh2=0;sh2<3;sh2++)g.fillRect(fx,fy+fh*(0.2+sh2*0.28),fw,1.2);
-          const lx=px+ww*(0.55+Math.random()*0.3);
-          g.fillStyle='rgba(20,16,14,.5)';g.fillRect(lx,py,1,wh*0.22);
-          g.fillStyle='rgba(255,214,150,.6)';g.beginPath();g.arc(lx,py+wh*0.26,Math.max(1.2,ww*0.06),0,7);g.fill();
-        }
-      }
-      g.fillStyle='rgba(255,190,255,.08)';
-      g.beginPath();g.moveTo(px,py+wh);g.lineTo(px+ww*.35,py);g.lineTo(px+ww*.55,py);g.lineTo(px+ww*.2,py+wh);g.fill();
-      if(Math.random()<.4){
-        const dg=g.createLinearGradient(0,py+wh,0,py+wh+ch*.4);
-        dg.addColorStop(0,'rgba(10,8,16,.35)');dg.addColorStop(1,'rgba(10,8,16,0)');
-        g.fillStyle=dg;g.fillRect(px+ww*.1,py+wh,ww*.8,ch*.4);
-      }
+// ============================================================================
+// FACADES: albedo + lit-window emissive, generated as matched pairs
+// By day a window is dark glass reflecting the sky; at night it is a light
+// source. Baking lit windows into the albedo made them look painted on under a
+// real sun, so every facade now produces two maps from ONE layout: `map` (wall,
+// frames, dark glass) and `lit` (black, except the windows that are on). The
+// time-of-day rig dials the lit map's emissiveIntensity from ~0 at dusk to 1 at
+// night. Window rectangles keep the exact grid the facade normal maps were
+// built for, so bevels still line up.
+// ============================================================================
+// what Tokyo actually burns at night: mostly cool office LED and warm homes
+const WIN_FAMS=[
+  {p:0.36,a:[236,244,255],b:[184,202,226],office:true},  // office LED, 5000K
+  {p:0.34,a:[255,224,172],b:[226,170,108]},              // residential tungsten-warm
+  {p:0.12,a:[226,252,228],b:[158,204,170],office:true},  // old fluorescent, green cast
+  {p:0.10,a:[255,204,138],b:[222,146,80]},               // amber / paper lamp
+  {p:0.08,a:[255,252,242],b:[242,236,216]},              // blazing
+];
+function pickWinFam(){let r=Math.random();for(const f of WIN_FAMS){if((r-=f.p)<=0)return f;}return WIN_FAMS[0];}
+function _winGlass(g,px,py,ww,wh){
+  // neutral glass: the top catches sky, the bottom falls dark — no colour cast of its own
+  const gr=g.createLinearGradient(px,py,px,py+wh);
+  gr.addColorStop(0,'#66707a');gr.addColorStop(0.42,'#323a42');gr.addColorStop(1,'#1b1f24');
+  g.fillStyle=gr;g.fillRect(px,py,ww,wh);
+  g.fillStyle='rgba(255,255,255,.05)';                       // faint diagonal reflection
+  g.beginPath();g.moveTo(px,py+wh);g.lineTo(px+ww*.32,py);g.lineTo(px+ww*.48,py);g.lineTo(px+ww*.16,py+wh);g.fill();
+}
+function _winLit(gl,px,py,ww,wh,fam){
+  const j=0.70+Math.random()*0.42, m=c=>Math.max(0,Math.min(255,Math.round(c*j)));
+  const gr=gl.createLinearGradient(px,py,px,py+wh);
+  gr.addColorStop(0,`rgb(${m(fam.a[0])},${m(fam.a[1])},${m(fam.a[2])})`);
+  gr.addColorStop(1,`rgb(${m(fam.b[0])},${m(fam.b[1])},${m(fam.b[2])})`);
+  gl.fillStyle=gr;gl.fillRect(px,py,ww,wh);
+  // what's inside cuts the light: blinds in offices, people and furniture in homes
+  gl.fillStyle='rgba(0,0,0,.55)';
+  if(fam.office&&Math.random()<0.45){
+    const n=4+Math.floor(Math.random()*4),dn=Math.random()*0.7;
+    for(let i=0;i<n;i++)gl.fillRect(px,py+wh*(i/n),ww,Math.max(0.8,wh/n*0.35));
+    if(dn>0.35)gl.fillRect(px,py,ww,wh*dn*0.6);               // blind partly lowered
+  }else if(Math.random()<0.4){
+    const k=Math.random();
+    if(k<0.4){                                                  // a person near the glass
+      const sx=px+ww*(0.25+Math.random()*0.5),sy=py+wh,sh=wh*(0.5+Math.random()*0.3),sw=Math.max(1.3,sh*0.32);
+      gl.beginPath();gl.arc(sx,sy-sh*0.86,sw*0.42,0,7);gl.fill();
+      gl.beginPath();gl.moveTo(sx-sw*0.5,sy);gl.lineTo(sx-sw*0.35,sy-sh*0.68);gl.lineTo(sx+sw*0.35,sy-sh*0.68);gl.lineTo(sx+sw*0.5,sy);gl.closePath();gl.fill();
+    }else if(k<0.75){                                           // curtain half drawn
+      gl.fillRect(px+(Math.random()<.5?0:ww*0.5),py,ww*0.5,wh);
+    }else{                                                      // furniture line
+      gl.fillRect(px+ww*0.1,py+wh*0.62,ww*0.6,Math.max(1.2,wh*0.3));
     }
   }
-  let gr=g.createLinearGradient(0,h,0,h*0.7);
-  gr.addColorStop(0,'rgba(6,4,12,.6)');gr.addColorStop(1,'rgba(6,4,12,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  gr=g.createLinearGradient(0,0,0,h*0.12);
-  gr.addColorStop(0,'rgba(180,130,255,.14)');gr.addColorStop(1,'rgba(180,130,255,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-},512,512,true);}
-function glassTex(){return tex((g,w,h)=>{
-  const gr=g.createLinearGradient(0,0,w*.3,h);
-  gr.addColorStop(0,'#7a6aa8');gr.addColorStop(.3,'#5a4a8a');gr.addColorStop(.6,'#302858');gr.addColorStop(1,'#1c1836');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.strokeStyle='rgba(6,4,16,.6)';
-  for(let x=0;x<=12;x++){g.beginPath();g.moveTo(x*w/12,0);g.lineTo(x*w/12,h);g.stroke();}
-  for(let y=0;y<=22;y++){g.lineWidth=y%4===0?2.5:1;g.beginPath();g.moveTo(0,y*h/22);g.lineTo(w,y*h/22);g.stroke();}
-  g.lineWidth=1;
-  for(let i=0;i<45;i++){
-    g.fillStyle=Math.random()<.5?'rgba(255,225,160,.75)':'rgba(150,220,255,.6)';
-    g.fillRect(Math.floor(Math.random()*12)*w/12+2,Math.floor(Math.random()*22)*h/22+2,w/12-4,h/22-4);
-  }
-  g.fillStyle='rgba(230,190,255,.2)';
-  g.beginPath();g.moveTo(0,h);g.lineTo(w*.45,0);g.lineTo(w*.68,0);g.lineTo(w*.23,h);g.fill();
-},512,512,true);}
+}
+function _pairTex(w,h,draw){
+  const a=document.createElement('canvas');a.width=w;a.height=h;
+  const l=document.createElement('canvas');l.width=w;l.height=h;
+  const gl=l.getContext('2d');gl.fillStyle='#000';gl.fillRect(0,0,w,h);
+  draw(a.getContext('2d'),gl,w,h);
+  const mk=c=>{const t=new THREE.CanvasTexture(c);t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;};
+  return {map:mk(a),lit:mk(l)};
+}
+// per-floor occupancy: some floors dark, some blazing — a city at 9pm, not a checkerboard
+const FLOOR_TIERS=[0,0,0.08,0.18,0.3,0.42,0.55,0.72];
+function facadeTexPair(base,opts){
+  const cols=(opts&&opts.cols)||10,rows=(opts&&opts.rows)||16;
+  return _pairTex(512,512,(g,gl,w,h)=>{
+    if(opts&&opts.concrete&&window.WALL_IMG){
+      g.drawImage(window.WALL_IMG,0,0,window.WALL_IMG.width,window.WALL_IMG.height,0,0,w,h);
+      g.fillStyle='rgba(0,0,0,0.30)';g.fillRect(0,0,w,h);       // neutral: no tint of its own
+    }else{g.fillStyle=base;g.fillRect(0,0,w,h);}
+    for(let i=0;i<2400;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.07})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
+    const cw=w/cols,ch=h/rows;
+    for(let y=0;y<rows;y++){
+      const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
+      g.fillStyle='rgba(255,255,255,.07)';g.fillRect(0,y*ch,w,2);   // slab edge catching light
+      g.fillStyle='rgba(0,0,0,.26)';g.fillRect(0,y*ch+2,w,3);
+      let run=Math.random()<0.5;
+      for(let x=0;x<cols;x++){
+        const px=x*cw+cw*0.16,py=y*ch+ch*0.22,ww=cw*0.68,wh=ch*0.56;
+        g.fillStyle='rgba(0,0,0,.45)';g.fillRect(px-2,py-2,ww+4,wh+4);   // frame / reveal
+        _winGlass(g,px,py,ww,wh);
+        if(Math.random()<0.25)run=!run;
+        if(run&&Math.random()<occ*2.0)_winLit(gl,px,py,ww,wh,pickWinFam());
+        if(Math.random()<.45){                                   // rain staining off the sill
+          const dg=g.createLinearGradient(0,py+wh,0,py+wh+ch*.5);
+          dg.addColorStop(0,'rgba(0,0,0,.22)');dg.addColorStop(1,'rgba(0,0,0,0)');
+          g.fillStyle=dg;g.fillRect(px+ww*(.1+Math.random()*.3),py+wh,ww*(.2+Math.random()*.4),ch*.5);
+        }
+      }
+    }
+    // (no bottom-of-tile grime here: this texture tiles vertically up the tower, so a
+    //  gradient at its foot repeats as a dark band every few floors)
+  });
+}
+function facadeTex(base,opts){return facadeTexPair(base,opts).map;}   // albedo-only callers
+
+// curtain-wall glass towers: mullion grid, spandrel bands, a sky-gradient sheen
+function glassTexPair(){
+  return _pairTex(512,512,(g,gl,w,h)=>{
+    const gr=g.createLinearGradient(0,0,w*.25,h);
+    gr.addColorStop(0,'#7c8792');gr.addColorStop(.35,'#4a545e');gr.addColorStop(.7,'#2c333a');gr.addColorStop(1,'#1d2227');
+    g.fillStyle=gr;g.fillRect(0,0,w,h);
+    const C=12,R=22,cw=w/C,ch=h/R;
+    for(let y=0;y<R;y++){
+      if(y%4===3){g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,y*ch+ch*0.55,w,ch*0.45);}  // slab spandrel
+      const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
+      for(let x=0;x<C;x++)if(Math.random()<occ*1.4)_winLit(gl,x*cw+2,y*ch+2,cw-4,ch-4,pickWinFam());
+    }
+    g.strokeStyle='rgba(12,14,16,.75)';
+    for(let x=0;x<=C;x++){g.lineWidth=x%3===0?2.5:1.2;g.beginPath();g.moveTo(x*cw,0);g.lineTo(x*cw,h);g.stroke();}
+    for(let y=0;y<=R;y++){g.lineWidth=1.2;g.beginPath();g.moveTo(0,y*ch);g.lineTo(w,y*ch);g.stroke();}
+    g.lineWidth=1;
+    g.fillStyle='rgba(255,255,255,.06)';
+    g.beginPath();g.moveTo(0,h);g.lineTo(w*.45,0);g.lineTo(w*.62,0);g.lineTo(w*.17,h);g.fill();
+  });
+}
+function glassTex(){return glassTexPair().map;}
+
 const gravelTex=tex((g,w,h)=>{
-  g.fillStyle='#332c3c';g.fillRect(0,0,w,h);
-  for(let i=0;i<4000;i++){const v=Math.random()*36;g.fillStyle=`rgba(${55+v},${48+v},${60+v},.8)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  g.fillStyle='#4a4744';g.fillRect(0,0,w,h);
+  for(let i=0;i<4000;i++){const v=Math.random()*36;g.fillStyle=`rgba(${70+v},${67+v},${63+v},.8)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
 },256,256);
 // ---------- TOKYO STREET NETWORK ----------
 // Hierarchical grid: wide avenues, side streets, back alleys, irregular blocks,
@@ -1922,6 +2046,7 @@ function makeOceanMat({color=0x0c2a44,amp=1.0,metalness=0.05,roughness=0.12,emis
   const m=new THREE.MeshStandardMaterial({color,metalness,roughness,emissive,emissiveIntensity});
   const uni={uTime:{value:Math.random()*40},uAmp:{value:amp}};
   m.onBeforeCompile=(sh)=>{
+    fogHook(sh);
     sh.uniforms.uTime=uni.uTime; sh.uniforms.uAmp=uni.uAmp;
     sh.vertexShader=WAVE_GLSL+'\n'+sh.vertexShader
       .replace('#include <beginnormal_vertex>','vec3 objectNormal = waveNormal(position.xy);')
@@ -2346,7 +2471,7 @@ const sfInnerXf=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>[]);
 const parapetXf=[]; // PERF: every building's roof parapet, batched into one InstancedMesh
 const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, batched + shared material
 const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
-const warnGeo=new THREE.SphereGeometry(1,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff3366});
+const warnGeo=new THREE.SphereGeometry(0.42,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff1a10});   // ICAO red, lamp-sized
 
 // generic original "idol" billboard (NOT a copy of any copyrighted character)
 function idolPosterTex(){return tex((g,w,h)=>{
@@ -2511,21 +2636,23 @@ function makeFacadeHeightCanvas(cols,rows){
 const facadeGridPresets=[{cols:5,rows:7},{cols:7,rows:10},{cols:10,rows:16},{cols:13,rows:20},{cols:16,rows:26}];
 const facadeNormalMaps=facadeGridPresets.map(p=>heightToNormal(makeFacadeHeightCanvas(p.cols,p.rows),2.2));
 const facadeNormalMap=facadeNormalMaps[1]; // kept for any external reference; standard-grid map
-const facadeBaseColors=['#463a54','#4e4256','#3a3448','#524058','#3c3a4a','#4a3d3d','#40465a','#523d4a','#463f36','#3a4442'];
+// real Tokyo facade stock: beige and grey tile, raw and painted concrete, white
+// panel, dark granite, brown brick — the colour comes from the material, not a tint
+const facadeBaseColors=['#b9b1a3','#9c9a95','#c8c3b8','#7d7a75','#a8998a','#5e5b58','#d2cdc2','#8f8578','#6e6a66','#b0a898'];
 // each entry pairs a texture with its own material feel (roughness/metalness/env) so FACADE
 // MATERIAL varies building-to-building, not just the window pattern
 const facades=facadeBaseColors.map((base,i)=>{
   const preset=facadeGridPresets[i%facadeGridPresets.length];
   return {
     preset,
-    map:facadeTex(base,preset),
+    ...(()=>{const pr=facadeTexPair(base,preset);return {map:pr.map,lit:pr.lit};})(),
     normal:facadeNormalMaps[i%facadeGridPresets.length],
     roughness:0.74+Math.random()*0.22,
     metalness:0.02+Math.random()*0.09,
     envMapIntensity:0.26+Math.random()*0.34
   };
 });
-const glassT=glassTex();
+const glassPair=glassTexPair(),glassT=glassPair.map;
 // ---- REAL ROOFTOP SURFACES ----
 // The old roof was flat gravel-noise on a Lambert material with no normal map, so from altitude every
 // roof read as generic vector-purple. This is tar-felt roofing with ALIGNED panel seams, patch
@@ -2534,18 +2661,18 @@ const glassT=glassTex();
 function drawRoofSeams(g,w,h,albedo){
   const strip=h/8;
   for(let s=1;s<8;s++){const y=s*strip;
-    if(albedo){g.fillStyle='rgba(0,0,0,.34)';g.fillRect(0,y-1.5,w,3);g.fillStyle='rgba(150,140,160,.10)';g.fillRect(0,y+1.5,w,1.5);}
+    if(albedo){g.fillStyle='rgba(0,0,0,.34)';g.fillRect(0,y-1.5,w,3);g.fillStyle='rgba(160,156,150,.10)';g.fillRect(0,y+1.5,w,1.5);}
     else{g.fillStyle='#c8c8c8';g.fillRect(0,y-1.5,w,3);}
   }
 }
 function makeRoofMap(){return tex((g,w,h)=>{
-  g.fillStyle='#2b2734';g.fillRect(0,0,w,h);
-  for(let i=0;i<11000;i++){const v=Math.random()*32;g.fillStyle=`rgba(${50+v},${44+v},${56+v},.6)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  g.fillStyle='#57534e';g.fillRect(0,0,w,h);
+  for(let i=0;i<11000;i++){const v=Math.random()*34;g.fillStyle=`rgba(${74+v},${71+v},${66+v},.6)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
   const strip=h/8;
-  for(let s=0;s<8;s++){g.fillStyle=`rgba(${18+Math.random()*26},${16+Math.random()*22},${28+Math.random()*28},.12)`;g.fillRect(0,s*strip,w,strip);}
+  for(let s=0;s<8;s++){const v=Math.random()*26;g.fillStyle=`rgba(${30+v},${29+v},${27+v},.12)`;g.fillRect(0,s*strip,w,strip);}
   drawRoofSeams(g,w,h,true);
   for(let i=0;i<6;i++){const pw=26+Math.random()*80,ph=20+Math.random()*60,px=Math.random()*w,py=Math.random()*h;
-    g.fillStyle='rgba(12,10,16,.5)';g.fillRect(px,py,pw,ph);g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;g.strokeRect(px,py,pw,ph);}
+    g.fillStyle='rgba(14,13,12,.45)';g.fillRect(px,py,pw,ph);g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;g.strokeRect(px,py,pw,ph);}
   for(let i=0;i<9;i++){const cx=Math.random()*w,cy=Math.random()*h,rr=16+Math.random()*44;
     const gr=g.createRadialGradient(cx,cy,rr*0.15,cx,cy,rr);
     gr.addColorStop(0,'rgba(64,60,78,.20)');gr.addColorStop(.75,'rgba(36,32,46,.10)');gr.addColorStop(1,'rgba(8,6,12,0)');
@@ -2620,7 +2747,8 @@ function mountBillboard(grp,bw,bd,bh,cx,cz,forcedSide){
   else if(roll<0.58){t=foodAdTex();w2=bw*0.48;h2=bw*1.2;}
   else if(roll<0.76){t=noirPosterTex();w2=bw*0.46;h2=bw*1.2;}
   else{t=adTex();w2=bw*0.95;h2=bw*0.48;}
-  const bb=new THREE.Mesh(new THREE.PlaneGeometry(w2,h2),new THREE.MeshBasicMaterial({map:t}));
+  // LED/backlit panels: a hair under full white, so poster content survives night exposure + bloom
+  const bb=new THREE.Mesh(new THREE.PlaneGeometry(w2,h2),new THREE.MeshBasicMaterial({map:t,color:0xc8c8c8}));
   const side=forcedSide!==undefined?forcedSide:Math.floor(Math.random()*4);
   const off=[[0,bd/2+0.3,0],[0,-bd/2-0.3,Math.PI],[bw/2+0.3,0,Math.PI/2],[-bw/2-0.3,0,-Math.PI/2]][side];
   const py=bh*0.52+Math.random()*bh*0.3;
@@ -2644,63 +2772,35 @@ function addBillboard(grp,bw,bd,bh,cx,cz){
 }
 
 // residential facade: balconies, sliding doors, laundry-rail hatching
-function resTex(base){return tex((g,w,h)=>{
-  g.fillStyle=base;g.fillRect(0,0,w,h);
-  for(let i=0;i<1500;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.09})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
-  const rows=9,ch=h/rows;
-  // ROUND-4: per-floor lit-ratio tiers (some floors read almost fully dark, others nearly all lit)
-  // instead of a flat 30% chance on every unit of every floor — more fully-dark vs blazing floors
-  const tiers=[0,0.08,0.28,0.5,0.82];
-  const floorLit=[];for(let y=0;y<rows;y++)floorLit.push(tiers[Math.floor(Math.random()*tiers.length)]);
-  for(let y=0;y<rows;y++){
-    g.fillStyle='rgba(255,255,255,.10)';g.fillRect(0,y*ch,w,3);
-    g.fillStyle='rgba(0,0,0,.42)';g.fillRect(0,y*ch+3,w,5);
-    g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=1;
-    for(let x=0;x<w;x+=7){g.beginPath();g.moveTo(x,y*ch+ch*0.55);g.lineTo(x,y*ch+ch*0.95);g.stroke();}
-    g.fillStyle='rgba(0,0,0,.25)';g.fillRect(0,y*ch+ch*0.55,w,2);
-    const units=5,cw=w/units;
-    for(let x=0;x<units;x++){
-      const lit=Math.random()<floorLit[y];
-      const px=x*cw+cw*0.14,py=y*ch+ch*0.16,ww=cw*0.72,wh=ch*0.42;
-      g.fillStyle='rgba(0,0,0,.5)';g.fillRect(px-2,py-2,ww+4,wh+4);
-      const grd=g.createLinearGradient(px,py,px,py+wh);
-      // warm/cool/green mix, not every lit unit the same tungsten tone
-      if(lit){
-        const r=Math.random();
-        if(r<0.56){grd.addColorStop(0,'#ffe2b0');grd.addColorStop(1,'#d8995c');}
-        else if(r<0.84){grd.addColorStop(0,'#dcecff');grd.addColorStop(1,'#9fb8d8');}
-        else{grd.addColorStop(0,'#dcffe0');grd.addColorStop(1,'#96c89e');} // kitchen fluorescent green
+// low-rise apartment blocks (mansion/apaato): balcony rails and sliding doors, the
+// same albedo + lit-emissive split as the towers so they read sunlit at dusk and
+// lived-in at night
+function resTexPair(base){
+  return _pairTex(512,512,(g,gl,w,h)=>{
+    g.fillStyle=base;g.fillRect(0,0,w,h);
+    for(let i=0;i<1500;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.08})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
+    const rows=9,ch=h/rows,units=5,cw=w/units;
+    for(let y=0;y<rows;y++){
+      const occ=[0,0.1,0.3,0.5,0.8][Math.floor(Math.random()*5)];
+      g.fillStyle='rgba(255,255,255,.10)';g.fillRect(0,y*ch,w,3);          // balcony slab edge
+      g.fillStyle='rgba(0,0,0,.36)';g.fillRect(0,y*ch+3,w,5);
+      for(let x=0;x<units;x++){
+        const px=x*cw+cw*0.14,py=y*ch+ch*0.16,ww=cw*0.72,wh=ch*0.42;
+        g.fillStyle='rgba(0,0,0,.45)';g.fillRect(px-2,py-2,ww+4,wh+4);
+        _winGlass(g,px,py,ww,wh);
+        g.fillStyle='rgba(0,0,0,.4)';g.fillRect(px+ww/2-1,py,2,wh);        // sliding-door split
+        if(Math.random()<occ)_winLit(gl,px,py,ww,wh,Math.random()<0.7?WIN_FAMS[1]:pickWinFam());
       }
-      else{grd.addColorStop(0,'#2a2438');grd.addColorStop(1,'#171224');}
-      g.fillStyle=grd;g.fillRect(px,py,ww,wh);
-      g.fillStyle='rgba(0,0,0,.4)';g.fillRect(px+ww/2-1,py,2,wh);
-      if(lit&&Math.random()<0.5){g.fillStyle='rgba(30,20,30,.45)';g.fillRect(px+ww*0.55,py,ww*0.4,wh);}
-      if(lit&&Math.random()<0.36){
-        // hint of an interior: furniture/person silhouette or a TV glow, so balcony units read
-        // lived-in — ROUND-4: chance raised (was 0.28) + TV-glow option added
-        const kind=Math.random();
-        g.fillStyle='rgba(15,12,18,.55)';
-        if(kind<0.42){
-          const sx=px+ww*(0.3+Math.random()*0.4),sy=py+wh*0.96,sh=wh*0.62,sw2=Math.max(1.2,sh*0.34);
-          g.beginPath();g.arc(sx,sy-sh*0.84,sw2*0.4,0,7);g.fill();
-          g.beginPath();g.moveTo(sx-sw2*0.48,sy);g.lineTo(sx-sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.32,sy-sh*0.65);g.lineTo(sx+sw2*0.48,sy);g.closePath();g.fill();
-        }else if(kind<0.78){
-          g.fillRect(px+ww*0.12,py+wh*0.6,ww*0.55,Math.max(1,wh*0.3));
-        }else{
-          g.fillStyle='rgba(140,200,255,.32)';
-          g.fillRect(px+ww*0.22,py+wh*0.26,ww*0.5,wh*0.26);
-        }
-      }
+      g.strokeStyle='rgba(0,0,0,.30)';g.lineWidth=1;                       // balcony rail balusters
+      for(let x=0;x<w;x+=7){g.beginPath();g.moveTo(x,y*ch+ch*0.62);g.lineTo(x,y*ch+ch*0.95);g.stroke();}
+      g.fillStyle='rgba(0,0,0,.22)';g.fillRect(0,y*ch+ch*0.62,w,2);
     }
-  }
-  const gr=g.createLinearGradient(0,h,0,h*0.75);
-  gr.addColorStop(0,'rgba(6,4,12,.55)');gr.addColorStop(1,'rgba(6,4,12,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-},512,512,true);}
-const resFacades=[resTex('#5c5348'),resTex('#4e4a52'),resTex('#5a4e46'),resTex('#544a5c')];
+  });
+}
+const resFacades=[resTexPair('#c4bcae'),resTexPair('#a9a49c'),resTexPair('#b8a894'),resTexPair('#d0ccc4')];   // cream tile, grey, beige, white
 const grassTex=tex((g,w,h)=>{
-  g.fillStyle='#1c2b1a';g.fillRect(0,0,w,h);
-  for(let i=0;i<2600;i++){g.fillStyle=`rgba(${20+Math.random()*30},${50+Math.random()*40},${20+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  g.fillStyle='#3a4630';g.fillRect(0,0,w,h);
+  for(let i=0;i<2600;i++){g.fillStyle=`rgba(${45+Math.random()*30},${60+Math.random()*30},${35+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
 },256,256,true);
 const grassMat=new THREE.MeshLambertMaterial({map:grassTex});
 const pathMat=new THREE.MeshLambertMaterial({color:0x565048});
@@ -2741,13 +2841,28 @@ const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const fac=facades[i%facades.length];
   if(fac.map){fac.map.wrapS=fac.map.wrapT=THREE.RepeatWrapping;fac.map.needsUpdate=true;}
   if(fac.normal){fac.normal.wrapS=fac.normal.wrapT=THREE.RepeatWrapping;fac.normal.needsUpdate=true;}
-  const m=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity});
-  m.color.setHSL((222+Math.random()*104)/360,0.07+Math.random()*0.13,0.46+Math.random()*0.32);
-  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0]});
+  if(fac.lit){fac.lit.wrapS=fac.lit.wrapT=THREE.RepeatWrapping;fac.lit.needsUpdate=true;}
+  const m=new THREE.MeshStandardMaterial({map:fac.map,normalMap:fac.normal,normalScale:new THREE.Vector2(1,1),roughness:fac.roughness,metalness:fac.metalness,envMapIntensity:fac.envMapIntensity,
+    emissive:0xffffff,emissiveMap:fac.lit,emissiveIntensity:0});
+  // was HSL hue 222-326 — a random blue-to-magenta cast on every building. Now a near-white
+  // multiplier with a whisper of warm or cool, so the facade's own material shows through.
+  const warm=Math.random()<0.6;
+  m.color.setHSL((warm?28+Math.random()*16:205+Math.random()*15)/360,0.03+Math.random()*0.06,0.80+Math.random()*0.16);
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0],winGain:0.8+Math.random()*0.45,facade:true});
   a.push(m);} return a;})();
 glassT.wrapS=glassT.wrapT=THREE.RepeatWrapping;glassT.needsUpdate=true;
-const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++)a.push(new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.12+Math.random()*0.08,metalness:0.2,envMapIntensity:1.7,clearcoat:0.4,clearcoatRoughness:0.2}));return a;})();
-const RES_POOL=resFacades.map(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;return new THREE.MeshLambertMaterial({map:t});});
+glassPair.lit.wrapS=glassPair.lit.wrapT=THREE.RepeatWrapping;glassPair.lit.needsUpdate=true;
+const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++){
+  const m=new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.10+Math.random()*0.08,metalness:0.25,envMapIntensity:1.5,clearcoat:0.5,clearcoatRoughness:0.15,
+    emissive:0xffffff,emissiveMap:glassPair.lit,emissiveIntensity:0});
+  m.color.setHSL((200+Math.random()*20)/360,0.06+Math.random()*0.06,0.78+Math.random()*0.15);   // faint blue-green float glass
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.9});
+  a.push(m);}return a;})();
+const RES_POOL=resFacades.map(pr=>{
+  [pr.map,pr.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;});
+  const m=new THREE.MeshLambertMaterial({map:pr.map,emissive:0xffffff,emissiveMap:pr.lit,emissiveIntensity:0});
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.85});
+  return m;});
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
 // Facade UVs are 0..1 per box face, so a tall tower stretched ONE window grid over its whole height —
 // which reads as a blank slab. Repeat the grid per ~`unit` metres instead, per face, so window rows
@@ -3065,27 +3180,21 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 // the far skyline silhouette ring (1400), safely inside the ground plane (CITY=1150).
 (function buildOuterSkylineImpostors(){
   const innerR=580,outerR=1060,count=340;
-  const impostorTexA=tex((g,w,h)=>{
-    g.fillStyle='#241d34';g.fillRect(0,0,w,h);
-    for(let y=6;y<h;y+=9){for(let x=4;x<w;x+=7){
-      if(Math.random()<0.4){
-        g.fillStyle=Math.random()<0.6?'rgba(255,205,150,.55)':(Math.random()<0.6?'rgba(160,210,255,.5)':'rgba(255,150,220,.45)');
-        g.fillRect(x,y,2,2.4);
-      }
+  // These were UNLIT boxes with a violet night baked in, so at dusk the far city sat there
+  // as glowing night blocks. Now they take light like the near city, with their windows on
+  // the emissive channel the time-of-day rig dials up as it gets dark.
+  const impPair=(base,step,pLit)=>_pairTex(48,128,(g,gl,w,h)=>{
+    g.fillStyle=base;g.fillRect(0,0,w,h);
+    for(let y=6;y<h;y+=step+2){for(let x=4;x<w;x+=step){
+      g.fillStyle='rgba(40,46,52,.55)';g.fillRect(x,y,2,2.4);            // window
+      if(Math.random()<pLit){gl.fillStyle=Math.random()<0.55?'rgb(255,214,160)':'rgb(214,230,255)';gl.fillRect(x,y,2,2.4);}
     }}
-  },48,128,true);
-  const impostorTexB=tex((g,w,h)=>{
-    g.fillStyle='#1e1a2c';g.fillRect(0,0,w,h);
-    for(let y=6;y<h;y+=8){for(let x=4;x<w;x+=6){
-      if(Math.random()<0.3){
-        g.fillStyle=Math.random()<0.5?'rgba(255,190,130,.5)':'rgba(150,220,255,.45)';
-        g.fillRect(x,y,1.6,2);
-      }
-    }}
-  },48,128,true);
+  });
+  const pA=impPair('#a39d93',7,0.30),pB=impPair('#8a8782',6,0.24);
   const geo=new THREE.BoxGeometry(1,1,1);
-  const matA=new THREE.MeshBasicMaterial({map:impostorTexA});
-  const matB=new THREE.MeshBasicMaterial({map:impostorTexB});
+  const matA=new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0});
+  const matB=new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0});
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:matA,preset:null,winGain:1.2},{mat:matB,preset:null,winGain:1.2});
   const mA=new THREE.InstancedMesh(geo,matA,Math.ceil(count/2));
   const mB=new THREE.InstancedMesh(geo,matB,Math.floor(count/2));
   mA.frustumCulled=false;mB.frustumCulled=false;
@@ -3151,12 +3260,31 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const finial=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.9,2.4,6),new THREE.MeshStandardMaterial({color:0xd9b64a,metalness:0.85,roughness:0.3,emissive:0x3a2a08,emissiveIntensity:0.5}));finial.position.y=y+1.2;keep.add(finial);
   keep.position.set(cx,0,cz);grp.add(keep);
   // pine groves across the grounds (dark Japanese black pine)
-  const pineTrunk=new THREE.MeshLambertMaterial({color:0x38291d}),pineLeaf=new THREE.MeshLambertMaterial({color:0x1c3a24});
+  const pineTrunk=new THREE.MeshLambertMaterial({color:0x3b2e22}),pineLeaf=new THREE.MeshLambertMaterial({color:0x1a2a1f,flatShading:true});
+  const padBlob=new THREE.SphereGeometry(1,9,6);
+  const PINE_GEOS=Array.from({length:5},()=>{          // merged pad sets, shared
+    const geos=[],mats=[],pads=3+Math.floor(Math.random()*3);
+    let lean=(Math.random()-.5)*1.6;
+    for(let k=0;k<pads;k++){
+      // pads hang off alternating sides of the trunk at uneven heights, like pruned branches
+      const side=(k%2?1:-1), y=2.8+k*1.15+Math.random()*0.6;
+      const off=lean*(k/pads)+side*(0.6+Math.random()*1.3);
+      const w=(1.9-k*0.18)*(0.7+Math.random()*0.5);
+      geos.push(padBlob);
+      mats.push(new THREE.Matrix4().compose(new THREE.Vector3(off,y,(Math.random()-.5)*1.6),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random()-.5)*0.25,Math.random()*3,(Math.random()-.5)*0.25)),
+        new THREE.Vector3(w,0.32+Math.random()*0.16,w*(0.55+Math.random()*0.35))));
+    }
+    const g=mergeGeos(geos,mats);g.computeVertexNormals();return {g,lean};
+  });
   for(let i=0;i<44;i++){
     const a=Math.random()*Math.PI*2,r=44+Math.random()*(innerR-58),px=cx+Math.cos(a)*r,pz=cz+Math.sin(a)*r;
     if(Math.hypot(px-cx,pz-cz)<34)continue; // keep the keep courtyard clear
-    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.55,3,5),pineTrunk);tr.position.set(px,1.5,pz);grp.add(tr);
-    const lf=new THREE.Mesh(new THREE.ConeGeometry(2.2+Math.random(),4.5+Math.random()*2,6),pineLeaf);lf.position.set(px,5+Math.random(),pz);grp.add(lf);
+    const P=PINE_GEOS[Math.floor(Math.random()*PINE_GEOS.length)];
+    const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.42,5.2,5),pineTrunk);
+    tr.position.set(px+P.lean*0.4,2.5,pz);tr.rotation.z=-P.lean*0.12;grp.add(tr);
+    const lf=new THREE.Mesh(P.g,pineLeaf);lf.position.set(px,0,pz);lf.rotation.y=Math.random()*6.3;
+    lf.scale.setScalar(0.9+Math.random()*0.35);grp.add(lf);
   }
   // two stone bridges across the moat (Nijubashi-style) on the south + east approaches
   const bridgeMat=new THREE.MeshStandardMaterial({color:0x6b6f66,roughness:0.9});
@@ -3337,14 +3465,14 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   window.__navyShip={g:ship, padPos:new THREE.Vector3(padX,4.82,SHIP_Z), t:0};
 }
 
-// ---------- TOKYO TOWER-style landmark (pink lit) ----------
+// ---------- TOKYO TOWER-style landmark: international orange + white, warm-lit ----------
 {
   const tw=new THREE.Group();
-  const redWire=new THREE.MeshBasicMaterial({color:0xff4fa0,wireframe:true});
-  const red=new THREE.MeshLambertMaterial({color:0xd63a80});
+  const redWire=new THREE.MeshBasicMaterial({color:0xff6a1e,wireframe:true});   // lattice in its floodlit orange
+  const red=new THREE.MeshLambertMaterial({color:0xd8481c});                     // aviation (international) orange
   const lower=new THREE.Mesh(new THREE.ConeGeometry(30,80,8,6,true),redWire);
   lower.position.y=40;tw.add(lower);
-  const lowerS=new THREE.Mesh(new THREE.ConeGeometry(29,80,8,1,true),new THREE.MeshLambertMaterial({color:0xd63a80,transparent:true,opacity:.22,side:THREE.DoubleSide}));
+  const lowerS=new THREE.Mesh(new THREE.ConeGeometry(29,80,8,1,true),new THREE.MeshLambertMaterial({color:0xd8481c,transparent:true,opacity:.22,side:THREE.DoubleSide}));
   lowerS.position.y=40;tw.add(lowerS);
   const deck1=new THREE.Mesh(new THREE.CylinderGeometry(12,13,6,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
   deck1.position.y=82;tw.add(deck1);
@@ -3375,7 +3503,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const roofMat=new THREE.MeshLambertMaterial({color:0x2a2d33});
   const glowMat=new THREE.MeshBasicMaterial({color:0xffcf87});
   const trunkMat=new THREE.MeshLambertMaterial({color:0x3a2a1e});
-  const leafCols=[new THREE.Color(0x274b30),new THREE.Color(0x2f5a38),new THREE.Color(0x203f28),new THREE.Color(0x356b3e)];
+  const leafCols=[new THREE.Color(0x2f4428),new THREE.Color(0x3a4a2a),new THREE.Color(0x2a3d2c),new THREE.Color(0x44532f)];   // same stock as the street trees
   const treeItems=[], lantItems=[];
   const addTree=(x,z,h)=>treeItems.push({x,z,s:h/11.5,ry:Math.random()*Math.PI*2,c:leafCols[Math.floor(Math.random()*leafCols.length)]});
   const addLantern=(x,z)=>lantItems.push({x,z,ry:Math.random()*Math.PI*2});
@@ -3432,9 +3560,16 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   // ---- build instanced trees ----
   if(treeItems.length){
     const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,5,6);trunkGeo.translate(0,2.5,0);
-    const can1Geo=new THREE.ConeGeometry(3.9,4.6,7);can1Geo.translate(0,7.0,0);
-    const can2Geo=new THREE.ConeGeometry(2.8,4.2,7);can2Geo.translate(0,9.6,0);
-    const canMat=new THREE.MeshLambertMaterial({color:0xffffff});
+    // canopies are lumpy blob clusters (merged once, instanced), not stacked cones
+    const _cluster=(n,spread,lift)=>{const blob=new THREE.IcosahedronGeometry(1,1),gs=[],ms=[];
+      for(let i=0;i<n;i++){const a=Math.random()*6.283,r=i?spread*(0.5+Math.random()*0.5):0;
+        ms.push(new THREE.Matrix4().compose(new THREE.Vector3(Math.cos(a)*r,lift+(Math.random()-.3)*spread*0.7,Math.sin(a)*r),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random()*3,Math.random()*3,0)),
+          new THREE.Vector3(1,1,1).multiplyScalar(i?1.4+Math.random()*1.1:2.4)));gs.push(blob);}
+      const g=mergeGeos(gs,ms);g.computeVertexNormals();return g;};
+    const can1Geo=_cluster(6,2.6,7.4);
+    const can2Geo=_cluster(4,1.6,10.0);
+    const canMat=new THREE.MeshLambertMaterial({color:0xffffff,flatShading:true});
     const trunkIM=new THREE.InstancedMesh(trunkGeo,trunkMat,treeItems.length);
     const can1IM=new THREE.InstancedMesh(can1Geo,canMat,treeItems.length);
     const can2IM=new THREE.InstancedMesh(can2Geo,canMat,treeItems.length);
@@ -4028,14 +4163,31 @@ instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshStandardMaterial(
 instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
 
 // trees: parks + ginkgo rows on the avenues
-const trunkG=new THREE.CylinderGeometry(.35,.5,4,6);
-const trunkM=new THREE.MeshLambertMaterial({color:0x362a20});
-const leafM=new THREE.MeshLambertMaterial({color:0x233a1e});
+// Street trees (zelkova / ginkgo): a canopy is a CLUSTER of lumpy blobs, not one sphere —
+// that silhouette is most of what reads as "tree" from a helicopter. Six merged canopy
+// variants are built once and shared, so each tree is still just trunk + canopy.
+const trunkG=new THREE.CylinderGeometry(.22,.38,4.4,6);
+const trunkM=new THREE.MeshLambertMaterial({color:0x3a2f26});
+const LEAF_MATS=[0x2f4428,0x3a4a2a,0x2a3d2c,0x44532f].map(c=>new THREE.MeshLambertMaterial({color:c,flatShading:true}));
+const CANOPY_GEOS=Array.from({length:6},()=>{
+  const blob=new THREE.IcosahedronGeometry(1,1),geos=[],mats=[];
+  const n=5+Math.floor(Math.random()*3);
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,r=i?0.9+Math.random()*0.8:0;
+    const m=new THREE.Matrix4().compose(
+      new THREE.Vector3(Math.cos(a)*r,(i?Math.random()*1.4-0.3:0.4),Math.sin(a)*r),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random()*3,Math.random()*3,0)),
+      new THREE.Vector3(1,1,1).multiplyScalar(i?0.9+Math.random()*0.7:1.5));
+    geos.push(blob);mats.push(m);
+  }
+  const g=mergeGeos(geos,mats);g.computeVertexNormals();return g;
+});
 function plantTree(x,z,sc){
+  sc=(sc||1)*(0.85+Math.random()*0.4);
   const t=new THREE.Group();
-  const tr=new THREE.Mesh(trunkG,trunkM);tr.position.y=2;t.add(tr);
-  const lf=new THREE.Mesh(new THREE.SphereGeometry((2.2+Math.random()*1.4)*(sc||1),7,7),leafM);
-  lf.position.y=5;lf.scale.y=1.2;lf.castShadow=true;t.add(lf);
+  const tr=new THREE.Mesh(trunkG,trunkM);tr.position.y=2.2*sc;tr.scale.setScalar(sc);t.add(tr);
+  const lf=new THREE.Mesh(CANOPY_GEOS[Math.floor(Math.random()*CANOPY_GEOS.length)],LEAF_MATS[Math.floor(Math.random()*LEAF_MATS.length)]);
+  lf.position.y=5.2*sc;lf.scale.set(1.25*sc,1.05*sc,1.25*sc);lf.rotation.y=Math.random()*6.3;lf.castShadow=true;t.add(lf);
   t.position.set(x,0,z);scene.add(t);
 }
 treeSpots.forEach(([x,z])=>plantTree(x,z,1));
@@ -4120,14 +4272,16 @@ strobeGlow.scale.set(2.1,2.1,1);strobeGlow.position.copy(strobe.position);heli.a
 window.__navGlows={r:navRGlow,g:navGGlow,s:strobeGlow};
 // visibility: subtle key (cool) + rim (warm neon-bounce) lights riding on the airframe so the
 // heli's silhouette pops off the dark city instead of reading as a black cutout
-const heliKeyLight=new THREE.PointLight(0xbfe0ff,0.55,22,2);heliKeyLight.position.set(0,4.2,-2.0);heli.add(heliKeyLight);
-const heliRimLight=new THREE.PointLight(0xff6fc0,0.45,18,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
+// faint fill so the airframe never goes to a black hole at night; neutral, not pink
+const heliKeyLight=new THREE.PointLight(0xdfe6ee,0.30,20,2);heliKeyLight.position.set(0,4.2,-2.0);heli.add(heliKeyLight);
+const heliRimLight=new THREE.PointLight(0xffd2a8,0.18,16,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
 const mast=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,1,8),darkMat);mast.position.y=1.35;heli.add(mast);
 const rotor=new THREE.Group();
-for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.5,.06,14.5),darkMat);bl.rotation.y=i*Math.PI/2;rotor.add(bl);}
+const bladeMat=new THREE.MeshStandardMaterial({color:0x2c302a,metalness:0.1,roughness:0.6});
+for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.55,.05,14.5),bladeMat);bl.rotation.y=i*Math.PI/2;bl.rotation.z=0.012;rotor.add(bl);}
 rotor.position.y=1.85;heli.add(rotor);
 const discTex=tex((g,w,h)=>{g.clearRect(0,0,w,h);g.translate(w/2,h/2);
-for(let i=0;i<70;i++){g.strokeStyle=`rgba(15,15,20,${Math.random()*0.25})`;g.beginPath();g.arc(0,0,Math.random()*w/2,0,7);g.stroke();}},256,256);
+for(let i=0;i<70;i++){g.strokeStyle=`rgba(25,26,24,${Math.random()*0.09})`;g.beginPath();g.arc(0,0,w*0.08+Math.random()*w*0.42,0,7);g.stroke();}},256,256);
 const disc=new THREE.Mesh(new THREE.CircleGeometry(7.2,24),new THREE.MeshBasicMaterial({map:discTex,transparent:true,depthWrite:false}));
 disc.rotation.x=-Math.PI/2;disc.position.y=1.9;heli.add(disc);
 const tailRotor=new THREE.Group();
@@ -4142,10 +4296,26 @@ scene.add(cubeCam);
 {
   const keep=new Set([rotor,tailRotor,disc,navR,navG,strobe,navRGlow,navGGlow,strobeGlow,heliKeyLight,heliRimLight]);
   [...heli.children].forEach(c=>{if(!keep.has(c))heli.remove(c);});
-  const gm=new THREE.MeshStandardMaterial({color:0x4a5158,metalness:0.68,roughness:0.36,envMap:cubeRT.texture,envMapIntensity:1.3});
-  const gm2=new THREE.MeshStandardMaterial({color:0x363c42,metalness:0.62,roughness:0.44,envMap:cubeRT.texture,envMapIntensity:1.15});
-  const dk=new THREE.MeshStandardMaterial({color:0x15181b,metalness:0.5,roughness:0.55,envMap:cubeRT.texture,envMapIntensity:0.9});
-  const glz=new THREE.MeshPhysicalMaterial({color:0x1c2830,metalness:0.1,roughness:0.08,transparent:true,opacity:.82,envMap:cubeRT.texture,envMapIntensity:1.7,clearcoat:0.6});
+  // MATTE MILITARY PAINT. This was 68% metallic mirroring a live reflection probe, so under
+  // a dusk sky the airframe read as white chrome. Gunships wear flat green-grey (FS 34031-ish):
+  // near-zero metalness, high roughness, with panel seams, rivets, scuffing and exhaust soot.
+  const panelTex=tex((g,w,h)=>{
+    g.fillStyle='#bdbdbd';g.fillRect(0,0,w,h);
+    for(let i=0;i<900;i++){const v=180+Math.random()*40|0;g.fillStyle=`rgba(${v},${v},${v},.35)`;
+      g.fillRect(Math.random()*w,Math.random()*h,4+Math.random()*10,2+Math.random()*6);}   // paint mottling
+    g.strokeStyle='rgba(40,40,40,.55)';g.lineWidth=1.2;                                    // panel seams
+    const xs=[0,0.22,0.47,0.71,1],ys=[0,0.31,0.58,1];
+    xs.forEach(f=>{g.beginPath();g.moveTo(f*w+(Math.random()-.5)*6,0);g.lineTo(f*w+(Math.random()-.5)*6,h);g.stroke();});
+    ys.forEach(f=>{g.beginPath();g.moveTo(0,f*h);g.lineTo(w,f*h+(Math.random()-.5)*6);g.stroke();});
+    g.fillStyle='rgba(30,30,30,.45)';                                                       // rivet lines
+    xs.forEach(f=>{for(let y=4;y<h;y+=7)g.fillRect(f*w+3,y,1.3,1.3);});
+    for(let i=0;i<60;i++){g.fillStyle=`rgba(${Math.random()<.5?235:60},${Math.random()<.5?235:60},${Math.random()<.5?235:60},.10)`;
+      g.fillRect(Math.random()*w,Math.random()*h,2+Math.random()*14,1+Math.random()*2);}   // scuffs
+  },256,256,true);
+  const gm=new THREE.MeshStandardMaterial({color:0x5a6150,map:panelTex,metalness:0.06,roughness:0.66,envMap:cubeRT.texture,envMapIntensity:0.45});
+  const gm2=new THREE.MeshStandardMaterial({color:0x474d40,map:panelTex,metalness:0.08,roughness:0.62,envMap:cubeRT.texture,envMapIntensity:0.45});
+  const dk=new THREE.MeshStandardMaterial({color:0x1d1f1e,metalness:0.25,roughness:0.6,envMap:cubeRT.texture,envMapIntensity:0.5});
+  const glz=new THREE.MeshPhysicalMaterial({color:0x2a3a3c,metalness:0.0,roughness:0.06,transparent:true,opacity:.72,envMap:cubeRT.texture,envMapIntensity:1.4,clearcoat:0.8});
   const add=m=>{m.castShadow=true;heli.add(m);return m;};
   // slab-sided fuselage
   const fus=add(new THREE.Mesh(new THREE.BoxGeometry(1.9,1.6,5.4),gm));fus.position.set(0,0,0.8);
@@ -4174,7 +4344,9 @@ scene.add(cubeCam);
   });
   const hub=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.4,0.7,10),dk));hub.position.y=1.55;
   // tail boom + swept fin + stabilator
-  const boom=add(new THREE.Mesh(new THREE.BoxGeometry(0.7,0.85,6.2),gm));boom.position.set(0,0.25,6);
+  const boomGeo=new THREE.BoxGeometry(0.78,0.95,6.2,1,1,4);
+  {const pa=boomGeo.attributes.position;for(let i=0;i<pa.count;i++){const k=0.55+0.45*(1-(pa.getZ(i)+3.1)/6.2);pa.setX(i,pa.getX(i)*k);pa.setY(i,pa.getY(i)*k);}boomGeo.computeVertexNormals();}
+  const boom=add(new THREE.Mesh(boomGeo,gm));boom.position.set(0,0.3,6);
   const vfin=add(new THREE.Mesh(new THREE.BoxGeometry(0.22,2.8,1.25),gm));vfin.position.set(0,1.5,10.5);vfin.rotation.x=0.08;
   const stab=add(new THREE.Mesh(new THREE.BoxGeometry(3.3,0.14,1),gm));stab.position.set(0,0.15,10.1);
   // tail wheel
@@ -5012,10 +5184,10 @@ function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.Textu
       window.WALL_IMG=await loadImg(window.__WALL_DIFF);
       const cPool=facadeGridPresets.map(p=>facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true}));
       (window.__bldgMats||[]).forEach(bm=>{
-        if(Math.random()>0.34)return; // only a subset get the raw-concrete look
+        if(!bm.facade||Math.random()>0.34)return; // facades only (glass/apartments/far city share this list), ~1/3 of them
         const idx=Math.max(0,facadeGridPresets.indexOf(bm.preset));
         bm.mat.map=cPool[idx];
-        bm.mat.color.setHSL((220+Math.random()*30)/360,0.05,0.5); // neutral cool tint over the grime
+        bm.mat.color.setHSL((25+Math.random()*20)/360,0.03,0.78+Math.random()*0.12); // raw concrete, no cast
         bm.mat.needsUpdate=true;
       });
     }
@@ -6417,6 +6589,7 @@ function checkStageProgress(){
   if(!v||!v.visited)return;
   if(stagePendingCrew().length===0){
     stage++;
+    TOD.target=todForStage(stage);            // the light moves on with the story
     refreshStageMarkers();
     const nv=VENUES[stage];
     if(nv){
@@ -7747,7 +7920,7 @@ function resetRunState(){
   if(interiorMode)exitVenue();
   CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
   VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
-  aboard=[];missionDone=false;stage=0;
+  aboard=[];missionDone=false;stage=0;TOD.target=todForStage(0);TOD.t=TOD.pinned!==null?TOD.pinned:0;
   winch.crew=null;winch.t=0;if(winch.line)winch.line.visible=false;
   crewBoardWho=null;window.__deckState=null;
   ammoMax=BASE_AMMO_MAX.slice();
@@ -8391,6 +8564,7 @@ function loop(now){
     cam.position.y+=Math.sin(now/28)*0.03;
     if(shake>0){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake;}
     sky.position.copy(cam.position);
+    updateTOD(dt,now);
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
     moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
     moonHalo.position.copy(moonSprite.position);
@@ -8400,7 +8574,7 @@ function loop(now){
       cubeCam.update(renderer,scene);
       heli.visible=true;
     }
-    sun.position.copy(heli.position).add(new THREE.Vector3(180,300,-220));
+    sun.position.copy(heli.position).addScaledVector(TOD.lightDir,620);
     sun.target=heli;
     rim.position.copy(heli.position).add(new THREE.Vector3(-200,120,260));
     rim.target=heli;
@@ -8444,6 +8618,7 @@ function loop(now){
     cam.position.lerp(new THREE.Vector3(cx,74+Math.sin(t*2.1)*30,cz),0.02);
     cam.lookAt(TOWER.x,66,TOWER.z);
     sky.position.copy(cam.position);
+    updateTOD(dt,now);
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
     moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
     moonHalo.position.copy(moonSprite.position);
