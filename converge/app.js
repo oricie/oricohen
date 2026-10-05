@@ -54,7 +54,7 @@
   }
   function startExplore(skip) {
     setKind(resolveKind(S.brief)); S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
-    S.deck = M.initialDirections(S.ctx, S.seedBase); save(); if (skip) startSwipe(0); else go('dirs');
+    S.lastMsg = ''; S.deck = M.initialDirections(S.ctx, S.seedBase); save(); if (skip) startSwipe(0); else go('dirs');
   }
   function startSwipe(i) { S.cur = S.deck[i || 0]; S.shown = [S.cur]; S.note = 'start'; go('swipe'); }
   const hasMore = () => S.hist.length < 30;
@@ -67,18 +67,18 @@
     S.hist.push({ d, r, vec: d.vec, seed: d.seed, name: d.name, letter: d.letter });
     const after = M.learn(S.hist), msg = M.reaction(before, after);
     const card = $('.dcard'); if (card) { $('.stamp.' + (r > 0 ? 'like' : 'nope'), card).style.opacity = 1; card.classList.remove('drag'); card.classList.add('fly'); const s = r > 0 ? 1 : -1; card.style.transform = 'translate(' + s * (innerWidth * .8) + 'px,-30px) rotate(' + s * 26 + 'deg)'; }
-    const L = $('#learn'); if (L) { L.textContent = '✦ ' + msg.text; L.classList.add('on'); }
+    S.lastMsg = msg.text;
     if (S.hist.length >= 3 && !S.tpUser && innerWidth >= 1180) S.tp = true;
     renderTaste(true); renderBar(); save();
     setTimeout(() => {
       if (isReady()) { S.busy = false; return startConverge(); }
-      S.cur = nextCard(); S.note = 'adapt'; $('#stage').innerHTML = '<div class="ghost g2"></div><div class="ghost g1"></div><div class="dcard blank"><div class="thinking"><i></i><i></i><i></i> Shaping the next direction</div></div>';
-      setTimeout(() => { if (S.view !== 'swipe') return; renderRibbon(); mountCard(S.cur, true); scrollTo({ top: 0, behavior: 'smooth' }); S.busy = false; setTimeout(() => { const l = $('#learn'); if (l) l.classList.remove('on'); }, 1800); }, 650);
+      S.cur = nextCard(); S.note = 'adapt'; renderRibbon(true); $('#stage').innerHTML = '<div class="ghost g2"></div><div class="ghost g1"></div><div class="dcard blank"><div class="thinking"><i></i><i></i><i></i></div></div>';
+      setTimeout(() => { if (S.view !== 'swipe') return; renderRibbon(); mountCard(S.cur, true); scrollTo({ top: 0, behavior: 'smooth' }); S.busy = false; }, 650);
     }, 560);
   }
   function undo() {
     if (S.busy || !S.hist.length || S.view !== 'swipe') return toast('Nothing to undo');
-    const h = S.hist.pop(); S.shown.pop(); S.cur = h.d; S.note = 'undo'; renderTaste(); renderBar(); renderRibbon(); mountCard(S.cur, true); save();
+    const h = S.hist.pop(); S.shown.pop(); S.cur = h.d; S.note = 'undo'; S.lastMsg = ''; renderTaste(); renderBar(); renderRibbon(); mountCard(S.cur, true); save();
   }
   function startConverge() {
     S.final = M.finalDirection(S.hist, S.ctx, S.seedBase + 999); S.view = 'converge'; S.tp = false; document.body.classList.remove('tp-open'); renderBar(); save();
@@ -163,18 +163,21 @@
 
   /* ───────── 3 · swipe ───────── */
   function vSwipe() {
-    $('#view').innerHTML = '<section class="sw"><div id="ribbon" class="ribbon"></div><div class="learn" id="learn"></div><div class="stage" id="stage"></div><div class="acts"><button class="rb sm" id="a-undo" aria-label="Undo" title="Undo (Z)">↺</button><button class="rb big no" id="a-no" aria-label="Not for me" title="Not for me (←)">✕</button><button class="rb big yes" id="a-yes" aria-label="Like" title="Like (→)">♥</button><button class="rb sm" id="a-open" aria-label="Try it" title="Try it (Space)">⤢</button></div><p class="mono kb">← → to react · Space to try it · Z to undo · T for your taste</p></section>';
+    $('#view').innerHTML = '<section class="sw"><div id="ribbon" class="ribbon"></div><div class="stage" id="stage"></div><div class="acts"><button class="rb sm" id="a-undo" aria-label="Undo" title="Undo (Z)">↺</button><button class="rb big no" id="a-no" aria-label="Not for me" title="Not for me (←)">✕</button><button class="rb big yes" id="a-yes" aria-label="Like" title="Like (→)">♥</button><button class="rb sm" id="a-open" aria-label="Try it" title="Try it (Space)">⤢</button></div><p class="mono kb">← → to react · Space to try it · Z to undo · T for your taste</p></section>';
     $('#a-no').onclick = () => react(-1); $('#a-yes').onclick = () => react(1); $('#a-undo').onclick = undo; $('#a-open').onclick = () => openProto(S.cur, true);
     renderRibbon(); mountCard(S.cur, true); document.body.classList.toggle('tp-open', S.tp);
   }
-  function renderRibbon() {
-    const el = $('#ribbon'); if (!el) return; const d = S.cur, last = S.hist[S.hist.length - 1];
-    let h;
-    const tg = a => a.map(x => '<span class="t">' + esc(x) + '</span>').join(' ');
-    if (S.note === 'start' || !last) h = '<div><span class="t p">Start here</span></div><div class="sub2">React to what you see. Swipe right if this could be your ' + (S.kind === 'brand' ? 'brand' : 'product') + ', left if it could not.</div>';
-    else if (S.note === 'explore') h = '<div><span class="t p">New direction</span></div><div class="sub2">Moving away from your ' + (S.kind === 'brand' ? 'brand' : 'product') + ' so far, to show you something different.</div>';
-    else h = '<div><span class="t p">' + (last.r > 0 ? 'You liked' : 'You passed on') + '</span> <b>' + esc(last.name) + '</b></div><div class="sub2">' + (d.why && d.why.push.length ? 'Pushing further on ' + tg(d.why.push) + ' &nbsp;·&nbsp; ' : '') + (d.why ? 'Now testing ' + tg(d.why.probe) : '') + '</div>';
-    if (M.closing(S.hist) && !isReady()) h = '<div><span class="close-note">We’re getting close. <button id="r-ready">Show my product</button></span></div>' + h;
+  function renderRibbon(thinking) {
+    const el = $('#ribbon'); if (!el) return; const d = S.cur, last = S.hist[S.hist.length - 1], low = a => a.map(x => x.toLowerCase());
+    const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
+    let l1, l2;
+    if (thinking) { l1 = S.lastMsg; l2 = 'Shaping the next direction…'; }
+    else if (S.note === 'undo') { l1 = 'Undone.'; l2 = 'Back to ' + d.name + '.'; }
+    else if (S.note === 'explore') { l1 = 'Something different.'; l2 = 'Moving away from your ' + (S.kind === 'brand' ? 'brand' : 'product') + ' so far.'; }
+    else if (S.note === 'start' || !last) { l1 = 'Start here.'; l2 = 'Swipe right if this could be your ' + (S.kind === 'brand' ? 'brand' : 'product') + ', left if not.'; }
+    else { l1 = S.lastMsg || (last.r > 0 ? 'You liked ' : 'You passed on ') + last.name + '.'; l2 = d.why && d.why.probe.length ? 'Now testing ' + list(low(d.why.probe)) + '.' : ''; }
+    let h = '<div class="rl1">' + esc(l1) + '</div>' + (l2 ? '<div class="rl2">' + esc(l2) + '</div>' : '');
+    if (M.closing(S.hist) && !isReady() && !thinking) h = '<button type="button" class="close-note" id="r-ready">We’re getting close. <span>Show my ' + (S.kind === 'brand' ? 'brand' : 'product') + '</span></button>' + h;
     el.innerHTML = h; const b = $('#r-ready'); if (b) b.onclick = () => startConverge();
   }
   function mountCard(d, enter) {
