@@ -83,12 +83,12 @@
   }
   async function askAgent() {
     const kind = resolveKind(S.brief); if (kind === 'card') return;
-    const B = S.brief; delete B.agent; delete B.dir;
-    let sample = null; try { sample = await Promise.race([claude.use('sample'), new Promise(r => setTimeout(() => r(null), 2500))]); } catch (e) { }
-    if (!sample) return;
+    const B = S.brief; delete B.agent; delete B.dir; B.agentErr = '';
+    let sample = null; try { sample = await Promise.race([claude.use('sample'), new Promise(r => setTimeout(() => r(null), 12000))]); } catch (e) { B.agentErr = 'no connection to Claude'; }
+    if (!sample) { B.agentErr = B.agentErr || 'Claude is not available in this view'; return; }
     if (kind === 'brand') {
       const bp = 'You are a senior brand strategist and copywriter. Invent ONE brand for the brief below, specific to exactly what it is (not a generic business). Return JSON: {"directions":[{...}]} with a single direction: name (1-3 words, original, never a real company; if the brief names the business reuse it exactly), head (website headline, max 9 words, specific, no clichés), sub (one sentence, write the brand name as {n}), eyebrow (2-4 words), cta ([primary,secondary], max 3 words each), nav (4 short items), feats (exactly 3 pairs [title, one sentence] about what this business really offers), quote ([believable customer line, who]), stats (exactly 3 pairs [short value, label], plausible), glyph (one of: ' + MM.GLYPHS.join(' ') + '). Write in the language of the brief. Brief: ' + [B.text, B.problem].filter(Boolean).join('. ') + (B.name ? '\nBusiness name (use exactly): ' + B.name : '');
-      try { const j = await sample.json(bp, { modelTier: 'default', cache: true }); if (j && Array.isArray(j.directions) && j.directions[0] && typeof j.directions[0] === 'object') { B.dir = j.directions[0]; B.agentOk = true; } } catch (e) { }
+      try { const j = await sample.json(bp, { modelTier: 'default', cache: true }); if (j && Array.isArray(j.directions) && j.directions[0] && typeof j.directions[0] === 'object') { B.dir = j.directions[0]; B.agentOk = true; } else B.agentErr = 'unexpected answer'; } catch (e) { B.agentErr = (e && (e.code || e.message)) || 'failed'; }
       return;
     }
     const base = D.P[D.detect([B.text, B.users, B.problem].join(' '), B.type)], tpl = {}; PACK_KEYS.forEach(k => tpl[k] = base[k]);
@@ -96,8 +96,8 @@
       'Return ONE JSON object with exactly the same keys and shapes as the example below, but with content specific to THIS product: its real vocabulary, entities, statuses, workflow steps, KPIs, table columns, approvals and settings, as a domain expert would write it. Rules: realistic numbers and short labels (under 28 characters); keep the arrays at the same lengths as the example (names 12, kpis 4, workflow.steps 5, drivers 4, bridge 7, group 6, series 2, approvals 4, settings 4 groups of 3); cols must keep the same 8 column ids in the same order (name, owner, m1, m2, m3, pct, status, trend) and the same type strings, only change the labels; kpis items are [label, value, delta, 1 if good else 0]; keep "idp", "range", "spread", "num", "cur", "unit" valid (cur and unit may be empty strings); "name" is a short invented product name. Write all text in ' + (/[֐-׿]/.test(B.text) ? 'English (keep identifiers and numbers Latin, even though the brief is Hebrew)' : 'the language of the brief') + '. No commentary, JSON only.\n\nExample (for a different product):\n' + JSON.stringify(tpl);
     try {
       const j = await sample.json(prompt, { modelTier: 'default', cache: true });
-      const m = mergePack(j, base); if (m) { B.agent = m; B.agentOk = true; }
-    } catch (e) { /* not granted, rate limited or bad JSON: keep the built-in pack */ }
+      const m = mergePack(j, base); if (m) { B.agent = m; B.agentOk = true; } else B.agentErr = 'unexpected answer';
+    } catch (e) { B.agentErr = (e && (e.code || e.message)) || 'failed'; }
   }
   async function begin(skip) {
     const b = $('#go'), r = $('#seeall'); [b, r].forEach(x => x && (x.disabled = true));
@@ -105,6 +105,7 @@
     const t = setTimeout(() => { }, 0); clearTimeout(t);
     try { await Promise.race([askAgent(), new Promise(res => setTimeout(res, 70000))]); } catch (e) { }
     startExplore(skip);
+    if (S.kind !== 'card') setTimeout(() => toast(S.brief.agentOk ? 'Claude wrote the content for your idea' : 'Built-in content used. Claude unavailable: ' + (S.brief.agentErr || 'unknown')), 400);
   }
   function startExplore(skip) {
     setKind(resolveKind(S.brief)); S.ctx = newCtx(); S.seedBase = Math.floor(Math.random() * 9000) + 100; S.next = 1; S.hist = []; S.shown = []; S.final = null; S.readyAt = 7; S.tp = false; S.tpUser = false;
