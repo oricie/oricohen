@@ -150,9 +150,9 @@
   const LB = { site: 'Website', scroll: 'Page', brand: 'Brand board' };
 
   // Strong signals of a complex product, then signals of a brand/website. English and Hebrew.
-  const COMPLEX = /\b(social network|network for|marketplace|software|saas|portal|app for|ai agents?|agents?|erp|crm|enterprise|dashboard|analytics|back.?office|admin (console|panel|platform)|internal tool|workflow|b2b|saas|platform|developer tools?|data platform|business intelligence|bi)\b|פלטפורמ|מערכת (ניהול|לניהול|ארגונית)|דשבורד|אנליטיקה|ארגוני|תוכנה ל|תכנון פיננסי|ניהול (מלאי|לקוחות|הרשאות)|סאס/i;
+  const COMPLEX = /\b(apps?|mobile app|tracker|tracking|social network|network for|marketplace|software|saas|portal|app for|ai agents?|agents?|erp|crm|enterprise|dashboard|analytics|back.?office|admin (console|panel|platform)|internal tool|workflow|b2b|saas|platform|developer tools?|data platform|business intelligence|bi)\b|פלטפורמ|מערכת (ניהול|לניהול|ארגונית)|דשבורד|אנליטיקה|ארגוני|תוכנה ל|תכנון פיננסי|ניהול (מלאי|לקוחות|הרשאות)|סאס/i;
   const BRANDY = /\b(logo|branding|brand|landing page|website|portfolio|shop|store|restaurant|caf[eé]|bakery|bagel|studio|salon|boutique|bar|clinic|gym|florist|hotel|service|services|dog|pet|pets|grooming|cleaning|plumber|electrician|repair|tutor|tutoring|coach|coaching|consulting|consultant|agency|photographer|photography|bakery|truck|catering|church|nonprofit|school|daycare|walker|sitter|sitting|trainer|landscaping|movers|lawyer|dentist|boutique)\b|לוגו|מיתוג|אתר|תיק עבודות|חנות|מסעדה|בית קפה|מאפיי|בייגל|סטודיו|מספרה|בוטיק|קליניקה|יוגה|פיצרי|שירות|כלב|חיות|ניקיון|מאמן|יועץ|צלם|קייטרינג|גינון|הובלות|עורך דין|רופא שיניים/i;
-  const detectKind = t => { t = t || ''; const c = COMPLEX.test(t), b = BRANDY.test(t); if (b && !/\b(erp|crm|enterprise|dashboard|analytics|admin (console|panel))\b|ארגוני|דשבורד/i.test(t)) return 'brand'; return c ? 'product' : 'brand'; };
+  const detectKind = t => { t = t || ''; const c = COMPLEX.test(t), b = BRANDY.test(t); if (b && !/\b(apps?|erp|crm|enterprise|dashboard|analytics|admin (console|panel))\b|ארגוני|דשבורד/i.test(t)) return 'brand'; return c ? 'product' : 'brand'; };
 
   g.BRAND = {
     model: { AXES, ARCH, AX: {}, learn: MD.learn, meters, summary, reaction, closing, makeDirection, initialDirections, nextDirection, finalDirection, ready: MD.ready },
