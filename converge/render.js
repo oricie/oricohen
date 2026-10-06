@@ -317,10 +317,12 @@
     return '--bg:' + t.bg + ';--surface:' + t.surface + ';--raised:' + t.raised + ';--ink:' + t.ink + ';--mut:' + t.mut + ';--line:' + t.line + ';--acc:' + t.acc + ';--accInk:' + t.accInk + ';--soft:' + t.soft + ';--pos:' + t.pos + ';--neg:' + t.neg + ';--warn:' + t.warn +
       ';--u:' + f.u + 'px;--fs:' + f.fs + 'px;--row:' + f.row + 'px;--r:' + f.r + 'px;--ui:"' + t.fonts.ui + '";--mono:"' + t.fonts.mono + '";--disp:"' + t.fonts.disp + '";--dw:' + dw + ';color-scheme:' + t.mode;
   }
+  g.PRODUCT_VARS = vars;
   const loaded = new Set();
   function ensureFonts(d) { M.fontsHref(d.theme.fonts).forEach(h => { if (loaded.has(h)) return; loaded.add(h); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = h; document.head.appendChild(l); }); }
 
   function view(d, st) {
+    if (d.pack && d.pack.layout === 'map' && g.LIVE) return g.LIVE.view(d, st);
     const f = d.flags;
     let page, drawer = '';
     const S = st.screen;
@@ -347,11 +349,12 @@
     if (o.interactive && !sr._wired) {
       sr._wired = true;
       sr.addEventListener('click', e => {
-        const t = e.target.closest('[data-go],[data-row],[data-close],[data-step],[data-tab],[data-iview],[data-appr],[data-preset],[data-tog],[data-sg],[data-adv],[data-cmd]'); if (!t) { if (st.cmd) { st.cmd = false; draw(); } return; }
+        const t = e.target.closest('[data-go],[data-row],[data-close],[data-step],[data-tab],[data-iview],[data-appr],[data-preset],[data-tog],[data-sg],[data-adv],[data-cmd],[data-sel]'); if (!t) { if (st.cmd) { st.cmd = false; draw(); } return; }
         const ds = t.dataset;
-        if (ds.appr) { const [i, a] = ds.appr.split(':'); st.appr[i] = a; }
+        if (ds.sel != null && ds.go == null) st.sel = +ds.sel;
+        else if (ds.appr) { const [i, a] = ds.appr.split(':'); st.appr[i] = a; }
         else if (ds.row != null && ds.go == null) { st.row = +ds.row; st.tab = 'Overview'; }
-        else if (ds.go) { st.screen = ds.go; st.row = ds.row != null ? +ds.row : null; st.cmd = false; }
+        else if (ds.go) { st.screen = ds.go; st.row = ds.row != null ? +ds.row : null; st.cmd = false; if (ds.row != null && d.pack.layout === 'map') st.sel = +ds.row; }
         else if (ds.close) st.row = null;
         else if (ds.step != null) st.step = +ds.step;
         else if (ds.tab) st.tab = ds.tab;

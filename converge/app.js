@@ -63,7 +63,7 @@
   }
 
   /* ───────── Claude as the content agent ───────── */
-  const PACK_KEYS = ['name', 'kind', 'users', 'cur', 'unit', 'e', 'labels', 'groups', 'names', 'idp', 'range', 'spread', 'status', 'pctLabel', 'num', 'cols', 'kpis', 'workflow', 'inputsT', 'drivers', 'bridge', 'group', 'lines', 'series', 'trendT', 'insightT', 'people', 'act', 'ai', 'approvals', 'settings'];
+  const PACK_KEYS = ['live', 'layout', 'name', 'kind', 'users', 'cur', 'unit', 'e', 'labels', 'groups', 'names', 'idp', 'range', 'spread', 'status', 'pctLabel', 'num', 'cols', 'kpis', 'workflow', 'inputsT', 'drivers', 'bridge', 'group', 'lines', 'series', 'trendT', 'insightT', 'people', 'act', 'ai', 'approvals', 'settings'];
   const okArr = (a, n) => Array.isArray(a) && a.length >= n;
   function mergePack(p, base) {
     if (!p || typeof p !== 'object') return null;
@@ -75,11 +75,12 @@
       kpis: x => okArr(x, 4) && x.every(k => Array.isArray(k) && k.length >= 3), workflow: x => x && typeof x.name === 'string' && okArr(x.steps, 4) && x.steps.every(s => Array.isArray(s) && s.length >= 2),
       inputsT: x => typeof x === 'string', drivers: x => okArr(x, 3) && x.every(d => Array.isArray(d) && d.length >= 2), bridge: x => Array.isArray(x) && x.length === 7, group: x => okArr(x, 4), lines: x => okArr(x, 4), series: x => Array.isArray(x) && x.length === 2,
       trendT: x => typeof x === 'string', insightT: x => typeof x === 'string', people: x => typeof x === 'string', act: x => okArr(x, 3), ai: x => okArr(x, 2), approvals: x => okArr(x, 3) && x.every(a => Array.isArray(a) && a.length >= 4),
+      live: x => x && okArr(x.items, 6) && x.items.every(i => i && ['code', 'line', 'from', 'to', 'fc', 'tc', 'dep', 'arr', 'status'].every(k => typeof i[k] === 'string') && typeof i.prog === 'number'),
       settings: x => okArr(x, 3) && x.every(g => Array.isArray(g) && typeof g[0] === 'string' && Array.isArray(g[1]) && g[1].length)
     };
     Object.keys(chk).forEach(k => { let ok = false; try { ok = !!chk[k](p[k]); } catch (e) { } if (ok) { out[k] = p[k]; n++; } });
     ['cur', 'unit'].forEach(k => { if (typeof p[k] === 'string') out[k] = p[k]; });
-    out.re = /./; return n >= 12 ? out : null;
+    out.re = /./; out.layout = base.layout; return n >= 12 ? out : null;
   }
   async function askAgent() {
     const kind = resolveKind(S.brief); if (kind === 'card') return;
@@ -93,7 +94,7 @@
     }
     const base = D.P[D.detect([B.text, B.users, B.problem].join(' '), B.type)], tpl = {}; PACK_KEYS.forEach(k => tpl[k] = base[k]);
     const prompt = 'You write realistic mock content for a clickable product prototype. The product: "' + [B.text, B.users && 'Users: ' + B.users, B.problem && 'Problem: ' + B.problem].filter(Boolean).join('. ') + '".\n' +
-      'Return ONE JSON object with exactly the same keys and shapes as the example below, but with content specific to THIS product: its real vocabulary, entities, statuses, workflow steps, KPIs, table columns, approvals and settings, as a domain expert would write it. Rules: realistic numbers and short labels (under 28 characters); keep the arrays at the same lengths as the example (names 12, kpis 4, workflow.steps 5, drivers 4, bridge 7, group 6, series 2, approvals 4, settings 4 groups of 3); cols must keep the same 8 column ids in the same order (name, owner, m1, m2, m3, pct, status, trend) and the same type strings, only change the labels; kpis items are [label, value, delta, 1 if good else 0]; keep "idp", "range", "spread", "num", "cur", "unit" valid (cur and unit may be empty strings); "name" is a short invented product name. Write all text in ' + (/[֐-׿]/.test(B.text) ? 'English (keep identifiers and numbers Latin, even though the brief is Hebrew)' : 'the language of the brief') + '. No commentary, JSON only.\n\nExample (for a different product):\n' + JSON.stringify(tpl);
+      'Return ONE JSON object with exactly the same keys and shapes as the example below, but with content specific to THIS product: its real vocabulary, entities, statuses, workflow steps, KPIs, table columns, approvals and settings, as a domain expert would write it. Rules: realistic numbers and short labels (under 28 characters); keep the arrays at the same lengths as the example (names 12, kpis 4, workflow.steps 5, drivers 4, bridge 7, group 6, series 2, approvals 4, settings 4 groups of 3); cols must keep the same 8 column ids in the same order (name, owner, m1, m2, m3, pct, status, trend) and the same type strings, only change the labels; kpis items are [label, value, delta, 1 if good else 0]; if "live" is present, rewrite live.items (8 items) as the real items of THIS product, keeping every key (prog is 0 to 1, 3-letter-ish codes in from/to) and the live title, unit and filter labels; keep "idp", "range", "spread", "num", "cur", "unit" valid (cur and unit may be empty strings); "name" is a short invented product name. Write all text in ' + (/[֐-׿]/.test(B.text) ? 'English (keep identifiers and numbers Latin, even though the brief is Hebrew)' : 'the language of the brief') + '. No commentary, JSON only.\n\nExample (for a different product):\n' + JSON.stringify(tpl);
     try {
       const j = await sample.json(prompt, { modelTier: 'default', cache: true });
       const m = mergePack(j, base); if (m) { B.agent = m; B.agentOk = true; } else B.agentErr = 'unexpected answer';

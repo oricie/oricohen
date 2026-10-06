@@ -144,7 +144,31 @@
       settings: [['General', [['Workspace name', 'Northline'], ['Default view', 'Overview'], ['Notifications', 'Daily digest']]], ['Roles', [['Admins', '4 people'], ['Editors', '36 people'], ['Viewers', '210 people']]], ['Policies', [['Approval required over', 'Threshold'], ['Auto-archive after', '90 days'], ['Require comments', 'on']]], ['Integrations', [['Calendar', 'Connected'], ['Chat', 'Connected'], ['Storage', 'Connected']]]]
     }
   };
-  const ORDER = ['process', 'finance', 'erp', 'crm', 'dev', 'admin', 'bi'];
+
+  const F = (code, line, from, to, fc, tc, dep, arr, status, prog, dur, ac, alt, spd, gate, delay) => ({ code, line, from, to, fc, tc, dep, arr, status, prog, dur, alt, spd, gate, delay: delay || 0, ac });
+  P.live = Object.assign({}, P.generic, {
+    re: /flight|radar|aircraft|airline|airport|aviation|vessel|shipping|fleet|train|transit|rideshare|real.?time map|live map|gps/, layout: 'map', name: 'Skyline', kind: 'Live flight tracker', users: 'Travellers and planespotters',
+    labels: { home: 'Live map', workflow: 'Flight detail', table: 'Departures', insights: 'Delays', approvals: 'Alerts', settings: 'Settings' },
+    groups: { home: 'Track', workflow: 'Track', table: 'Track', insights: 'Track', approvals: 'You', settings: 'You' },
+    e: ['flight', 'Flights'],
+    kpis: [['In the air', '48', '+6', 1], ['Delayed', '7', '+2', 0], ['On time', '91%', '+1 pt', 1], ['Followed', '3', '', 1]],
+    ai: ['LY001 is running 12 minutes early.', 'Gate change for BA164: now B7.'],
+    settings: [['Notifications', [['Gate changes', 'on'], ['Delays over 15 minutes', 'on'], ['Landing alerts', 'off']]], ['Units', [['Altitude', 'Feet'], ['Speed', 'Knots'], ['Time', '24 hour']]], ['Followed', [['LY001 Tel Aviv to New York', 'on'], ['BA164 London to Singapore', 'on'], ['EK202 Dubai to Sydney', 'off']]], ['Display', [['Map style', 'Light'], ['Show routes', 'on'], ['Airport labels', 'on']]]],
+    live: {
+      title: 'Flights near you', unit: 'flights', search: 'Search flight, route or airport', f1: 'Departing', f2: 'Arriving', air: 'in the air', late: 'delayed', sub: 'Scheduled times, live status and gates', h1: 'Flight', k1: 'Altitude', k2: 'Speed', k3: 'Gate',
+      items: [
+        F('LY001', 'El Al · Boeing 787-9', 'TLV', 'JFK', 'Tel Aviv', 'New York', '08:40', '13:25', 'In air', .56, '11h 45m', '', '37,000 ft', '512 kt', 'B4'),
+        F('BA164', 'British Airways · A350', 'LHR', 'SIN', 'London', 'Singapore', '21:05', '17:20', 'In air', .38, '13h 15m', '', '39,000 ft', '488 kt', 'A12'),
+        F('EK202', 'Emirates · A380', 'DXB', 'SYD', 'Dubai', 'Sydney', '02:30', '22:10', 'In air', .71, '14h 10m', '', '36,000 ft', '540 kt', 'C21'),
+        F('LH400', 'Lufthansa · 747-8', 'FRA', 'JFK', 'Frankfurt', 'New York', '10:15', '12:50', 'Delayed', .22, '8h 35m', '', '34,000 ft', '470 kt', 'Z50', 25),
+        F('AF218', 'Air France · 777', 'CDG', 'GRU', 'Paris', 'São Paulo', '13:00', '19:55', 'In air', .47, '11h 55m', '', '38,000 ft', '501 kt', 'K32'),
+        F('QR7', 'Qatar Airways · 787', 'IST', 'BKK', 'Istanbul', 'Bangkok', '23:10', '12:35', 'In air', .64, '9h 25m', '', '38,000 ft', '497 kt', '210'),
+        F('JL43', 'Japan Airlines · 787', 'HND', 'LAX', 'Tokyo', 'Los Angeles', '17:45', '11:20', 'In air', .33, '9h 35m', '', '35,000 ft', '505 kt', '112'),
+        F('TK52', 'Turkish Airlines · A330', 'IST', 'DEL', 'Istanbul', 'Delhi', '06:55', '16:10', 'Boarding', 0, '5h 15m', '', '–', '–', 'F9')
+      ]
+    }
+  });
+  const ORDER = ['live', 'process', 'finance', 'erp', 'crm', 'dev', 'admin', 'bi'];
 
   function detect(text, type) {
     const t = (text || '').toLowerCase() + ' ' + (type || '').toLowerCase();
