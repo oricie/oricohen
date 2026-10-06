@@ -5709,7 +5709,7 @@ function pickLane(onX){
   const r=arr[Math.floor(Math.random()*arr.length)];
   const dir=Math.random()<.5?1:-1;
   const off=r.major?(Math.random()<.5?3.4:7.4):3.2;
-  return {lane:r.p-dir*off,dir,road:r};
+  return {lane:onX?r.p-dir*off:r.p+dir*off,dir,road:r};   // Japan drives on the LEFT, on both axes
 }
 
 // ground: dark urban concrete (roads are separate strips on top)
@@ -6012,7 +6012,95 @@ function makeAlleyTex(){return tex((g,w,h)=>{
 function makePlainAsphaltTex(){return tex((g,w,h)=>{
   asphaltBase(g,w,h,'#26272c');
 },512,512,true);}
+// ============================================================================
+// PROCEDURAL ASPHALT — computed in WORLD space in the road shader, so nothing tiles and every
+// junction matches the street running into it. The road textures now only contribute their lane
+// paint; the surface itself is: tar of different ages (fresh black / old grey), aggregate grain,
+// crack networks in the old stretches, tar-sealed crack lines, square utility patches with seams,
+// potholes holding water, polished darker tyre tracks and an oil line down every lane.
+// Fine detail fades with distance so it does not shimmer from the air.
+// ============================================================================
+const ASPHALT_GLSL=`
+varying vec3 vWP;uniform vec3 uRoad;
+float ah(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float an(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(ah(i),ah(i+vec2(1,0)),f.x),mix(ah(i+vec2(0,1)),ah(i+vec2(1,1)),f.x),f.y);}
+float afbm(vec2 p){return an(p)*0.5+an(p*2.03+7.1)*0.3+an(p*4.1+3.3)*0.2;}
+float acrack(vec2 p){ vec2 i=floor(p),f=fract(p);float d1=8.0,d2=8.0;
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(float(x),float(y));vec2 o=vec2(ah(i+g),ah(i+g+19.7));
+    float d=length(g+o-f);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
+  return d2-d1;}
+`;
+function asphaltify(mat,road){
+  const u={uRoad:{value:new THREE.Vector3(road?(road.axis==='x'?0:1):0,road?road.p:0,road?road.w:0)}};
+  mat.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    Object.assign(sh.uniforms,u);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat aRough=0.0;')
+      .replace('#include <map_fragment>',`#include <map_fragment>
+{ vec2 p=vWP.xz; float dist=length(vViewPosition);
+  float near=1.0-smoothstep(14.0,55.0,dist);
+  float age=afbm(p*0.022+3.0);                                       // resurfaced (black) vs old (grey)
+  vec3 col=mix(vec3(0.040,0.040,0.042),vec3(0.10,0.097,0.092),smoothstep(0.35,0.72,age));
+  col*=0.86+0.28*an(p*0.55);                                         // mottling
+  float agg=an(p*8.5)*0.6+an(p*21.0)*0.4;
+  col*=mix(1.0,0.82+0.36*agg,near);                                  // aggregate grain
+  float rgh=0.66+0.22*an(p*0.13);
+  // tyre tracks + oil line, only on real carriageways
+  if(uRoad.z>0.5){
+    float acr=(uRoad.x<0.5?vWP.x:vWP.z)-uRoad.y+uRoad.z*0.5;
+    float along=(uRoad.x<0.5?vWP.z:vWP.x);
+    float f=fract(acr/3.25);
+    float tr=exp(-pow((f-0.25)/0.07,2.0))+exp(-pow((f-0.75)/0.07,2.0));
+    col*=1.0-0.30*tr; rgh-=0.16*tr;
+    col*=1.0-0.35*exp(-pow((f-0.5)/0.06,2.0))*smoothstep(0.35,0.8,an(vec2(along*0.25,acr)));
+  }
+  // crack networks where the tar is old, alligator cracking in the wheel paths
+  float oldM=smoothstep(0.62,0.9,age+0.3*an(p*0.21))*smoothstep(0.35,0.7,an(p*0.06+5.0));   // cracking comes in stretches
+  float cw=0.022+dist*0.0005;
+  float cr=1.0-smoothstep(cw,cw*2.2,acrack(p*0.42));
+  float cr2=1.0-smoothstep(cw*1.6,cw*3.5,acrack(p*1.7));
+  float cmask=smoothstep(0.3,0.75,an(p*0.9));                      // break the polygons up: real cracks wander and stop
+  col=mix(col,vec3(0.012),(cr*0.7*cmask+cr2*0.5*smoothstep(0.65,0.9,age)*cmask)*oldM*(0.3+0.7*near));
+  // tar-sealed crack lines: long meandering glossy black runs
+  float sl=abs(an(p*0.07+11.0)-0.5);
+  float seal=(1.0-smoothstep(0.010+dist*0.0002,0.018+dist*0.0004,sl))*step(0.45,an(p*0.031));
+  col=mix(col,vec3(0.006),seal*0.9); rgh=mix(rgh,0.28,seal);
+  // utility patches: rectangles of newer or older tar with dark sealant seams
+  vec2 pc=p/vec2(5.0,3.4), ci=floor(pc), cf=fract(pc); float ph=ah(ci+0.37);
+  if(ph<0.075){
+    vec2 lo=vec2(ah(ci+3.1),ah(ci+7.7))*0.32, hi=1.0-vec2(ah(ci+1.3),ah(ci+5.9))*0.32;
+    vec2 dd=min(cf-lo,hi-cf); float ins=step(0.0,min(dd.x,dd.y));
+    float seam=ins*(1.0-smoothstep(0.0,0.03+dist*0.0004,min(dd.x*5.0,dd.y*3.4)));
+    col=mix(col,(ph<0.04?vec3(0.024):vec3(0.10,0.098,0.092))*(0.9+0.2*agg),ins);
+    col=mix(col,vec3(0.006),seam*0.9);
+  }
+  // potholes: broken rim, black hole, standing water
+  vec2 qc=p/7.0, qi=floor(qc); float qh=ah(qi+9.1);
+  if(qh<0.03){
+    vec2 c=(qi+0.25+0.5*vec2(ah(qi+2.2),ah(qi+4.4)))*7.0;
+    float r=0.35+0.6*ah(qi+6.6); float dd=length(p-c)/r+0.35*(an((p-c)*3.0)-0.5);
+    float hole=1.0-smoothstep(0.85,1.0,dd), rim=(1.0-smoothstep(1.0,1.35,dd))*(1.0-hole);
+    col=mix(col,vec3(0.12,0.115,0.105)*(0.8+0.4*agg),rim*0.8);
+    col=mix(col,vec3(0.008,0.009,0.011),hole); rgh=mix(rgh,0.04,hole);
+  }
+  // keep the lane paint the road texture carries; replace everything else
+  float paint=smoothstep(0.10,0.22,max(texelColor.r,texelColor.g));
+  diffuseColor.rgb=mix(col,diffuseColor.rgb,paint);
+  aRough=mix(rgh,0.75,paint);
+}`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=aRough;');
+  };
+  mat.customProgramCacheKey=()=>'asphalt';
+  mat.envMapIntensity=0.6;                    // the dusk sky was tinting every road violet
+  mat.normalScale.set(0.25,0.25);
+  mat.needsUpdate=true;
+  return mat;
+}
 const plainAsphaltMat=new THREE.MeshStandardMaterial({map:makePlainAsphaltTex(),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.7,0.7),roughness:0.4,roughnessMap:wetRoughTex,metalness:0.05,envMapIntensity:1.1,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6});
+asphaltify(plainAsphaltMat,null);                // junction patches share the same world-space surface
 
 // REAL TOKYO SIDEWALK: cast concrete paver SLABS with per-slab tone variation, deep grimy joints,
 // cracks that cross slabs, moss/dirt collecting in the seams, dark gum spots, damp water staining,
@@ -6181,7 +6269,7 @@ function addRoad(axis,r){
   // normal can come up (0.10 -> 0.32) WITHOUT shattering into sparkle — a rough surface diffuses each
   // specular. The wet roughness MAP still darkens streaks/pools, so those keep a coherent neon shine.
   const baseRough=(r.major?0.52:0.56)+Math.random()*0.18;
-  const mat=new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.36,0.36),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.07,envMapIntensity:1.0,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+  const mat=asphaltify(new THREE.MeshStandardMaterial({map:roadTexFor(r),normalMap:asphaltNormalTex,normalScale:new THREE.Vector2(0.36,0.36),roughness:baseRough,roughnessMap:roadWetRoughFor(r),metalness:0.07,envMapIntensity:1.0,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}),{axis,p:r.p,w:r.w});
   // clip the grid at the coastline so no street runs out into the bay
   if(axis==='z'&&r.p>SEA_Z0)return;                       // east-west road fully seaward: drop it
   const spanLen=axis==='x'?LAND_LEN:CITY*2;               // north-south roads end at the coast
@@ -6520,7 +6608,7 @@ const tileTex=tex((g,w,h)=>{
 const tileMat=new THREE.MeshStandardMaterial({map:tileTex,roughness:0.8,metalness:0.05,envMapIntensity:0.5,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}); // matte tiled slab plaza (was glassy)
 // intersection patches: mostly asphalt, some stone-paver plazas / tiled slabs for block variety
 ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
-  const roll=Math.random(),bm=roll<0.16?cobbleMat:(roll<0.28?tileMat:plainAsphaltMat);
+  const bm=plainAsphaltMat;   // junctions are carriageway: same asphalt as the streets running into them
   const patch=new THREE.Mesh(new THREE.PlaneGeometry(rx.w,rz.w),bm);
   patch.rotation.x=-Math.PI/2;patch.position.set(rx.p,0.046,rz.p);
   scene.add(patch);
@@ -7880,6 +7968,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   for(let i=0;i<44;i++){
     const a=Math.random()*Math.PI*2,r=44+Math.random()*(innerR-58),px=cx+Math.cos(a)*r,pz=cz+Math.sin(a)*r;
     if(Math.hypot(px-cx,pz-cz)<34)continue; // keep the keep courtyard clear
+    if(roadAt(px,pz,2.5))continue;          // never in a street running through the grounds
     const P=PINE_GEOS[Math.floor(Math.random()*PINE_GEOS.length)];
     const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.42,5.2,5),pineTrunk);
     tr.position.set(px+P.lean*0.4,2.5,pz);tr.rotation.z=-P.lean*0.12;grp.add(tr);
@@ -8646,6 +8735,120 @@ for(let i=0;i<44;i++){
   scene.add(vm);
 }
 
+// ============================================================================
+// CAR KIT — real silhouettes instead of boxes. Each model is one merged geometry tagged per
+// vertex with what it is (paint / glass / trim / headlight / taillight / chrome / taxi sign /
+// plate); one shared shader turns the tag into the right material, so a whole fleet of a
+// model is ONE instanced draw call and paint still varies per car via instance colour.
+// Front of every model faces -Z, wheels on the ground at y=0.
+// ============================================================================
+const CP={PAINT:0,GLASS:1,TRIM:2,HEAD:3,TAIL:4,CHROME:5,SIGN:6,PLATE:7};
+function _tag(geo,part){const g=geo.index?geo.toNonIndexed():geo;g.deleteAttribute('uv');if(g.attributes.uv2)g.deleteAttribute('uv2');
+  if(!g.attributes.normal)g.computeVertexNormals();
+  g.setAttribute('aPart',new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(part),1));return g;}
+function _mergeTagged(list){
+  let n=0;list.forEach(g=>n+=g.attributes.position.count);
+  const P=new Float32Array(n*3),N=new Float32Array(n*3),A=new Float32Array(n);let o=0;
+  list.forEach(g=>{P.set(g.attributes.position.array,o*3);N.set(g.attributes.normal.array,o*3);A.set(g.attributes.aPart.array,o);o+=g.attributes.position.count;});
+  const out=new THREE.BufferGeometry();
+  out.setAttribute('position',new THREE.BufferAttribute(P,3));out.setAttribute('normal',new THREE.BufferAttribute(N,3));out.setAttribute('aPart',new THREE.BufferAttribute(A,1));
+  out.computeBoundingSphere();return out;
+}
+// side-profile extrusion: shape x = along the car (front +x), y up; result: length on Z (front -Z), width on X
+function _side(pts,width,bevel){
+  const sh=new THREE.Shape();sh.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)sh.lineTo(pts[i][0],pts[i][1]);
+  const g=new THREE.ExtrudeGeometry(sh,{depth:width-2*(bevel||0),bevelEnabled:!!bevel,bevelThickness:bevel||0,bevelSize:bevel||0,bevelSegments:2,curveSegments:4});
+  g.translate(0,0,-(width-2*(bevel||0))/2);g.rotateY(Math.PI/2);return g;
+}
+function _box(w,h,d,x,y,z,part,rx){const g=new THREE.BoxGeometry(w,h,d);if(rx)g.rotateX(rx);g.translate(x,y,z);return _tag(g,part);}
+function buildCarModel(S){
+  const L=S.L,W=S.W,c=S.c,R=S.R,parts=[];
+  // lower body: bottom edge with wheel arches, then the beltline outline front -> rear
+  const Ra=R+0.07, a0=Math.asin(Math.max(-1,Math.min(1,(c-R)/Ra)));
+  const bot=[[-L/2,c]];
+  [S.wr,S.wf].forEach(wx=>{for(let k=0;k<=8;k++){const a=(Math.PI-a0)-(Math.PI-2*a0)*k/8;bot.push([wx+Ra*Math.cos(a),R+Ra*Math.sin(a)]);}});
+  bot.push([L/2,c]);
+  parts.push(_tag(_side(bot.concat(S.body),W,0.05),CP.PAINT));
+  // greenhouse: glass, tapered inward above the beltline (tumblehome)
+  const gh=_side(S.cabin,W*0.9,0.03);
+  {const pa=gh.attributes.position,yb=Math.min(...S.cabin.map(p=>p[1])),yt=Math.max(...S.cabin.map(p=>p[1]));
+   for(let i=0;i<pa.count;i++){const t=Math.max(0,(pa.getY(i)-yb)/(yt-yb));pa.setX(i,pa.getX(i)*(1-0.13*t));}}
+  parts.push(_tag(gh,CP.GLASS));
+  // roof skin + pillars in body colour
+  const top=S.cabin.filter(p=>p[1]>=Math.max(...S.cabin.map(q=>q[1]))-0.06);
+  const rx0=Math.min(...top.map(p=>p[0])),rx1=Math.max(...top.map(p=>p[0])),ry=Math.max(...top.map(p=>p[1]));
+  parts.push(_box(W*0.9*0.87+0.02,0.05,rx1-rx0+0.06,0,ry+0.005,-(rx0+rx1)/2,CP.PAINT));
+  const cab=S.cabin, xs=W*0.9*0.87/2;
+  const pillar=(p,q)=>{const dx=q[0]-p[0],dy=q[1]-p[1],len=Math.hypot(dx,dy),ang=Math.atan2(dy,dx);
+    [-1,1].forEach(sd=>{const g=new THREE.BoxGeometry(0.07,0.09,len);g.rotateX(ang);    // profile +x maps to -z
+      const mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2;g.translate(sd*(xs+0.015),my,-mx);parts.push(_tag(g,CP.PAINT));});};
+  pillar(cab[0],cab[1]);pillar(cab[cab.length-2],cab[cab.length-1]);                  // A and C pillars
+  if(S.bPillar!==false){const mid=(rx0+rx1)/2-0.1;pillar([mid,cab[0][1]],[mid,ry]);}  // B pillar
+  // bumpers, grille, lights, plate, mirrors
+  parts.push(_box(W-0.04,0.2,0.16,0,c+0.14,-L/2+0.02,CP.TRIM),_box(W-0.04,0.2,0.16,0,c+0.14,L/2-0.02,CP.TRIM));
+  parts.push(_box(W*0.42,0.14,0.04,0,S.hl,-L/2-0.005,CP.TRIM));
+  [-1,1].forEach(sd=>{
+    parts.push(_box(0.34,0.13,0.05,sd*(W/2-0.27),S.hl,-L/2+0.005,CP.HEAD));
+    parts.push(_box(0.3,0.15,0.05,sd*(W/2-0.22),S.tl,L/2-0.005,CP.TAIL));
+    parts.push(_box(0.06,0.11,0.17,sd*(W/2+0.05),S.mirror,-(cab[0][0]-0.1),CP.PAINT));
+  });
+  parts.push(_box(0.34,0.17,0.02,0,c+0.36,L/2+0.01,CP.PLATE),_box(0.34,0.17,0.02,0,c+0.3,-L/2-0.07,CP.PLATE));
+  // wheels: tyre + rim, and a contact shadow so the car sits on the road
+  const tyre=new THREE.CylinderGeometry(R,R,0.22,14);tyre.rotateZ(Math.PI/2);
+  const rim=new THREE.CylinderGeometry(R*0.58,R*0.58,0.235,10);rim.rotateZ(Math.PI/2);
+  [S.wf,S.wr].forEach(wx=>[-1,1].forEach(sd=>{
+    const t=tyre.clone();t.translate(sd*(W/2-0.13),R,-wx);parts.push(_tag(t,CP.TRIM));
+    const r2=rim.clone();r2.translate(sd*(W/2-0.12),R,-wx);parts.push(_tag(r2,CP.CHROME));}));
+  {const g=new THREE.PlaneGeometry(W*0.95,L*0.9);g.rotateX(-Math.PI/2);g.translate(0,0.025,0);parts.push(_tag(g,CP.TRIM));}
+  if(S.extra)S.extra(parts);
+  return _mergeTagged(parts);
+}
+const CAR_SPECS={
+  taxi:{L:4.7,W:1.72,c:0.2,R:0.32,wf:1.45,wr:-1.35,hl:0.66,tl:0.74,mirror:1.0,
+    body:[[2.35,0.55],[2.32,0.78],[1.95,0.86],[0.95,0.92],[-1.4,0.93],[-2.1,0.9],[-2.33,0.8],[-2.35,0.55]],
+    cabin:[[0.95,0.92],[0.3,1.44],[-0.95,1.46],[-1.5,0.93]],
+    extra:p=>{p.push(_box(0.62,0.24,0.32,0,1.6,0.2,CP.SIGN));}},
+  sedan:{L:4.75,W:1.78,c:0.18,R:0.33,wf:1.45,wr:-1.4,hl:0.66,tl:0.76,mirror:0.98,
+    body:[[2.38,0.5],[2.33,0.74],[1.9,0.84],[1.0,0.9],[-1.45,0.92],[-2.2,0.88],[-2.37,0.74],[-2.38,0.5]],
+    cabin:[[1.0,0.9],[0.2,1.38],[-0.9,1.4],[-1.65,0.92]]},
+  kei:{L:3.4,W:1.48,c:0.17,R:0.28,wf:1.12,wr:-1.08,hl:0.68,tl:0.8,mirror:1.0,
+    body:[[1.7,0.48],[1.67,0.74],[1.35,0.84],[0.9,0.9],[-1.62,0.92],[-1.7,0.8],[-1.7,0.48]],
+    cabin:[[0.92,0.9],[0.42,1.6],[-1.55,1.63],[-1.63,0.92]]},
+  keitruck:{L:3.4,W:1.48,c:0.2,R:0.27,wf:1.05,wr:-1.0,hl:0.72,tl:0.6,mirror:1.05,bPillar:false,
+    body:[[1.7,0.55],[1.7,0.92],[0.62,0.92],[0.58,0.74],[-1.7,0.74],[-1.7,0.48]],
+    cabin:[[1.64,0.92],[1.48,1.74],[0.66,1.76],[0.62,0.92]],
+    extra:p=>{p.push(_box(1.42,0.28,0.05,0,0.88,1.68,CP.PAINT),_box(1.42,0.28,0.05,0,0.88,-0.56,CP.PAINT));
+      [-1,1].forEach(sd=>p.push(_box(0.05,0.28,2.26,sd*0.71,0.88,0.56,CP.PAINT)));}},
+  minivan:{L:4.75,W:1.82,c:0.19,R:0.33,wf:1.5,wr:-1.42,hl:0.82,tl:0.95,mirror:1.08,
+    body:[[2.38,0.6],[2.34,0.86],[1.95,0.98],[1.62,1.02],[-2.3,1.02],[-2.37,0.84],[-2.38,0.6]],
+    cabin:[[1.62,1.02],[0.92,1.84],[-2.2,1.88],[-2.3,1.02]]},
+  boxtruck:{L:5.8,W:2.0,c:0.26,R:0.4,wf:1.95,wr:-1.35,hl:0.78,tl:0.8,mirror:1.5,bPillar:false,
+    body:[[2.9,0.62],[2.88,1.16],[1.45,1.16],[1.4,0.92],[-2.9,0.92],[-2.9,0.62]],
+    cabin:[[2.85,1.16],[2.72,2.12],[1.52,2.16],[1.45,1.16]],
+    extra:p=>{p.push(_box(2.1,2.15,4.25,0,2.0,0.75,CP.PAINT),_box(2.12,0.28,4.27,0,1.55,0.75,CP.TRIM));}},
+};
+const CAR_GEOS={};for(const k in CAR_SPECS)CAR_GEOS[k]=buildCarModel(CAR_SPECS[k]);
+const carMat=new THREE.MeshStandardMaterial({color:0xffffff,metalness:0.45,roughness:0.32,envMapIntensity:1.1});
+carMat.onBeforeCompile=sh=>{
+  if(typeof fogHook==='function')fogHook(sh);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aPart;varying float vPart;')
+    .replace('#include <begin_vertex>','#include <begin_vertex>\nvPart=aPart;');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vPart;')
+    .replace('#include <color_fragment>',`#include <color_fragment>
+  if(vPart>0.5){ diffuseColor.rgb = vPart<1.5?vec3(0.012,0.016,0.02) : vPart<2.5?vec3(0.018) : vPart<3.5?vec3(0.85,0.85,0.8)
+      : vPart<4.5?vec3(0.45,0.02,0.02) : vPart<5.5?vec3(0.5) : vPart<6.5?vec3(0.9,0.85,0.6) : vec3(0.8,0.8,0.74); }`)
+    .replace('#include <metalnessmap_fragment>',`#include <metalnessmap_fragment>
+  if(vPart>0.5&&vPart<1.5){metalnessFactor=0.0;} else if(vPart>1.5&&vPart<2.5){metalnessFactor=0.0;} else if(vPart>4.5&&vPart<5.5){metalnessFactor=1.0;}`)
+    .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+  if(vPart>0.5&&vPart<1.5)roughnessFactor=0.04; else if(vPart>1.5&&vPart<2.5)roughnessFactor=0.85; else if(vPart>4.5&&vPart<5.5)roughnessFactor=0.25; else if(vPart>2.5)roughnessFactor=0.4;`)
+    .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+  if(vPart>2.5&&vPart<3.5)totalEmissiveRadiance+=vec3(2.2,2.1,1.7);
+  else if(vPart>3.5&&vPart<4.5)totalEmissiveRadiance+=vec3(1.6,0.06,0.04);
+  else if(vPart>5.5&&vPart<6.5)totalEmissiveRadiance+=vec3(1.3,1.1,0.6);`);
+};
+carMat.customProgramCacheKey=()=>'carkit';
+window.__carKit={CAR_GEOS,carMat};
+
 // parked cars hugging the curbs of side streets — upgraded from flat boxes to real bodies with
 // round wheels, a glass greenhouse and lights so they read like the moving traffic. Placements that
 // would land over the river band are skipped, so no parked car floats over open water.
@@ -8653,18 +8856,6 @@ for(let i=0;i<44;i++){
   const carCols=[0xb03030,0x3050a0,0xd8d8d8,0x2a2c30,0x6a7078,0xc8a030,0x30506a,0x8a3050];
   const minorX=ROADS_X.filter(r=>!r.major&&r.w>10);
   const minorZ=ROADS_Z.filter(r=>!r.major&&r.w>10);
-  const pWheelG=new THREE.CylinderGeometry(0.42,0.42,0.32,12);
-  const pWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
-  const pHubM=new THREE.MeshLambertMaterial({color:0x8a8f98});
-  const pWheelOff=[[-0.86,0.42,-1.3],[0.86,0.42,-1.3],[-0.86,0.42,1.3],[0.86,0.42,1.3]]; // [x,y,z]
-  const pWheelSet=wheelSetGeo(pWheelG,pWheelOff), pHubSet=wheelSetGeo(new THREE.CylinderGeometry(0.16,0.16,0.34,10),pWheelOff); // PERF: 4 wheels -> 1 mesh
-  const pGlassM=new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.12,opacity:.72,transparent:true});
-  const pHlM=new THREE.MeshBasicMaterial({color:0xdfe6ff}), pTlM=new THREE.MeshBasicMaterial({color:0x661010});
-  // PERF: parked cars are static, so the whole fleet is drawn as ~7 InstancedMesh (body/roof/glass/
-  // wheels/hubs/head+tail) instead of ~9 meshes per car. Body+roof carry per-instance colour.
-  const pBodGeo=new THREE.BoxGeometry(1.9,0.62,4.3), pRoofGeo=new THREE.BoxGeometry(1.66,0.16,2.0),
-        pCabGeo=new THREE.BoxGeometry(1.6,0.5,2.0), pLightGeo=new THREE.BoxGeometry(1.5,0.12,0.06);
-  const pBodMat=new THREE.MeshStandardMaterial({color:0xffffff,metalness:0.58,roughness:0.34,envMapIntensity:1.1});
   const parks=[];
   for(let i=0;i<56;i++){
     const onX=Math.random()<0.5;
@@ -8676,25 +8867,18 @@ for(let i=0;i<44;i++){
     const off=r.w/2-1.3;
     const wx=onX?a:(r.p+sd*off), wz=onX?(r.p+sd*off):a; // world position of this car
     if(Math.abs(wx-riverCX(wz))<RIVER_HW+4)continue; // would float over the meandering river — skip
-    const c=carCols[Math.floor(Math.random()*carCols.length)];
-    parks.push({px:onX?a:(r.p+sd*off), pz:onX?(r.p+sd*off):a, yaw:onX?Math.PI/2:0, c});
+    if(onX?ROADS_X.some(q=>Math.abs(wx-q.p)<q.w/2+6):ROADS_Z.some(q=>Math.abs(wz-q.p)<q.w/2+6))continue; // not across a junction
+    const kind=['kei','kei','keitruck','sedan','minivan','kei','boxtruck'][Math.floor(Math.random()*7)];
+    const c=kind==='boxtruck'||kind==='keitruck'||Math.random()<0.45?0xeceeef:carCols[Math.floor(Math.random()*carCols.length)];
+    parks.push({px:onX?a:(r.p+sd*off), pz:onX?(r.p+sd*off):a, yaw:(onX?Math.PI/2:0)+(Math.random()<.5?Math.PI:0)+(Math.random()-.5)*0.06, c, kind});
   }
-  const PN=parks.length;
-  if(PN){
-    const pdum=new THREE.Object3D(), pcol=new THREE.Color(), G=new THREE.Matrix4(), L=new THREE.Matrix4(), M=new THREE.Matrix4();
-    const bodM=new THREE.InstancedMesh(pBodGeo,pBodMat,PN), roofM=new THREE.InstancedMesh(pRoofGeo,pBodMat,PN),
-          cabM=new THREE.InstancedMesh(pCabGeo,pGlassM,PN), whM=new THREE.InstancedMesh(pWheelSet,pWheelM,PN),
-          hbM=new THREE.InstancedMesh(pHubSet,pHubM,PN), hlM=new THREE.InstancedMesh(pLightGeo,pHlM,PN),
-          tlM=new THREE.InstancedMesh(pLightGeo,pTlM,PN);
-    parks.forEach((p,i)=>{
-      pdum.position.set(p.px,0,p.pz);pdum.rotation.set(0,p.yaw,0);pdum.scale.set(1,1,1);pdum.updateMatrix();G.copy(pdum.matrix);
-      const at=(m,lx,ly,lz)=>{L.makeTranslation(lx,ly,lz);M.multiplyMatrices(G,L);m.setMatrixAt(i,M);};
-      at(bodM,0,0.66,0);at(roofM,0,1.36,-0.1);at(cabM,0,1.05,-0.1);at(whM,0,0,0);at(hbM,0,0,0);at(hlM,0,0.62,-2.16);at(tlM,0,0.62,2.16);
-      pcol.setHex(p.c);bodM.setColorAt(i,pcol);roofM.setColorAt(i,pcol);
-    });
-    bodM.castShadow=true;
-    [bodM,roofM,cabM,whM,hbM,hlM,tlM].forEach(m=>{m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;scene.add(m);});
-    if(bodM.instanceColor)bodM.instanceColor.needsUpdate=true;if(roofM.instanceColor)roofM.instanceColor.needsUpdate=true;
+  // one instanced mesh per model: the whole parked fleet is ~6 draw calls
+  const byKind={};parks.forEach(p=>{(byKind[p.kind]||(byKind[p.kind]=[])).push(p);});
+  const pdum=new THREE.Object3D(),pcol=new THREE.Color();
+  for(const k in byKind){
+    const list=byKind[k],im=new THREE.InstancedMesh(CAR_GEOS[k],carMat,list.length);
+    list.forEach((p,i)=>{pdum.position.set(p.px,0,p.pz);pdum.rotation.set(0,p.yaw,0);pdum.updateMatrix();im.setMatrixAt(i,pdum.matrix);im.setColorAt(i,pcol.setHex(p.c));});
+    im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;im.castShadow=true;im.frustumCulled=false;scene.add(im);
   }
 }
 
@@ -9713,10 +9897,10 @@ function applyRealAsphalt(){
     // sensible grain scale; exact per-road tiling alignment isn't visible on asphalt anyway.
     ASPHALT_NOR.wrapS=ASPHALT_NOR.wrapT=THREE.RepeatWrapping;ASPHALT_NOR.repeat.set(3,180);ASPHALT_NOR.needsUpdate=true;
     (window.__roadMeshes||[]).forEach(rm=>{
-      const m=rm.mesh.material;m.map=roadTexFor(rm.r);m.normalMap=ASPHALT_NOR;m.normalScale.set(0.7,0.7);m.needsUpdate=true;
+      const m=rm.mesh.material;m.map=roadTexFor(rm.r);m.normalMap=ASPHALT_NOR;m.normalScale.set(0.25,0.25);m.needsUpdate=true;
     });
     const pn=ASPHALT_NOR.clone();pn.wrapS=pn.wrapT=THREE.RepeatWrapping;pn.needsUpdate=true;
-    plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.normalMap=pn;plainAsphaltMat.normalScale.set(0.85,0.85);plainAsphaltMat.needsUpdate=true;
+    plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.normalMap=pn;plainAsphaltMat.normalScale.set(0.25,0.25);plainAsphaltMat.needsUpdate=true;
     const gn=ASPHALT_NOR.clone();gn.wrapS=gn.wrapT=THREE.RepeatWrapping;gn.repeat.set(60,60);gn.needsUpdate=true;
     if(typeof ground!=='undefined'){ground.material.normalMap=gn;ground.material.normalScale=new THREE.Vector2(0.7,0.7);ground.material.needsUpdate=true;}
   }catch(e){console.warn('applyRealAsphalt failed',e);}
@@ -13122,175 +13306,36 @@ function loop(now){
       // Japanese street palette — mostly white / silver (kei cars & trucks are overwhelmingly white),
       // with a few muted colours + the odd taxi black/green.
       const mcCols=[0xecedef,0xf2f3f5,0xdfe1e4,0xc9ccd0,0xe8e8ea,0xf5f5f6,0x9fb2c4,0x8f9a5a,0x232428,0xb03030,0x2a5a86,0xd8b23a];
-      // three traced sports-car profiles
-      function profile911(){
-        const s=new THREE.Shape();
-        s.moveTo(-2.35,0.28);
-        s.quadraticCurveTo(-2.4,0.5,-2.15,0.56);
-        s.quadraticCurveTo(-1.95,0.6,-1.75,0.72);
-        s.quadraticCurveTo(-1.5,0.82,-1.15,0.84);
-        s.lineTo(-0.85,0.86);
-        s.quadraticCurveTo(-0.55,0.88,-0.25,1.18);
-        s.quadraticCurveTo(0.15,1.34,0.55,1.33);
-        s.quadraticCurveTo(1.15,1.3,1.7,0.92);
-        s.quadraticCurveTo(2.15,0.66,2.4,0.64);
-        s.quadraticCurveTo(2.55,0.62,2.5,0.42);
-        s.lineTo(2.45,0.24);s.lineTo(1.45,0.24);
-        s.quadraticCurveTo(1.45,0.74,1.0,0.74);
-        s.quadraticCurveTo(0.55,0.74,0.55,0.24);
-        s.lineTo(-0.85,0.24);
-        s.quadraticCurveTo(-0.85,0.74,-1.3,0.74);
-        s.quadraticCurveTo(-1.75,0.74,-1.75,0.24);
-        s.lineTo(-2.3,0.24);s.lineTo(-2.35,0.28);
-        return s;
-      }
-      // angular fastback coupe-SUV (image 1)
-      function profileAngular(){
-        const s=new THREE.Shape();
-        s.moveTo(-2.5,0.34);
-        s.lineTo(-2.45,0.62);                          // sharp low nose
-        s.lineTo(-2.1,0.78);
-        s.lineTo(-1.7,0.86);                           // hood rise
-        s.lineTo(-1.0,0.92);
-        s.lineTo(-0.55,1.28);                          // A-pillar (angular)
-        s.lineTo(0.35,1.42);                           // flat roof
-        s.lineTo(1.05,1.4);
-        s.lineTo(1.95,1.0);                            // fastback (straight)
-        s.lineTo(2.45,0.86);
-        s.lineTo(2.55,0.66);                           // rear spoiler lip
-        s.lineTo(2.5,0.34);
-        s.lineTo(1.5,0.34);
-        s.quadraticCurveTo(1.5,0.82,1.05,0.82);        // rear arch
-        s.quadraticCurveTo(0.6,0.82,0.6,0.34);
-        s.lineTo(-0.95,0.34);
-        s.quadraticCurveTo(-0.95,0.82,-1.4,0.82);      // front arch
-        s.quadraticCurveTo(-1.85,0.82,-1.85,0.34);
-        s.lineTo(-2.45,0.34);s.lineTo(-2.5,0.34);
-        return s;
-      }
-      // Supra with rear wing (image 2)
-      function profileSupra(){
-        const s=new THREE.Shape();
-        s.moveTo(-2.45,0.3);
-        s.quadraticCurveTo(-2.5,0.52,-2.2,0.58);
-        s.quadraticCurveTo(-1.9,0.66,-1.55,0.74);
-        s.lineTo(-1.0,0.8);
-        s.quadraticCurveTo(-0.5,0.82,-0.15,1.16);      // windshield
-        s.quadraticCurveTo(0.3,1.32,0.75,1.28);        // rounded roof
-        s.quadraticCurveTo(1.35,1.22,1.75,0.86);       // fastback
-        s.lineTo(2.05,0.78);
-        s.lineTo(2.05,1.12);                           // wing upright
-        s.lineTo(2.5,1.16);                            // rear wing
-        s.lineTo(2.5,1.0);
-        s.lineTo(2.2,0.98);
-        s.lineTo(2.2,0.72);
-        s.quadraticCurveTo(2.45,0.68,2.42,0.44);       // tail
-        s.lineTo(2.38,0.26);s.lineTo(1.4,0.26);
-        s.quadraticCurveTo(1.4,0.76,0.95,0.76);
-        s.quadraticCurveTo(0.5,0.76,0.5,0.26);
-        s.lineTo(-0.9,0.26);
-        s.quadraticCurveTo(-0.9,0.76,-1.35,0.76);
-        s.quadraticCurveTo(-1.8,0.76,-1.8,0.26);
-        s.lineTo(-2.4,0.26);s.lineTo(-2.45,0.3);
-        return s;
-      }
-      // ---- Japanese kei vehicles (cab-over microtruck, tall microvan, tiny hatchback) — the
-      // silhouettes that make the traffic read as Tokyo, not a generic sports-car grid ----
-      function profileKeiTruck(){ const s=new THREE.Shape(); // cab-over flat-bed 軽トラ
-        s.moveTo(-2.15,0.22); s.lineTo(-2.15,1.52); s.lineTo(-0.72,1.52); s.lineTo(-0.72,0.66);
-        s.lineTo(2.2,0.66); s.lineTo(2.28,0.6); s.lineTo(2.28,0.22); s.lineTo(-2.15,0.22); return s; }
-      function profileKeiVan(){ const s=new THREE.Shape(); // tall cab-over microvan 軽バン
-        s.moveTo(-2.05,0.22); s.lineTo(-2.12,0.92); s.lineTo(-1.82,1.58); s.lineTo(1.85,1.62);
-        s.lineTo(2.12,1.48); s.lineTo(2.12,0.22); s.lineTo(-2.05,0.22); return s; }
-      function profileKeiCar(){ const s=new THREE.Shape(); // tiny tall hatchback 軽自動車
-        s.moveTo(-1.85,0.22); s.lineTo(-1.9,0.72); s.lineTo(-1.5,0.82); s.lineTo(-1.15,1.42);
-        s.lineTo(1.15,1.48); s.lineTo(1.66,1.32); s.lineTo(1.82,0.92); s.lineTo(1.82,0.22); s.lineTo(-1.85,0.22); return s; }
-      const carGeos=[];
-      // [profileFn, spawn-weight] — kei vehicles dominate; a few sports cars remain for variety
-      const carProfiles=[[profileKeiTruck,4],[profileKeiVan,4],[profileKeiCar,4],[profile911,1],[profileAngular,1],[profileSupra,1]];
-      const giPool=[];
-      // CAR_S scales the whole fleet up: kei vehicles are genuinely tiny in real life, which read as
-      // toys at this scale, so bodies are enlarged and widened for a believable road presence.
-      const CAR_S=1.26, CAR_W=2.05;
-      carProfiles.forEach(([fn,wt])=>{
-        try{
-          const geo=new THREE.ExtrudeGeometry(fn(),{depth:CAR_W,bevelEnabled:true,bevelThickness:0.08,bevelSize:0.08,bevelSegments:2});
-          geo.translate(0,0,-CAR_W/2);
-          geo.scale(CAR_S,CAR_S,1);           // longer + taller; width already set by extrude depth
-          const idx=carGeos.length;carGeos.push(geo);
-          for(let k=0;k<wt;k++)giPool.push(idx);
-        }catch(err){console.warn('car profile failed',err);}
-      });
-      if(carGeos.length===0){
-        const fb=new THREE.BoxGeometry(4.6,0.9,1.7);carGeos.push(fb);
-      }
-      const glassGeo=new THREE.BoxGeometry(1.5,0.52,1.72);
-      const mcWheelG=new THREE.CylinderGeometry(0.58,0.58,0.4,16);
-      const mcWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
-      const hubM=new THREE.MeshLambertMaterial({color:0x999aa2});
-      const mcWheelOff=[[-1.02,0.58,-1.62],[1.02,0.58,-1.62],[-1.02,0.58,1.28],[1.02,0.58,1.28]]; // [x,y,z] — track+wheelbase scaled with the bigger bodies
-      const mcWheelSet=wheelSetGeo(mcWheelG,mcWheelOff), mcHubSet=wheelSetGeo(new THREE.CylinderGeometry(0.27,0.27,0.44,12),mcWheelOff); // PERF: 4 wheels -> 1 mesh
-      // PERF: the whole 80-car fleet renders as per-component InstancedMesh (3 body silhouettes +
-      // glass/wheels/hubs/head+tail = ~8 draw calls, was ~500). State lives in __movingCars; only the
-      // instance matrices are rewritten each frame (position moves; yaw is fixed per car).
-      const MC=window.__movingCars, geoCount=carGeos.map(()=>0), _mcc=new THREE.Color();
-      const MC_N=200; // denser Tokyo street traffic (was 80) — cheap: whole fleet is instanced
+      // the car kit's models, weighted toward what actually fills a Tokyo street at night:
+      // kei cars and taxis, then sedans, minivans, kei trucks and the odd delivery truck
+      const KIT=window.__carKit, kinds=['kei','kei','kei','taxi','taxi','sedan','sedan','minivan','minivan','keitruck','boxtruck'];
+      const kindList=Object.keys(KIT.CAR_GEOS), geoCount={}, _mcc=new THREE.Color();
+      const MC=window.__movingCars, MC_N=200;
       for(let i=0;i<MC_N;i++){
-        const c=mcCols[i%mcCols.length];
-        const gi=giPool.length?giPool[Math.floor(Math.random()*giPool.length)]:Math.floor(Math.random()*carGeos.length);
+        const kind=kinds[Math.floor(Math.random()*kinds.length)];
         const onX=Math.random()<0.5, pl=pickLane(onX);
-        const yaw=onX?(pl.dir>0?Math.PI/2:-Math.PI/2):(pl.dir>0?0:Math.PI);
-        const taxi=Math.random()<0.16; // Tokyo streets carry a lot of taxis
-        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:16+Math.random()*12,yaw,gi,color:taxi?(Math.random()<0.5?0x14161a:0x1d3a2a):c,slot:geoCount[gi]++,taxi});
+        const yaw=onX?(pl.dir>0?-Math.PI/2:Math.PI/2):(pl.dir>0?Math.PI:0);   // models face -Z
+        const color=kind==='taxi'?[0x14161a,0x1d3a2a,0xd8b23a,0x2a4a7a][Math.floor(Math.random()*4)]
+                   :(kind==='boxtruck'||kind==='keitruck')?0xeceeef:mcCols[i%mcCols.length];
+        geoCount[kind]=geoCount[kind]||0;
+        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:(kind==='boxtruck'?12:16)+Math.random()*12,yaw,kind,color,slot:geoCount[kind]++,taxi:kind==='taxi'});
       }
-      const bodyMeshes=carGeos.map((geo,gi)=>{
-        if(!geoCount[gi])return null;
-        const m=new THREE.InstancedMesh(geo,new THREE.MeshStandardMaterial({color:0xffffff,metalness:0.62,roughness:0.3,envMapIntensity:1.15}),geoCount[gi]);
-        m.frustumCulled=false;scene.add(m);return m;
-      });
-      MC.forEach(c=>{const bm=bodyMeshes[c.gi];if(bm)bm.setColorAt(c.slot,_mcc.setHex(c.color));});
-      bodyMeshes.forEach(m=>{if(m&&m.instanceColor)m.instanceColor.needsUpdate=true;});
-      const glassIM=new THREE.InstancedMesh(glassGeo,new THREE.MeshStandardMaterial({color:0x0a1420,metalness:0.3,roughness:0.1,envMapIntensity:1.3,transparent:true,opacity:.72}),MC_N);
-      const whIM=new THREE.InstancedMesh(mcWheelSet,mcWheelM,MC_N), hbIM=new THREE.InstancedMesh(mcHubSet,hubM,MC_N);
-      const hlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.72,.18,.1),new THREE.MeshBasicMaterial({color:0xfff4d0}),MC_N);
-      const tlIM=new THREE.InstancedMesh(new THREE.BoxGeometry(1.82,.16,.1),new THREE.MeshBasicMaterial({color:0xff2818}),MC_N);
-      // Japanese rear number plate (kei = yellow with black text): region kanji + classification, then
-      // the big kana + number row. Tiny from the air but authentic on low passes / cockpit view.
-      const plateTex=tex((g,w,h)=>{
-        g.fillStyle='#f6c81c';g.fillRect(0,0,w,h);
-        g.fillStyle='#141414';g.textAlign='center';g.textBaseline='middle';
-        g.font=`bold ${Math.round(h*0.24)}px sans-serif`;g.fillText('品川 580',w/2,h*0.26);
-        g.font=`bold ${Math.round(h*0.44)}px sans-serif`;g.fillText('あ 12-34',w/2,h*0.66);
-        g.strokeStyle='#141414';g.lineWidth=Math.max(1,h*0.05);g.strokeRect(1,1,w-2,h-2);
-      },64,32);
-      const plateIM=new THREE.InstancedMesh(new THREE.PlaneGeometry(1.1,0.52),new THREE.MeshBasicMaterial({map:plateTex}),MC_N);
-      // Tokyo taxi roof sign (行灯) — a lit box on the roof of the taxi share of the fleet
-      const taxiTex=tex((g,w,h)=>{g.fillStyle='#f4e9c8';g.fillRect(0,0,w,h);g.fillStyle='#1a1a1a';g.textAlign='center';g.textBaseline='middle';g.font=`bold ${Math.round(h*0.6)}px sans-serif`;g.fillText('個人',w/2,h*0.55);},32,16);
-      const taxiIM=new THREE.InstancedMesh(new THREE.BoxGeometry(0.74,0.3,0.42),new THREE.MeshBasicMaterial({map:taxiTex}),MC_N);
-      [glassIM,whIM,hbIM,hlIM,tlIM,plateIM,taxiIM].forEach(m=>{m.frustumCulled=false;scene.add(m);});
-      window.__mcInst={bodyMeshes,glassIM,whIM,hbIM,hlIM,tlIM,plateIM,taxiIM,Rbody:new THREE.Matrix4().makeRotationY(Math.PI/2),
-        Zero:new THREE.Matrix4().makeScale(0,0,0),
-        G:new THREE.Matrix4(),L:new THREE.Matrix4(),M:new THREE.Matrix4(),q:new THREE.Quaternion(),e:new THREE.Euler(),p:new THREE.Vector3(),s:new THREE.Vector3(1,1,1)};
+      const bodyMeshes={};
+      kindList.forEach(k=>{if(!geoCount[k])return;const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,geoCount[k]);
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.frustumCulled=false;m.castShadow=false;scene.add(m);bodyMeshes[k]=m;});
+      MC.forEach(c=>bodyMeshes[c.kind].setColorAt(c.slot,_mcc.setHex(c.color)));
+      for(const k in bodyMeshes)if(bodyMeshes[k].instanceColor)bodyMeshes[k].instanceColor.needsUpdate=true;
+      window.__mcInst={bodyMeshes,G:new THREE.Matrix4(),q:new THREE.Quaternion(),e:new THREE.Euler(),p:new THREE.Vector3(),s:new THREE.Vector3(1,1,1)};
     }
     { const MC=window.__movingCars, I=window.__mcInst;
-      MC.forEach((c,i)=>{
+      for(let i=0;i<MC.length;i++){const c=MC[i];
         c.pos+=c.spd*c.dir*dt;
         if(c.pos>520)c.pos=-520;if(c.pos<-520)c.pos=520;
         I.p.set(c.onX?c.pos:c.lane,0,c.onX?c.lane:c.pos);
         I.e.set(0,c.yaw,0);I.q.setFromEuler(I.e);I.G.compose(I.p,I.q,I.s);
-        const bm=I.bodyMeshes[c.gi];if(bm){I.M.multiplyMatrices(I.G,I.Rbody);bm.setMatrixAt(c.slot,I.M);}
-        I.L.makeTranslation(0,1.42,0.2);I.M.multiplyMatrices(I.G,I.L);I.glassIM.setMatrixAt(i,I.M);
-        I.whIM.setMatrixAt(i,I.G);I.hbIM.setMatrixAt(i,I.G);
-        I.L.makeTranslation(0,.7,-2.92);I.M.multiplyMatrices(I.G,I.L);I.hlIM.setMatrixAt(i,I.M);
-        I.L.makeTranslation(0,.76,3.02);I.M.multiplyMatrices(I.G,I.L);I.tlIM.setMatrixAt(i,I.M);
-        I.L.makeTranslation(0,.53,3.07);I.M.multiplyMatrices(I.G,I.L);I.plateIM.setMatrixAt(i,I.M); // rear number plate
-        if(c.taxi){I.L.makeTranslation(0,1.92,0.1);I.M.multiplyMatrices(I.G,I.L);I.taxiIM.setMatrixAt(i,I.M);} // roof sign
-        else I.taxiIM.setMatrixAt(i,I.Zero);
-      });
-      I.bodyMeshes.forEach(m=>{if(m)m.instanceMatrix.needsUpdate=true;});
-      I.plateIM.instanceMatrix.needsUpdate=true;I.taxiIM.instanceMatrix.needsUpdate=true;
-      I.glassIM.instanceMatrix.needsUpdate=true;I.whIM.instanceMatrix.needsUpdate=true;I.hbIM.instanceMatrix.needsUpdate=true;
-      I.hlIM.instanceMatrix.needsUpdate=true;I.tlIM.instanceMatrix.needsUpdate=true;
+        I.bodyMeshes[c.kind].setMatrixAt(c.slot,I.G);
+      }
+      for(const k in I.bodyMeshes)I.bodyMeshes[k].instanceMatrix.needsUpdate=true;
     }
     updateRevealLights(); // snap the reveal-light pool to the nearest lamps/car headlights this frame
     for(let wi=0;wi<__oceanMats.length;wi++)__oceanMats[wi].uTime.value+=dt;
