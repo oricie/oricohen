@@ -178,12 +178,12 @@
         '<div class="opt"><label class="field"><span class="lab">Target users</span><input id="bu" dir="auto" maxlength="80" placeholder="FP&A analysts, controllers, the CFO" value="' + esc(keep.users != null ? keep.users : B.users) + '"></label><label class="field"><span class="lab">Main problem</span><input id="bp" dir="auto" maxlength="120" placeholder="Budgets live in forty spreadsheets" value="' + esc(keep.problem != null ? keep.problem : B.problem) + '"></label></div><div class="lab2">Product type</div><div class="chips" id="types">' + TYPES.map(t => '<button type="button" class="tchip ' + (B.type === t[0] ? 'on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
       $$('#types .tchip').forEach(b => b.onclick = () => { B.type = b.dataset.t; $$('#types .tchip').forEach(x => x.classList.toggle('on', x === b)); });
     };
-    ta.oninput = () => { grow(); if (B.kind === 'auto') opts(); }; grow(); opts();
+    ta.oninput = () => { if (B.fromEg && ta.value.trim() !== B.fromEg) { B.kind = 'auto'; B.type = ''; B.fromEg = null; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === 'auto')); } grow(); if (B.kind === 'auto') opts(); line(); }; grow(); opts();
     ta.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#go').click(); } };
     $('#kchange').onclick = () => $('#kinds').classList.toggle('hidden');
     $('#more').onclick = () => { const o = $('#opts'); o.classList.toggle('hidden'); $('#more').textContent = o.classList.contains('hidden') ? 'Add details' : 'Hide details'; };
     $$('#kinds .tchip').forEach(b => b.onclick = () => { B.kind = b.dataset.k; $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x === b)); shown = null; opts(); });
-    $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); ta.focus(); });
+    $$('.eg .tchip').forEach(a => a.onclick = () => { const e = EXAMPLES[+a.dataset.e]; ta.value = e[1]; B.kind = e[2]; B.type = e[3]; B.fromEg = e[1].trim(); B.name = ''; grow(); $$('#kinds .tchip').forEach(x => x.classList.toggle('on', x.dataset.k === B.kind)); shown = null; opts(); ta.focus(); });
     const collect = () => { B.text = ta.value.trim() || EXAMPLES[0][1]; B.users = ($('#bu') || {}).value ? $('#bu').value.trim() : ''; B.problem = ($('#bp') || {}).value ? $('#bp').value.trim() : ''; B.name = ($('#bn') || {}).value ? $('#bn').value.trim() : ''; B.when = ($('#bw') || {}).value ? $('#bw').value.trim() : ''; B.where = ($('#bq') || {}).value ? $('#bq').value.trim() : ''; };
     $('#bf').onsubmit = e => { e.preventDefault(); collect(); begin(true); };
     $('#seeall').onclick = () => { collect(); begin(false); };
