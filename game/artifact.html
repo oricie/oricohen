@@ -182,6 +182,7 @@
   body.on-foot .foot { display:flex; }
   body.on-foot #fireBtn, body.on-foot #camBtn, body.on-foot #wpnBtn,
   body.on-foot #stopBtn, body.on-foot #tacwrap { display:none; }
+  body.cockpit #tacwrap { display:none; }          /* the TSD is on the left MFD in the cockpit */
   #talkBtn { right:var(--col); bottom:var(--floor); }
   #exitBtn { right:var(--edge); bottom:var(--floor); }
   @keyframes fireRing { to { transform:rotate(360deg); } }
@@ -214,6 +215,84 @@
     #help { display:none; }
     #steps { display:none !important; }
     #actPrompt .a { font-size:15px; } #actPrompt .key { font-size:16px; }
+  }
+  /* ---- MISSION BRIEFING (start / game-over screen) ---- */
+  #brief { position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; overflow:auto;
+    padding:24px 16px; color:var(--ui-hi); font-family:var(--f); pointer-events:auto;
+    background:radial-gradient(ellipse at 50% 45%, rgba(2,10,14,.62), rgba(2,6,9,.93) 75%),
+               repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  #brief, #brief * { touch-action:pan-y; }   /* the briefing scrolls on phones */
+  .bf-sheet { width:min(920px,100%); margin:auto; background:rgba(1,12,18,.86); border:1px solid var(--ui-line);
+    box-shadow:0 0 0 1px rgba(0,0,0,.6), 0 30px 80px rgba(0,0,0,.6); position:relative; }
+  .bf-sheet::before,.bf-sheet::after { content:''; position:absolute; width:14px; height:14px; border:2px solid var(--ui); }
+  .bf-sheet::before { left:-1px; top:-1px; border-right:none; border-bottom:none; }
+  .bf-sheet::after { right:-1px; bottom:-1px; border-left:none; border-top:none; }
+  .bf-class { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:7px 18px;
+    background:var(--ui-warn); color:#120c00; font:700 12px/1.2 'Courier New',monospace; letter-spacing:.12em; }
+  .bf-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 26px 6px; }
+  .bf-title { font-weight:700; font-size:clamp(30px,5.6vw,56px); line-height:.95; letter-spacing:.02em; color:#fff; }
+  .bf-title small { display:block; font-size:clamp(11px,1.6vw,14px); letter-spacing:.26em; color:var(--ui); margin-bottom:10px; font-weight:600; }
+  .bf-hanko { flex:none; width:78px; height:78px; border:3px solid #c81e2a; border-radius:6px; color:#d8242f;
+    font:700 25px/1.05 "Hiragino Mincho ProN","Yu Mincho",serif; display:flex; align-items:center; justify-content:center;
+    text-align:center; transform:rotate(-7deg); opacity:.9; box-shadow:inset 0 0 0 3px rgba(200,30,42,.25); }
+  .bf-sit { padding:6px 26px 16px; font-size:15px; line-height:1.55; color:#cfe6ea; max-width:780px; }
+  .bf-sit b { color:#fff; }
+  .bf-cols { display:grid; grid-template-columns:1.15fr 1fr; gap:0; border-top:1px solid var(--ui-faint); border-bottom:1px solid var(--ui-faint); }
+  .bf-steps,.bf-crew { padding:16px 26px 18px; }
+  .bf-crew { border-left:1px solid var(--ui-faint); }
+  .bf-h { font-size:12px; font-weight:700; letter-spacing:.2em; color:var(--ui); margin-bottom:10px; }
+  .bf-step { display:flex; gap:12px; align-items:flex-start; padding:7px 0; }
+  .bf-step i { font-style:normal; font:700 13px/1 'Courier New',monospace; color:#001218; background:var(--ui);
+    padding:5px 5px 4px; margin-top:1px; }
+  .bf-step b { display:block; font-size:16px; letter-spacing:.04em; color:#fff; }
+  .bf-step span { display:block; font-size:13.5px; color:var(--ui-dim); color:#9fbcc2; margin-top:2px; line-height:1.4; }
+  #brief kbd { font:700 12px/1 var(--f); color:#001218; background:#d9f9ff; border-radius:3px; padding:2px 6px 1px;
+    box-shadow:0 2px 0 #0a7f8c; }
+  .bf-keys { margin-top:12px; font-size:12.5px; color:#9fbcc2; line-height:2; }
+  .bf-cards { display:grid; grid-template-columns:1fr; gap:6px; }
+  .bf-card { display:flex; align-items:center; gap:10px; padding:5px 8px 5px 5px; background:rgba(95,242,255,.04);
+    border:1px solid var(--ui-faint); position:relative; }
+  .bf-card img { width:40px; height:40px; image-rendering:pixelated; filter:grayscale(.6) contrast(1.1); }
+  .bf-card b { display:block; font-size:15px; letter-spacing:.06em; }
+  .bf-card span { font-size:12px; color:#9fbcc2; margin-right:8px; }
+  .bf-card em { font-style:normal; font-size:12px; color:var(--ui); letter-spacing:.08em; }
+  .bf-card u { text-decoration:none; margin-left:auto; font:700 11px/1 'Courier New',monospace; color:#ff5a64;
+    border:1.5px solid #ff5a64; padding:3px 5px; transform:rotate(-4deg); letter-spacing:.1em; }
+  .bf-card.home u { color:var(--ui-ok); border-color:var(--ui-ok); }
+  .bf-card.home img { filter:none; }
+  .bf-launch { display:flex; align-items:center; gap:18px; padding:18px 26px; flex-wrap:wrap; }
+  .bf-call { display:flex; flex-direction:column; gap:4px; font-size:11px; letter-spacing:.2em; color:var(--ui); font-weight:700; }
+  .bf-call input { background:#000a0f; border:1px solid var(--ui-line); color:#fff; padding:10px 12px; width:170px;
+    font:700 17px/1 var(--f); letter-spacing:.12em; text-transform:uppercase; outline:none; pointer-events:auto; }
+  .bf-call input:focus { border-color:var(--ui); box-shadow:0 0 0 2px rgba(95,242,255,.2); }
+  #startBtn { pointer-events:auto; cursor:pointer; border:none; padding:5px; align-self:flex-end;
+    background:repeating-linear-gradient(-45deg,#ffc23a 0 10px,#1a1406 10px 20px); }
+  #startBtn span { display:block; background:#c81e2a; color:#fff; font:700 20px/1 var(--f); letter-spacing:.2em;
+    padding:13px 34px 12px; box-shadow:inset 0 -3px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); }
+  #startBtn:hover span { background:#e0242f; }
+  #startBtn:active span { transform:translateY(2px); box-shadow:inset 0 -1px 0 rgba(0,0,0,.35); }
+  .bf-meta { margin-left:auto; display:flex; gap:22px; align-items:flex-start; font-size:13px; color:#9fbcc2; }
+  .bf-meta b { color:#fff; }
+  #ovStats .down { display:block; color:#ff5a64; font-weight:700; font-size:18px; letter-spacing:.08em; margin-bottom:2px; }
+  #ovBoard { min-width:150px; }
+  #ovBoard > b { display:block; font-size:11px; letter-spacing:.2em; color:var(--ui); margin-bottom:3px; }
+  #ovBoard div { display:flex; gap:8px; font-size:13px; line-height:1.5; }
+  #ovBoard div i { font-style:normal; color:var(--ui-dim); width:12px; }
+  #ovBoard div em { font-style:normal; margin-left:auto; color:#fff; }
+  #ovBoard .none { color:#6f8b91; }
+  .bf-foot { padding:0 26px 12px; font-size:11px; color:#5f7a80; }
+  @media (max-width:720px) {
+    .bf-cols { grid-template-columns:1fr; } .bf-crew { border-left:none; border-top:1px solid var(--ui-faint); }
+    .bf-cards { grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
+    .bf-card { flex-direction:column; gap:3px; padding:4px 2px 5px; min-width:0; text-align:center; }
+    .bf-card img { width:34px; height:34px; } .bf-card b { font-size:11px; letter-spacing:.02em; }
+    .bf-card span,.bf-card em { display:none; } .bf-card u { margin:0; font-size:9px; padding:2px 3px; }
+    .bf-keys { display:none; } .bf-sit { font-size:14px; } .bf-step { padding:5px 0; }
+    .bf-step b { font-size:15px; } .bf-step span { font-size:13px; }
+    .bf-launch { gap:12px; } .bf-call input { width:140px; } #startBtn span { padding:12px 22px 11px; font-size:18px; }
+    .bf-head { padding:18px 18px 4px; } .bf-sit,.bf-steps,.bf-crew,.bf-launch,.bf-foot { padding-left:18px; padding-right:18px; }
+    .bf-hanko { width:60px; height:60px; font-size:19px; } .bf-meta { margin-left:0; width:100%; }
+    .bf-class span:last-child { display:none; }
   }
   /* ---- NEON TITLE WORDMARK ---- */
   .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
@@ -9009,340 +9088,206 @@ heli.position.set(0,45,120);scene.add(heli);
   disc.position.y=1.95;rotor.position.y=1.9;
 }
 
-// ---------- 3D COCKPIT INTERIOR (rich gunship interior, real geometry) ----------
+// ---------- 3D COCKPIT INTERIOR ----------
+// Rebuilt as a physical front seat rather than screens floating in front of the camera: a solid
+// instrument panel that fills the bottom of the view, a deep anti-glare shield, heavy canopy
+// frame and sills, MFDs set into bezels with real push-buttons, standby gauges, switch rows.
+// Lit materials, so the panel catches the dusk sky and the MFDs' own glow — and goes dark with it.
 scene.add(cam);
 const cockpitGroup=new THREE.Group();
 cam.add(cockpitGroup);
-function shadedTex(fn,w=256,h=256){return tex((g,w2,h2)=>{
-  g.fillStyle='#1b1d22';g.fillRect(0,0,w2,h2);
-  fn(g,w2,h2);
-  const vg=g.createLinearGradient(0,0,0,h2);
-  vg.addColorStop(0,'rgba(255,255,255,.10)');vg.addColorStop(.5,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.35)');
-  g.fillStyle=vg;g.fillRect(0,0,w2,h2);
-},w,h,true);}
-// brushed dark metal main-panel skin: plate seams, rivets, stencilled labels (replaces flat graph-paper grid)
-const panelTex=shadedTex((g,w,h)=>{
-  g.globalAlpha=0.55;
-  for(let i=0;i<260;i++){
-    const y=Math.random()*h;
-    g.strokeStyle=Math.random()<0.5?'rgba(255,255,255,.035)':'rgba(0,0,0,.05)';
-    g.beginPath();g.moveTo(0,y);g.lineTo(w,y+(Math.random()-.5)*2);g.stroke();
-  }
-  g.globalAlpha=1;
-  g.strokeStyle='rgba(0,0,0,.55)';g.lineWidth=2;
-  [w*0.22,w*0.5,w*0.78].forEach(x=>{g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();});
-  g.beginPath();g.moveTo(0,h*0.5);g.lineTo(w,h*0.5);g.stroke();
-  g.fillStyle='#3a3f46';
-  [w*0.02,w*0.22,w*0.5,w*0.78,w*0.98].forEach(x=>[h*0.06,h*0.94].forEach(y=>{
-    g.beginPath();g.arc(x,y,2.1,0,7);g.fill();
-    g.fillStyle='rgba(255,255,255,.25)';g.beginPath();g.arc(x-.5,y-.5,.7,0,7);g.fill();
-    g.fillStyle='#3a3f46';
-  }));
-  g.fillStyle='rgba(170,220,200,.4)';g.font='7px monospace';g.textAlign='left';
-  g.fillText('AH-9 GUNSHIP  //  MASTER PANEL',6,h-6);
-  g.textAlign='center';g.fillText('MASTER ARM',w*0.5,h*0.5-4);
-  g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=3;g.strokeRect(4,4,w-8,h-8);
-},512,176);
-const panelMat=new THREE.MeshBasicMaterial({map:panelTex});
-const strutMat=new THREE.MeshBasicMaterial({color:0x0b0c10});
-const gripMat=new THREE.MeshBasicMaterial({color:0x1c1c20});
-const glareTex=tex((g,w,h)=>{
-  const gr=g.createLinearGradient(0,0,w,h);
-  gr.addColorStop(0,'rgba(255,255,255,0)');
-  gr.addColorStop(0.45,'rgba(255,210,255,.08)');
-  gr.addColorStop(0.55,'rgba(255,210,255,.16)');
-  gr.addColorStop(0.65,'rgba(255,210,255,.08)');
-  gr.addColorStop(1,'rgba(255,255,255,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-},256,256);
+// cockpit flood + MFD spill. On the camera (always in the scene) so the light count never changes
+// when the cockpit is toggled — that would force every material in the city to recompile.
+const cpFlood=new THREE.PointLight(0xbfe4ff,0,2.2,2);cpFlood.position.set(0,0.05,-0.45);cam.add(cpFlood);
+const cpSpill=new THREE.PointLight(0x5ff2ff,0,1.3,2);cpSpill.position.set(0,-0.22,-0.78);cam.add(cpSpill);
 
-// ---- glareshield / coaming (padded lip below the windscreen) ----
-const coamingTex=tex((g,w,h)=>{
-  g.fillStyle='#0f1013';g.fillRect(0,0,w,h);
-  g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1;
-  for(let x=6;x<w;x+=9){g.beginPath();g.moveTo(x,3);g.lineTo(x,h-3);g.stroke();}
-  const vg=g.createLinearGradient(0,0,0,h);
-  vg.addColorStop(0,'rgba(255,255,255,.12)');vg.addColorStop(1,'rgba(0,0,0,.4)');
-  g.fillStyle=vg;g.fillRect(0,0,w,h);
-},160,40);
-const coamingMat=new THREE.MeshBasicMaterial({map:coamingTex});
-const coaming=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,2.85,12,1,true,Math.PI*0.05,Math.PI*0.55),coamingMat);
-coaming.rotation.z=Math.PI/2;
-coaming.position.set(0,-0.30,-1.62);
-cockpitGroup.add(coaming);
+function cpTex(w,h,fn){return tex((g,W2,H2)=>fn(g,W2,H2),w,h,true);}
+// matte FS 36118 gunship grey: panel seams, Dzus fasteners, scuffs where hands go
+const cpPanelTex=cpTex(512,256,(g,w,h)=>{
+  g.fillStyle='#2c2f33';g.fillRect(0,0,w,h);
+  for(let i=0;i<5000;i++){const v=Math.random()*14-7;g.fillStyle=`rgba(${44+v},${47+v},${51+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+  g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=2;
+  [0.18,0.5,0.82].forEach(f=>{g.beginPath();g.moveTo(w*f,0);g.lineTo(w*f,h);g.stroke();});
+  g.beginPath();g.moveTo(0,h*0.55);g.lineTo(w,h*0.55);g.stroke();
+  g.fillStyle='#4a4e54';
+  for(let x=10;x<w;x+=46)[8,h*0.55-8,h*0.55+8,h-8].forEach(y=>{g.beginPath();g.arc(x,y,2.6,0,7);g.fill();
+    g.strokeStyle='rgba(0,0,0,.7)';g.lineWidth=0.8;g.beginPath();g.moveTo(x-1.8,y);g.lineTo(x+1.8,y);g.stroke();});
+  for(let i=0;i<14;i++){const x=Math.random()*w,y=Math.random()*h;g.fillStyle='rgba(120,124,128,.10)';g.fillRect(x,y,10+Math.random()*40,1.5);} // scuffs
+});
+cpPanelTex.wrapS=cpPanelTex.wrapT=THREE.RepeatWrapping;
+const cpPanelMat=new THREE.MeshStandardMaterial({map:cpPanelTex,color:0x9ea6ae,roughness:0.82,metalness:0.15});   // cool grey, so dusk light doesn't turn it brown
+const cpBlackMat=new THREE.MeshStandardMaterial({color:0x111214,roughness:0.9,metalness:0.1});      // anti-glare black
+const cpFrameMat=new THREE.MeshStandardMaterial({color:0x26292d,roughness:0.6,metalness:0.45});     // canopy frame
+const cpBezelMat=new THREE.MeshStandardMaterial({color:0x1a1c1f,roughness:0.55,metalness:0.3});
+const cpBtnMat=new THREE.MeshStandardMaterial({color:0x1e2124,roughness:0.55,metalness:0.2,emissive:0x06180e,emissiveIntensity:1});
+const strutMat=cpFrameMat;
+// stencilled panel legends, NVG-green backlit (they glow faintly in the dark like the real thing)
+function legendTex(lines,w,h){return tex((g,W2,H2)=>{g.clearRect(0,0,W2,H2);g.fillStyle='#8dffb8';g.font='bold 15px "Courier New",monospace';g.textAlign='center';
+  lines.forEach(([t,x,y])=>g.fillText(t,x*W2,y*H2));},w,h);}
 
-// ---- main instrument panel / dash ----
-const dashBody=new THREE.Mesh(new THREE.BoxGeometry(2.75,0.26,0.55),panelMat);
-dashBody.position.set(0,-0.62,-1.28);dashBody.rotation.x=-0.22;cockpitGroup.add(dashBody);
-const dashFace=new THREE.Mesh(new THREE.BoxGeometry(2.75,0.36,0.05),panelMat);
-dashFace.position.set(0,-0.47,-1.56);dashFace.rotation.x=-0.5;cockpitGroup.add(dashFace);
-const lowerConsole=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.3,0.4),panelMat);
-lowerConsole.position.set(0,-0.85,-1.05);lowerConsole.rotation.x=-0.15;cockpitGroup.add(lowerConsole);
+// ---- instrument panel: one slab angled back toward the pilot, filling the lower view ----
+const PANEL_TILT=-0.36, PANEL_Y=-0.50, PANEL_Z=-0.92;
+const panel=new THREE.Group();panel.position.set(0,PANEL_Y,PANEL_Z);panel.rotation.x=PANEL_TILT;cockpitGroup.add(panel);
+const panelSlab=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.56,0.08),cpPanelMat);panelSlab.position.z=-0.04;panel.add(panelSlab);
+// side wings angled toward the pilot (the panel wraps around you)
+[-1,1].forEach(sd=>{const wg=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.56,0.08),cpPanelMat);
+  wg.position.set(sd*1.62,0,0.22);wg.rotation.y=-sd*0.55;panel.add(wg);});
+// lower knee panel and centre console falling away below
+const knee=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.4,0.06),cpPanelMat);knee.position.set(0,-0.42,0.14);knee.rotation.x=0.5;panel.add(knee);
 
-// ---- MFD screens: recessed bezel + glass sheen + soft glow + side button strips ----
-const radarCanvasEl=document.createElement('canvas');radarCanvasEl.width=radarCanvasEl.height=110;
-const horizonCanvasEl=document.createElement('canvas');horizonCanvasEl.width=horizonCanvasEl.height=110;
+// ---- glareshield: deep padded hood over the panel, its lip the darkest thing in the view ----
+// it sits ON the panel's top edge (local y=+0.28) and runs forward to the windscreen base
+const PANEL_TOP=new THREE.Vector3(0,0.28,0).applyEuler(new THREE.Euler(PANEL_TILT,0,0)).add(new THREE.Vector3(0,PANEL_Y,PANEL_Z));
+const hood=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.045,0.44),cpBlackMat);hood.position.set(0,PANEL_TOP.y+0.03,PANEL_TOP.z-0.2);cockpitGroup.add(hood);
+const lip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,2.9,14,1),cpBlackMat);lip.rotation.z=Math.PI/2;lip.position.set(0,PANEL_TOP.y+0.025,PANEL_TOP.z+0.02);cockpitGroup.add(lip);
+
+// ---- MFD canvases (drawn by drawDashMFD at 3x for crisp text on the big screens) ----
+const MFD_SS=3;
+const radarCanvasEl=document.createElement('canvas');radarCanvasEl.width=radarCanvasEl.height=110*MFD_SS;
+const horizonCanvasEl=document.createElement('canvas');horizonCanvasEl.width=horizonCanvasEl.height=110*MFD_SS;
 const tacCanvasEl=document.getElementById('tacmap');
 const radarTexMFD=new THREE.CanvasTexture(radarCanvasEl);
 const horizonTexMFD=new THREE.CanvasTexture(horizonCanvasEl);
 const tacTexMFD=new THREE.CanvasTexture(tacCanvasEl);
-const engCanvasEl=document.createElement('canvas');engCanvasEl.width=engCanvasEl.height=100;
-const wpnCanvasEl=document.createElement('canvas');wpnCanvasEl.width=wpnCanvasEl.height=100;
+const engCanvasEl=document.createElement('canvas');engCanvasEl.width=engCanvasEl.height=100*MFD_SS;
+const wpnCanvasEl=document.createElement('canvas');wpnCanvasEl.width=wpnCanvasEl.height=100*MFD_SS;
 const engC=engCanvasEl.getContext('2d'),wpnC=wpnCanvasEl.getContext('2d');
+engC.setTransform(MFD_SS,0,0,MFD_SS,0,0);wpnC.setTransform(MFD_SS,0,0,MFD_SS,0,0);
 const engTexMFD=new THREE.CanvasTexture(engCanvasEl);
 const wpnTexMFD=new THREE.CanvasTexture(wpnCanvasEl);
+[radarTexMFD,horizonTexMFD,tacTexMFD,engTexMFD,wpnTexMFD].forEach(t=>{t.anisotropy=4;t.encoding=THREE.sRGBEncoding;});
 
-const mfdButtonsTex=tex((g,w,h)=>{
-  g.fillStyle='#0e0f12';g.fillRect(0,0,w,h);
-  const labels=['BRT','CON','MODE','RNG','SEL','MENU'];
-  const rh=h/labels.length;
-  labels.forEach((lb,i)=>{
-    const y=i*rh;
-    g.fillStyle='#22252a';g.fillRect(3,y+3,w-6,rh-6);
-    g.strokeStyle='rgba(120,255,220,.55)';g.lineWidth=1;g.strokeRect(3,y+3,w-6,rh-6);
-    g.fillStyle='#8fffde';g.font='7px monospace';g.textAlign='center';
-    g.fillText(lb,w/2,y+rh/2+2.5);
-  });
-},20,120);
-function mfdScreen(txm,x,y,z,rotX,w,h,glowColor){
-  const grp=new THREE.Group();grp.position.set(x,y,z);grp.rotation.x=rotX;cockpitGroup.add(grp);
-  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:coolGlowTex,color:glowColor,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false}));
-  glow.scale.set(w*2.4,h*2.4,1);glow.position.z=-0.002;grp.add(glow);
-  const bez=new THREE.Mesh(new THREE.BoxGeometry(w+0.065,h+0.065,0.03),strutMat);
-  bez.position.z=-0.012;grp.add(bez);
-  const rim=new THREE.Mesh(new THREE.BoxGeometry(w+0.02,h+0.02,0.014),new THREE.MeshBasicMaterial({color:0x000000}));
-  rim.position.z=0.006;grp.add(rim);
-  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:txm,side:THREE.DoubleSide}));
-  scr.position.z=0.015;grp.add(scr);
-  const sheen=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:glareTex,transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false}));
-  sheen.position.z=0.017;sheen.rotation.z=0.4;grp.add(sheen);
-  const bl=new THREE.Mesh(new THREE.PlaneGeometry(0.05,h+0.04),new THREE.MeshBasicMaterial({map:mfdButtonsTex}));
-  bl.position.set(-(w/2+0.05),0,0.006);grp.add(bl);
-  const br=new THREE.Mesh(new THREE.PlaneGeometry(0.05,h+0.04),new THREE.MeshBasicMaterial({map:mfdButtonsTex}));
-  br.position.set(w/2+0.05,0,0.006);br.scale.x=-1;grp.add(br);
-  return grp;
+const cpBtnGeo=new THREE.BoxGeometry(0.026,0.018,0.012);
+const cpBtnXf=[];                      // every bezel push-button, instanced into one draw call below
+// an MFD set INTO the panel: recessed screen, thick bezel, 5 buttons a side + 4 top/bottom
+function mfd(texm,x,y,w,h,label){
+  const g=new THREE.Group();g.position.set(x,y,0.005);panel.add(g);
+  const bz=new THREE.Mesh(new THREE.BoxGeometry(w+0.11,h+0.09,0.035),cpBezelMat);bz.position.z=0.012;g.add(bz);
+  const well=new THREE.Mesh(new THREE.BoxGeometry(w+0.01,h+0.01,0.01),new THREE.MeshBasicMaterial({color:0x000000}));well.position.z=0.024;g.add(well);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texm,toneMapped:false}));scr.position.z=0.031;g.add(scr);
+  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({color:0x000000,roughness:0.08,metalness:0.9,transparent:true,opacity:0.22,envMapIntensity:1.2}));
+  glass.position.z=0.0325;g.add(glass);                               // the cover glass reflects the sky
+  const m=new THREE.Matrix4(),q=new THREE.Quaternion().setFromEuler(new THREE.Euler(PANEL_TILT,0,0));
+  const wp=new THREE.Vector3();
+  const add=(bx,by)=>{wp.set(x+bx,y+by,0.035).applyQuaternion(q).add(panel.position);cpBtnXf.push(new THREE.Matrix4().compose(wp,q,new THREE.Vector3(1,1,1)));};
+  for(let i=0;i<5;i++){const by=-h/2+h*(i+0.5)/5;add(-(w/2+0.036),by);add(w/2+0.036,by);}
+  for(let i=0;i<4;i++){const bx=-w/2+w*(i+0.5)/4;add(bx,h/2+0.03);add(bx,-(h/2+0.03));}
+  if(label){const lt=legendTex([[label,0.5,0.7]],256,32);const lm=new THREE.Mesh(new THREE.PlaneGeometry(w,w/8),new THREE.MeshBasicMaterial({map:lt,transparent:true,opacity:0.7}));
+    lm.position.set(0,-(h/2+0.06),0.03);g.add(lm);}
+  return g;
 }
-mfdScreen(horizonTexMFD,-0.80,-0.50,-1.42,-0.48,0.30,0.30,0x60a8ff);
-mfdScreen(tacTexMFD,0,-0.50,-1.44,-0.48,0.42,0.42,0x50ffb0);
-mfdScreen(radarTexMFD,0.80,-0.50,-1.42,-0.48,0.30,0.30,0x40ff90);
-mfdScreen(engTexMFD,-0.42,-0.84,-1.06,-0.15,0.22,0.18,0xffb050);
-mfdScreen(wpnTexMFD,0.42,-0.84,-1.06,-0.15,0.22,0.18,0xff6050);
+mfd(tacTexMFD,-0.40,0.085,0.30,0.30,'TSD');
+mfd(radarTexMFD,0.40,0.085,0.30,0.30,'FCR');
+mfd(horizonTexMFD,0,0.15,0.15,0.15,null);
+mfd(engTexMFD,0,-0.04,0.15,0.12,'ENG');
+mfd(wpnTexMFD,-0.84,0.06,0.17,0.15,'WPN');
+{const im=new THREE.InstancedMesh(cpBtnGeo,cpBtnMat,cpBtnXf.length);cpBtnXf.forEach((m,i)=>im.setMatrixAt(i,m));
+ im.instanceMatrix.needsUpdate=true;cockpitGroup.add(im);}
 
-// ---- switch panels / side consoles / annunciators ----
-function switchPanelTex(title,labels,accent){
-  return tex((g,w,h)=>{
-    g.fillStyle='#15171b';g.fillRect(0,0,w,h);
-    const vg=g.createLinearGradient(0,0,0,h);
-    vg.addColorStop(0,'rgba(255,255,255,.06)');vg.addColorStop(1,'rgba(0,0,0,.3)');
-    g.fillStyle=vg;g.fillRect(0,0,w,h);
-    g.strokeStyle='rgba(0,0,0,.6)';g.lineWidth=3;g.strokeRect(2,2,w-4,h-4);
-    g.fillStyle=accent;g.font='bold 9px monospace';g.textAlign='center';g.globalAlpha=.9;
-    g.fillText(title,w/2,14);g.globalAlpha=1;
-    const cols=3,rows=2,mx=16,my=26,cw=(w-mx*2)/cols,ch=(h-my-16)/rows;
-    let li=0;
-    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-      const cx=mx+cw*c+cw/2,cy=my+ch*r+ch/2;
-      const guarded=(r===0&&c===cols-1);
-      g.fillStyle='#0c0d10';g.fillRect(cx-11,cy-9,22,20);
-      g.strokeStyle='#3a3f46';g.lineWidth=1;g.strokeRect(cx-11,cy-9,22,20);
-      if(guarded){
-        g.strokeStyle='#cc3344';g.lineWidth=1.4;
-        g.beginPath();g.moveTo(cx-10,cy-2);g.lineTo(cx-8,cy-13);g.lineTo(cx+8,cy-13);g.lineTo(cx+10,cy-2);g.stroke();
-      }
-      const on=((li*37+7)%5)<3;
-      g.strokeStyle=on?accent:'#666';g.lineWidth=2.4;
-      g.beginPath();g.moveTo(cx,cy+7);g.lineTo(cx+(on?4:-4),cy-6);g.stroke();
-      g.fillStyle=on?accent:'#555';g.beginPath();g.arc(cx+(on?4:-4),cy-6,1.6,0,7);g.fill();
-      g.fillStyle='rgba(190,230,220,.85)';g.font='6px monospace';g.textAlign='center';
-      g.fillText(labels[li]||'',cx,cy+15);
-      li++;
-    }
-    const ky=h-14;
-    [w*0.28,w*0.72].forEach((kx,i)=>{
-      g.strokeStyle='#4a4f56';g.lineWidth=1.4;g.beginPath();g.arc(kx,ky,8,0,7);g.stroke();
-      g.fillStyle='#22262b';g.beginPath();g.arc(kx,ky,8,0,7);g.fill();g.stroke();
-      const ang=-0.6+i*1.1;
-      g.strokeStyle=accent;g.lineWidth=1.6;g.beginPath();g.moveTo(kx,ky);g.lineTo(kx+Math.cos(ang)*7,ky+Math.sin(ang)*7);g.stroke();
-    });
-  },180,150);
-}
-const leftConsoleTex=switchPanelTex('NAV / SYS',['NAV','XPDR','PITOT','LIGHT','FUEL PMP','ARM'],'#7fffd4');
-const rightConsoleTex=switchPanelTex('WPN / DEF',['LASER','JAM','FLARE','G-SAFE','IGN','MSTR'],'#ffb060');
-const annunGeo=new THREE.PlaneGeometry(0.11,0.038);
-function annunciator(parentGrp,x,y,label,color){
-  const t=tex((g,w,h)=>{
-    g.fillStyle='#050505';g.fillRect(0,0,w,h);
-    g.fillStyle=color;g.globalAlpha=.92;g.fillRect(2,2,w-4,h-10);g.globalAlpha=1;
-    g.strokeStyle='#000';g.lineWidth=1;g.strokeRect(2,2,w-4,h-10);
-    g.fillStyle='#000';g.font='bold 7px monospace';g.textAlign='center';
-    g.fillText(label,w/2,h-9+8);
-  },78,28);
-  const m=new THREE.Mesh(annunGeo,new THREE.MeshBasicMaterial({map:t}));
-  m.position.set(x,y,0.024);
-  parentGrp.add(m);
-}
-function sideConsole(sx,texMap,annun){
-  const grp=new THREE.Group();
-  grp.position.set(sx,-0.72,-1.14);
-  grp.rotation.set(-0.25,sx<0?0.55:-0.55,0);
-  cockpitGroup.add(grp);
-  const housing=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.08),strutMat);
-  housing.position.z=-0.02;grp.add(housing);
-  const face=new THREE.Mesh(new THREE.PlaneGeometry(0.55,0.46),new THREE.MeshBasicMaterial({map:texMap}));
-  face.position.z=0.021;grp.add(face);
-  annun.forEach((a,i)=>annunciator(grp,-0.18+i*0.19,0.27,a.l,a.c));
-  return grp;
-}
-sideConsole(-1.55,leftConsoleTex,[{l:'ENG',c:'#3ef27a'},{l:'XMSN',c:'#3ef27a'},{l:'HYD',c:'#ffcc33'}]);
-sideConsole(1.55,rightConsoleTex,[{l:'FUEL',c:'#ffcc33'},{l:'ICE',c:'#3ef27a'},{l:'GEN',c:'#3ef27a'}]);
+// ---- MASTER CAUTION / WARNING push-lights on the glareshield edge ----
+const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
+cautionLight.position.set(-0.16,PANEL_TOP.y+0.065,PANEL_TOP.z-0.03);cockpitGroup.add(cautionLight);
+const warnLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x2a1a00}));
+warnLight.position.set(0.16,PANEL_TOP.y+0.065,PANEL_TOP.z-0.03);cockpitGroup.add(warnLight);
+{const lt=legendTex([['MSTR CAUTION',0.25,0.62],['MSTR WARNING',0.75,0.62]],512,32);
+ const lm=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.04),new THREE.MeshBasicMaterial({map:lt,transparent:true,opacity:0.65}));
+ lm.position.set(0,PANEL_TOP.y+0.1,PANEL_TOP.z-0.04);cockpitGroup.add(lm);}
 
-const cautionLabelTex=tex((g,w,h)=>{
-  g.fillStyle='#c7ccd2';g.font='bold 8px monospace';g.textAlign='center';
-  g.fillText('MASTER CAUTION',w/2,h/2+3);
-},140,20);
-// MASTER CAUTION annunciator. It used to sit at x=0, z=-1.365 — directly in front of the
-// centre tactical MFD at z=-1.44 — so it punched a dead red rectangle through the middle of
-// the map in every cockpit shot. Moved into the empty bay between the attitude and tac
-// screens, and wired to hull state so it behaves like an annunciator instead of dead geometry.
-const CAUTION_X=-0.43;
-const cautionLabel=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.024),new THREE.MeshBasicMaterial({map:cautionLabelTex,transparent:true}));
-cautionLabel.position.set(CAUTION_X,-0.395,-1.365);cautionLabel.rotation.x=-0.22;
-cockpitGroup.add(cautionLabel);
-const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.06,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
-cautionLight.position.set(CAUTION_X,-0.445,-1.365);cautionLight.rotation.x=-0.22;
-cockpitGroup.add(cautionLight);
-
-// ---- round gauges (mechanical backups) ----
-function gauge(x,y,z,label,getVal,range){
-  const faceTex=shadedTex((g,w,h)=>{
-    g.fillStyle='#101216';g.beginPath();g.arc(w/2,h/2,w/2-2,0,7);g.fill();
-    g.strokeStyle='#3a3f46';g.lineWidth=2;g.beginPath();g.arc(w/2,h/2,w/2-6,0,7);g.stroke();
-    g.strokeStyle='#7fd';g.lineWidth=1;
-    for(let i=0;i<=8;i++){
-      const a=Math.PI*0.25+i*(Math.PI*1.5/8);
-      g.beginPath();g.moveTo(w/2+Math.cos(a)*(w/2-10),h/2+Math.sin(a)*(w/2-10));
-      g.lineTo(w/2+Math.cos(a)*(w/2-16),h/2+Math.sin(a)*(w/2-16));g.stroke();
-    }
-    g.fillStyle='#7fd';g.font='9px monospace';g.textAlign='center';g.fillText(label,w/2,h-8);
-  },64,64);
-  const outer=new THREE.Group();outer.position.set(x,y,z);outer.rotation.x=-0.48;
-  cockpitGroup.add(outer);
-  const faceM=new THREE.Mesh(new THREE.CircleGeometry(0.065,20),new THREE.MeshBasicMaterial({map:faceTex}));
-  outer.add(faceM);
-  const needleSpin=new THREE.Group();outer.add(needleSpin);
-  const needle=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.05,0.002),new THREE.MeshBasicMaterial({color:0xff3333}));
-  needle.position.set(0,0.023,0.003);needleSpin.add(needle);
+// ---- standby gauges (mechanical) on the right wing of the panel ----
+function gauge(x,y,label,getVal,range){
+  const faceTex=tex((g,w,h)=>{
+    g.fillStyle='#0b0c0e';g.beginPath();g.arc(w/2,h/2,w/2-2,0,7);g.fill();
+    g.strokeStyle='#e8e8e0';g.lineWidth=2;
+    for(let i=0;i<=30;i++){const a=Math.PI*0.75+i*(Math.PI*1.5/30),r1=w/2-8,r2=r1-(i%5===0?12:6);
+      g.lineWidth=i%5===0?2.4:1.2;g.beginPath();g.moveTo(w/2+Math.cos(a)*r1,h/2+Math.sin(a)*r1);g.lineTo(w/2+Math.cos(a)*r2,h/2+Math.sin(a)*r2);g.stroke();}
+    g.fillStyle='#e8e8e0';g.font='bold 15px sans-serif';g.textAlign='center';g.fillText(label,w/2,h*0.72);
+  },128,128);
+  const outer=new THREE.Group();outer.position.set(x,y,0.01);panel.add(outer);
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.058,0.058,0.03,24),cpBezelMat);ring.rotation.x=Math.PI/2;ring.position.z=0.01;outer.add(ring);
+  const faceM=new THREE.Mesh(new THREE.CircleGeometry(0.05,32),new THREE.MeshBasicMaterial({map:faceTex}));faceM.position.z=0.026;outer.add(faceM);
+  const needleSpin=new THREE.Group();needleSpin.position.z=0.028;outer.add(needleSpin);
+  const needle=new THREE.Mesh(new THREE.BoxGeometry(0.004,0.042,0.002),new THREE.MeshBasicMaterial({color:0xf2f2ea}));
+  needle.position.y=0.019;needleSpin.add(needle);
   return {needleSpin,getVal,range};
 }
 const gauges=[
-  gauge(-1.18,-0.5,-1.4,'ALT',()=>heli.position.y,[0,180]),
-  gauge(1.18,-0.5,-1.4,'SPD',()=>CRUISE*3.6,[0,140]),
-  gauge(0,-1.0,-1.0,'RPM',()=>98+Math.sin(performance.now()/500)*1.5,[80,110])
+  gauge(0.78,0.17,'ALT',()=>heli.position.y,[0,180]),
+  gauge(0.92,0.03,'KTS',()=>CRUISE*(window.__throttle||1)*1.94,[0,160]),
+  gauge(0.78,-0.09,'Nr %',()=>98+Math.sin(performance.now()/500)*1.5,[0,120]),
 ];
 
-// ---- cyclic + collective ----
-const gripTexA=tex((g,w,h)=>{
-  g.fillStyle='#1a1a1e';g.fillRect(0,0,w,h);
-  g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=2;
-  for(let y=4;y<h;y+=6){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
-},24,48);
-const gripMatTex=new THREE.MeshBasicMaterial({map:gripTexA});
-function handBlob(x,y,z,rotZ){
-  const hand=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,6),new THREE.MeshBasicMaterial({color:0x2b3324}));
-  hand.scale.set(1,0.8,1.3);
-  hand.position.set(x,y,z);hand.rotation.z=rotZ;
-  cockpitGroup.add(hand);
+// ---- switch rows: toggles with guards on the lower panel and side wings ----
+{
+  const tg=new THREE.CylinderGeometry(0.004,0.005,0.03,6);tg.rotateX(Math.PI/2-0.5);tg.translate(0,0.004,0.02);
+  const base=new THREE.CylinderGeometry(0.011,0.011,0.008,10);base.rotateX(Math.PI/2);base.translate(0,0,0.006);
+  const tgM=new THREE.MeshStandardMaterial({color:0xc8ccd0,roughness:0.3,metalness:0.8});
+  const spots=[];
+  for(let i=0;i<9;i++)spots.push([-0.42+i*0.105,-0.17]);
+  for(let i=0;i<6;i++){spots.push([-1.25+i*0.07,0.12]);spots.push([1.12+i*0.06,-0.20]);}
+  const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(PANEL_TILT,0,0)),v=new THREE.Vector3();
+  const it=new THREE.InstancedMesh(tg,tgM,spots.length),ib=new THREE.InstancedMesh(base,cpBezelMat,spots.length);
+  spots.forEach(([x,y],i)=>{v.set(x,y,0.005).applyQuaternion(q).add(panel.position);const m=new THREE.Matrix4().compose(v,q,new THREE.Vector3(1,1,1));it.setMatrixAt(i,m);ib.setMatrixAt(i,m);});
+  cockpitGroup.add(it,ib);
+  const lt=legendTex([['BATT',0.06,0.5],['GEN 1',0.17,0.5],['GEN 2',0.28,0.5],['APU',0.39,0.5],['FUEL XFR',0.5,0.5],['NVS',0.61,0.5],['ANTI-ICE',0.72,0.5],['IFF',0.83,0.5],['MSTR ARM',0.94,0.5]],1024,40);
+  const lm=new THREE.Mesh(new THREE.PlaneGeometry(0.94,0.037),new THREE.MeshBasicMaterial({map:lt,transparent:true,opacity:0.65}));
+  lm.position.set(0,-0.21,0.012);panel.add(lm);
 }
-function cyclicStick(x){
-  const g=new THREE.Group();
-  const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.02,0.26,8),gripMat);
-  rod.position.y=0.13;g.add(rod);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.026,0.11,10),gripMatTex);
-  grip.position.y=0.29;g.add(grip);
-  const trigGuard=new THREE.Mesh(new THREE.TorusGeometry(0.03,0.006,6,10,Math.PI),strutMat);
-  trigGuard.position.y=0.22;trigGuard.rotation.x=Math.PI/2;g.add(trigGuard);
-  const btn=new THREE.Mesh(new THREE.SphereGeometry(0.013,6,6),new THREE.MeshBasicMaterial({color:0xcc2020}));
-  btn.position.set(0,0.345,0.015);g.add(btn);
-  const thumbBtn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.012,0.02),new THREE.MeshBasicMaterial({color:0x555a60}));
-  thumbBtn.position.set(0.02,0.33,-0.01);g.add(thumbBtn);
-  g.position.set(x,-0.85,-0.85);g.rotation.z=x>0?-0.1:0.1;
-  cockpitGroup.add(g);
-  handBlob(x+(x>0?-0.01:0.01),-0.55,-0.85,x>0?-0.15:0.15);
-}
-cyclicStick(-0.55);cyclicStick(0.55);
-function collective(){
-  const g=new THREE.Group();
-  const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.024,0.55,8),gripMat);
-  rod.position.set(0,0.27,0);rod.rotation.z=0.35;g.add(rod);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.16,10),gripMatTex);
-  grip.position.set(0.19,0.50,0);grip.rotation.z=1.0;g.add(grip);
-  const throttleRing=new THREE.Mesh(new THREE.TorusGeometry(0.032,0.008,6,12),strutMat);
-  throttleRing.position.set(0.24,0.55,0);throttleRing.rotation.y=Math.PI/2;g.add(throttleRing);
-  g.position.set(-1.15,-1.05,-0.6);
-  cockpitGroup.add(g);
-  handBlob(-0.97,-0.56,-0.6,-0.3);
-}
-collective();
 
-// ---- canopy / windscreen frame: segmented "greenhouse" mullions + tinted glass ----
+// ---- canopy: heavy frame you look past, sills along your elbows, faintly dirty glass ----
 function bar3(p1,p2,width,mat){
-  const dir=new THREE.Vector3().subVectors(p2,p1);
-  const len=dir.length();
-  if(len<1e-4)return;
-  const mid=new THREE.Vector3().addVectors(p1,p2).multiplyScalar(0.5);
-  const m=new THREE.Mesh(new THREE.BoxGeometry(width,width,len),mat);
-  m.position.copy(mid);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir.clone().normalize());
-  cockpitGroup.add(m);
+  const dir=new THREE.Vector3().subVectors(p2,p1),len=dir.length();if(len<1e-4)return;
+  const m=new THREE.Mesh(new THREE.BoxGeometry(width,width*0.75,len),mat);
+  m.position.copy(p1).add(p2).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),dir.normalize());
+  cockpitGroup.add(m);return m;
 }
 function quadGeo(a,b,c,d){
   const geo=new THREE.BufferGeometry();
-  const v=new Float32Array([
-    a.x,a.y,a.z, b.x,b.y,b.z, c.x,c.y,c.z,
-    a.x,a.y,a.z, c.x,c.y,c.z, d.x,d.y,d.z
-  ]);
-  geo.setAttribute('position',new THREE.BufferAttribute(v,3));
-  geo.computeVertexNormals();
-  return geo;
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array([a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z,a.x,a.y,a.z,c.x,c.y,c.z,d.x,d.y,d.z]),3));
+  geo.setAttribute('uv',new THREE.BufferAttribute(new Float32Array([0,0,1,0,1,1,0,0,1,1,0,1]),2));
+  geo.computeVertexNormals();return geo;
 }
-const canopyGlassMat=new THREE.MeshBasicMaterial({color:0x16233a,transparent:true,opacity:.26,side:THREE.DoubleSide,depthWrite:false});
-const NCOL=7,canopyCols=[];
-for(let i=0;i<NCOL;i++){
-  const t=i/(NCOL-1);
-  const x=-1.7+3.4*t;
-  const s=Math.cos((t-0.5)*Math.PI);
-  canopyCols.push({
-    top:new THREE.Vector3(x,0.48+0.09*s,-1.55-0.55*s),
-    bot:new THREE.Vector3(x,-0.03+0.05*s,-1.28-0.25*s)
-  });
-}
-canopyCols.forEach((col,i)=>{
-  bar3(col.bot,col.top,i===Math.floor(NCOL/2)?0.05:0.03,strutMat);
-  if(i>0){
-    const prev=canopyCols[i-1];
-    bar3(prev.top,col.top,0.03,strutMat);
-    bar3(prev.bot,col.bot,0.024,strutMat);
-    cockpitGroup.add(new THREE.Mesh(quadGeo(prev.top,col.top,col.bot,prev.bot),canopyGlassMat));
-  }
+const V3=(x,y,z)=>new THREE.Vector3(x,y,z);
+// windscreen corners (camera space): base along the glareshield, header bow overhead
+const WS={bl:V3(-0.95,PANEL_TOP.y+0.05,-1.42),br:V3(0.95,PANEL_TOP.y+0.05,-1.42),tl:V3(-0.72,0.62,-0.98),tr:V3(0.72,0.62,-0.98)};
+bar3(WS.bl,WS.tl,0.07,cpFrameMat);bar3(WS.br,WS.tr,0.07,cpFrameMat);            // A-pillars
+bar3(WS.tl,WS.tr,0.08,cpFrameMat);                                               // header bow
+bar3(WS.bl,WS.br,0.05,cpFrameMat);                                               // windscreen base
+[-1,1].forEach(sd=>{
+  bar3(V3(sd*0.95,PANEL_TOP.y+0.05,-1.42),V3(sd*1.12,PANEL_TOP.y+0.08,0.2),0.09,cpFrameMat);           // canopy sill by your elbow
+  bar3(V3(sd*0.72,0.62,-0.98),V3(sd*0.80,0.66,0.3),0.06,cpFrameMat);              // roof rail
+  bar3(V3(sd*1.02,-0.2,-0.55),V3(sd*0.76,0.64,-0.5),0.05,cpFrameMat);             // side-window frame
 });
-
-// ---- glow reflections on the canopy glass ----
-const glarePlane=new THREE.Mesh(new THREE.PlaneGeometry(3.3,2.0),
+const dirtTex=tex((g,w,h)=>{g.clearRect(0,0,w,h);
+  for(let i=0;i<60;i++){const x=Math.random()*w,y=Math.random()*h,r=2+Math.random()*10;const gr=g.createRadialGradient(x,y,0,x,y,r);
+    gr.addColorStop(0,'rgba(200,200,190,.10)');gr.addColorStop(1,'rgba(200,200,190,0)');g.fillStyle=gr;g.fillRect(x-r,y-r,r*2,r*2);}
+  g.strokeStyle='rgba(220,220,220,.05)';for(let i=0;i<30;i++){g.beginPath();const x=Math.random()*w,y=Math.random()*h;g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*60,y+(Math.random()-.5)*20);g.stroke();}
+  const gr=g.createLinearGradient(0,h,0,0);gr.addColorStop(0,'rgba(170,170,160,.12)');gr.addColorStop(.3,'rgba(170,170,160,0)');g.fillStyle=gr;g.fillRect(0,0,w,h); // grime at the base
+},256,256);
+const canopyGlassMat=new THREE.MeshBasicMaterial({map:dirtTex,color:0xffffff,transparent:true,opacity:1,side:THREE.DoubleSide,depthWrite:false});
+cockpitGroup.add(new THREE.Mesh(quadGeo(WS.bl,WS.br,WS.tr,WS.tl),canopyGlassMat));
+// the MFD glow reflected low in the windscreen, and a glare band that swings with attitude
+const glareTex=tex((g,w,h)=>{const gr=g.createLinearGradient(0,0,w,h);
+  gr.addColorStop(0,'rgba(255,255,255,0)');gr.addColorStop(0.47,'rgba(255,236,220,.07)');gr.addColorStop(0.53,'rgba(255,236,220,.12)');gr.addColorStop(0.6,'rgba(255,236,220,.05)');gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);},256,256);
+const glarePlane=new THREE.Mesh(new THREE.PlaneGeometry(2.0,1.0),
   new THREE.MeshBasicMaterial({map:glareTex,transparent:true,opacity:.3,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
-glarePlane.position.set(0,0.18,-1.92);
-cockpitGroup.add(glarePlane);
-const reflTex=tex((g,w,h)=>{
-  const gr=g.createLinearGradient(0,h,0,0);
-  gr.addColorStop(0,'rgba(120,255,190,.22)');
-  gr.addColorStop(0.35,'rgba(120,255,190,.06)');
-  gr.addColorStop(1,'rgba(120,255,190,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-},64,128);
-const instrRefl=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.85),
-  new THREE.MeshBasicMaterial({map:reflTex,transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
-instrRefl.position.set(0,0.05,-1.55);instrRefl.rotation.x=-0.35;
-cockpitGroup.add(instrRefl);
+glarePlane.position.set(0,0.2,-1.18);glarePlane.rotation.x=0.35;cockpitGroup.add(glarePlane);
+const reflTex=tex((g,w,h)=>{const gr=g.createLinearGradient(0,h,0,0);
+  gr.addColorStop(0,'rgba(95,242,255,.16)');gr.addColorStop(0.3,'rgba(95,242,255,.04)');gr.addColorStop(1,'rgba(95,242,255,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,128);
+const instrRefl=new THREE.Mesh(new THREE.PlaneGeometry(1.6,0.45),
+  new THREE.MeshBasicMaterial({map:reflTex,transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+instrRefl.position.set(0,-0.05,-1.25);instrRefl.rotation.x=0.4;cockpitGroup.add(instrRefl);
 
+// ---- cyclic grip rising between your knees (just enters the bottom of the frame) ----
+{
+  const g=new THREE.Group();
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.026,0.13,12),new THREE.MeshStandardMaterial({color:0x151617,roughness:0.75}));
+  grip.position.y=0.065;g.add(grip);
+  const top=new THREE.Mesh(new THREE.SphereGeometry(0.031,12,8,0,Math.PI*2,0,Math.PI/2),cpBezelMat);top.position.y=0.13;g.add(top);
+  const trig=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.03,0.02),new THREE.MeshStandardMaterial({color:0x9a1b1b,roughness:0.5}));trig.position.set(0,0.1,-0.03);g.add(trig);
+  g.position.set(0.0,-0.78,-0.62);g.rotation.x=-0.25;cockpitGroup.add(g);
+}
 cockpitGroup.visible=false;
 
 // ---------- INPUT ----------
@@ -10229,6 +10174,7 @@ function flashMsg(t,color){
 // ---------- DASH + TACTICAL MAP + CANVAS COMBAT HUD ----------
 const radarC=radarCanvasEl.getContext('2d');
 const horC=horizonCanvasEl.getContext('2d');
+radarC.setTransform(MFD_SS,0,0,MFD_SS,0,0);horC.setTransform(MFD_SS,0,0,MFD_SS,0,0);
 const tacC=tacCanvasEl.getContext('2d');
 const hudCv=document.getElementById('hud');
 const hudX=hudCv.getContext('2d');
@@ -12667,19 +12613,40 @@ function updateCrewDelivery(){
 let started=false,streak=0,streakT=0,mult=1,bestScore=0,pilotName='PILOT';
 gameOver=true; // gate the sim until START
 const ov=document.createElement('div');
-ov.style.cssText='position:absolute;inset:0;background:rgba(6,4,18,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:60;font-family:Courier New,monospace;color:#fff;text-align:center;gap:12px;padding:20px;';
+ov.id='brief';
+// MISSION BRIEFING — the first screen sets the tone: a 1989 crew-recovery op, not a synthwave
+// arcade cabinet. Teletype classification header, a hanko-stamped title, the loop in four
+// steps, the five missing crew as dossier cards, and a guarded launch switch. Same turquoise
+// and amber as the in-flight HUD so the briefing and the cockpit are one design.
 ov.innerHTML=`
-  <div class="logo"><span class="logo-main">NEON<em>TOKYO</em></span><span class="logo-jp">ネオン東京</span></div>
-  <div style="font-size:14px;color:#35e0ff;text-shadow:0 0 10px #35e0ff;letter-spacing:6px;font-family:'Bahnschrift','Arial Narrow',sans-serif;font-weight:700;margin-top:2px">ONE NIGHT IN TOKYO</div>
-  <div style="max-width:560px;font-size:11.5px;color:#d6ecff;line-height:1.7;opacity:.94">Your crew went down over Tokyo and scattered. Nobody knows where they are — but the city does.
-  <br><b style="color:#3fe0ff">Land on a cyan pad and press E to go inside on foot</b>: a sushi counter in Kanda, the Uogashi fish market, a 1989 電気堂 electronics shop, an all-night coin laundry, a sword polisher's in the south-west. Each owner gives up <b style="color:#ffd24a">one of your crew — and the next shop in the chain</b>.
-  <br>Finding them is not the hard part. To lift one you must <b style="color:#3fe0ff">hold a low, slow hover while the hoist runs</b> — four seconds as a stationary target over a street that is not friendly.
-  <br>Every crewman you get back flies with you: the gunner works the door gun, the medic patches the hull, the chief rebalances the racks. Get all five to the Navy ship — past the <b style="color:#ff8a8a">黒龍会 Black Dragon</b> gunships.</div>
-  <div id="ovStats" style="font-size:13px;color:#cfc;line-height:1.7"></div>
-  <input id="pName" maxlength="10" placeholder="CALLSIGN" style="background:#0c0a18;border:1px solid #35e0ff;color:#fff;padding:8px 12px;font-family:inherit;font-size:14px;text-align:center;border-radius:6px;width:180px;pointer-events:auto">
-  <button id="startBtn" style="background:#ff2f8f;border:none;color:#fff;padding:14px 44px;font-size:18px;font-weight:bold;font-family:inherit;border-radius:8px;cursor:pointer;pointer-events:auto;box-shadow:0 0 24px rgba(255,47,143,.6)">TAKE OFF</button>
-  <div id="ovBoard" style="font-size:12px;color:#9fd;line-height:1.8;min-height:60px"></div>
-  <div style="font-size:9px;opacity:.5">leaderboard scores are shared with other players of this game</div>`;
+  <div class="bf-sheet">
+    <div class="bf-class"><span>極秘 · TOP SECRET // CREW RECOVERY</span><span>JTF-東京 · 24 NOV 1989 · 18:35 JST</span></div>
+    <div class="bf-head">
+      <div class="bf-title"><small>OPERATION 黒龍 · BLACK DRAGON</small>ONE NIGHT IN TOKYO</div>
+      <div class="bf-hanko">東京<br>一夜</div>
+    </div>
+    <div class="bf-sit">AH-9 <b>RAVEN 2-1</b> went down over central Tokyo at 17:50. The crew bailed out and scattered across the city as it fell. The 黒龍会 syndicate runs the streets tonight and its gunships are already up. <b>Bring all five home to the Navy ship in the bay before the night is out.</b></div>
+    <div class="bf-cols">
+      <div class="bf-steps">
+        <div class="bf-h">HOW IT WORKS</div>
+        <div class="bf-step"><i>01</i><div><b>FLY TO THE MARKED SHOP</b><span>Follow the cyan beam. Five shops, one at a time.</span></div></div>
+        <div class="bf-step"><i>02</i><div><b>LAND ON THE PAD · <kbd>E</kbd> GO INSIDE</b><span>Walk to the counter, <kbd>F</kbd> to talk. The owner knows where your crew is.</span></div></div>
+        <div class="bf-step"><i>03</i><div><b>HOVER LOW &amp; SLOW TO HOIST</b><span>Four seconds over a hostile street. Drift and the cable pays out.</span></div></div>
+        <div class="bf-step"><i>04</i><div><b>SET DOWN ON THE NAVY SHIP</b><span>Gunships launch the moment someone is aboard.</span></div></div>
+        <div class="bf-keys"><kbd>W A S D</kbd> fly · <kbd>SPACE</kbd> fire · <kbd>1-4</kbd> weapon · <kbd>X</kbd> hover · <kbd>C</kbd> cockpit</div>
+      </div>
+      <div class="bf-crew">
+        <div class="bf-h">MISSING · 5</div>
+        <div class="bf-cards">${CREW.map(c=>`<div class="bf-card"><img src="${crewAvatarURL(c)}" alt=""><div><b>${c.rank} ${c.call}</b><span>${c.name}</span><em>${c.role}</em></div><u>MIA</u></div>`).join('')}</div>
+      </div>
+    </div>
+    <div class="bf-launch">
+      <label class="bf-call"><span>CALLSIGN</span><input id="pName" maxlength="10" placeholder="PILOT" autocomplete="off"></label>
+      <button id="startBtn"><span>TAKE OFF</span></button>
+      <div class="bf-meta"><div id="ovStats"></div><div id="ovBoard"></div></div>
+    </div>
+    <div class="bf-foot">leaderboard scores are shared with other players of this game</div>
+  </div>`;
 document.body.appendChild(ov);
 const comboEl=document.createElement('div');
 comboEl.style.cssText='position:absolute;top:22%;left:50%;transform:translate(-50%,-50%);font-size:24px;font-weight:bold;letter-spacing:.12em;color:var(--ui-warn);text-shadow:0 0 14px var(--ui-warn);opacity:0;transition:opacity .25s;pointer-events:none;z-index:40;font-family:var(--f);';
@@ -12688,7 +12655,7 @@ async function loadMeta(){
   try{const r=await window.storage.get('heli-meta');
     if(r){const m=JSON.parse(r.value);bestScore=m.best||0;pilotName=m.name||'PILOT';
       document.getElementById('pName').value=pilotName;}}catch(e){}
-  document.getElementById('ovStats').innerHTML='BEST SCORE: '+bestScore;
+  document.getElementById('ovStats').innerHTML='BEST <b>'+bestScore+'</b>';
   renderBoard();
 }
 async function saveMeta(){
@@ -12700,8 +12667,8 @@ async function loadBoard(){
 }
 async function renderBoard(){
   const b=await loadBoard();
-  document.getElementById('ovBoard').innerHTML='<b style="color:#ff4fd0">— TOP PILOTS —</b><br>'+
-    (b.length?b.map((e,i)=>(i+1)+'. '+e.n+' — '+e.s).join('<br>'):'no flights logged yet');
+  document.getElementById('ovBoard').innerHTML='<b>TOP PILOTS</b>'+
+    (b.length?b.slice(0,5).map((e,i)=>'<div><i>'+(i+1)+'</i>'+e.n+'<em>'+e.s+'</em></div>').join(''):'<div class="none">no flights logged yet</div>');
 }
 async function submitScore(){
   if(score<=0)return;
@@ -12773,10 +12740,12 @@ async function endRun(){
   await saveMeta();
   await submitScore();
   document.getElementById('ovStats').innerHTML=
-    '<span style="color:#f66;font-size:20px;font-weight:bold">CHOPPER DOWN</span><br>'+
-    'SCORE '+score+' · KILLS '+kills+' · MISSION '+missionLevel+'<br>BEST: '+bestScore;
-  document.getElementById('startBtn').textContent='FLY AGAIN';
+    '<span class="down">RAVEN 2-1 IS DOWN</span>'+
+    'SCORE <b>'+score+'</b> · KILLS <b>'+kills+'</b> · CREW HOME <b>'+CREW.filter(c=>c.rescued).length+'/5</b><br>BEST <b>'+bestScore+'</b>';
+  document.getElementById('startBtn').querySelector('span').textContent='FLY AGAIN';
   ov.style.display='flex';
+  ov.querySelectorAll('.bf-card').forEach((el,i)=>{const c=CREW[i];const u=el.querySelector('u');
+    u.textContent=c.rescued?'HOME':'MIA';el.classList.toggle('home',!!c.rescued);});
 }
 document.getElementById('startBtn').addEventListener('pointerdown',e=>{e.preventDefault();startRun();});
 loadMeta();
@@ -12789,7 +12758,8 @@ loadMeta();
 // excluded so nothing that moves gets frozen; moving cars are already instanced.
 (function mergePooledStatics(){
   try{
-    const dyn=new Set([heli]);
+    const dyn=new Set([heli,cam]);            // cam carries the cockpit: merging it froze the panel into the city
+    (window.__beacons||[]).forEach(B=>{if(B.lr.parent)dyn.add(B.lr.parent);});   // flashing light bars toggle per frame
     if(window.__navyShip&&window.__navyShip.g)dyn.add(window.__navyShip.g);
     if(window.__train&&window.__train.cars)window.__train.cars.forEach(c=>dyn.add(c));
     const isDyn=o=>{let n=o;while(n){if(dyn.has(n))return true;n=n.parent;}return false;};
@@ -13418,6 +13388,9 @@ function loop(now){
     rim.target=heli;
     cockpitGroup.visible=cockpitMode;
     heli.visible=!cockpitMode;
+    cpFlood.intensity=cockpitMode?0.55:0;cpSpill.intensity=cockpitMode?0.9:0;
+    if(document.body.classList.contains('cockpit')!==cockpitMode)document.body.classList.toggle('cockpit',cockpitMode);
+    warnLight.material.color.setHex(cockpitMode&&enemies.some(e=>e.kind==='heli'&&e.hp>0&&!e.leaving)&&((now/300|0)%2)?0xff2a1a:0x2a1a00);
     drawDashMFD();
     updateCrewRescue(dt);updateCrewDelivery();
     // animate the landing pads: chevrons march down the beam, lights chase around the ring, the name
