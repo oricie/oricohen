@@ -5411,11 +5411,9 @@ function sfx(dur,vol,fLow,fHigh){
 function sfxGunshot(){
   if(!AC)return;
   const t=AC.currentTime;
-  const clen=Math.floor(0.025*AC.sampleRate);
-  const cbuf=AC.createBuffer(1,clen,AC.sampleRate);
-  const cd=cbuf.getChannelData(0);
-  for(let i=0;i<clen;i++)cd[i]=(Math.random()*2-1)*Math.pow(1-i/clen,1.5);
-  const csrc=AC.createBufferSource();csrc.buffer=cbuf;
+  if(!window.__gunBuf){const clen=Math.floor(0.025*AC.sampleRate);window.__gunBuf=AC.createBuffer(1,clen,AC.sampleRate);
+    const cd=window.__gunBuf.getChannelData(0);for(let i=0;i<clen;i++)cd[i]=(Math.random()*2-1)*Math.pow(1-i/clen,1.5);}
+  const csrc=AC.createBufferSource();csrc.buffer=window.__gunBuf;
   const chp=AC.createBiquadFilter();chp.type='highpass';chp.frequency.value=2000;
   const cg=AC.createGain();cg.gain.value=0.16;
   csrc.connect(chp);chp.connect(cg);cg.connect(AC.destination);csrc.start(t);
@@ -7581,6 +7579,95 @@ const groundPoolXf=[]; // {x,z,s,c:[r,g,b]}
 // POOLS of shared materials up-front (colour variety now comes from pool size, not per-building
 // mutation) and give the box a single material with a separate roof cap on top, so the merge pass can
 // fuse thousands of buildings down to a handful of draw calls.
+// ============================================================================
+// FACADE INTERIORS ("interior mapping"): every window of the facade pool is an opening onto a
+// real-looking room. The shader traces the view ray through the window aperture into a box room
+// (back wall, floor, ceiling, side walls) in metres, so rooms shift in correct perspective as you
+// fly past; lit rooms take their colour from the window-light map, blinds/curtains from the same
+// map stay in front, and the glass on top is a low-roughness reflector. Beyond ~140 m it falls
+// back to the flat texture (too small to see, and cheaper).
+// ============================================================================
+const FACADE_ROOM_GLSL=`
+uniform vec2 uGrid;
+float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+`;
+function facadeInteriors(m,preset){
+  const u={uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}};
+  m.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    Object.assign(sh.uniforms,u);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+FACADE_ROOM_GLSL)
+      .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+{
+  float dist=length(vViewPosition);
+  vec2 cell=vUv*uGrid, ci=floor(cell), cf=fract(cell);
+  vec2 fw=fwidth(cell); float pxs=max(fw.x,fw.y);
+  if(pxs<0.14){                                                            // close enough to draw windows ourselves
+    // the window, frame, mullion and sill are drawn here with anti-aliased edges — resolution
+    // independent, so they stay sharp up close instead of a magnified 512px texture
+    vec2 lo=vec2(0.16,0.22), hi=vec2(0.84,0.78); float fr=0.035;
+    vec2 aw=fw*0.75+1e-4;
+    vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); float win=s1.x*s1.y;
+    vec2 s2=smoothstep(lo-fr-aw,lo-fr+aw,cf)-smoothstep(hi+fr-aw,hi+fr+aw,cf); float frm=clamp(s2.x*s2.y-win,0.0,1.0);
+    float mull=win*(1.0-smoothstep(0.012-aw.x,0.012+aw.x,abs(cf.x-0.5)))*step(4.5,uGrid.y/uGrid.x*2.0+1.0);
+    vec2 s3=smoothstep(vec2(lo.x-fr*1.6,lo.y-fr-0.035)-aw,vec2(lo.x-fr*1.6,lo.y-fr-0.035)+aw,cf)
+           -smoothstep(vec2(hi.x+fr*1.6,lo.y-fr)-aw,vec2(hi.x+fr*1.6,lo.y-fr)+aw,cf); float sill=clamp(s3.x*s3.y,0.0,1.0);
+    vec3 wallC=diffuseColor.rgb;
+    float fadeNear=1.0-smoothstep(0.08,0.14,pxs);
+    // room behind the glass (interior mapping) — only where a room is big enough to read
+    vec4 lc=texture2D(emissiveMap,(ci+0.5)/uGrid); lc.rgb=emissiveMapTexelToLinear(lc).rgb;
+    vec4 lh=texture2D(emissiveMap,vUv); lh.rgb=emissiveMapTexelToLinear(lh).rgb;
+    float on=max(lc.r,max(lc.g,lc.b));
+    vec3 light=on>0.05?lc.rgb/on:vec3(0.0);
+    float shade=on>0.05?clamp(max(lh.r,max(lh.g,lh.b))/on,0.12,1.0):1.0;
+    vec3 rc=vec3(0.6);
+    if(dist<140.0&&win>0.01){
+      vec3 fdx=dFdx(vViewPosition), fdy=dFdy(vViewPosition);
+      vec3 Ng=normalize(cross(fdx,fdy));
+      vec2 st0=dFdx(vUv), st1=dFdy(vUv);
+      vec3 q1p=cross(fdy,Ng), q0p=cross(Ng,fdx);
+      vec3 T=normalize(q1p*st0.x+q0p*st1.x), B=normalize(q1p*st0.y+q0p*st1.y);
+      float mpu=length(fdx)/max(length(st0),1e-6);
+      vec2 cm=vec2(mpu/uGrid.x,mpu/uGrid.y);
+      vec3 V=normalize(-vViewPosition);
+      vec3 dir=-vec3(dot(V,T),dot(V,B),dot(V,Ng)); dir.z=min(dir.z,-0.05);
+      float W=cm.x,H=cm.y,D=max(W,H)*1.2;
+      vec3 o=vec3(cf.x*W,cf.y*H,0.0);
+      float tx=dir.x>0.0?(W-o.x)/dir.x:(-o.x)/min(dir.x,-1e-4);
+      float ty=dir.y>0.0?(H-o.y)/dir.y:(-o.y)/min(dir.y,-1e-4);
+      float tz=D/(-dir.z);
+      float t=min(min(tx,ty),tz); vec3 hp=o+dir*t;
+      float rh=fh(ci+vec2(3.1,7.7));
+      vec3 wc=mix(vec3(0.62,0.58,0.52),vec3(0.52,0.56,0.6),step(0.5,rh));
+      if(t==tz){ vec2 bw=vec2(hp.x/W,hp.y/H); rc=wc*(0.8+0.2*bw.y);
+        if(bw.y<0.42&&abs(bw.x-(0.3+0.4*rh))<0.22)rc*=0.35;
+        if(bw.y>0.5&&bw.y<0.8&&abs(bw.x-0.7+0.4*rh)<0.1)rc=mix(rc,vec3(0.15,0.2,0.3),0.7); }
+      else if(t==ty){ rc=dir.y<0.0?vec3(0.30,0.24,0.18)*(0.8+0.3*fh(floor(hp.xz*4.0)))
+                       :vec3(0.85,0.85,0.82)*(1.0+1.5*step(abs(hp.x-W*0.5),W*0.18)*step(abs(hp.z+D*0.5),D*0.2)); }
+      else rc=wc*0.8;
+      rc*=0.55+0.45*(1.0+hp.z/D);
+      rc=mix(vec3(0.6),rc,1.0-smoothstep(90.0,140.0,dist));
+    }
+    vec3 glassEm=rc*light*emissive*1.5*shade + rc*0.012;
+    float fres=pow(1.0-abs(dot(normalize(-vViewPosition),normal)),3.0);
+    #ifdef USE_FOG
+    glassEm+=fogColor*(0.10+0.55*fres);                                      // the evening sky in the pane, stronger at grazing angles
+    #endif
+    vec3 col=wallC;
+    col=mix(col,wallC*1.22+0.02,sill);                                     // sill catches the light
+    col=mix(col,vec3(0.05,0.052,0.055),frm);                               // window frame
+    col=mix(col,vec3(0.012,0.014,0.016),win);                              // glass
+    col=mix(col,vec3(0.05,0.052,0.055),mull);
+    diffuseColor.rgb=mix(diffuseColor.rgb,col,fadeNear);
+    totalEmissiveRadiance=mix(totalEmissiveRadiance,glassEm*win*(1.0-mull),fadeNear);
+    roughnessFactor=mix(roughnessFactor,mix(roughnessFactor,0.05,win),fadeNear);
+    metalnessFactor=mix(metalnessFactor,mix(metalnessFactor,0.0,win),fadeNear);
+  }
+}`);
+  };
+  m.customProgramCacheKey=()=>'facade-rooms';
+  return m;
+}
 const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const fac=facades[i%facades.length];
   if(fac.map){fac.map.wrapS=fac.map.wrapT=THREE.RepeatWrapping;fac.map.needsUpdate=true;}
@@ -7593,6 +7680,7 @@ const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const warm=Math.random()<0.6;
   m.color.setHSL((warm?28+Math.random()*16:205+Math.random()*15)/360,0.03+Math.random()*0.06,0.80+Math.random()*0.16);
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0],winGain:0.8+Math.random()*0.45,facade:true});
+  facadeInteriors(m,fac.preset||facadeGridPresets[0]);
   a.push(m);} return a;})();
 glassT.wrapS=glassT.wrapT=THREE.RepeatWrapping;glassT.needsUpdate=true;
 glassPair.lit.wrapS=glassPair.lit.wrapT=THREE.RepeatWrapping;glassPair.lit.needsUpdate=true;
@@ -8443,29 +8531,39 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 }
 
 // ---------- ELEVATED EXPRESSWAY (over the southern avenue) ----------
+// Shutoko-style: grey concrete deck and parapets on round piers, the same shader asphalt as the
+// streets with its own lane paint, and tall sodium lamps on curved arms — not pink lollipops.
 {
   const hy=16,hw=15;
-  const deckT=makeRoadStripTex();deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,18);
-  const deckMat=new THREE.MeshLambertMaterial({map:deckT});
-  const deck=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.6,hw),deckMat);
+  const concM=new THREE.MeshStandardMaterial({color:0x8a8884,roughness:0.92,metalness:0.0});
+  const concDarkM=new THREE.MeshStandardMaterial({color:0x5e5c58,roughness:0.95,metalness:0.0});
+  const deck=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.6,hw),concDarkM);
   deck.position.set(0,hy,HWY_Z);deck.castShadow=true;deck.receiveShadow=true;scene.add(deck);
-  const railM=new THREE.MeshLambertMaterial({color:0x6a6480});
-  [[-1],[1]].forEach(([sd])=>{
-    const rail=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.4,.4),railM);
-    rail.position.set(0,hy+1.4,HWY_Z+sd*hw/2);scene.add(rail);
+  const deckT=makeRoadStripTex();deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,CITY*2/40);
+  const top=new THREE.Mesh(new THREE.PlaneGeometry(hw-1.2,CITY*2),
+    asphaltify(new THREE.MeshStandardMaterial({map:deckT,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{axis:'z',p:HWY_Z,w:hw-1.2}));
+  top.rotation.set(-Math.PI/2,0,Math.PI/2);top.position.set(0,hy+0.81,HWY_Z);top.receiveShadow=true;scene.add(top);
+  [-1,1].forEach(sd=>{
+    const par=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.1,0.45),concM);par.position.set(0,hy+1.35,HWY_Z+sd*(hw/2-0.22));par.castShadow=true;scene.add(par);
+    const lip=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,0.12,0.6),concDarkM);lip.position.set(0,hy+1.93,HWY_Z+sd*(hw/2-0.22));scene.add(lip);
   });
-  const pillarM=new THREE.MeshLambertMaterial({color:0x3e384c});
   for(let x=-CITY;x<=CITY;x+=55){
-    const col=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.9,hy,8),pillarM);
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(1.7,1.9,hy,16),concM);
     col.position.set(x,hy/2,HWY_Z);col.castShadow=true;scene.add(col);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.2,hw-2),pillarM);
-    cap.position.set(x,hy-1.2,HWY_Z);scene.add(cap);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(3.4,1.4,hw-1),concM);
+    cap.position.set(x,hy-1.4,HWY_Z);scene.add(cap);
   }
-  for(let x=-CITY+30;x<=CITY;x+=110){
-    const lampGlow=new THREE.Mesh(new THREE.SphereGeometry(.8,6,6),new THREE.MeshBasicMaterial({color:0xff9ad0}));
-    lampGlow.position.set(x,hy+7,HWY_Z);scene.add(lampGlow);
-    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,6,5),railM);
-    pole.position.set(x,hy+4,HWY_Z);scene.add(pole);
+  const poleM=new THREE.MeshStandardMaterial({color:0x6c7076,roughness:0.5,metalness:0.6});
+  const headM=new THREE.MeshBasicMaterial({color:0xffc27a});
+  const hwyGlowTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
+    gr.addColorStop(0,'rgba(255,214,150,.55)');gr.addColorStop(.4,'rgba(255,176,96,.16)');gr.addColorStop(1,'rgba(255,160,80,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
+  for(let x=-CITY+30,k=0;x<=CITY;x+=60,k++){
+    const sd=k%2?1:-1, z=HWY_Z+sd*(hw/2-0.2);
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,9,8),poleM);pole.position.set(x,hy+1.8+4.5,z);scene.add(pole);
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.6,6),poleM);arm.rotation.x=Math.PI/2;arm.position.set(x,hy+10.6,z-sd*1.2);scene.add(arm);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.9),headM);head.position.set(x,hy+10.5,z-sd*2.4);scene.add(head);
+    const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:hwyGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+    spr.scale.set(5,5,1);spr.position.set(x,hy+10.3,z-sd*2.4);scene.add(spr);
   }
 }
 
@@ -10206,7 +10304,7 @@ function fire(){
     const b=new THREE.Mesh(tracerG,tracerM);
     b.position.copy(origin);
     b.lookAt(b.position.clone().add(v));b.rotateX(Math.PI/2);
-    const tg=new THREE.Sprite(new THREE.SpriteMaterial({map:emberTex,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false}));
+    const tg=new THREE.Sprite(tracerHeadMat);
     tg.scale.set(.5,.5,1);tg.position.set(0,0,1.2);
     b.add(tg);
     scene.add(b);
@@ -10254,12 +10352,13 @@ function muzzle(){
   muzzleT=0.05;
   const tip=heli.position.clone().add(new THREE.Vector3(0,-1.3,-4.7).applyQuaternion(heli.quaternion));
   const fwd=new THREE.Vector3(0,0,-1).applyQuaternion(heli.quaternion);
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:fireTex,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false}));
+  if(!window.__muzzlePool){window.__muzzlePool=[];for(let i=0;i<8;i++)window.__muzzlePool.push(new THREE.Sprite(new THREE.SpriteMaterial({map:fireTex,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false})));window.__muzzleI=0;}
+  const s=window.__muzzlePool[window.__muzzleI++%window.__muzzlePool.length];
   const sc=1.2+Math.random()*0.7;
-  s.scale.set(sc,sc*0.7,1);
+  s.scale.set(sc,sc*0.7,1);s.material.opacity=1;
   s.position.copy(tip);
-  pushFX({m:s,v:fwd.clone().multiplyScalar(3),t:0.055,muzzle:true});
-  scene.add(s);
+  if(s.__fx&&explosions.indexOf(s.__fx)>=0){s.__fx.v=fwd.clone().multiplyScalar(3);s.__fx.t=0.055;}
+  else{s.__fx={m:s,v:fwd.clone().multiplyScalar(3),t:0.055,muzzle:true};pushFX(s.__fx);scene.add(s);}
 }
 let shake=0;
 const fireTex=tex((g,w,h)=>{
@@ -10278,6 +10377,7 @@ const smokeTex=tex((g,w,h)=>{
   gr.addColorStop(1,'rgba(40,36,32,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },128,128);
+let tracerHeadMat=null;
 const emberTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
   gr.addColorStop(0,'rgba(255,240,180,1)');
@@ -10285,6 +10385,7 @@ const emberTex=tex((g,w,h)=>{
   gr.addColorStop(1,'rgba(255,80,10,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },32,32);
+tracerHeadMat=new THREE.SpriteMaterial({map:emberTex,transparent:true,opacity:.95,blending:THREE.AdditiveBlending,depthWrite:false});
 const coreTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
   gr.addColorStop(0,'rgba(255,255,255,1)');
@@ -10323,14 +10424,15 @@ function spawnDebris(pos,count,speed){
   }
 }
 // ---- capped, short-lived explosion point-lights (lights nearby buildings) ----
-const activeLights=[];
-const MAX_LIGHTS=3;
+// PERF: these used to be created and removed per explosion. Changing the number of lights in the
+// scene invalidates every lit material's shader, so each rocket hit recompiled the whole city —
+// the hitch you felt when firing. A fixed pool of 3, parked at intensity 0, costs nothing idle.
+const FX_LIGHTS=[];for(let i=0;i<3;i++){const l=new THREE.PointLight(0xffffff,0,10);l.position.set(0,-500,0);scene.add(l);FX_LIGHTS.push({l,to:0});}
+let _fxLi=0;
 function addLight(pos,color,intensity,dist,life){
-  if(activeLights.length>=MAX_LIGHTS){const old=activeLights.shift();clearTimeout(old.to);scene.remove(old.l);}
-  const l=new THREE.PointLight(color,intensity,dist);l.position.copy(pos);scene.add(l);
-  const rec={l};
-  rec.to=setTimeout(()=>{scene.remove(l);const idx=activeLights.indexOf(rec);if(idx>=0)activeLights.splice(idx,1);},life*1000);
-  activeLights.push(rec);
+  const rec=FX_LIGHTS[_fxLi++%FX_LIGHTS.length];clearTimeout(rec.to);
+  rec.l.color.setHex(color);rec.l.intensity=intensity;rec.l.distance=dist;rec.l.position.copy(pos);
+  rec.to=setTimeout(()=>{rec.l.intensity=0;},life*1000);
 }
 // ---- bright motion-blur glow attached to rocket/missile heads ----
 function addMissileGlow(m){
@@ -10403,12 +10505,16 @@ function explode(pos,r,dmg,napalm){
   shake=Math.min(1,shake+(napalm?0.7:0.35));
   sfxExplosion(napalm);
 }
+// pooled: every minigun hit used to allocate 6 new geometries + materials
+const _bloodG=new THREE.SphereGeometry(.25,4,4), BLOOD_POOL=[];let _bloodI=0;
+for(let i=0;i<60;i++)BLOOD_POOL.push(new THREE.Mesh(_bloodG,new THREE.MeshBasicMaterial({color:0x5a0e0c,transparent:true,opacity:1})));
 function blood(pos){
   for(let i=0;i<6;i++){
-    const p=new THREE.Mesh(new THREE.SphereGeometry(.25,4,4),new THREE.MeshBasicMaterial({color:0x8a1515,transparent:true,opacity:1}));
-    p.position.copy(pos);p.position.y+=1.5;
-    explosions.push({m:p,v:new THREE.Vector3((Math.random()-.5)*10,Math.random()*8,(Math.random()-.5)*10),t:.5});
-    scene.add(p);
+    const p=BLOOD_POOL[_bloodI++%BLOOD_POOL.length];
+    p.position.copy(pos);p.position.y+=1.5;p.scale.setScalar(1);p.material.opacity=1;
+    const v=new THREE.Vector3((Math.random()-.5)*10,Math.random()*8,(Math.random()-.5)*10);
+    if(p.__fx&&explosions.indexOf(p.__fx)>=0){p.__fx.v=v;p.__fx.t=.5;}
+    else{p.__fx={m:p,v,t:.5};explosions.push(p.__fx);scene.add(p);}
   }
 }
 function flashMsg(t,color){
@@ -11037,6 +11143,31 @@ function drawHUD(now){
       hudX.restore();hudX.lineWidth=1;hudX.textAlign='left';
     }
   }
+
+  // ---------------- THREATS: who is shooting at you ----------------
+  // Black Dragon gunships get a red bracket + range when in view and a red edge arrow when not,
+  // so "what fired at me from the air?" always has an answer on screen.
+  if(!interiorMode)enemies.forEach(e=>{
+    if(e.kind!=='heli'||e.hp<=0||e.leaving)return;
+    const d=Math.round(e.m.position.distanceTo(heli.position));
+    const sp=project(e.m.position);
+    hudX.save();hudX.strokeStyle=UI.alert;hudX.fillStyle=UI.alert;hudX.lineWidth=1.8;
+    if(sp.on&&sp.x>20&&sp.x<w-20&&sp.y>40&&sp.y<h-40){
+      const r=Math.max(10,Math.min(26,900/Math.max(1,d)));
+      const k=r*0.45;
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sy])=>{hudX.beginPath();
+        hudX.moveTo(sp.x+sx*r,sp.y+sy*(r-k));hudX.lineTo(sp.x+sx*r,sp.y+sy*r);hudX.lineTo(sp.x+sx*(r-k),sp.y+sy*r);hudX.stroke();});
+      hudX.font=T(UI.label,true);hudX.textAlign='center';
+      hudX.fillText('黒龍 GUNSHIP  '+d+'m',sp.x,sp.y-r-6);
+    }else{
+      const ang=Math.atan2(e.m.position.x-heli.position.x,e.m.position.z-heli.position.z)-yaw;   // same convention as the waypoint arrow
+      const rr=Math.min(w,h)*0.38, ax=cx+Math.sin(ang)*rr, ay=cy-Math.cos(ang)*rr;
+      hudX.translate(ax,ay);hudX.rotate(ang);
+      hudX.beginPath();hudX.moveTo(0,-20);hudX.lineTo(14,11);hudX.lineTo(0,3);hudX.lineTo(-14,11);hudX.closePath();hudX.fill();
+      hudX.rotate(-ang);hudX.font=T(UI.label,true);hudX.textAlign='center';hudX.fillText('黒龍 GUNSHIP '+d+'m',0,30);
+    }
+    hudX.restore();hudX.lineWidth=1;hudX.textAlign='left';
+  });
 
   // ---------------- HOIST: the extraction panel ----------------
   if(winch.crew||(now-crewBoardT)<2600){
@@ -12365,7 +12496,7 @@ function revealCrew(id){
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,34,10,1,true),new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.13,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
   beam.position.y=17;g.add(beam);
   const fig=inPerson(0x2f5a3a,0x22252a,0,0,0);fig.scale.setScalar(1.15);g.add(fig);
-  const gl=new THREE.PointLight(0x9dffb0,1.1,26,2);gl.position.y=2.4;g.add(gl);
+  // (no point light here: adding one mid-game changes the light count and recompiles every shader)
   c.marker=g;scene.add(g);
 }
 function crewRemaining(){return CREW.filter(c=>!c.rescued).length;}
@@ -12741,7 +12872,9 @@ function buildWinch(){
   const hook=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.13,6,12),
     new THREE.MeshStandardMaterial({color:0xffc23a,emissive:0xff8a00,emissiveIntensity:0.6,roughness:0.4,metalness:0.7}));
   hook.rotation.x=Math.PI/2;g.add(hook);
-  const glow=new THREE.PointLight(0xffc23a,1.4,22,2);g.add(glow);
+  // the hook light lives in the scene permanently and is dimmed, never hidden — hiding it with the
+  // group changed the light count at every hoist start/stop and recompiled the city
+  const glow=new THREE.PointLight(0xffc23a,0,22,2);scene.add(glow);
   g.visible=false;scene.add(g);
   winch.line=g;winch.hook=hook;winch.glow=glow;winch.cable=cable;
 }
@@ -12773,7 +12906,7 @@ function updateCrewRescue(dt){
     if(winch.crew){winch.crew=null;winch.t=0;}
     winch.t=Math.max(0,winch.t-dt*2);
     winch.fail='';
-    winch.line.visible=false;
+    winch.line.visible=false;winch.glow.intensity=0;
     return;
   }
   if(winch.crew!==tgt){winch.crew=tgt;winch.t=0;}
@@ -12793,16 +12926,17 @@ function updateCrewRescue(dt){
   // cable: hangs from the airframe down toward the crewman as progress builds
   const frac=winch.t/EXTRACT_TIME;
   winch.line.visible=winch.t>0.05;
+  if(!winch.line.visible)winch.glow.intensity=0;
   if(winch.line.visible){
     const top=heli.position.y-1.2;
     const drop=Math.max(1.5,(top-1.2)*Math.min(1,frac*1.35));
     winch.cable.scale.y=drop;
     winch.cable.position.set(0,-drop/2,0);
     winch.hook.position.set(0,-drop,0);
-    winch.glow.position.set(0,-drop,0);
     winch.glow.intensity=ok?1.6:0.5;
     winch.hook.material.emissiveIntensity=ok?0.8:0.25;
     winch.line.position.set(heli.position.x,top,heli.position.z);
+    winch.glow.position.set(heli.position.x,top-drop,heli.position.z);   // world space: the light is not in the group
     winch.hook.rotation.z+=dt*(ok?3:0.6);
   }
 
@@ -12810,7 +12944,7 @@ function updateCrewRescue(dt){
     const c=tgt;
     c.aboard=true;aboard.push(c);
     if(c.marker){scene.remove(c.marker);c.marker=null;}
-    winch.crew=null;winch.t=0;winch.line.visible=false;
+    winch.crew=null;winch.t=0;winch.line.visible=false;winch.glow.intensity=0;
     crewBoardT=performance.now();crewBoardWho=c;
     setTimeout(()=>{if(!gameOver&&aboard.length)startInterception();},2200);   // the sky answers
     flashMsg(c.call+' ABOARD — '+c.perk,UI.ok);
@@ -12948,7 +13082,7 @@ function resetRunState(){
   bullets.forEach(b=>scene.remove(b.m));bullets.length=0;
   explosions.forEach(e=>scene.remove(e.m));explosions.length=0;
   debris.forEach(d=>scene.remove(d.m));debris.length=0;
-  activeLights.forEach(rec=>{clearTimeout(rec.to);scene.remove(rec.l);});activeLights.length=0;
+  FX_LIGHTS.forEach(rec=>{clearTimeout(rec.to);rec.l.intensity=0;});   // pooled: dim, never remove
   if(hostage){scene.remove(hostage.m);hostage=null;}
   hp=100;score=0;kills=0;wave=1;missionLevel=1;streak=0;mult=1;
   // ---- reset the ONE NIGHT IN TOKYO campaign ----
@@ -12956,7 +13090,7 @@ function resetRunState(){
   CREW.forEach(c=>{c.found=false;c.rescued=false;c.aboard=false;if(c.marker){scene.remove(c.marker);c.marker=null;}});
   VENUES.forEach(v=>{v.visited=false;if(v.marker)v.marker.visible=true;});
   aboard=[];missionDone=false;stage=0;TOD.target=todForStage(0);TOD.t=TOD.pinned!==null?TOD.pinned:TOD_START;runClock0=performance.now();
-  winch.crew=null;winch.t=0;if(winch.line)winch.line.visible=false;
+  winch.crew=null;winch.t=0;if(winch.line){winch.line.visible=false;winch.glow.intensity=0;}
   crewBoardWho=null;window.__deckState=null;
   ammoMax=BASE_AMMO_MAX.slice();
   if(typeof refreshStageMarkers==='function')refreshStageMarkers();
@@ -13406,49 +13540,32 @@ function loop(now){
     if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar(0.8+b*0.4);}}
     if(window.__lighthouse){const H=window.__lighthouse;H.t+=dt;H.pivot.rotation.y+=dt*0.6;const pulse=0.8+0.2*Math.sin(H.t*3.0);H.lamp.material.emissiveIntensity=2.6*pulse;H.lampLight.intensity=3.0*pulse;if(window.__lhHalo)window.__lhHalo.material.opacity=0.4+0.35*pulse;}
     if(!window.__hwyCars){
-      window.__hwyCars=[];
-      function mkVehicle(kind){
-        const g=new THREE.Group();
-        const col=[0xb03030,0x3050a0,0xd8d8d8,0x222428,0xc8a030,0x3a5a3a][Math.floor(Math.random()*6)];
-        if(kind===0){
-          const bod=new THREE.Mesh(new THREE.BoxGeometry(2,0.85,4.4),new THREE.MeshLambertMaterial({color:col}));bod.position.y=0.7;g.add(bod);
-          const cab=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.6,2.2),new THREE.MeshLambertMaterial({color:0x161c22}));cab.position.y=1.35;g.add(cab);
-        }else if(kind===1){
-          const bod=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.8,5.4),new THREE.MeshLambertMaterial({color:col}));bod.position.y=1.2;g.add(bod);
-          const cab=new THREE.Mesh(new THREE.BoxGeometry(2.1,1.4,1.4),new THREE.MeshLambertMaterial({color:0x161c22}));cab.position.set(0,1.1,-2.6);g.add(cab);
-        }else{
-          const bod=new THREE.Mesh(new THREE.BoxGeometry(2.4,2.4,9),new THREE.MeshLambertMaterial({color:col}));bod.position.y=1.4;g.add(bod);
-          for(let w=0;w<4;w++){const win=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.8,0.08),new THREE.MeshBasicMaterial({color:0xffe8b0}));win.position.set(-3+w*2,1.7,4.55);g.add(win);}
-        }
-        const hl=new THREE.Mesh(new THREE.BoxGeometry(kind===2?2.2:1.8,.15,.1),new THREE.MeshBasicMaterial({color:0xfff0c0}));
-        hl.position.set(0,0.6,kind===2?-4.4:(kind===1?-2.6:-2.2));g.add(hl);
-        const tl3=new THREE.Mesh(new THREE.BoxGeometry(kind===2?2.2:1.8,.15,.1),new THREE.MeshBasicMaterial({color:0xff3020}));
-        tl3.position.set(0,0.6,kind===2?4.4:(kind===1?2.6:2.2));g.add(tl3);
-        const vWheelG=new THREE.CylinderGeometry(kind===2?0.5:0.4,kind===2?0.5:0.4,0.3,10);
-        const vWheelM=new THREE.MeshLambertMaterial({color:0x0c0c0c});
-        const wz=kind===2?[-3.6,3.6]:(kind===1?[-1.8,1.8]:[-1.4,1.4]);
-        const wx=kind===2?1.15:(kind===1?1.05:0.95);
-        wz.forEach(z=>{
-          [-wx,wx].forEach(x=>{
-            const wh=new THREE.Mesh(vWheelG,vWheelM);wh.rotation.z=Math.PI/2;wh.position.set(x,kind===2?0.5:0.4,z);g.add(wh);
-          });
-        });
-        return g;
+      // expressway traffic from the same car kit (it was boxes): one instanced mesh per model
+      const KIT=window.__carKit, kinds=['sedan','sedan','minivan','taxi','kei','boxtruck','boxtruck'];
+      const HC=window.__hwyCars=[], cnt={}, cc=new THREE.Color();
+      const hcCols=[0xeceeef,0xd8dadc,0x232428,0x9fb2c4,0xb03030,0x2a5a86,0xc9ccd0];
+      for(let i=0;i<34;i++){
+        const kind=kinds[Math.floor(Math.random()*kinds.length)], lane=[-5.2,-1.9,1.9,5.2][Math.floor(Math.random()*4)];
+        cnt[kind]=cnt[kind]||0;
+        HC.push({kind,slot:cnt[kind]++,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind==='boxtruck'?15:21)+Math.random()*8,dir:lane<0?1:-1,   // keep left
+          col:kind==='taxi'?0x14161a:kind==='boxtruck'?0xeceeef:hcCols[Math.floor(Math.random()*hcCols.length)]});
       }
-      for(let i=0;i<34;i++){ // denser expressway traffic (was 22)
-        const kind=Math.random()<0.55?0:(Math.random()<0.7?1:2);
-        const v=mkVehicle(kind);
-        const lane=Math.random()<.5?-3.5:3.5;
-        v.rotation.y=lane<0?0:Math.PI;
-        scene.add(v);
-        window.__hwyCars.push({m:v,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind===2?12:kind===1?16:22)+Math.random()*8,dir:lane<0?1:-1});
-      }
+      window.__hwyInst={};
+      for(const k in cnt){const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,cnt[k]);m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.frustumCulled=false;scene.add(m);window.__hwyInst[k]=m;}
+      HC.forEach(c=>window.__hwyInst[c.kind].setColorAt(c.slot,cc.setHex(c.col)));
+      for(const k in window.__hwyInst)window.__hwyInst[k].instanceColor.needsUpdate=true;
+      window.__hwyTmp={o:new THREE.Object3D()};
     }
-    window.__hwyCars.forEach(c=>{
-      c.pos+=c.spd*c.dir*dt;
-      if(c.pos>CITY)c.pos=-CITY;if(c.pos<-CITY)c.pos=CITY;
-      c.m.position.set(c.pos,17.4,HWY_Z+c.lane);
-    });
+    { const o=window.__hwyTmp.o;
+      window.__hwyCars.forEach(c=>{
+        c.pos+=c.spd*c.dir*dt;
+        if(c.pos>CITY)c.pos=-CITY;if(c.pos<-CITY)c.pos=CITY;
+        o.position.set(c.pos,16.8,HWY_Z+c.lane);o.rotation.set(0,c.dir>0?-Math.PI/2:Math.PI/2,0);o.updateMatrix();
+        window.__hwyInst[c.kind].setMatrixAt(c.slot,o.matrix);
+      });
+      for(const k in window.__hwyInst)window.__hwyInst[k].instanceMatrix.needsUpdate=true;
+    }
     // pedestrians read as sub-pixel twinkling dots from high altitude — cull the whole instanced
     // batch (2 draw calls) above a threshold, with hysteresis so it doesn't pop back and forth
     if(window.__pedHidden===undefined)window.__pedHidden=false;
