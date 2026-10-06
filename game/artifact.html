@@ -4818,18 +4818,22 @@ const blurMat=new THREE.ShaderMaterial({
     }`
 });
 const compositeMat=new THREE.ShaderMaterial({
-  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4}},
+  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4},uTexel:{value:new THREE.Vector2(1/1280,1/720)}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
-  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;uniform vec2 uTexel;varying vec2 vUv;
     void main(){
       vec2 cc=vUv-0.5;
       float r2=dot(cc,cc);
       // restrained radial chromatic aberration, strongest toward the frame edges
-      vec2 off=cc*(0.0007+0.0016*r2);
+      vec2 off=cc*(0.0003+0.0012*r2);
       vec3 s;
       s.r=texture2D(tScene,vUv+off).r;
       s.g=texture2D(tScene,vUv).g;
       s.b=texture2D(tScene,vUv-off).b;
+      // unsharp mask: the frame was soft (aberration + upscaling); bring edges and texture back
+      vec3 nb=texture2D(tScene,vUv+vec2(uTexel.x,0.0)).rgb+texture2D(tScene,vUv-vec2(uTexel.x,0.0)).rgb
+             +texture2D(tScene,vUv+vec2(0.0,uTexel.y)).rgb+texture2D(tScene,vUv-vec2(0.0,uTexel.y)).rgb;
+      s+=(s-nb*0.25)*0.55;
       vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+texture2D(tBloomWide,vUv).rgb*bloomWideStrength;
       vec3 c=s+bloom;
       float l=dot(c,vec3(0.299,0.587,0.114));
@@ -4840,8 +4844,8 @@ const compositeMat=new THREE.ShaderMaterial({
       vec3 highTint=vec3(0.012,0.004,-0.008);
       c+=shadowTint*(1.0-smoothstep(0.0,0.45,l));
       c+=highTint*smoothstep(0.5,1.0,l);
-      c=(c-0.5)*1.05+0.5;
-      c=mix(vec3(l),c,1.02);
+      c=mix(c,c*c*(3.0-2.0*c),0.22);          // filmic S-curve: deeper blacks, punchier mids
+      c=mix(vec3(l),c,1.08);
       // gentle vignette
       float vig=1.0-smoothstep(0.28,0.92,sqrt(r2));
       c*=mix(0.82,1.0,vig);
@@ -4884,7 +4888,7 @@ function renderPost(){
   blurMat.uniforms.tDiffuse.value=wideRT2.texture;blurMat.uniforms.dir.value.set(0,1);
   renderer.setRenderTarget(wideRT1);renderer.render(postScene,postCam);
   postQuad.material=compositeMat;
-  compositeMat.uniforms.tScene.value=sceneRT.texture;
+  compositeMat.uniforms.tScene.value=sceneRT.texture;compositeMat.uniforms.uTexel.value.set(1/sceneRT.width,1/sceneRT.height);
   compositeMat.uniforms.tBloom.value=blurRT2.texture;
   compositeMat.uniforms.tBloomWide.value=wideRT1.texture;
   renderer.setRenderTarget(null);renderer.render(postScene,postCam);
@@ -5964,8 +5968,9 @@ function drawAsphaltPhoto(g,w,h){
   }
 }
 function asphaltBase(g,w,h,fallbackFill){
-  if(ASPHALT_IMG){drawAsphaltPhoto(g,w,h);}
-  else{g.fillStyle=fallbackFill;g.fillRect(0,0,w,h);paintAsphaltGrain(g,w,h);}
+  // road textures now carry ONLY the lane paint: the surface is computed by the asphalt shader,
+  // and any grain left in here leaked through the paint mask as white/black specks
+  g.fillStyle='#0c0c0d';g.fillRect(0,0,w,h);
 }
 function makeRoadStripTex(){return tex((g,w,h)=>{
   asphaltBase(g,w,h,'#25272b');
@@ -6030,72 +6035,82 @@ float acrack(vec2 p){ vec2 i=floor(p),f=fract(p);float d1=8.0,d2=8.0;
   for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){vec2 g=vec2(float(x),float(y));vec2 o=vec2(ah(i+g),ah(i+g+19.7));
     float d=length(g+o-f);if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
   return d2-d1;}
+// every surface feature as one height field (metres-ish): colour AND relief come from the same
+// numbers, so a crack is dark because it is a groove the light falls into, not a painted line
+struct AS{float h;float crack;float seal;float patchIn;float seam;float hole;float rim;float agg;float age;float track;float oil;};
+AS asurf(vec2 p,float near,float dist){
+  AS s;
+  s.age=afbm(p*0.022+3.0);
+  s.agg=an(p*8.5)*0.6+an(p*21.0)*0.4;
+  s.track=0.0;s.oil=0.0;
+  if(uRoad.z>0.5){
+    float acr=(uRoad.x<0.5?p.x:p.y)-uRoad.y+uRoad.z*0.5, along=(uRoad.x<0.5?p.y:p.x);
+    float f=fract(acr/3.25);
+    s.track=exp(-pow((f-0.25)/0.07,2.0))+exp(-pow((f-0.75)/0.07,2.0));
+    s.oil=exp(-pow((f-0.5)/0.06,2.0))*smoothstep(0.35,0.8,an(vec2(along*0.25,acr)));
+  }
+  float oldM=smoothstep(0.6,0.88,s.age+0.3*an(p*0.21))*smoothstep(0.35,0.7,an(p*0.06+5.0));
+  float cw=0.02+dist*0.0005, cmask=smoothstep(0.3,0.75,an(p*0.9));
+  float c1=1.0-smoothstep(cw,cw*2.4,acrack(p*0.42));
+  float c2=(1.0-smoothstep(cw*1.5,cw*3.4,acrack(p*1.7)))*smoothstep(0.65,0.9,s.age)*(0.4+0.6*s.track);
+  s.crack=clamp((c1*0.8+c2*0.6)*cmask*oldM,0.0,1.0);
+  float sl=abs(an(p*0.07+11.0)-0.5);
+  s.seal=(1.0-smoothstep(0.010+dist*0.0002,0.02+dist*0.0004,sl))*step(0.45,an(p*0.031));
+  vec2 pc=p/vec2(5.0,3.4), ci=floor(pc), cf=fract(pc); float ph=ah(ci+0.37);
+  s.patchIn=0.0;s.seam=0.0;
+  if(ph<0.075){vec2 lo=vec2(ah(ci+3.1),ah(ci+7.7))*0.32, hi=1.0-vec2(ah(ci+1.3),ah(ci+5.9))*0.32;
+    vec2 dd=min(cf-lo,hi-cf)*vec2(5.0,3.4); s.patchIn=step(0.0,min(dd.x,dd.y))*(ph<0.04?1.0:2.0);
+    s.seam=step(0.5,s.patchIn)*(1.0-smoothstep(0.0,0.05+dist*0.0006,min(dd.x,dd.y)));}
+  vec2 qi=floor(p/7.0); float qh=ah(qi+9.1); s.hole=0.0;s.rim=0.0;
+  if(qh<0.03){vec2 c=(qi+0.25+0.5*vec2(ah(qi+2.2),ah(qi+4.4)))*7.0; float r=0.35+0.6*ah(qi+6.6);
+    float dd=length(p-c)/r+0.35*(an((p-c)*3.0)-0.5);
+    s.hole=1.0-smoothstep(0.82,1.0,dd); s.rim=(1.0-smoothstep(1.0,1.4,dd))*(1.0-s.hole);}
+  s.h=(s.agg-0.5)*0.35*near - s.crack*0.9 - s.seam*0.6 + s.seal*0.15 - s.hole*2.2 + s.rim*0.35*(an(p*6.0)) - s.track*0.15
+      + (s.patchIn>0.5?0.12:0.0);
+  return s;
+}
 `;
 function asphaltify(mat,road){
   const u={uRoad:{value:new THREE.Vector3(road?(road.axis==='x'?0:1):0,road?road.p:0,road?road.w:0)}};
+  mat.normalMap=null;                          // the stretched photo normal map was the "wrinkled leather"
+  mat.roughnessMap=null;
   mat.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u);
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
       .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat aRough=0.0;')
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat aRough=0.0;vec3 aNrm=vec3(0.0,1.0,0.0);')
       .replace('#include <map_fragment>',`#include <map_fragment>
 { vec2 p=vWP.xz; float dist=length(vViewPosition);
   float near=1.0-smoothstep(14.0,55.0,dist);
-  float age=afbm(p*0.022+3.0);                                       // resurfaced (black) vs old (grey)
-  vec3 col=mix(vec3(0.040,0.040,0.042),vec3(0.10,0.097,0.092),smoothstep(0.35,0.72,age));
-  col*=0.86+0.28*an(p*0.55);                                         // mottling
-  float agg=an(p*8.5)*0.6+an(p*21.0)*0.4;
-  col*=mix(1.0,0.82+0.36*agg,near);                                  // aggregate grain
-  float rgh=0.66+0.22*an(p*0.13);
-  // tyre tracks + oil line, only on real carriageways
-  if(uRoad.z>0.5){
-    float acr=(uRoad.x<0.5?vWP.x:vWP.z)-uRoad.y+uRoad.z*0.5;
-    float along=(uRoad.x<0.5?vWP.z:vWP.x);
-    float f=fract(acr/3.25);
-    float tr=exp(-pow((f-0.25)/0.07,2.0))+exp(-pow((f-0.75)/0.07,2.0));
-    col*=1.0-0.30*tr; rgh-=0.16*tr;
-    col*=1.0-0.35*exp(-pow((f-0.5)/0.06,2.0))*smoothstep(0.35,0.8,an(vec2(along*0.25,acr)));
+  AS a=asurf(p,near,dist);
+  vec3 col=mix(vec3(0.048,0.048,0.05),vec3(0.13,0.126,0.118),smoothstep(0.25,0.62,a.age));   // most city asphalt is weathered grey
+  col*=0.86+0.28*an(p*0.55);
+  col*=mix(1.0,0.8+0.4*a.agg,near);
+  float rgh=0.68+0.2*an(p*0.13);
+  col*=1.0-0.30*a.track; rgh-=0.18*a.track;
+  col*=1.0-0.35*a.oil; rgh-=0.2*a.oil;
+  col=mix(col,vec3(0.010),a.crack*(0.35+0.65*near));
+  col=mix(col,vec3(0.006),a.seal*0.9); rgh=mix(rgh,0.25,a.seal);
+  if(a.patchIn>0.5)col=mix(col,(a.patchIn<1.5?vec3(0.065,0.064,0.066):vec3(0.12,0.117,0.11))*(0.9+0.2*a.agg),0.85);
+  col=mix(col,vec3(0.006),a.seam*0.9);
+  col=mix(col,vec3(0.12,0.115,0.105)*(0.8+0.4*a.agg),a.rim*0.8);
+  col=mix(col,vec3(0.008,0.009,0.011),a.hole); rgh=mix(rgh,0.03,a.hole);
+  // relief: finite-difference the same height field, only where it can be seen
+  if(near>0.02){
+    float e=0.03, k=near*1.6;
+    float hx=asurf(p+vec2(e,0.0),near,dist).h, hz=asurf(p+vec2(0.0,e),near,dist).h;
+    aNrm=normalize(vec3(-(hx-a.h)/e*0.05*k,1.0,-(hz-a.h)/e*0.05*k));
   }
-  // crack networks where the tar is old, alligator cracking in the wheel paths
-  float oldM=smoothstep(0.62,0.9,age+0.3*an(p*0.21))*smoothstep(0.35,0.7,an(p*0.06+5.0));   // cracking comes in stretches
-  float cw=0.022+dist*0.0005;
-  float cr=1.0-smoothstep(cw,cw*2.2,acrack(p*0.42));
-  float cr2=1.0-smoothstep(cw*1.6,cw*3.5,acrack(p*1.7));
-  float cmask=smoothstep(0.3,0.75,an(p*0.9));                      // break the polygons up: real cracks wander and stop
-  col=mix(col,vec3(0.012),(cr*0.7*cmask+cr2*0.5*smoothstep(0.65,0.9,age)*cmask)*oldM*(0.3+0.7*near));
-  // tar-sealed crack lines: long meandering glossy black runs
-  float sl=abs(an(p*0.07+11.0)-0.5);
-  float seal=(1.0-smoothstep(0.010+dist*0.0002,0.018+dist*0.0004,sl))*step(0.45,an(p*0.031));
-  col=mix(col,vec3(0.006),seal*0.9); rgh=mix(rgh,0.28,seal);
-  // utility patches: rectangles of newer or older tar with dark sealant seams
-  vec2 pc=p/vec2(5.0,3.4), ci=floor(pc), cf=fract(pc); float ph=ah(ci+0.37);
-  if(ph<0.075){
-    vec2 lo=vec2(ah(ci+3.1),ah(ci+7.7))*0.32, hi=1.0-vec2(ah(ci+1.3),ah(ci+5.9))*0.32;
-    vec2 dd=min(cf-lo,hi-cf); float ins=step(0.0,min(dd.x,dd.y));
-    float seam=ins*(1.0-smoothstep(0.0,0.03+dist*0.0004,min(dd.x*5.0,dd.y*3.4)));
-    col=mix(col,(ph<0.04?vec3(0.024):vec3(0.10,0.098,0.092))*(0.9+0.2*agg),ins);
-    col=mix(col,vec3(0.006),seam*0.9);
-  }
-  // potholes: broken rim, black hole, standing water
-  vec2 qc=p/7.0, qi=floor(qc); float qh=ah(qi+9.1);
-  if(qh<0.03){
-    vec2 c=(qi+0.25+0.5*vec2(ah(qi+2.2),ah(qi+4.4)))*7.0;
-    float r=0.35+0.6*ah(qi+6.6); float dd=length(p-c)/r+0.35*(an((p-c)*3.0)-0.5);
-    float hole=1.0-smoothstep(0.85,1.0,dd), rim=(1.0-smoothstep(1.0,1.35,dd))*(1.0-hole);
-    col=mix(col,vec3(0.12,0.115,0.105)*(0.8+0.4*agg),rim*0.8);
-    col=mix(col,vec3(0.008,0.009,0.011),hole); rgh=mix(rgh,0.04,hole);
-  }
-  // keep the lane paint the road texture carries; replace everything else
-  float paint=smoothstep(0.10,0.22,max(texelColor.r,texelColor.g));
-  diffuseColor.rgb=mix(col,diffuseColor.rgb,paint);
-  aRough=mix(rgh,0.75,paint);
+  float paint=smoothstep(0.08,0.2,max(texelColor.r,texelColor.g));
+  diffuseColor.rgb=mix(col,diffuseColor.rgb*0.9,paint);
+  aRough=mix(rgh,0.7,paint);
 }`)
-      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=aRough;');
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=aRough;')
+      .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(aNrm,0.0)).xyz);');
   };
-  mat.customProgramCacheKey=()=>'asphalt';
-  mat.envMapIntensity=0.6;                    // the dusk sky was tinting every road violet
-  mat.normalScale.set(0.25,0.25);
+  mat.customProgramCacheKey=()=>'asphalt2';
+  mat.envMapIntensity=0.55;
   mat.needsUpdate=true;
   return mat;
 }
@@ -6293,7 +6308,7 @@ function addRoad(axis,r){
   if(hi>a+0.5)segs.push([a,hi]);
   [-1,1].forEach(sd=>{
     const c=r.p+sd*(r.w/2+SW/2);
-    segs.forEach(([a0,a1])=>{ if(a1-a0>0.6)SW_SEGS.push({axis,c,a0,a1}); });
+    segs.forEach(([a0,a1])=>{ if(a1-a0>0.6)SW_SEGS.push({axis,c,a0,a1,kerb:c-sd*SW/2}); });   // kerb = road-side edge
   });
 }
 const SW_SEGS=[];
@@ -6312,10 +6327,10 @@ ROADS_Z.forEach(r=>addRoad('z',r));
     t.forEach(tri=>{(flip?[tri[0],tri[2],tri[1]]:tri).forEach(i=>{P.push(...pts[i]);N.push(...n);U.push(...uvs[i]);});});
   };
   const KL=9.6, LREF=CITY*2;                                      // kerb tile length, walk texture span
-  SW_SEGS.forEach(({axis,c,a0,a1})=>{
+  SW_SEGS.forEach(({axis,c,a0,a1,kerb})=>{
     const x0=c-SW/2,x1=c+SW/2,h=CURB_H;
     quad(TP,TN,TU,[V(axis,x0,a0,h),V(axis,x1,a0,h),V(axis,x1,a1,h),V(axis,x0,a1,h)],
-      [[0,a0/LREF],[1,a0/LREF],[1,a1/LREF],[0,a1/LREF]],[0,1,0]);
+      [[Math.abs(x0-kerb),a0],[Math.abs(x1-kerb),a0],[Math.abs(x1-kerb),a1],[Math.abs(x0-kerb),a1]],[0,1,0]);   // u = metres from the kerb
     const nAc=s2=>axis==='x'?[s2,0,0]:[0,0,s2], nAl=s2=>axis==='x'?[0,0,s2]:[s2,0,0];
     const L=(a1-a0)/KL, Wd=SW/KL;
     [[x0,-1],[x1,1]].forEach(([xc,s2])=>quad(KP,KN,KU,[V(axis,xc,a0,0),V(axis,xc,a1,0),V(axis,xc,a1,h),V(axis,xc,a0,h)],
@@ -6329,7 +6344,48 @@ ROADS_Z.forEach(r=>addRoad('z',r));
     const m=new THREE.Mesh(g,mat);m.receiveShadow=true;m.frustumCulled=false;scene.add(m);return m;};
   const kt=curbFaceTex.clone();kt.needsUpdate=true;kt.repeat.set(1,1);kt.wrapS=kt.wrapT=THREE.RepeatWrapping;
   window.__kerbMat=new THREE.MeshStandardMaterial({map:kt,color:0xa2a4ae,roughness:0.86,metalness:0.1,envMapIntensity:0.65});
-  mk(TP,TN,TU,sidewalkMat);mk(KP,KN,KU,window.__kerbMat);
+  // PAVEMENT shader: world-space 45 cm pavers with sunken joints, per-slab tone, stains and gum,
+  // damp near the kerb, and the yellow tenji tactile strip with raised domes 45-75 cm from the kerb.
+  const pavMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85,metalness:0.0,envMapIntensity:0.35,
+    map:new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1)});
+  pavMat.map.needsUpdate=true;
+  pavMat.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat pRough=0.85;vec3 pNrm=vec3(0,1,0);'+`
+float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
+  vec2 g=p/0.45, gi=floor(g), gf=fract(g);
+  float joint=1.0-smoothstep(0.0,0.035,min(min(gf.x,1.0-gf.x),min(gf.y,1.0-gf.y)));
+  float t=ah(gi);
+  col=mix(vec3(0.16,0.155,0.15),vec3(0.24,0.225,0.21),t)*(0.85+0.3*an(p*3.0));
+  col*=1.0-0.35*smoothstep(0.55,0.85,an(p*0.35+2.0));                 // grime and old stains
+  col=mix(col,vec3(0.05,0.045,0.04),step(0.993,ah(floor(p*6.0))));    // gum spots
+  rough=0.82-0.25*(1.0-smoothstep(0.0,0.6,u));                         // damp along the kerb
+  col*=1.0-0.25*(1.0-smoothstep(0.0,0.5,u));
+  float h=-joint*0.6+(t-0.5)*0.15;
+  if(u>0.45&&u<0.75){                                                  // tenji strip
+    vec2 tg=p/0.3, tf=fract(tg);
+    col=vec3(0.52,0.36,0.03)*(0.8+0.3*an(p*2.0));
+    float tj=1.0-smoothstep(0.0,0.03,min(min(tf.x,1.0-tf.x),min(tf.y,1.0-tf.y)));
+    vec2 dp=fract(tg*4.0)-0.5; float dome=1.0-smoothstep(0.18,0.32,length(dp));
+    h=dome*0.5-tj*0.5; col*=1.0-0.3*tj; rough=0.6;
+  }
+  col=mix(col,col*0.35,joint);
+  return h*near;
+}`)
+      .replace('#include <map_fragment>',`#include <map_fragment>
+{ vec2 p=vWP.xz; float dist=length(vViewPosition), near=1.0-smoothstep(10.0,45.0,dist), u=vUv.x;
+  vec3 col; float r; float h=pavH(p,u,near,col,r);
+  if(near>0.02){ vec3 c2; float r2; float e=0.02;
+    float hx=pavH(p+vec2(e,0.0),u,near,c2,r2), hz=pavH(p+vec2(0.0,e),u,near,c2,r2);
+    pNrm=normalize(vec3(-(hx-h)/e*0.03,1.0,-(hz-h)/e*0.03)); }
+  diffuseColor.rgb=col; pRough=r; }`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=pRough;')
+      .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(pNrm,0.0)).xyz);');
+  };
+  pavMat.customProgramCacheKey=()=>'pavement';
+  mk(TP,TN,TU,pavMat);mk(KP,KN,KU,window.__kerbMat);
   window.__swStats={segments:SW_SEGS.length};
 }
 
@@ -8558,12 +8614,20 @@ void reflStreaks;
 // cars still flashing where they stopped. All instanced / pooled — a handful of draw calls.
 {
   const walls=SW_SEGS.filter(sg=>sg.a1-sg.a0>8);                   // building side of each sidewalk slab
-  const bagG=new THREE.IcosahedronGeometry(0.42,1);
-  const bagM=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.35,metalness:0.0,envMapIntensity:0.8});
+  // a garbage bag, not a ball: lumpy, slumped flat on the ground, gathered into a tied neck
+  const bagG=(()=>{const g=new THREE.IcosahedronGeometry(0.42,2),pa=g.attributes.position,v=new THREE.Vector3();
+    for(let i=0;i<pa.count;i++){v.fromBufferAttribute(pa,i);
+      const n=1+0.13*Math.sin(v.x*11.0+v.y*7.0)*Math.cos(v.z*9.0)+0.06*Math.sin(v.y*23.0+v.x*5.0);
+      v.multiplyScalar(n);
+      if(v.y<-0.12)v.y=-0.12-(v.y+0.12)*0.25;                     // slumped base
+      if(v.y>0.22){const t=(v.y-0.22)/0.25;v.x*=1-0.75*t;v.z*=1-0.75*t;v.y+=t*0.12;}   // gathered neck
+      pa.setXYZ(i,v.x,v.y,v.z);}
+    g.computeVertexNormals();return g;})();
+  const bagM=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.62,metalness:0.0,envMapIntensity:0.35});
   const boxG=new THREE.BoxGeometry(0.7,0.45,0.55);
   const boxM=new THREE.MeshStandardMaterial({color:0x7a6248,roughness:0.95});
   const BAGS=[],BOXES=[];
-  const bagCols=[0x15161a,0x1d2026,0x2a3a5a,0x8a9098,0x3a4a2a,0xb8b8b0];
+  const bagCols=[0x15161a,0x1d2026,0x9aa6b4,0x8a9098,0xc4c8cc,0xb8bcc4,0x3a4a5a];   // Tokyo bags: translucent white/blue-grey, some black
   const sideOf=sg=>{ // +1/-1: which side of the slab faces away from its road
     const R=(sg.axis==='x'?ROADS_X:ROADS_Z).find(r=>Math.abs(Math.abs(sg.c-r.p)-(r.w/2+SW/2))<0.2);
     return R?Math.sign(sg.c-R.p):1;};
@@ -9897,10 +9961,10 @@ function applyRealAsphalt(){
     // sensible grain scale; exact per-road tiling alignment isn't visible on asphalt anyway.
     ASPHALT_NOR.wrapS=ASPHALT_NOR.wrapT=THREE.RepeatWrapping;ASPHALT_NOR.repeat.set(3,180);ASPHALT_NOR.needsUpdate=true;
     (window.__roadMeshes||[]).forEach(rm=>{
-      const m=rm.mesh.material;m.map=roadTexFor(rm.r);m.normalMap=ASPHALT_NOR;m.normalScale.set(0.25,0.25);m.needsUpdate=true;
+      const m=rm.mesh.material;m.map=roadTexFor(rm.r);m.needsUpdate=true;   // relief comes from the asphalt shader now
     });
     const pn=ASPHALT_NOR.clone();pn.wrapS=pn.wrapT=THREE.RepeatWrapping;pn.needsUpdate=true;
-    plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.normalMap=pn;plainAsphaltMat.normalScale.set(0.25,0.25);plainAsphaltMat.needsUpdate=true;
+    plainAsphaltMat.map=makePlainAsphaltTex();plainAsphaltMat.needsUpdate=true;
     const gn=ASPHALT_NOR.clone();gn.wrapS=gn.wrapT=THREE.RepeatWrapping;gn.repeat.set(60,60);gn.needsUpdate=true;
     if(typeof ground!=='undefined'){ground.material.normalMap=gn;ground.material.normalScale=new THREE.Vector2(0.7,0.7);ground.material.needsUpdate=true;}
   }catch(e){console.warn('applyRealAsphalt failed',e);}
