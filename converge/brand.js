@@ -63,7 +63,7 @@
     const arch = nearest(vec), A = ARCH[arch];
     const name = A.names.find(n => !ctx.used.has(n)) || (A.names[0] + ' ' + (ctx.used.size % 5 + 2));
     ctx.used.add(name);
-    const v = MM.makeVariant(ctx.brief, seed, null, overrides(vec, seed));
+    const v = MM.makeVariant(ctx.brief, seed, ctx.brief.dir || null, overrides(vec, seed));
     const d = { id: seed, seed, vec, arch, name, letter: String.fromCharCode(65 + (ctx.count++ % 26)), v, kind: 'brand', packKey: 'brand', pack: { name: v.name, kind: 'Brand & website', labels: { site: 'Website', scroll: 'Page', brand: 'Brand board' }, groups: {} }, theme: { raised: MM.mix(v.pal.bg, v.pal.ink, .07), bg: v.pal.bg }, tags: tagsFor(vec), explain: A.blurb, philosophy: A.phil };
     d.decisions = decisions(d);
     return Object.assign(d, over || {});
@@ -150,7 +150,7 @@
   const LB = { site: 'Website', scroll: 'Page', brand: 'Brand board' };
 
   // Strong signals of a complex product, then signals of a brand/website. English and Hebrew.
-  const COMPLEX = /\b(erp|crm|enterprise|dashboard|analytics|back.?office|admin (console|panel|platform)|internal tool|workflow|b2b|saas|platform|developer tools?|data platform|business intelligence|bi)\b|פלטפורמ|מערכת (ניהול|לניהול|ארגונית)|דשבורד|אנליטיקה|ארגוני|תוכנה ל|תכנון פיננסי|ניהול (מלאי|לקוחות|הרשאות)|סאס/i;
+  const COMPLEX = /\b(social network|network for|marketplace|software|saas|portal|app for|ai agents?|agents?|erp|crm|enterprise|dashboard|analytics|back.?office|admin (console|panel|platform)|internal tool|workflow|b2b|saas|platform|developer tools?|data platform|business intelligence|bi)\b|פלטפורמ|מערכת (ניהול|לניהול|ארגונית)|דשבורד|אנליטיקה|ארגוני|תוכנה ל|תכנון פיננסי|ניהול (מלאי|לקוחות|הרשאות)|סאס/i;
   const BRANDY = /\b(logo|branding|brand|landing page|website|portfolio|shop|store|restaurant|caf[eé]|bakery|bagel|studio|salon|boutique|bar|clinic|gym|florist|hotel|service|services|dog|pet|pets|grooming|cleaning|plumber|electrician|repair|tutor|tutoring|coach|coaching|consulting|consultant|agency|photographer|photography|bakery|truck|catering|church|nonprofit|school|daycare|walker|sitter|sitting|trainer|landscaping|movers|lawyer|dentist|boutique)\b|לוגו|מיתוג|אתר|תיק עבודות|חנות|מסעדה|בית קפה|מאפיי|בייגל|סטודיו|מספרה|בוטיק|קליניקה|יוגה|פיצרי|שירות|כלב|חיות|ניקיון|מאמן|יועץ|צלם|קייטרינג|גינון|הובלות|עורך דין|רופא שיניים/i;
   const detectKind = t => { t = t || ''; const c = COMPLEX.test(t), b = BRANDY.test(t); if (b && !/\b(erp|crm|enterprise|dashboard|analytics|admin (console|panel))\b|ארגוני|דשבורד/i.test(t)) return 'brand'; return c ? 'product' : 'brand'; };
 
