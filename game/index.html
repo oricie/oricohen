@@ -2277,6 +2277,24 @@ function _outlineText(g,txt,cx,cy,size,family,fill,outline,ow){g.font=`bold ${si
 function _chromeText(g,txt,cx,cy,size,family){g.font=`bold ${size}px ${family}`;g.textAlign='center';g.textBaseline='middle';const gd=g.createLinearGradient(0,cy-size*0.55,0,cy+size*0.55);gd.addColorStop(0,'#ffffff');gd.addColorStop(.42,'#c9d2dd');gd.addColorStop(.5,'#7f8a99');gd.addColorStop(.58,'#4c5666');gd.addColorStop(1,'#e9eef4');g.lineJoin='round';g.lineWidth=Math.max(2,size*0.1);g.strokeStyle='#080810';g.strokeText(txt,cx,cy);g.fillStyle=gd;g.fillText(txt,cx,cy);}
 function _starburst(g,cx,cy,r,rays,col){g.save();g.translate(cx,cy);g.strokeStyle=col;g.globalAlpha=0.45;for(let i=0;i<rays;i++){g.rotate(Math.PI*2/rays);g.lineWidth=Math.max(1,r*0.02);g.beginPath();g.moveTo(0,0);g.lineTo(r,0);g.stroke();}g.globalAlpha=1;g.restore();}
 function _sparkle(g,cx,cy,r,col){g.fillStyle=col;g.beginPath();g.moveTo(cx,cy-r*2);g.lineTo(cx+r*.5,cy-r*.5);g.lineTo(cx+r*2,cy);g.lineTo(cx+r*.5,cy+r*.5);g.lineTo(cx,cy+r*2);g.lineTo(cx-r*.5,cy+r*.5);g.lineTo(cx-r*2,cy);g.lineTo(cx-r*.5,cy-r*.5);g.closePath();g.fill();}
+// SPECIFIC shops, not categories. A street reads as Tokyo when the signs belong to someone:
+// "麺屋 黒龍", "スナック 美咲", a floor number, a phone number, opening hours.
+const _nm={
+  men:['黒龍','一心','武蔵','大勝','玄','鬼金','天雷','五郎','まる福','銀杏'],
+  snack:['美咲','ゆかり','ひとみ','麗子','すみれ','小雪','蘭','かおり','ルナ','茜'],
+  izk:['とり吉','赤ちょうちん','まさ','魚八','大漁','のんべえ','福助','ぼんぼり'],
+  kissa:['白鳥','星乃','らんぷ','古時計','ボンジュール','琥珀'],
+  other:['質 大黒屋','麻雀 東風','歯科 佐藤','中華 龍門','ホテル 月光','理容 ミナミ','ゲーム 天国','整骨院','金券 ダイヤ','占い 紫苑','焼肉 牛若','餃子 王将軒','鮨 よし田','薬 ヒノデ','カラオケ 歌ヒロバ'],
+};
+function shopName(){
+  const r=Math.random();
+  if(r<0.18)return {jp:'麺屋 '+_pick(_nm.men),sub:_pick(['豚骨','味噌','醤油','つけ麺'])+' ¥'+_pick(['780','850','920','1000'])};
+  if(r<0.36)return {jp:'スナック '+_pick(_nm.snack),sub:'PM8:00 – AM3:00'};
+  if(r<0.52)return {jp:'居酒屋 '+_pick(_nm.izk),sub:'生ビール ¥'+_pick(['390','480','500'])};
+  if(r<0.62)return {jp:'純喫茶 '+_pick(_nm.kissa),sub:'珈琲 ¥'+_pick(['450','500','550'])};
+  return {jp:_pick(_nm.other),sub:'☎ 03-'+(3000+Math.floor(Math.random()*6999))+'-'+String(Math.floor(Math.random()*9999)).padStart(4,'0')};
+}
+const _floorCols=[['#f2eee4','#1a1a1a'],['#c81e2a','#fff6e8'],['#1c3c8a','#ffffff'],['#f4d21c','#141414'],['#1d1d1f','#ffd84d'],['#0d6b4a','#ffffff'],['#e86a9a','#ffffff'],['#ffffff','#c81e2a']];
 function drawSignFace(g,x,y,w,h,col,vertical){
   g.save();
   g.beginPath();g.rect(x,y,w,h);g.clip();                 // keep every motif inside the panel
@@ -2286,10 +2304,41 @@ function drawSignFace(g,x,y,w,h,col,vertical){
   const bg=g.createLinearGradient(x,y,x,y+h);
   bg.addColorStop(0,_rgba(_mixc(dark,rgb,0.16),1));bg.addColorStop(1,_rgba(dark,1));
   g.fillStyle=bg;g.fillRect(x,y,w,h);
-  const pool=tall?['vcol','power','izakaya','stripe']:['chrome','gradient','grid','power','price','izakaya','stripe','vcol'];
+  const pool=tall?['tenant','tenant','tenant','vcol','izakaya','power']:['shopname','shopname','shopname','shopname','izakaya','price','chrome'];
   const arch=_pick(pool);
-  if(arch==='vcol'){                                       // vertical mincho kanji column
-    const word=_pick(shopWords).replace(/ー/g,'│'), chars=[...word].slice(0,4);
+  if(arch==='tenant'){                                     // zakkyo-building floor directory: one slab per floor
+    const n=3+Math.floor(Math.random()*3), sh=h/n;
+    let fl=n+1;
+    for(let i=0;i<n;i++,fl--){
+      const [bgc,fgc]=_pick(_floorCols), yy=y+i*sh;
+      g.fillStyle=bgc;g.fillRect(x+1,yy+1,w-2,sh-2);
+      g.fillStyle='rgba(0,0,0,.25)';g.fillRect(x+1,yy+sh-3,w-2,2);
+      g.fillStyle=fgc;g.font=`bold ${Math.round(Math.min(sh*0.22,w*0.2))}px ${GOTHIC}`;g.textAlign='left';g.textBaseline='top';
+      g.fillText((fl===1?'B1':fl+'F'),x+3,yy+3);
+      const nm=shopName().jp.split(' ').pop(), chars=[...nm].slice(0,4), cs=Math.min((sh*0.72)/Math.max(2,chars.length),w*0.62);
+      chars.forEach((c,k)=>{g.font=`bold ${Math.round(cs)}px ${MINCHO}`;g.textAlign='center';g.textBaseline='middle';
+        g.fillText(c,x+w*0.56,yy+sh*0.2+cs*(k+0.5)*0.98);});
+    }
+    for(let i=0;i<40;i++){g.fillStyle=`rgba(40,30,20,${Math.random()*0.18})`;g.fillRect(x+Math.random()*w,y+Math.random()*h,2,6+Math.random()*16);} // rain grime
+  }else if(arch==='shopname'){                             // a named shop: name, trade line, hours / phone
+    const sn=shopName(), parts=sn.jp.split(' ');
+    const lit=Math.random()<0.5;                            // backlit acrylic (light face) or neon on black
+    let ink=col;
+    if(lit){const bgc=_pick([[238,232,220],[250,214,40],[200,30,40],[22,60,140]]);
+      g.fillStyle=_rgba(bgc,1);g.fillRect(x,y,w,h);
+      ink=(bgc[0]*0.3+bgc[1]*0.59+bgc[2]*0.11)>150?_pick(['#151515','#b81818']):'#ffffff';}   // always readable on its board
+    if(parts.length>1){
+      g.fillStyle=lit?ink:_rgba(rgb,0.85);g.font=`bold ${Math.round(h*0.17)}px ${GOTHIC}`;g.textAlign='left';g.textBaseline='top';
+      g.fillText(parts[0],x+w*0.05,y+h*0.07);
+    }
+    const nm=parts[parts.length-1], s2=_fit(g,nm,w*0.86,h*0.5,'bold',MINCHO);
+    if(lit)_outlineText(g,nm,cx,y+h*0.53,s2,MINCHO,ink,ink==='#ffffff'?'#202020':'rgba(255,255,255,.5)',Math.max(1,s2*0.04));
+    else _glowText(g,nm,cx,y+h*0.53,s2,MINCHO,col,mn*0.12);
+    g.fillStyle=lit?ink:'#e8e8e8';g.font=`${Math.round(h*0.13)}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';
+    g.fillText(sn.sub,cx,y+h*0.86);
+    if(lit)for(let i=0;i<25;i++){g.fillStyle=`rgba(30,24,16,${Math.random()*0.16})`;g.fillRect(x+Math.random()*w,y+Math.random()*h*0.4,1.5,4+Math.random()*12);}
+  }else if(arch==='vcol'){                                       // vertical mincho kanji column
+    const word=(Math.random()<0.6?shopName().jp.split(' ').pop():_pick(shopWords)).replace(/ー/g,'│'), chars=[...word].slice(0,4);
     const rule=x+w*(Math.random()<.5?0.24:0.76);
     g.strokeStyle=_rgba(rgb,0.6);g.lineWidth=Math.max(1,w*0.02);g.beginPath();g.moveTo(rule,y+h*0.1);g.lineTo(rule,y+h*0.9);g.stroke();
     const colX=x+w*(rule<cx?0.6:0.42), size=Math.min(h*0.82/chars.length,w*0.66);
@@ -2348,7 +2397,7 @@ function drawSignFace(g,x,y,w,h,col,vertical){
 function neonTex(txt,col,shape,frameStyle){
   shape=shape||'tall';frameStyle=frameStyle||'steel';
   const landscape=shape==='wide';
-  const w=landscape?256:64, h=landscape?64:256;
+  const w=landscape?512:128, h=landscape?128:512;   // 2x: the old 64px-wide faces were mush up close
   return tex((g,w,h)=>{
     g.fillStyle='#141118';g.fillRect(0,0,w,h);
     const frameW=frameStyle==='black'?4:(frameStyle==='chrome'?5:6+Math.floor(Math.random()*3));
@@ -3948,7 +3997,7 @@ function updateRevealLights(){
   __revealCand.length=0;
   const lamps=window.__lampPts||[];
   for(let i=0;i<lamps.length;i++){const l=lamps[i],dx=l.x-hx,dz=l.z-hz,d2=dx*dx+dz*dz;
-    if(d2<170*170)__revealCand.push({x:l.x,z:l.z,d2,warm:l.warm,car:false});}
+    if(d2<170*170)__revealCand.push({x:l.x,z:l.z,d2:l.fire?d2*0.6:d2,warm:l.warm,fire:l.fire,car:false});}
   const cars=window.__movingCars||[];
   for(let i=0;i<cars.length;i++){const c=cars[i],cx=c.onX?c.pos:c.lane,cz=c.onX?c.lane:c.pos,dx=cx-hx,dz=cz-hz,d2=dx*dx+dz*dz;
     if(d2<140*140)__revealCand.push({x:cx,z:cz,d2,warm:false,car:true});}
@@ -3956,7 +4005,8 @@ function updateRevealLights(){
   for(let i=0;i<REVEAL_N;i++){
     const L=revealLights[i],c=__revealCand[i];
     if(!c){L.intensity=0;continue;}
-    if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.95,0.86);L.intensity=2.4;L.distance=24;}
+    if(c.fire){L.position.set(c.x,2.2,c.z);L.color.setRGB(1.0,0.5,0.16);L.intensity=3.2+Math.random()*1.4;L.distance=26;}
+    else if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.95,0.86);L.intensity=2.4;L.distance=24;}
     else if(c.warm){L.position.set(c.x,7.5,c.z);L.color.setRGB(1.0,0.72,0.4);L.intensity=4.2;L.distance=34;}
     else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.66,0.8,1.0);L.intensity=3.8;L.distance=34;}
   }
@@ -3991,6 +4041,100 @@ function reflStreaks(axis,r){
 //  only added colour-dot noise on top of it.)
 void reflStreaks;
 
+// ---------- THE NIGHT IT HAPPENED: street debris, burning barrels, abandoned patrol cars ----------
+// Clean pavements read as a game level. These read as a city a few hours into a disaster:
+// collection-day bags split against the walls, cardboard, fires people lit and left, and police
+// cars still flashing where they stopped. All instanced / pooled — a handful of draw calls.
+{
+  const walls=SW_SEGS.filter(sg=>sg.a1-sg.a0>8);                   // building side of each sidewalk slab
+  const bagG=new THREE.IcosahedronGeometry(0.42,1);
+  const bagM=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.35,metalness:0.0,envMapIntensity:0.8});
+  const boxG=new THREE.BoxGeometry(0.7,0.45,0.55);
+  const boxM=new THREE.MeshStandardMaterial({color:0x7a6248,roughness:0.95});
+  const BAGS=[],BOXES=[];
+  const bagCols=[0x15161a,0x1d2026,0x2a3a5a,0x8a9098,0x3a4a2a,0xb8b8b0];
+  const sideOf=sg=>{ // +1/-1: which side of the slab faces away from its road
+    const R=(sg.axis==='x'?ROADS_X:ROADS_Z).find(r=>Math.abs(Math.abs(sg.c-r.p)-(r.w/2+SW/2))<0.2);
+    return R?Math.sign(sg.c-R.p):1;};
+  walls.forEach(sg=>{
+    if(Math.random()<0.45)return;
+    const out=sideOf(sg), n=1+Math.floor(Math.random()*2);
+    for(let k=0;k<n;k++){
+      const al=sg.a0+2+Math.random()*(sg.a1-sg.a0-4), ac=sg.c+out*(SW/2-0.55);
+      const wx=sg.axis==='x'?ac:al, wz=sg.axis==='x'?al:ac;
+      if(Math.abs(wx-riverCX(wz))<RIVER_HW+10)continue;
+      const pile=3+Math.floor(Math.random()*7);
+      for(let b=0;b<pile;b++){
+        const dl=(Math.random()-.5)*2.4, dc=(Math.random()-.5)*0.7;
+        BAGS.push({x:sg.axis==='x'?wx+dc:wx+dl,z:sg.axis==='x'?wz+dl:wz+dc,y:CURB_H+0.32+(b>4?0.45:0),
+          s:0.8+Math.random()*0.5,c:bagCols[Math.floor(Math.random()*bagCols.length)]});
+      }
+      if(Math.random()<0.6)BOXES.push({x:wx+(Math.random()-.5)*2,z:wz+(Math.random()-.5)*2,y:CURB_H+0.22,r:Math.random()*3});
+    }
+  });
+  const d=new THREE.Object3D(),cc=new THREE.Color();
+  if(BAGS.length){
+    const im=new THREE.InstancedMesh(bagG,bagM,BAGS.length);
+    BAGS.forEach((b,i)=>{d.position.set(b.x,b.y,b.z);d.rotation.set(Math.random(),Math.random()*6,Math.random());
+      d.scale.set(b.s,b.s*(0.75+Math.random()*0.3),b.s*(0.9+Math.random()*0.3));d.updateMatrix();im.setMatrixAt(i,d.matrix);im.setColorAt(i,cc.setHex(b.c));});
+    im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;im.castShadow=false;im.receiveShadow=true;scene.add(im);
+  }
+  if(BOXES.length){
+    const im=new THREE.InstancedMesh(boxG,boxM,BOXES.length);
+    BOXES.forEach((b,i)=>{d.position.set(b.x,b.y,b.z);d.rotation.set(0,b.r,(Math.random()-.5)*0.5);d.scale.setScalar(0.8+Math.random()*0.6);d.updateMatrix();im.setMatrixAt(i,d.matrix);});
+    im.instanceMatrix.needsUpdate=true;scene.add(im);
+  }
+  // burning barrels at junction corners: fire sprites flicker, a real light joins the reveal pool
+  const flameTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h*0.62,2,w/2,h*0.55,w*0.48);
+    gr.addColorStop(0,'rgba(255,240,190,1)');gr.addColorStop(.25,'rgba(255,170,60,.9)');gr.addColorStop(.6,'rgba(220,70,10,.35)');gr.addColorStop(1,'rgba(120,20,0,0)');
+    g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
+  const barrelG=new THREE.CylinderGeometry(0.45,0.42,1.1,12,1,true);
+  const barrelM=new THREE.MeshStandardMaterial({color:0x4a2a18,roughness:0.8,metalness:0.4,side:THREE.DoubleSide,emissive:0x2a0800});
+  window.__fires=[];
+  const corners=[];
+  ROADS_X.filter(r=>r.w>10).forEach(rx=>ROADS_Z.filter(r=>r.w>10&&r.p<SEA_Z0-20).forEach(rz=>{
+    if(Math.abs(rx.p)>560||Math.abs(rz.p)>560)return;
+    if(Math.abs(rx.p-riverCX(rz.p))<RIVER_HW+20)return;
+    corners.push([rx.p+(Math.random()<.5?-1:1)*(rx.w/2+SW*0.6),rz.p+(Math.random()<.5?-1:1)*(rz.w/2+SW*0.6)]);
+  }));
+  corners.sort(()=>Math.random()-0.5).slice(0,22).forEach(([x,z])=>{
+    const b=new THREE.Mesh(barrelG,barrelM);b.position.set(x,CURB_H+0.55,z);scene.add(b);
+    const f=new THREE.Sprite(new THREE.SpriteMaterial({map:flameTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
+    f.position.set(x,CURB_H+1.55,z);f.scale.set(1.6,2.2,1);scene.add(f);
+    const f2=f.clone();f2.material=f.material.clone();f2.scale.set(5,4,1);f2.material.opacity=0.35;f2.position.y+=0.3;scene.add(f2);
+    groundPoolXf.push({x,z,s:6+Math.random()*2,st:1.1,c:[1.0,0.42,0.1]});
+    window.__fires.push({f,f2,x,z,ph:Math.random()*9});
+    (window.__lampPts||(window.__lampPts=[])).push({x,z,fire:true});
+  });
+  // abandoned patrol cars, doors open, light bars still going
+  window.__beacons=[];
+  const pcBody=new THREE.MeshStandardMaterial({color:0xe8e8e8,roughness:0.45,metalness:0.3});
+  const pcBlack=new THREE.MeshStandardMaterial({color:0x101114,roughness:0.5,metalness:0.3});
+  const pcGlass=new THREE.MeshStandardMaterial({color:0x0b0f14,roughness:0.1,metalness:0.6});
+  const redM=new THREE.MeshBasicMaterial({color:0xff1a1a}), bluM=new THREE.MeshBasicMaterial({color:0x2a5aff});
+  const glowR=new THREE.SpriteMaterial({map:flameTex,color:0xff2020,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+  const glowB=new THREE.SpriteMaterial({map:flameTex,color:0x3050ff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
+  for(let i=0,tries=0;i<8&&tries<60;tries++){
+    const onX=Math.random()<.5, arr=onX?laneRoads.z:laneRoads.x, r=arr[Math.floor(Math.random()*arr.length)];
+    const along=(Math.random()-.5)*900, x=onX?along:r.p+(Math.random()-.5)*r.w*0.4, z=onX?r.p+(Math.random()-.5)*r.w*0.4:along;
+    if(z>SEA_Z0-10||Math.abs(x-riverCX(z))<RIVER_HW+12)continue;
+    if(onX?ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+6):ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+6))continue;
+    const g=new THREE.Group();
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(1.75,0.7,4.6),pcBlack);lower.position.y=0.55;g.add(lower);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(1.74,0.32,4.62),pcBody);upper.position.y=1.06;g.add(upper);
+    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.55,2.3),pcGlass);cab.position.set(0,1.48,-0.2);g.add(cab);
+    const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,1.1),pcBody);door.position.set(1.15,0.95,-0.1);door.rotation.y=-0.9;g.add(door);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.3),pcBlack);bar.position.set(0,1.82,-0.2);g.add(bar);
+    const lr=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),redM);lr.position.set(-0.32,1.86,-0.2);g.add(lr);
+    const lb=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),bluM);lb.position.set(0.32,1.86,-0.2);g.add(lb);
+    const sr=new THREE.Sprite(glowR.clone());sr.position.set(-0.4,1.9,-0.2);sr.scale.set(5,5,1);g.add(sr);
+    const sb=new THREE.Sprite(glowB.clone());sb.position.set(0.4,1.9,-0.2);sb.scale.set(5,5,1);g.add(sb);
+    [[-0.8,1.5],[0.8,1.5],[-0.8,-1.5],[0.8,-1.5]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.24,10),pcBlack);w.rotation.z=Math.PI/2;w.position.set(wx,0.34,wz);g.add(w);});
+    g.position.set(x,0,z);g.rotation.y=(onX?Math.PI/2:0)+(Math.random()-.5)*0.9;scene.add(g);
+    window.__beacons.push({sr,sb,lr,lb,ph:Math.random()*6});
+    i++;
+  }
+}
 // instance every ground light-pool (lamp sodium/mercury pools + neon shopfront splashes + wet
 // reflection streaks) as ONE draw call, each with its own colour, laid flat just above the road.
 let groundPoolInst=null;
@@ -4073,6 +4217,7 @@ for(let i=0;i<44;i++){
   const a=(Math.random()-.5)*1000;
   const sd=Math.random()<.5?-1:1;
   const off=r.w/2+SW+0.7;
+  if(onX?ROADS_X.some(q=>Math.abs(a-q.p)<q.w/2+SW+2):ROADS_Z.some(q=>Math.abs(a-q.p)<q.w/2+SW+2))continue;   // not in a junction
   const vm=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.2,1),vendMats[Math.floor(Math.random()*3)]);
   if(onX)vm.position.set(a,1.1,r.p+sd*off);else vm.position.set(r.p+sd*off,1.1,a);
   vm.rotation.y=onX?(sd>0?Math.PI:0):(sd>0?-Math.PI/2:Math.PI/2);
@@ -5333,23 +5478,112 @@ function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.Textu
   }catch(e){console.warn('loadRealConcrete failed',e);}
 })();
 
+// ---------- THE INFECTED: who they were, not a green soldier ----------
+// Every zombie was the same sci-fi trooper tinted one glowing green, on one walk cycle. Now each
+// is a Tokyo civilian from the night it happened — salaryman, office worker, konbini clerk, road
+// crew, cook, schoolkid, nurse — painted onto the one rig by body region in the shader (legs /
+// torso / sleeves / skin), with blood and grime, and given a body type, a posture and a gait.
+const OUTFITS=[
+  {n:'salaryman', leg:0x23252a, top:0x2e3036, slv:0.30, acc:0xb9b4a6},
+  {n:'salaryman', leg:0x1d1f24, top:0x8c8a84, slv:0.30, acc:0x5a2328},
+  {n:'office',    leg:0x1c2131, top:0xc2bcae, slv:0.18, acc:0x1c2131},
+  {n:'konbini',   leg:0x2a2c30, top:0x3c6e9c, slv:0.16, acc:0xd8d4c8},
+  {n:'roadcrew',  leg:0x262d3c, top:0xc35a1c, slv:0.30, acc:0xd8d070},
+  {n:'cook',      leg:0x34363a, top:0xcfcabd, slv:0.20, acc:0x2a2a2a},
+  {n:'student',   leg:0x1b2033, top:0xc8c6be, slv:0.16, acc:0x1b2033},
+  {n:'nurse',     leg:0xc9b8b8, top:0xd2c6c4, slv:0.15, acc:0x8aa0b4},
+  {n:'hoodie',    leg:0x33435a, top:0x4c4e52, slv:0.33, acc:0x7a1c1c},
+  {n:'punk',      leg:0x18181a, top:0x6a1414, slv:0.15, acc:0x9a9a9a},
+];
+const SKINS=[0x8e9886,0x9a9890,0x857f86,0x7d8a78,0xa59f92];
+const _zMatCache=new Map();
+function infectedMaterial(base,outfit,skin,gore){
+  const key=base.uuid+'|'+OUTFITS.indexOf(outfit)+'|'+skin+'|'+gore;
+  if(_zMatCache.has(key))return _zMatCache.get(key);
+  const m=base.clone();
+  m.color.setRGB(1,1,1);m.roughness=0.92;m.metalness=0.0;
+  m.emissive=new THREE.Color(0,0,0);m.emissiveIntensity=0;
+  const u={uLeg:{value:new THREE.Color(outfit.leg)},uTop:{value:new THREE.Color(outfit.top)},uAcc:{value:new THREE.Color(outfit.acc)},
+           uSkin:{value:new THREE.Color(skin)},uSlv:{value:outfit.slv},uGore:{value:gore}};
+  m.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    Object.assign(sh.uniforms,u);
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vOP;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvOP=position;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>',`#include <common>
+varying vec3 vOP;uniform vec3 uLeg,uTop,uAcc,uSkin;uniform float uSlv,uGore;
+float zh(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
+float zn(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(zh(i),zh(i+vec3(1,0,0)),f.x),mix(zh(i+vec3(0,1,0)),zh(i+vec3(1,1,0)),f.x),f.y),
+             mix(mix(zh(i+vec3(0,0,1)),zh(i+vec3(1,0,1)),f.x),mix(zh(i+vec3(0,1,1)),zh(i+vec3(1,1,1)),f.x),f.y),f.z);}`)
+      .replace('#include <color_fragment>',`#include <color_fragment>
+{ float t=vOP.z/183.0, ax=abs(vOP.x)/183.0;
+  float lum=dot(diffuseColor.rgb,vec3(.3,.59,.11));
+  vec3 c = t>0.855 ? uSkin : t>0.47 ? (ax>uSlv ? uSkin : uTop) : uLeg;
+  if(t<0.055) c=vec3(0.07,0.065,0.06);                                  // shoes
+  if(t>0.455&&t<0.475&&ax<0.12) c=uAcc;                                 // belt / apron string
+  if(t>0.6&&t<0.82&&ax<0.035) c=mix(c,uAcc,0.85);                       // tie / zip / placket
+  if(t>0.93) c=mix(c,vec3(0.05,0.045,0.04),smoothstep(0.93,0.95,t));   // hair
+  c*=0.62+0.55*lum;                                                     // keep the model's folds and seams
+  float n=zn(vOP*0.09)*0.65+zn(vOP*0.31)*0.35;
+  c=mix(c,c*vec3(0.55,0.5,0.42),smoothstep(0.55,0.8,zn(vOP*0.05+7.0))*0.6); // grime
+  float bl=smoothstep(0.74-0.12*uGore,0.86-0.12*uGore,n)*(t>0.5?1.0:0.5)*(0.35+0.65*uGore);
+  c=mix(c,vec3(0.10,0.018,0.014),bl*0.9);                               // old blood: dark, brown-red, not paint
+  if(t>0.84&&t<0.9) c=mix(c,vec3(0.12,0.02,0.015),step(0.78,zn(vOP*0.4))*uGore); // mouth/jaw
+  diffuseColor.rgb=c; }`)
+      .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+{ float t=vOP.z/183.0; if(t>0.88&&t<0.905&&abs(abs(vOP.x)-3.2)<1.4&&vOP.y<0.0) totalEmissiveRadiance+=vec3(0.55,0.42,0.18)*0.6; }`); // dull eye-shine
+  };
+  m.customProgramCacheKey=()=>'infected';
+  m.needsUpdate=true;_zMatCache.set(key,m);return m;
+}
+const ZPOSE={spine:[1,0,0],spineSign:-1,roll:[0,0,1],reach:[1,0,0],reachSignL:-1,reachSignR:-1};
+const _zQ=new THREE.Quaternion(),_zAx=new THREE.Vector3();
+function zPose(z){                       // posture on top of the animation: hunch, head lol, reaching arms
+  const P=z.pose;if(!P)return;
+  for(const k in P.bones){const b=P.bones[k];if(!b.bone)continue;
+    _zQ.setFromAxisAngle(_zAx.set(b.ax[0],b.ax[1],b.ax[2]),b.a+(b.w||0)*Math.sin(z.ph*0.5+b.p));b.bone.quaternion.multiply(_zQ);}
+}
 function spawnZombie(big){
   const g=new THREE.Group();
-  let mixer=null,walkAction=null;
+  let mixer=null,walkAction=null,kind='shambler',pose=null,spd=0;
   if(humanoidModelReady&&humanoidTemplate){
     const model=THREE.SkeletonUtils.clone(humanoidTemplate);
-    applyHumanoidMaterialVariant(model,zombieMatVariants);
-    const scale=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?2:1+Math.random()*0.1);
-    model.scale.setScalar(scale);
+    const outfit=OUTFITS[Math.floor(Math.random()*OUTFITS.length)];
+    const skin=SKINS[Math.floor(Math.random()*SKINS.length)];
+    const gore=big?1:Math.random();
+    model.traverse(o=>{
+      if(!o.isMesh||!o.material)return;
+      o.castShadow=true;o.receiveShadow=false;
+      if(/visor/i.test(o.name)){o.visible=false;return;}            // no sci-fi visor on a civilian
+      o.material=infectedMaterial(o.material,outfit,skin,Math.round(gore*3)/3);
+    });
+    const r=Math.random();
+    kind=big?'brute':r<0.55?'shambler':r<0.85?'stalker':'runner';
+    const hs=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?2:(0.86+Math.random()*0.24));
+    const girth=big?1.25:(0.9+Math.random()*0.3);
+    model.scale.set(hs*girth,hs,hs*(0.95+(girth-1)*0.7));
     model.rotation.y=HUMANOID_BASE_YAW;
     g.add(model);
-    if(zombieWalkClip){
+    const bone=n=>model.getObjectByName('mixamorig'+n)||model.getObjectByName('mixamorig:'+n);
+    const hunch=kind==='runner'?0.25:kind==='stalker'?0.18+Math.random()*0.15:0.35+Math.random()*0.35;
+    const reachL=Math.random()<0.6, reachR=Math.random()<0.6;
+    pose={bones:{
+      sp:{bone:bone('Spine1'),ax:ZPOSE.spine,a:hunch*ZPOSE.spineSign,w:0.05,p:0},
+      hd:{bone:bone('Head'),ax:ZPOSE.roll,a:(Math.random()-.5)*0.9,w:0.12,p:1.3},
+      la:{bone:bone('LeftArm'),ax:ZPOSE.reach,a:reachL&&kind!=='runner'?ZPOSE.reachSignL*(0.9+Math.random()*0.5):0,w:0.15,p:0.4},
+      ra:{bone:bone('RightArm'),ax:ZPOSE.reach,a:reachR&&kind!=='runner'?ZPOSE.reachSignR*(0.9+Math.random()*0.5):0,w:0.15,p:2.1},
+    }};
+    const clip=kind==='runner'?(humanoidAnimClips.find(c=>/^run$/i.test(c.name))||zombieWalkClip):zombieWalkClip;
+    if(clip){
       mixer=new THREE.AnimationMixer(model);
-      walkAction=mixer.clipAction(zombieWalkClip);
+      walkAction=mixer.clipAction(clip);
       walkAction.setLoop(THREE.LoopRepeat,Infinity);
-      walkAction.timeScale=0.55+Math.random()*0.25;
+      walkAction.timeScale=kind==='runner'?0.75+Math.random()*0.2:kind==='stalker'?0.7+Math.random()*0.2:kind==='brute'?0.38:0.32+Math.random()*0.2;
+      walkAction.time=Math.random()*clip.duration;
       walkAction.play();
     }
+    spd=kind==='runner'?11+Math.random()*3:kind==='stalker'?6+Math.random()*2:kind==='brute'?4:2.6+Math.random()*2;
   }else{
     // fallback: old box-primitive zombie (used if the model hasn't finished loading yet)
     const b=new THREE.Mesh(zBodyG,zMat);b.position.y=1.5;b.castShadow=true;g.add(b);
@@ -5361,7 +5595,8 @@ function spawnZombie(big){
   const a=Math.random()*Math.PI*2,r=150+Math.random()*180;
   g.position.set(heli.position.x+Math.cos(a)*r,0,heli.position.z+Math.sin(a)*r);
   scene.add(g);
-  zombies.push({m:g,hp:big?260:32,big,spd:(big?4:6)+Math.random()*3,ph:Math.random()*7,leap:0,vy:0,mixer,walkAction});
+  zombies.push({m:g,hp:big?260:32,big,spd:spd||((big?4:6)+Math.random()*3),ph:Math.random()*7,leap:0,vy:0,mixer,walkAction,kind,pose,
+    limp:kind==='shambler'&&Math.random()<0.5?0.10+Math.random()*0.08:0});
 }
 window.__zdbg=()=>({heli,zombies,hostage,rescueHostage,spawnZombie,renderer,scene}); // TEMP DEBUG - remove before final
 window.__setYaw=v=>{yaw=v;}; // TEMP DEBUG - face the chase cam a chosen heading for QA captures
@@ -8400,7 +8635,7 @@ function loop(now){
         addScore(z.big?500:100);
         continue;
       }
-      if(z.mixer)z.mixer.update(dt);
+      if(z.mixer){z.mixer.update(dt);zPose(z);}
       const to=heli.position.clone().setY(0).sub(z.m.position.clone().setY(0));
       const d=to.length();to.normalize();
       z.ph+=dt*8;
@@ -8413,10 +8648,12 @@ function loop(now){
           shake=Math.min(1,shake+0.3);z.leap=0;z.m.position.y=0;
         }
       }else{
-        z.m.position.add(to.multiplyScalar(z.spd*dt));
-        z.m.position.y=Math.abs(Math.sin(z.ph))*.25;
-        z.m.rotation.y=Math.atan2(to.x,to.z);
-        z.m.rotation.z=Math.sin(z.ph*.7)*.08;
+        // gait by type: shamblers lurch and limp, runners don't sway, nobody hops in sync
+        const surge=z.kind==='shambler'?0.55+0.45*Math.max(0,Math.sin(z.ph*0.35)):1;
+        z.m.position.add(to.multiplyScalar(z.spd*surge*dt));
+        z.m.position.y=z.kind==='runner'?0:Math.abs(Math.sin(z.ph*0.5))*0.05;
+        z.m.rotation.y=Math.atan2(to.x,to.z)+(z.kind==='shambler'?Math.sin(z.ph*0.23)*0.25:0);
+        z.m.rotation.z=z.limp?Math.sin(z.ph*0.5)*z.limp:(z.kind==='runner'?0:Math.sin(z.ph*.35)*.04);
         if(d<15&&heli.position.y<(z.big?28:15)&&Math.random()<0.02){
           z.leap=1.4;z.vy=(z.big?20:16)+heli.position.y*0.8;
         }
@@ -8499,6 +8736,10 @@ function loop(now){
       if(d.t<=0){scene.remove(d.m);debris.splice(i,1);}
     }
     shake=Math.max(0,shake-2.5*dt);
+    if(window.__fires)for(const F of window.__fires){F.ph+=dt*(9+Math.random()*6);
+      const k=0.8+0.2*Math.sin(F.ph)+Math.random()*0.12;F.f.scale.set(1.5*k,2.2*k,1);F.f.material.opacity=0.85*k;F.f2.material.opacity=0.28*k;}
+    if(window.__beacons){const tt=now*0.001;for(const B of window.__beacons){const on=Math.floor((tt+B.ph)*3.2)%2;
+      B.sr.material.opacity=on?0.9:0.05;B.sb.material.opacity=on?0.05:0.9;B.lr.visible=!!on;B.lb.visible=!on;}}
     pulseSigns.forEach(s=>{
       s.ph+=dt*(s.fast?14:3);
       const v=s.fast?(Math.random()<0.06?0.2:1):(0.75+0.25*Math.sin(s.ph));
