@@ -14,6 +14,7 @@
     ['🧒 Kids coding school', 'A coding school for kids aged 7 to 12. Colorful, fun, energetic.']
   ];
   const STORE = 'matchmark.v1';
+  const API = (window.MATCHMARK_API || '').replace(/\/$/, '');
 
   /* ───────── storage ───────── */
   function load() { try { return JSON.parse(localStorage.getItem(STORE)) || { saved: [], brief: null }; } catch (e) { return { saved: [], brief: null }; } }
@@ -50,7 +51,7 @@
   const vcache = new Map();
   function rebuild(it) {
     const k = key(it);
-    if (!vcache.has(k)) vcache.set(k, MM.makeVariant(MM.parseBrief(it.text, it.name), it.seed, it.dir));
+    if (!vcache.has(k)) { const v = MM.makeVariant(MM.parseBrief(it.text, it.name), it.seed, it.dir); v.photo = it.ph || null; vcache.set(k, v); }
     return vcache.get(k);
   }
   const isSaved = v => saved.some(s => s.seed === v.seed && s.text === briefInput.text && (s.name || '') === (briefInput.name || ''));
@@ -109,7 +110,7 @@
   async function startDeck(input) {
     briefInput = input; lastBrief = input; persist();
     brief = MM.parseBrief(input.text, input.name);
-    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; history = []; queue = []; dirs = []; dirsOff = false;
+    seedBase = Math.floor(Math.random() * 900000) + 100; next = 0; photosOff = false; caps = null; history = []; queue = []; dirs = []; dirsOff = false;
     const go = $('.go'); go.disabled = true; go.firstChild.textContent = 'Designing for you… ';
     await fetchDirs(30000);
     go.disabled = false; go.firstChild.textContent = 'Start swiping ';
@@ -136,7 +137,7 @@
     try {
       const viaClaude = await askClaude(ctl.signal);
       if (viaClaude) { dirs = dirs.concat(viaClaude); clearTimeout(t); dirsBusy = false; return; }
-      const r = await fetch('/api/brand', { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' },
+      const r = await fetch(API + '/api/brand', { method: 'POST', signal: ctl.signal, headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text: briefInput.text, name: briefInput.name, n: 8, exclude: dirs.map(d => d && d.name).filter(Boolean) }) });
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
@@ -165,6 +166,26 @@
     requestAnimationFrame(fitAllLogos);
   }
 
+  /* Stock photo for the hero (Pexels, via /api/photo). Quietly skipped when the API or key is missing. */
+  let photosOff = false, caps = null;
+  async function loadCaps() { try { const r = await fetch(API + '/api/caps'); caps = r.ok ? await r.json() : {}; } catch (e) { caps = {}; } if (!caps.image && !caps.photo) photosOff = true; }
+  async function loadPhoto(card) {
+    const v = card.v;
+    if (photosOff || !v.usePhoto || v.photo) return;
+    if (!caps) await loadCaps(); if (photosOff) return;
+    try {
+      if (caps.image) {          // generated: the URL is the image, same prompt + seed always gives the same picture
+        const u = new URL(API + '/api/image?s=' + v.seed + '&p=' + encodeURIComponent(MM.imagePrompt(v)), location.href).href;
+        v.photo = { url: u, alt: v.photoQ, generated: true };
+      } else {                   // Pexels
+        const r = await fetch(API + '/api/photo?q=' + encodeURIComponent(v.photoQ) + '&i=' + (v.seed % 7));
+        if (!r.ok) return;
+        v.photo = await r.json();
+      }
+      const host = card.el.isConnected && $('.siteview', card.el);
+      if (host) MM.mountSite(host, v, true);
+    } catch (e) { photosOff = true; }
+  }
   function makeCard(v, dir) {
     ensureFonts(v);
     const el = document.createElement('article'); el.className = 'card';
@@ -179,6 +200,7 @@
     mountFrame($('.frame', el), v);
     const card = { v, el, dir };
     gesture(card);
+    loadPhoto(card);
     return card;
   }
 
@@ -216,7 +238,7 @@
     el.style.transform = 'translate(' + sign * (innerWidth + 200) + 'px,' + (-30) + 'px) rotate(' + sign * 28 + 'deg)';
     history.push({ v: card.v, dir, cdir: card.dir });
     if (dir === 'like') {
-      saved.unshift({ seed: card.v.seed, text: briefInput.text, name: briefInput.name || '', dir: card.dir || null, at: Date.now() });
+      saved.unshift({ seed: card.v.seed, text: briefInput.text, name: briefInput.name || '', dir: card.dir || null, ph: card.v.photo || null, at: Date.now() });
       vcache.set(key(saved[0]), card.v);
       persist(); bump();
       toast('♥ It’s yours: find it in Yours');

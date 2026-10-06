@@ -102,7 +102,7 @@
   /* ───────── industries ───────── */
   const IND = {
     security: {
-      re: /secur|cyber|protect|firewall|threat|pentest|infosec|privacy|vpn|antivirus|encrypt/, hue: [[185, 215], [245, 275], [150, 168]],
+      re: /secur|cyber|protect|firewall|threat|pentest|infosec|privacy|vpn|antivirus|encrypt|אבטחה|סייבר/, hue: [[185, 215], [245, 275], [150, 168]],
       modes: { dark: 3, light: 2, cream: 0, color: 0 }, fonts: { sans: 4, mono: 2, bold: 1 }, glyphs: ['shield', 'lock', 'hex', 'bolt', 'node'],
       names: ['Aegis', 'Vantage', 'Sentra', 'Bastion', 'Halcyon', 'Ironwood', 'Cipherly', 'Warden', 'Northguard', 'Lumen Secure'],
       eyebrow: 'Cyber security platform', nav: ['Platform', 'Solutions', 'Pricing', 'Docs'],
@@ -112,7 +112,7 @@
       quote: ['We cut our response time from hours to minutes.', 'Head of IT, Series B fintech'], stats: [['99.99%', 'Uptime'], ['< 5 min', 'Mean time to respond'], ['2,400+', 'Teams protected']]
     },
     pets: {
-      re: /\bpets?\b|\bdogs?\b|\bcats?\b|\bvet\b|veterin|groom|kennel|puppy|kitten|animal/, hue: [[18, 45], [160, 190], [330, 350]],
+      re: /\bpets?\b|\bdogs?\b|\bcats?\b|\bvet\b|veterin|groom|kennel|puppy|kitten|animal|כלב|חתול|וטרינר|חיות/, hue: [[18, 45], [160, 190], [330, 350]],
       modes: { color: 3, light: 2, cream: 2, dark: 0 }, fonts: { round: 4, bold: 1, sans: 1 }, glyphs: ['paw', 'heart', 'leaf', 'sun'],
       names: ['Happy Tails', 'Good Boy', 'Paws & Co', 'Whisker', 'Wag Club', 'Pawsitive', 'Fetch', 'Purrfect'],
       eyebrow: 'For the ones who love back', nav: ['Services', 'Team', 'Prices', 'Contact'],
@@ -122,7 +122,7 @@
       quote: ['My nervous pup actually runs to the door.', 'A relieved owner'], stats: [['3k+', 'Pets cared for'], ['4.9★', 'Owner rating'], ['7 days', 'Open weekly']]
     },
     kids: {
-      re: /\bkids?\b|child|toy|school|learn|educat|tutor|nursery|daycare|montessori|teach|course|academy/, hue: [[40, 55], [190, 210], [330, 350], [270, 285]],
+      re: /\bkids?\b|child|toy|school|learn|educat|tutor|nursery|daycare|montessori|teach|course|academy|ילדים|גן ילדים|חוג|בית ספר|לימוד/, hue: [[40, 55], [190, 210], [330, 350], [270, 285]],
       modes: { color: 4, light: 2, cream: 1, dark: 0 }, fonts: { round: 5, bold: 2 }, glyphs: ['book', 'sun', 'spark', 'heart', 'flower', 'peak'],
       names: ['Little Sprouts', 'Tiny Tinkers', 'Wonder Nook', 'Pip & Pals', 'Giggle Garden', 'Bright Bees', 'Cloud Nine', 'Moonbeam'],
       eyebrow: 'Learn & play', nav: ['Programs', 'Our team', 'Schedule', 'Contact'],
@@ -132,7 +132,7 @@
       quote: ['She talks about it all the way home.', 'Parent of a 6 year old'], stats: [['500+', 'Happy families'], ['1:6', 'Teacher to child'], ['4.9★', 'Parent rating']]
     },
     health: {
-      re: /fitness|\bgym\b|yoga|pilates|wellness|health|clinic|dental|dentist|therap|massage|\bspa\b|nutrition|physio|medical|meditat|coach|workout|climb/, hue: [[150, 190], [330, 350], [10, 25]],
+      re: /fitness|\bgym\b|yoga|pilates|wellness|health|clinic|dental|dentist|therap|massage|\bspa\b|nutrition|physio|medical|meditat|coach|workout|climb|יוגה|כושר|קליניקה|פיזיותרפיה|תזונה|טיפול|ספורט/, hue: [[150, 190], [330, 350], [10, 25]],
       modes: { light: 4, cream: 2, color: 2, dark: 1 }, fonts: { sans: 3, round: 2, serif: 1 }, glyphs: ['pulse', 'heart', 'leaf', 'sun', 'drop', 'peak'],
       names: ['Stride', 'Kindred Fit', 'Alive', 'Sol Studio', 'Ember', 'Bloom Move', 'Pulse & Co', 'Anchor'],
       eyebrow: 'Feel better, daily', nav: ['Classes', 'Coaches', 'Pricing', 'Contact'],
@@ -142,7 +142,7 @@
       quote: ['I finally look forward to Mondays.', 'Member since 2024'], stats: [['12k+', 'Sessions a month'], ['96%', 'Members stay'], ['7 days', 'Open each week']]
     },
     fashion: {
-      re: /fashion|cloth|apparel|boutique|beauty|salon|jewel|cosmetic|skincare|makeup|\bhair\b|barber|perfume|shoe|sneaker|tailor|lingerie|streetwear/, hue: [[330, 360], [20, 40], [260, 290]],
+      re: /fashion|cloth|apparel|boutique|beauty|salon|jewel|cosmetic|skincare|makeup|\bhair\b|barber|perfume|shoe|sneaker|tailor|lingerie|streetwear|אופנה|בוטיק|תכשיט|מספרה|קוסמטיקה|איפור|סלון/, hue: [[330, 360], [20, 40], [260, 290]],
       modes: { cream: 3, dark: 3, light: 2, color: 1 }, fonts: { serif: 5, sans: 2, bold: 1 }, glyphs: ['spark', 'flower', 'drop', 'heart', 'orbit'],
       names: ['Maison Noor', 'Atelier Vale', 'Thread & Co', 'Linden', 'Ode Studio', 'Sable', 'Oro', 'Marlowe'],
       eyebrow: 'New season', nav: ['Shop', 'Collections', 'About', 'Journal'],
@@ -152,7 +152,7 @@
       quote: ['I get asked where it’s from every single time.', 'A happy customer'], stats: [['100', 'Pieces per drop'], ['30 days', 'Free returns'], ['EU', 'Made in small studios']]
     },
     finance: {
-      re: /financ|\bbank|invest|insurance|\blaw\b|legal|lawyer|attorney|account|\btax\b|wealth|consult|advis|mortgage|fintech|payroll|bookkeep/, hue: [[205, 230], [150, 165], [255, 270]],
+      re: /financ|\bbank|invest|insurance|\blaw\b|legal|lawyer|attorney|account|\btax\b|wealth|consult|advis|mortgage|fintech|payroll|bookkeep|עורך דין|עורכת דין|ייעוץ|חשבונאות|ביטוח|מס\b/, hue: [[205, 230], [150, 165], [255, 270]],
       modes: { light: 4, dark: 2, cream: 1, color: 0 }, fonts: { sans: 4, serif: 2 }, glyphs: ['pillar', 'hex', 'peak', 'orbit', 'shield', 'spark'],
       names: ['Evergreen Capital', 'Northbridge', 'Clarity Advisors', 'Keystone', 'Harbor & Pine', 'Ledgerly', 'Meridian', 'Trellis'],
       eyebrow: 'Plain-English money', nav: ['Services', 'Pricing', 'About', 'Contact'],
@@ -162,7 +162,7 @@
       quote: ['First time money has made sense to me.', 'Client since 2022'], stats: [['$2.4B', 'Under care'], ['0', 'Hidden fees'], ['15 yrs', 'Of experience']]
     },
     food: {
-      re: /bagel|bakery|bread|cafe|café|coffee|restaurant|pizza|\bfood|\bdeli\b|donut|doughnut|pastry|kitchen|burger|taco|sushi|ice.?cream|diner|brunch|catering|bistro|\bbar\b|\bpub\b|\btea\b|cake|dessert|chocolate|juice|smoothie|brewery/, hue: [[4, 48]],
+      re: /bagel|bakery|bread|cafe|café|coffee|restaurant|pizza|\bfood|\bdeli\b|donut|doughnut|pastry|kitchen|burger|taco|sushi|ice.?cream|diner|brunch|catering|bistro|\bbar\b|\bpub\b|\btea\b|cake|dessert|chocolate|juice|smoothie|brewery|בייגל|מאפיי|קפה|מסעדה|פיצה|בישול|קייטרינג|בר\b|גלידה|שוקולד|עוגות|דוכן/, hue: [[4, 48]],
       modes: { cream: 3, color: 3, light: 2, dark: 0 }, fonts: { serif: 3, round: 3, bold: 2, sans: 1 }, glyphs: ['bagel', 'cup', 'sun', 'spark', 'leaf', 'heart'],
       names: ['Rise & Rye', 'Knead', 'Hole Story', 'Round Trip', 'Seeded', 'The Daily Roll', 'Crumb', 'Golden Hour', 'Hearth & Hole', 'Proof'],
       eyebrow: 'Fresh daily', nav: ['Menu', 'Our story', 'Visit', 'Order'],
@@ -172,7 +172,7 @@
       quote: ['The only place I’ll queue for.', 'A very loyal regular'], stats: [['6am', 'Doors open'], ['100%', 'Made in-house'], ['4.9★', 'Neighborhood rating']]
     },
     travel: {
-      re: /travel|hotel|\btours?\b|hostel|camp|surf|resort|adventure|hiking|\btrip|airbnb|\bbnb\b|vacation|outdoor|expedition|safari|cruise/, hue: [[175, 215], [15, 30], [40, 50]],
+      re: /travel|hotel|\btours?\b|hostel|camp|surf|resort|adventure|hiking|\btrip|airbnb|\bbnb\b|vacation|outdoor|expedition|safari|cruise|טיול|מלון|תיירות|צימר|אכסני/, hue: [[175, 215], [15, 30], [40, 50]],
       modes: { light: 3, cream: 2, color: 2, dark: 1 }, fonts: { sans: 3, serif: 2, bold: 1 }, glyphs: ['wave', 'peak', 'sun', 'orbit', 'drop', 'leaf'],
       names: ['Wander Well', 'Driftwood', 'Roam & Co', 'Compass Rose', 'Far & Away', 'Salt Route', 'Wayfarer', 'Tidewater'],
       eyebrow: 'Go somewhere', nav: ['Destinations', 'Experiences', 'Stories', 'Contact'],
@@ -182,7 +182,7 @@
       quote: ['Best trip we’ve ever taken, hands down.', 'Maya & Dan'], stats: [['60+', 'Destinations'], ['4.9★', 'Traveler rating'], ['24/7', 'Trip support']]
     },
     eco: {
-      re: /plant|garden|flower|\beco\b|eco-|organic|farm|sustain|vegan|nature|florist|soap|candle|zero.?waste|refill/, hue: [[95, 160], [20, 40]],
+      re: /plant|garden|flower|\beco\b|eco-|organic|farm|sustain|vegan|nature|florist|soap|candle|zero.?waste|refill|צמחים|גינה|פרחים|אורגני|קיימות|טבעוני|נרות|סבון/, hue: [[95, 160], [20, 40]],
       modes: { cream: 4, light: 2, color: 1, dark: 0 }, fonts: { serif: 3, round: 2, sans: 2 }, glyphs: ['leaf', 'flower', 'sun', 'drop', 'peak'],
       names: ['Pure Root', 'Moss & Co', 'Wild Clover', 'Fern', 'Terra Nova', 'Willow & Sage', 'Clay & Cedar', 'Greenhouse'],
       eyebrow: 'Grown with care', nav: ['Shop', 'Our story', 'Journal', 'Contact'],
@@ -192,7 +192,7 @@
       quote: ['I switched and never looked back.', 'Verified customer'], stats: [['100%', 'Recyclable packaging'], ['0', 'Nasties'], ['50+', 'Local partners']]
     },
     home: {
-      re: /furniture|interior|architect|real.?estate|property|renovat|construction|plumb|builder|decor|\bhome\b|carpent|landscap|cleaning/, hue: [[20, 40], [195, 215], [100, 140]],
+      re: /furniture|interior|architect|real.?estate|property|renovat|construction|plumb|builder|decor|\bhome\b|carpent|landscap|cleaning|ריהוט|עיצוב פנים|אדריכל|נדל|שיפוצ|קבלן/, hue: [[20, 40], [195, 215], [100, 140]],
       modes: { cream: 3, light: 3, dark: 1, color: 1 }, fonts: { serif: 3, sans: 3 }, glyphs: ['house', 'hex', 'sun', 'leaf'],
       names: ['Hearth & Beam', 'Studio Oak', 'Haven', 'Joist', 'Plinth', 'Oak & Linen', 'Cornerstone', 'Kiln'],
       eyebrow: 'Spaces that feel right', nav: ['Projects', 'Services', 'About', 'Contact'],
@@ -202,7 +202,7 @@
       quote: ['They understood our home better than we did.', 'Homeowner'], stats: [['300+', 'Projects'], ['12 yrs', 'Of craft'], ['On time', 'Every time']]
     },
     tech: {
-      re: /saas|software|platform|\bapps?\b|\bai\b|cloud|\bdata\b|\bdev|\bapi\b|startup|analytics|dashboard|automation|tool|crm|productivity|tech/, hue: [[215, 270], [160, 175], [330, 350]],
+      re: /saas|software|platform|\bapps?\b|\bai\b|cloud|\bdata\b|\bdev|\bapi\b|startup|analytics|dashboard|automation|tool|crm|productivity|tech|סטארטאפ|אפליקציה|תוכנה|בינה מלאכותית/, hue: [[215, 270], [160, 175], [330, 350]],
       modes: { light: 3, dark: 3, color: 1, cream: 0 }, fonts: { sans: 4, mono: 1, round: 1, bold: 1 }, glyphs: ['hex', 'orbit', 'spark', 'bolt', 'node', 'wave'],
       names: ['Fieldnote', 'Planar', 'Nimbus Labs', 'Tandem', 'Beacon', 'Relay', 'Meridian', 'Stackwell', 'Cadence', 'Quill'],
       eyebrow: 'Meet your new workflow', nav: ['Product', 'Solutions', 'Pricing', 'Resources'],
@@ -222,6 +222,8 @@
       quote: ['Exactly what we were looking for.', 'A happy customer'], stats: [['10+', 'Years of craft'], ['500+', 'Happy customers'], ['4.9★', 'Average rating']]
     }
   };
+  const PHOTO_Q = { security: 'cybersecurity technology', pets: 'happy dog', kids: 'children learning', health: 'wellness fitness', fashion: 'fashion boutique',
+    finance: 'modern office team', food: 'fresh bakery', travel: 'travel landscape', eco: 'natural plants', home: 'interior design', tech: 'modern workspace', generic: 'creative studio' };
   const ORDER = ['security', 'pets', 'kids', 'health', 'fashion', 'finance', 'food', 'travel', 'eco', 'home', 'tech'];
   const GLYPH_HINTS = [
     [/bagel|donut|doughnut/, 'bagel'], [/coffee|cafe|café|\btea\b|espresso/, 'cup'], [/lock|vault|privacy/, 'lock'], [/secur|cyber|protect/, 'shield'],
@@ -274,12 +276,13 @@
   }
 
   /* ───────── palette ───────── */
-  function makePalette(r, ind, mood) {
+  function makePalette(r, ind, mood, force) {
     const hr = pick(r, ind.hue);
-    const h = range(r, hr[0], hr[1]);
+    let h = range(r, hr[0], hr[1]);
     const modes = sum(ind.modes, mood.n ? sum(mood.modes, mood.modes) : {});
-    const mode = wpick(r, modes);
-    const s = range(r, mood.sat[0], mood.sat[1]);
+    let mode = wpick(r, modes);
+    let s = range(r, mood.sat[0], mood.sat[1]);
+    if (force) { if (force.hue != null) h = force.hue; if (force.sat != null) s = force.sat; if (force.mode) mode = force.mode; }
     const off = pick(r, [30, -30, 40, -40, 25, -25, 180, 150, -150]); // mostly analogous, some complementary
     let P;
     if (mode === 'dark') {
@@ -311,7 +314,10 @@
   const FEEL = { dark: 'Nocturne', color: 'Pop', cream: 'Warm', light: 'Clean' };
   const TYPE = { serif: 'editorial', sans: 'modern', round: 'friendly', mono: 'technical', bold: 'loud' };
 
-  function makeVariant(brief, seed, dir) {
+  /* ov: optional design overrides {pal:{hue,sat,mode}, cat, logoStyle, layout, radius, container, wcase, dot, art, usePhoto}.
+     Used by Converge to steer a variant from a taste vector. */
+  function makeVariant(brief, seed, dir, ov) {
+    ov = ov || {};
     const r = mulberry32((seed * 2654435761) >>> 0 ^ 0x9e3779b9);
     dir = dir && typeof dir === 'object' ? dir : null;
     const base = IND[brief.ind];
@@ -319,23 +325,24 @@
     const dm = dir && str(dir.mood, 80) ? moodFrom(dir.mood.toLowerCase()) : null;
     const mood = dm && dm.n ? dm : brief.mood;
     const hue = dir && isFinite(dir.hue) ? [[+dir.hue - 10, +dir.hue + 10]] : base.hue;
-    const pal = makePalette(r, Object.assign({}, ind, { hue }), mood);
+    const pal = makePalette(r, Object.assign({}, ind, { hue }), mood, ov.pal);
     const fw = sum(ind.fonts, mood.n ? sum(mood.fonts, mood.fonts) : {});
-    const cat = wpick(r, fw);
+    const cat = ov.cat || wpick(r, fw);
     const d = pick(r, BY_CAT[cat]);
     const b = pick(r, BODY[cat]);
     const glyph = dir && G[dir.glyph] ? dir.glyph : brief.glyphHint && r() < .6 ? brief.glyphHint : pick(r, ind.glyphs);
     const name = brief.name || (dir && str(dir.name, 26)) || pick(r, ind.names);
-    const logoStyle = LOGO_STYLES[(seed * 2 + (r() < .3 ? 1 : 0)) % LOGO_STYLES.length];
-    const layout = LAYOUTS[(seed + 1 + (r() < .25 ? 1 : 0)) % LAYOUTS.length];
-    const radius = pick(r, [0, 6, 14, 22, 32]);
+    const logoStyle = ov.logoStyle || LOGO_STYLES[(seed * 2 + (r() < .3 ? 1 : 0)) % LOGO_STYLES.length];
+    const layout = ov.layout || LAYOUTS[(seed + 1 + (r() < .25 ? 1 : 0)) % LAYOUTS.length];
+    const radius = ov.radius != null ? ov.radius : pick(r, [0, 6, 14, 22, 32]);
     const rb = radius === 0 ? 0 : radius >= 22 ? 999 : radius;
-    const wcase = cat === 'bold' ? 'upper' : cat === 'mono' ? 'lower' : wpick(r, { normal: 5, upper: cat === 'serif' ? 1 : 2, lower: 1 });
+    const wcase = ov.wcase || (cat === 'bold' ? 'upper' : cat === 'mono' ? 'lower' : wpick(r, { normal: 5, upper: cat === 'serif' ? 1 : 2, lower: 1 }));
     return {
       seed, name, ind: brief.ind, nameGiven: brief.nameGiven,
       head: ((dir && str(dir.head, 90)) || pick(r, ind.heads)).replace(/\{n\}/g, name), copy: ind, ai: !!dir,
       pal, fonts: { d, b, w: FONTS[d].h, cat }, glyph, logoStyle, layout, radius, rb,
-      container: pick(r, CONTAINERS), wcase, dot: r() < .3, art: pick(r, ARTS), artSeed: (r() * 1e9) | 0,
+      container: ov.container || pick(r, CONTAINERS), wcase, dot: ov.dot != null ? ov.dot : r() < .3, art: ov.art || pick(r, ARTS), artSeed: (r() * 1e9) | 0,
+      photoQ: (dir && str(dir.photo, 60)) || PHOTO_Q[brief.ind], usePhoto: ov.usePhoto != null ? ov.usePhoto : r() < .65, photo: null,
       label: (dir ? '✦ ' : '') + FEEL[pal.mode] + ' ' + TYPE[cat]
     };
   }
@@ -457,7 +464,7 @@
     '.hero{padding:48px 0 88px}.hero-in{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}' +
     '.eyebrow{display:inline-block;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--eyebrow);margin-bottom:22px}' +
     'h1{font-size:clamp(44px,5.6vw,84px)}.sub{font-size:20px;color:var(--muted);margin:24px 0 36px;max-width:32em}.cta{display:flex;gap:14px;flex-wrap:wrap}' +
-    '.art{aspect-ratio:600/520;width:100%}.art svg{display:block;width:100%;height:100%;border-radius:calc(var(--r)*1.4)}.art.wide{display:none;aspect-ratio:1200/380}' +
+    '.art{aspect-ratio:600/520;width:100%}.art{position:relative}.art svg{display:block;width:100%;height:100%;border-radius:calc(var(--r)*1.4)}.art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:calc(var(--r)*1.4)}.art.wide{display:none;aspect-ratio:1200/380}' +
     '.lay-center .hero-in{grid-template-columns:1fr;text-align:center;justify-items:center;gap:48px}.lay-center .sub{margin-left:auto;margin-right:auto}.lay-center .cta{justify-content:center}' +
     '.lay-center .art{display:none}.lay-center .art.wide{display:block;max-width:1100px}' +
     '.lay-bold .hero{background:var(--primary);color:var(--on-primary);padding:72px 0 96px}.lay-bold .sub,.lay-bold .eyebrow{color:var(--on-primary);opacity:.85}.lay-bold h1{font-size:clamp(52px,7.4vw,112px);line-height:.95}' +
@@ -518,24 +525,35 @@
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" preserveAspectRatio="xMidYMid slice">' + tiles + '</svg>';
   }
 
+  const HUE_NAMES = [[15, 'red'], [40, 'orange'], [65, 'golden yellow'], [95, 'lime green'], [165, 'green'], [195, 'teal'], [225, 'blue'], [265, 'indigo'], [300, 'purple'], [335, 'magenta'], [360, 'red']];
+  /* Prompt for an image model: the direction's subject, styled to the card's palette and mood. */
+  function imagePrompt(v) {
+    const hn = (HUE_NAMES.find(h => v.pal.hue < h[0]) || HUE_NAMES[0])[1];
+    const light = { dark: 'moody, dark, cinematic lighting', color: 'vibrant, bold colors, studio lighting', cream: 'warm, soft natural light, cozy', light: 'bright, airy, clean, soft daylight' }[v.pal.mode];
+    return v.photoQ + ', professional photography, ' + light + ', ' + hn + ' color accents, clean composition, shallow depth of field, no text, no logos, no people';
+  }
   function siteParts(v) {
     const ind = v.copy, P = v.pal, n = esc(v.name);
     const nav = logoHTML(v, { style: navStyle(v), size: 26 });
     const ic = '<span class="ic">' + markSVG(v, { container: 'none', colors: [P.onPrimary, P.primary] }) + '</span>';
     const sub = ind.sub.replace(/\{n\}/g, n);
+    const ph = v.usePhoto && v.photo && /^(https:\/\/|http:\/\/localhost)/.test(v.photo.url) ? v.photo : null;
+    const img = ph ? '<img src="' + esc(ph.url) + '" alt="' + esc(ph.alt || '') + '" onerror="this.remove()">' : '';
+    const credit = ph && ph.credit ? ' · Photo: <a href="' + esc(ph.link) + '">' + esc(ph.credit) + '</a> / Pexels' : '';
     return { body: '<header class="nav"><div class="wrap nav-in">' + nav + '<nav>' + ind.nav.map(x => '<a href="#">' + x + '</a>').join('') + '</nav><a class="btn sm" href="#">' + esc(ind.cta[0]) + '</a></div></header>' +
       '<section class="hero"><div class="wrap hero-in"><div class="copy"><span class="eyebrow">' + esc(ind.eyebrow) + '</span><h1>' + esc(v.head) + '</h1><p class="sub">' + sub + '</p>' +
       '<div class="cta"><a class="btn" href="#">' + esc(ind.cta[0]) + '</a><a class="btn ghost" href="#">' + esc(ind.cta[1]) + '</a></div></div>' +
-      '<div class="art">' + artSVG(v) + '</div><div class="art wide">' + artWide(v) + '</div></div></section>' +
+      '<div class="art">' + artSVG(v) + img + '</div><div class="art wide">' + artWide(v) + img + '</div></div></section>' +
       '<section class="stats"><div class="wrap stats-in">' + ind.stats.map(s => '<div class="stat"><b>' + esc(s[0]) + '</b><span>' + esc(s[1]) + '</span></div>').join('') + '</div></section>' +
       '<section class="feats"><div class="wrap"><h2>Why people choose ' + n + '</h2><div class="grid">' +
       ind.feats.map(f => '<div class="card">' + ic + '<h3>' + esc(f[0]) + '</h3><p>' + esc(f[1]) + '</p></div>').join('') + '</div></div></section>' +
       '<section class="quote"><div class="wrap"><blockquote>“' + esc(ind.quote[0]) + '”</blockquote><cite>' + esc(ind.quote[1]) + '</cite></div></section>' +
       '<section class="final"><div class="wrap"><div class="final-in"><h2>Ready when you are.</h2><a class="btn" href="#">' + esc(ind.cta[0]) + '</a></div></div></section>' +
-      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.</span></div></footer>' };
+      '<footer><div class="wrap foot-in">' + nav + '<span>© 2026 ' + n + '. All rights reserved.' + credit + '</span></div></footer>' };
   }
-  function siteHTML(v) {
+  function siteHTML(v, opts) {
     const p = siteParts(v), n = esc(v.name);
+    if (opts && opts.hero && v.photo) p.body = p.body.split(esc(v.photo.url)).join(opts.hero);
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + n + '</title>' +
       '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="' + fontsHref(v) + '">' +
       '<style>' + brandCSS(v) + SITE_CSS + LOGO_CSS + '</style></head><body class="lay-' + v.layout + '">' + p.body + '</body></html>';
@@ -592,6 +610,8 @@
     return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
   }
   async function brandKitZip(v) {
+    let heroBytes = null;
+    if (v.usePhoto && v.photo) { try { const r = await fetch(v.photo.url); if (r.ok) heroBytes = new Uint8Array(await r.arrayBuffer()); } catch (e) { } }
     const slug = v.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'brand';
     const P = v.pal;
     const readme = v.name + ' brand kit\n' + '='.repeat(v.name.length + 10) + '\n\n' +
@@ -599,9 +619,10 @@
       'logo.svg     Primary logo lockup.\nmark.svg     Icon / avatar / favicon version of the mark.\nbrand.css    Colours, fonts and radii as CSS variables.\n\n' +
       'Colours\n' + paletteList(v).map(c => '  ' + c[0].padEnd(11) + c[1]).join('\n') + '\n\n' +
       'Type\n  Display  ' + v.fonts.d + '\n  Body     ' + v.fonts.b + '\n  Both are free on Google Fonts (https://fonts.google.com).\n\n' +
-      'Generated with Matchmark.\n';
+      (heroBytes && v.photo.credit ? 'Photo: ' + v.photo.credit + ' on Pexels (' + v.photo.link + '), free to use under the Pexels license.\n\n' : '') + 'Generated with Matchmark.\n';
     return zip([
-      { name: slug + '/index.html', data: siteHTML(v) },
+      { name: slug + '/index.html', data: heroBytes ? siteHTML(v, { hero: 'images/hero.jpg' }) : siteHTML(v) },
+      ...(heroBytes ? [{ name: slug + '/images/hero.jpg', data: heroBytes }] : []),
       { name: slug + '/logo.svg', data: await logoSVG(v) },
       { name: slug + '/mark.svg', data: markStandaloneSVG(v) },
       { name: slug + '/brand.css', data: tokensCSS(v) },
@@ -610,7 +631,7 @@
   }
 
   global.MM = {
-    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, mountSite, tokensCSS, paletteList,
+    parseBrief, makeVariant, logoHTML, markHTML, markSVG, logoSVG, markStandaloneSVG, siteHTML, mountSite, imagePrompt, tokensCSS, paletteList,
     brandKitZip, fontsHref, LOGO_CSS, IND, mix, GLYPHS: Object.keys(G)
   };
 })(window);
