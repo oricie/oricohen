@@ -233,3 +233,5 @@ h1 em{background:var(--grad);-webkit-background-clip:text;background-clip:text;c
 .crow2{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
 .shares{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}.shr{display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:16px 18px;text-decoration:none;color:inherit;transition:transform .15s,border-color .15s}.shr:hover{transform:translateY(-2px);border-color:var(--ink)}.shr b{font:700 1.02rem var(--disp)}.shr span{color:var(--mut);font-size:.86rem}.shr.off{opacity:.55}
 .opt.one{grid-template-columns:1fr}
+
+.aitag{position:absolute;left:14px;top:12px;z-index:6;font:600 .72rem var(--mono,monospace);letter-spacing:.04em;padding:6px 11px;border-radius:99px;background:rgba(24,21,15,.78);color:#fff;pointer-events:none}.aitag:not(.done):before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#8b86ff;margin-right:7px;animation:aipulse 1s infinite}.aitag.done{background:var(--acc)}@keyframes aipulse{50%{opacity:.25}}

@@ -238,6 +238,47 @@
     if (M.closing(S.hist) && !isReady() && !thinking) h = '<button type="button" class="close-note" id="r-ready">We’re getting close. <span>Show my ' + NOUN() + '</span></button>' + h;
     el.innerHTML = h; const b = $('#r-ready'); if (b) b.onclick = () => startConverge();
   }
+
+  /* ───────── Claude designs the screen itself (not a template) ───────── */
+  const clean = html => {
+    const t = document.createElement('template'); t.innerHTML = html;
+    t.content.querySelectorAll('script,iframe,object,embed,link,meta,base,form,input,button,textarea,select').forEach(n => n.remove());
+    t.content.querySelectorAll('*').forEach(n => { [...n.attributes].forEach(at => { const v = at.value || ''; if (/^on/i.test(at.name) || /javascript:/i.test(v) || (/^(src|href|xlink:href|poster)$/i.test(at.name) && /^(https?:)?\/\//i.test(v.trim()))) n.removeAttribute(at.name); }); if (n.tagName === 'STYLE') n.textContent = n.textContent.replace(/@import[^;]*;/gi, '').replace(/url\(\s*['"]?\s*(https?:)?\/\/[^)]*\)/gi, 'none'); const st = n.getAttribute && n.getAttribute('style'); if (st && /url\(\s*['"]?\s*(https?:)?\/\//i.test(st)) n.setAttribute('style', st.replace(/url\([^)]*\)/gi, 'none')); });
+    return '<style>:host{display:block;width:1280px;height:800px}.cz{width:1280px;height:800px;overflow:hidden;position:relative}</style><div class="cz">' + [...t.content.childNodes].map(n => n.outerHTML || '').join('') + '</div>';
+  };
+  let aiSample;
+  const getSample = async () => { if (aiSample !== undefined) return aiSample; try { aiSample = await Promise.race([claude.use('sample'), new Promise(r => setTimeout(() => r(null), 12000))]); } catch (e) { aiSample = null; } return aiSample; };
+  function aiPrompt(d) {
+    const B = S.brief, liked = S.hist.filter(h => h.r > 0).map(h => h.d && (h.d.name + ': ' + h.d.explain)).filter(Boolean).slice(-3), passed = S.hist.filter(h => h.r < 0).map(h => h.d && h.d.name).filter(Boolean).slice(-4);
+    const th = d.theme || {}, heb = /[֐-׿]/.test(B.text || '');
+    const what = S.kind === 'brand' ? 'the home page of a website (hero, a few sections, real copy), including the logo/wordmark' : 'the single most important screen of the product (the screen a user would see most), as a real, polished interface';
+    return 'You are a world-class product and brand designer. Design ' + what + ' for this idea, as one self-contained HTML fragment.\n\nIdea: "' + [B.text, B.users && 'Users: ' + B.users, B.problem && 'Problem: ' + B.problem].filter(Boolean).join('. ') + '"\n\n' +
+      'Design direction to express: "' + d.name + '". ' + d.explain + ' ' + d.philosophy + '\nDecisions: ' + d.decisions.map(x => x[0] + ': ' + x[1]).join('; ') + '\n' +
+      (th.bg ? 'Starting palette and type (you may refine them): background ' + th.bg + ', ink ' + th.ink + ', accent ' + th.acc + ', fonts ' + ((th.fonts && [th.fonts.ui, th.fonts.disp].filter(Boolean).join(' / ')) || 'your choice') + '.\n' : '') +
+      (liked.length ? 'The person liked: ' + liked.join(' | ') + '\n' : '') + (passed.length ? 'They passed on: ' + passed.join(', ') + '\n' : '') +
+      '\nRules: invent the layout from what this idea really needs, do not fall back to a generic sidebar and table unless that truly is right; use the real vocabulary, entities, numbers and states of this domain; make it feel like a shipped product by a top studio (hierarchy, spacing, restraint, one memorable idea). Output ONLY the HTML, no markdown fences, no commentary: a <style> block first, then one root <div class="root"> that is exactly 1280px wide and 800px tall with overflow hidden. Use only HTML, CSS and inline SVG (draw any map, chart, illustration or logo in SVG). No JavaScript, no external images, no external URLs. Fonts: use Google Fonts families by name in font-family with good system fallbacks (they are loaded for you if you stay within: Inter, Fraunces, DM Sans, Space Grotesk, Instrument Serif, Bricolage Grotesque, Manrope, Playfair Display, JetBrains Mono, Cormorant Garamond, Syne, Outfit). ' + (heb ? 'The brief is Hebrew: write the interface text in Hebrew with dir="rtl".' : 'Write in the language of the brief.');
+  }
+  const AIFONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;600&family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;600&family=Instrument+Serif&family=Manrope:wght@400;600;800&family=Playfair+Display:wght@500;700&family=Cormorant+Garamond:wght@500;700&family=Syne:wght@600;800&family=Outfit:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap';
+  let aiFontsOn = false;
+  async function aiDesign(d) {
+    if (d.aiHtml) return d.aiHtml; if (d._aiP) return d._aiP;
+    d._aiP = (async () => {
+      const sample = await getSample(); if (!sample) throw new Error('no sample');
+      if (!aiFontsOn) { aiFontsOn = true; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = AIFONTS; document.head.appendChild(l); }
+      const r = await sample(aiPrompt(d), { modelTier: 'default', cache: true });
+      let h = String(r.text || '').replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/i, '').trim(); if (h.indexOf('<') < 0 || h.length < 400) throw new Error('empty design');
+      d.aiHtml = clean(h); return d.aiHtml;
+    })();
+    d._aiP.catch(() => { d._aiP = null; });
+    return d._aiP;
+  }
+  function showAI(f, html) { let h = f.querySelector('.h'); if (!h) { h = document.createElement('div'); h.className = 'h'; f.appendChild(h); } const sr = h.shadowRoot || h.attachShadow({ mode: 'open' }); const link = '<link rel="stylesheet" href="' + AIFONTS + '">'; sr.innerHTML = link + html; }
+  function aiUpgrade(d, f, pv) {
+    if (S.kind === 'card') return;
+    const tag = document.createElement('span'); tag.className = 'aitag'; tag.textContent = 'Claude is designing this…'; pv.appendChild(tag);
+    aiDesign(d).then(html => { if (!f.isConnected) return; showAI(f, html); tag.textContent = 'Designed by Claude'; tag.classList.add('done'); }).catch(e => { tag.textContent = 'Claude couldn’t design this one'; setTimeout(() => tag.remove(), 3000); });
+  }
+
   function mountCard(d, enter) {
     ensureFontsFor(d);
     const st = $('#stage'); st.innerHTML = '<div class="ghost g2"></div><div class="ghost g1"></div>';
@@ -249,7 +290,8 @@
       '<div class="it"><p class="ex">' + esc(d.explain) + '</p><p class="ph">' + esc(d.philosophy) + '</p></div><ul class="dec">' + d.decisions.slice(0, 4).map(x => '<li><b>' + x[0] + '</b>' + esc(x[1]) + '</li>').join('') + '</ul></div>';
     st.appendChild(el); const pv = $('.pv', el); fit(pv); const f = $('.fit', el);
     let ctl = host(f, d, tabs[0].state);
-    $$('.ptabs button', el).forEach(b => b.onclick = e => { e.stopPropagation(); $$('.ptabs button', el).forEach(x => x.classList.toggle('on', x === b)); f.innerHTML = ''; ctl = host(f, d, tabs[+b.dataset.i].state); });
+    $$('.ptabs button', el).forEach(b => b.onclick = e => { e.stopPropagation(); $$('.ptabs button', el).forEach(x => x.classList.toggle('on', x === b)); if (+b.dataset.i === 0 && d.aiHtml) { f.innerHTML = ''; showAI(f, d.aiHtml); return; } f.innerHTML = ''; ctl = host(f, d, tabs[+b.dataset.i].state); });
+    aiUpgrade(d, f, pv);
     gesture(el);
   }
   function ensureFontsFor(d) { PR.ensureFonts(d); }
@@ -310,11 +352,25 @@
     renderTab();
   }
   function renderTab() { const b = $('#rb'); b.innerHTML = ''; (isC() ? { Prototype: tCEdit, Experience: tCStyle, System: tCShare } : isB() ? { Prototype: tBProto, Experience: tBExp, System: tBSys } : { Prototype: tProto, Experience: tExp, System: tSys })[S.rtab](b); }
+
+  function aiButton(b, d, restore) {
+    const hint = $('.hint', b); if (!hint) return;
+    const btn = document.createElement('button'); btn.className = 'pill sm ink'; btn.style.marginTop = '10px'; btn.textContent = 'Have Claude design this screen from scratch'; hint.insertAdjacentElement('afterend', btn);
+    let ai = false;
+    btn.onclick = async () => {
+      const f = $('#pf', b);
+      if (ai) { ai = false; btn.textContent = 'Have Claude design this screen from scratch'; f.innerHTML = ''; restore(); return; }
+      btn.disabled = true; btn.textContent = 'Claude is designing… (up to a minute)';
+      try { const html = await aiDesign(d); f.innerHTML = ''; showAI(f, html); ai = true; btn.textContent = 'Back to the clickable prototype'; } catch (e) { btn.textContent = 'Claude is unavailable: ' + ((e && (e.code || e.message)) || 'failed'); setTimeout(() => { btn.textContent = 'Have Claude design this screen from scratch'; }, 3500); }
+      btn.disabled = false;
+    };
+  }
   function tProto(b) {
     const d = S.final, p = d.pack;
     b.innerHTML = '<div class="pto"><nav class="snav"><span class="mono">Screens</span>' + PR.SCREENS.map(s => '<button data-s="' + s + '" class="' + (s === 'home' ? 'on' : '') + '">' + esc(p.labels[s]) + '</button>').join('') + '</nav><div><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(p.name.toLowerCase()) + '.app</span></div><div class="fit live" id="pf"></div></div><p class="hint">A working prototype. Open a row, step through the workflow, approve a request, change a setting.</p></div></div>';
     const f = $('#pf', b); fit(f); const ctl = host(f, d, { screen: 'home' }, { interactive: true, onChange: st => $$('.snav button', b).forEach(x => x.classList.toggle('on', x.dataset.s === st.screen)) });
     $$('.snav button', b).forEach(x => x.onclick = () => ctl.go(x.dataset.s)); S.ctl = ctl;
+    aiButton(b, d, () => { host(f, d, { screen: 'home' }, { interactive: true, onChange: st => $$('.snav button', b).forEach(x => x.classList.toggle('on', x.dataset.s === st.screen)) }); });
   }
   function tExp(b) {
     const d = S.final, p = d.pack, f = d.flags, L = p.labels;
@@ -388,6 +444,7 @@
     b.innerHTML = '<div class="pto"><nav class="snav"><span class="mono">Views</span>' + ['site', 'scroll', 'brand'].map(s => '<button data-s="' + s + '" class="' + (s === 'site' ? 'on' : '') + '">' + LB[s] + '</button>').join('') + '</nav><div><div class="frame"><div class="chrome"><i></i><i></i><i></i><span>' + esc(domainOf(d)) + '</span></div><div class="fit live" id="pf"></div></div><p class="hint">A working website. Scroll inside the frame, or switch to the brand board to see the logo, colours and type together.</p></div></div>';
     const f = $('#pf', b); fit(f); const ctl = host(f, d, { screen: 'site' }, { interactive: true, onChange: st => $$('.snav button', b).forEach(x => x.classList.toggle('on', x.dataset.s === st.screen)) });
     $$('.snav button', b).forEach(x => x.onclick = () => ctl.go(x.dataset.s)); S.ctl = ctl;
+    aiButton(b, d, () => { host(f, d, { screen: 'site' }, { interactive: true, onChange: st => $$('.snav button', b).forEach(x => x.classList.toggle('on', x.dataset.s === st.screen)) }); });
   }
   function tBExp(b) {
     const d = S.final, v = d.v, c = v.copy, P = v.pal, n = esc(v.name);
