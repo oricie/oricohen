@@ -5317,13 +5317,17 @@ const wpnTexMFD=new THREE.CanvasTexture(wpnCanvasEl);
 [radarTexMFD,horizonTexMFD,tacTexMFD,engTexMFD,wpnTexMFD].forEach(t=>{t.anisotropy=4;t.encoding=THREE.sRGBEncoding;});
 
 const cpBtnGeo=new THREE.BoxGeometry(0.026,0.018,0.012);
+const cpScanTex=tex((g,w,h)=>{g.clearRect(0,0,w,h);for(let y=0;y<h;y+=2){g.fillStyle='rgba(0,0,0,.32)';g.fillRect(0,y,w,1);}},4,256);
+cpScanTex.wrapS=cpScanTex.wrapT=THREE.RepeatWrapping;cpScanTex.repeat.set(1,1.6);
+const cpScanMat=new THREE.MeshBasicMaterial({map:cpScanTex,transparent:true,depthWrite:false,toneMapped:false});
 const cpBtnXf=[];                      // every bezel push-button, instanced into one draw call below
 // an MFD set INTO the panel: recessed screen, thick bezel, 5 buttons a side + 4 top/bottom
 function mfd(texm,x,y,w,h,label){
   const g=new THREE.Group();g.position.set(x,y,0.005);panel.add(g);
   const bz=new THREE.Mesh(new THREE.BoxGeometry(w+0.11,h+0.09,0.035),cpBezelMat);bz.position.z=0.012;g.add(bz);
   const well=new THREE.Mesh(new THREE.BoxGeometry(w+0.01,h+0.01,0.01),new THREE.MeshBasicMaterial({color:0x000000}));well.position.z=0.024;g.add(well);
-  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texm,toneMapped:false}));scr.position.z=0.031;g.add(scr);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texm,toneMapped:false,color:new THREE.Color(1.35,1.35,1.35)}));scr.position.z=0.031;g.add(scr);
+  const scan=new THREE.Mesh(new THREE.PlaneGeometry(w,h),cpScanMat);scan.position.z=0.0315;g.add(scan);   // CRT scanlines
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({color:0x000000,roughness:0.08,metalness:0.9,transparent:true,opacity:0.22,envMapIntensity:1.2}));
   glass.position.z=0.0325;g.add(glass);                               // the cover glass reflects the sky
   const m=new THREE.Matrix4(),q=new THREE.Quaternion().setFromEuler(new THREE.Euler(PANEL_TILT,0,0));
@@ -5344,11 +5348,14 @@ mfd(wpnTexMFD,-0.84,0.06,0.17,0.15,'WPN');
  im.instanceMatrix.needsUpdate=true;cockpitGroup.add(im);}
 
 // ---- MASTER CAUTION / WARNING push-lights on the glareshield edge ----
-const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x220000}));
+function pushLightTex(l1,l2){return tex((g,w,h)=>{g.fillStyle='#8a8a8a';g.fillRect(0,0,w,h);g.fillStyle='#ffffff';
+  g.font='bold 30px "Courier New",monospace';g.textAlign='center';g.textBaseline='middle';g.fillText(l1,w/2,h*0.33);g.fillText(l2,w/2,h*0.7);
+  g.strokeStyle='#333';g.lineWidth=6;g.strokeRect(3,3,w-6,h-6);},256,128);}
+const cautionLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x1a1205,map:pushLightTex('MASTER','CAUTION')}));
 cautionLight.position.set(-0.16,PANEL_TOP.y+0.065,PANEL_TOP.z-0.03);cockpitGroup.add(cautionLight);
-const warnLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x2a1a00}));
+const warnLight=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.04,0.02),new THREE.MeshBasicMaterial({color:0x2a1a00,map:pushLightTex('MASTER','WARNING')}));
 warnLight.position.set(0.16,PANEL_TOP.y+0.065,PANEL_TOP.z-0.03);cockpitGroup.add(warnLight);
-{const lt=legendTex([['MSTR CAUTION',0.25,0.62],['MSTR WARNING',0.75,0.62]],512,32);
+if(false){const lt=legendTex([['MSTR CAUTION',0.25,0.62],['MSTR WARNING',0.75,0.62]],512,32);
  const lm=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.04),new THREE.MeshBasicMaterial({map:lt,transparent:true,opacity:0.65}));
  lm.position.set(0,PANEL_TOP.y+0.1,PANEL_TOP.z-0.04);cockpitGroup.add(lm);}
 
@@ -6615,82 +6622,94 @@ function mfdFrame(ctx,size,title){
     ctx.strokeStyle=UI.faint;ctx.beginPath();ctx.moveTo(6,17.5);ctx.lineTo(size-6,17.5);ctx.stroke();
   }
 }
+// ---- 1989 AH-64 cockpit displays: monochrome P43 phosphor green, the way the period CRTs
+// glowed, with the bezel-button legends drawn on the screen edge next to each button ----
+const PG={hi:'#c8ffd4',g:'#6dff8e',d:'rgba(109,255,142,.55)',f:'rgba(109,255,142,.2)',bg:'#010803'};
+function crtPage(ctx,S,title,L,R,T,B){
+  ctx.clearRect(0,0,S,S);
+  const bg=ctx.createRadialGradient(S/2,S/2,S*0.1,S/2,S/2,S*0.75);bg.addColorStop(0,'#03140a');bg.addColorStop(1,PG.bg);
+  ctx.fillStyle=bg;ctx.fillRect(0,0,S,S);
+  ctx.font='bold 5.6px '+UI.font;ctx.fillStyle=PG.d;ctx.textBaseline='middle';
+  (L||[]).forEach((t,i)=>{if(!t)return;ctx.textAlign='left';ctx.fillText(t,2,S*(i+0.5)/5);});
+  (R||[]).forEach((t,i)=>{if(!t)return;ctx.textAlign='right';ctx.fillText(t,S-2,S*(i+0.5)/5);});
+  (T||[]).forEach((t,i)=>{if(!t)return;ctx.textAlign='center';ctx.fillText(t,S*(i+0.5)/4,4.5);});
+  (B||[]).forEach((t,i)=>{if(!t)return;ctx.textAlign='center';ctx.fillText(t,S*(i+0.5)/4,S-4.5);});
+  if(title){ctx.fillStyle=PG.g;ctx.font='bold 7px '+UI.font;ctx.textAlign='center';ctx.fillText(title,S/2,12);}
+  ctx.textBaseline='alphabetic';
+}
+function crtGlow(ctx,on){ctx.shadowColor=on?PG.g:'transparent';ctx.shadowBlur=on?3:0;}
 function drawDashMFD(){
   const now=performance.now();
-  // MASTER CAUTION: dark when healthy, steady amber when hurt, flashing red when critical
   if(cautionLight){
-    const c=hp<30?((now/220|0)%2?0xff3b52:0x2a0308):hp<60?0x6a4a08:0x220000;
+    const c=hp<30?((now/220|0)%2?0xffb020:0x1a1205):hp<60?0xffb020:0x1a1205;
     cautionLight.material.color.setHex(c);
   }
-  // ---- RADAR: sweep + contacts ----
-  mfdFrame(radarC,110,null);
-  radarC.strokeStyle=UI.faint;radarC.lineWidth=1;
-  [50,34,18].forEach(r=>{radarC.beginPath();radarC.arc(55,55,r,0,7);radarC.stroke();});
-  radarC.beginPath();radarC.moveTo(5,55);radarC.lineTo(105,55);radarC.moveTo(55,5);radarC.lineTo(55,105);radarC.stroke();
-  const sweep=(now/2200)%(Math.PI*2);
-  const grad=radarC.createLinearGradient(55,55,55+Math.cos(sweep)*50,55+Math.sin(sweep)*50);
-  grad.addColorStop(0,'rgba(95,242,255,0)');grad.addColorStop(1,'rgba(95,242,255,.5)');
-  radarC.strokeStyle=grad;radarC.lineWidth=3;
-  radarC.beginPath();radarC.moveTo(55,55);radarC.lineTo(55+Math.cos(sweep)*50,55+Math.sin(sweep)*50);radarC.stroke();
-  radarC.lineWidth=1;
-  zombies.forEach(z=>{
-    const dx=z.m.position.x-heli.position.x,dz=z.m.position.z-heli.position.z;
-    const d=Math.sqrt(dx*dx+dz*dz);if(d>320)return;
-    const a=Math.atan2(dx,-dz)-yaw, rr=d/320*50;
-    radarC.fillStyle=z.big?UI.warn:UI.alert;
-    const s=z.big?5:3;
-    radarC.fillRect(55+Math.sin(a)*rr-s/2,55-Math.cos(a)*rr-s/2,s,s);
-  });
-  enemies.forEach(e=>{                                  // red triangles, matching the TSD
-    const dx=e.m.position.x-heli.position.x,dz=e.m.position.z-heli.position.z;
-    const d=Math.sqrt(dx*dx+dz*dz);if(d>340)return;
-    const a=Math.atan2(dx,-dz)-yaw, rr=Math.min(50,d/320*50);
-    const px=55+Math.sin(a)*rr, py=55-Math.cos(a)*rr, r=e.boss?6:4.5;
-    radarC.fillStyle=UI.alert;
-    radarC.beginPath();radarC.moveTo(px,py-r);radarC.lineTo(px+r*0.92,py+r*0.66);radarC.lineTo(px-r*0.92,py+r*0.66);radarC.closePath();
-    radarC.fill();radarC.strokeStyle='#fff';radarC.stroke();
-  });
-  radarC.fillStyle=UI.hi;radarC.fillRect(53,53,4,4);
-  radarC.fillStyle=UI.dim;radarC.font='7px '+UI.font;radarC.textAlign='center';
-  radarC.fillText('RADAR 320m',55,104);
-
-  // ---- ATTITUDE: artificial horizon ----
-  horC.clearRect(0,0,110,110);
-  horC.save();
-  horC.beginPath();horC.arc(55,55,50,0,7);horC.clip();
-  horC.translate(55,55);horC.rotate(-roll*1.5);
-  const py=pitch*160;
-  horC.fillStyle='#0a2c3a';horC.fillRect(-80,-110+py,160,110);   // sky: deep teal
-  horC.fillStyle='#04141b';horC.fillRect(-80,py,160,110);        // ground: near-black
-  horC.strokeStyle=UI.ui;horC.lineWidth=1.4;
-  horC.beginPath();horC.moveTo(-60,py);horC.lineTo(60,py);horC.stroke();
-  horC.strokeStyle=UI.faint;horC.lineWidth=1;                    // pitch ladder
-  for(let p=-40;p<=40;p+=20){ if(!p)continue;
-    horC.beginPath();horC.moveTo(-16,py+p);horC.lineTo(16,py+p);horC.stroke(); }
-  horC.restore();
-  horC.strokeStyle=UI.line;horC.lineWidth=1;horC.beginPath();horC.arc(55,55,50,0,7);horC.stroke();
-  horC.strokeStyle=UI.warn;horC.lineWidth=2;                     // fixed aircraft reference
-  horC.beginPath();horC.moveTo(30,55);horC.lineTo(48,55);horC.moveTo(62,55);horC.lineTo(80,55);horC.stroke();
-  horC.fillStyle=UI.warn;horC.fillRect(54,54,2,2);horC.lineWidth=1;
-
-  // ---- ENG / SYS ----
-  mfdFrame(engC,100,'ENG / SYS');
-  vBar(engC,14,24,13,50,(96+Math.sin(now/500)*3)/110,UI.ui,'RPM');
-  vBar(engC,44,24,13,50,hp/100,hp>60?UI.ok:hp>30?UI.warn:UI.alert,'HULL');
-  vBar(engC,74,24,13,50,(window.__throttle!==undefined?window.__throttle:1),UI.ui,'THR');
-  engC.fillStyle=UI.dim;engC.font='7px '+UI.font;engC.textAlign='left';
-  engC.fillText('OIL OK',6,94);engC.textAlign='right';engC.fillText('HYD OK',94,94);
-
-  // ---- WPN STATUS ----
-  mfdFrame(wpnC,100,'WPN STATUS');
-  ['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'].forEach((nm,i)=>{
-    const y=31+i*15, sel=i===wpn;
-    if(sel){wpnC.fillStyle='rgba(255,194,58,.14)';wpnC.fillRect(4,y-9,92,13);}
-    wpnC.fillStyle=sel?UI.warn:(ammo[i]<=0?'rgba(255,59,82,.55)':UI.dim);
-    wpnC.font=(sel?'bold ':'')+'8px '+UI.font;wpnC.textAlign='left';
-    wpnC.fillText(nm,7,y);
-    wpnC.textAlign='right';wpnC.fillText(ammo[i]===Infinity?'INF':String(ammo[i]),93,y);
-  });
+  const hdg=((-yaw*180/Math.PI)%360+360)%360;
+  // ---- FCR: radar sweep, compass rose, contacts ----
+  const R=radarC,S=110,C=56,RR=44;
+  crtPage(R,S,null,['GTM','RMAP','ATM','',''],['','RNG','320','',''],['FCR','','','TGT'],['','CUED','','ZOOM']);
+  R.strokeStyle=PG.f;R.lineWidth=0.8;
+  [RR,RR*0.66,RR*0.33].forEach(r=>{R.beginPath();R.arc(C,C,r,0,7);R.stroke();});
+  for(let d=0;d<360;d+=10){const a=(d-hdg)*Math.PI/180,r1=RR,r2=RR-(d%30?2.5:5);
+    R.strokeStyle=d%30?PG.f:PG.d;R.beginPath();R.moveTo(C+Math.sin(a)*r1,C-Math.cos(a)*r1);R.lineTo(C+Math.sin(a)*r2,C-Math.cos(a)*r2);R.stroke();
+    if(d%90===0){R.fillStyle=PG.d;R.font='bold 6px '+UI.font;R.textAlign='center';R.fillText(['N','E','S','W'][d/90],C+Math.sin(a)*(RR-9),C-Math.cos(a)*(RR-9)+2);}}
+  const sw=(now/1600)%(Math.PI*2);
+  for(let k=0;k<14;k++){const a=sw-k*0.04;R.strokeStyle=`rgba(109,255,142,${0.45*(1-k/14)})`;R.lineWidth=1.4;
+    R.beginPath();R.moveTo(C,C);R.lineTo(C+Math.sin(a)*RR,C-Math.cos(a)*RR);R.stroke();}
+  R.lineWidth=1;
+  const blip=(x,z,col,tri)=>{const dx=x-heli.position.x,dz=z-heli.position.z,d=Math.hypot(dx,dz);if(d>340)return;
+    const a=Math.atan2(dx,-dz)-yaw,rr=Math.min(RR,d/320*RR),px=C+Math.sin(a)*rr,py=C-Math.cos(a)*rr;
+    R.fillStyle=col;crtGlow(R,true);
+    if(tri){R.beginPath();R.moveTo(px,py-4);R.lineTo(px+3.6,py+2.6);R.lineTo(px-3.6,py+2.6);R.closePath();R.fill();}
+    else R.fillRect(px-1.5,py-1.5,3,3);crtGlow(R,false);};
+  zombies.forEach(z=>blip(z.m.position.x,z.m.position.z,z.big?PG.hi:PG.g,false));
+  enemies.forEach(e=>blip(e.m.position.x,e.m.position.z,'#ff5a4a',true));
+  R.strokeStyle=PG.hi;R.lineWidth=1.2;R.beginPath();R.moveTo(C,C-4);R.lineTo(C+3,C+3);R.lineTo(C,C+1.5);R.lineTo(C-3,C+3);R.closePath();R.stroke();R.lineWidth=1;
+  R.fillStyle=PG.g;R.font='bold 7px '+UI.font;R.textAlign='center';R.fillText(String(Math.round(hdg)).padStart(3,'0'),C,22);
+  // ---- ADI: attitude ball, roll scale, pitch ladder, speed / altitude ----
+  const H=horC;
+  crtPage(H,S,null,null,null,null,null);
+  H.save();H.beginPath();H.arc(C,C+2,40,0,7);H.clip();
+  H.translate(C,C+2);H.rotate(-roll*1.5);const py=pitch*160;
+  H.fillStyle='#0a2a14';H.fillRect(-80,-120+py,160,120);
+  H.fillStyle='#020904';H.fillRect(-80,py,160,120);
+  H.strokeStyle=PG.f;for(let i=-80;i<80;i+=6){H.beginPath();H.moveTo(i,py);H.lineTo(i-10,py+60);H.stroke();}   // ground hatch
+  H.strokeStyle=PG.hi;H.lineWidth=1.3;H.beginPath();H.moveTo(-60,py);H.lineTo(60,py);H.stroke();H.lineWidth=1;
+  H.fillStyle=PG.d;H.font='5.5px '+UI.font;
+  for(let pp=-30;pp<=30;pp+=10){if(!pp)continue;const y=py-pp*1.6,w2=pp%20?7:12;H.strokeStyle=PG.d;
+    H.beginPath();H.moveTo(-w2,y);H.lineTo(w2,y);H.stroke();H.textAlign='left';H.fillText(Math.abs(pp),w2+2,y+2);}
+  H.restore();
+  H.strokeStyle=PG.d;H.beginPath();H.arc(C,C+2,40,0,7);H.stroke();
+  [-60,-30,-20,-10,0,10,20,30,60].forEach(d=>{const a=(d-90)*Math.PI/180,r1=40,r2=d%30?44:46;
+    H.beginPath();H.moveTo(C+Math.cos(a)*r1,C+2+Math.sin(a)*r1);H.lineTo(C+Math.cos(a)*r2,C+2+Math.sin(a)*r2);H.stroke();});
+  {const a=(-roll*1.5*180/Math.PI-90)*Math.PI/180;H.fillStyle=PG.hi;H.beginPath();
+   H.moveTo(C+Math.cos(a)*39,C+2+Math.sin(a)*39);H.lineTo(C+Math.cos(a+0.08)*34,C+2+Math.sin(a+0.08)*34);H.lineTo(C+Math.cos(a-0.08)*34,C+2+Math.sin(a-0.08)*34);H.fill();}
+  H.strokeStyle='#ffc23a';H.lineWidth=2;H.beginPath();H.moveTo(C-22,C+2);H.lineTo(C-8,C+2);H.lineTo(C-5,C+6);H.moveTo(C+22,C+2);H.lineTo(C+8,C+2);H.lineTo(C+5,C+6);H.stroke();H.lineWidth=1;
+  H.fillStyle=PG.g;H.font='bold 7px '+UI.font;
+  H.textAlign='left';H.fillText(String(Math.round(CRUISE*(window.__throttle||1)*1.94)).padStart(3,'0')+'KT',3,106);
+  H.textAlign='right';H.fillText(String(Math.round(heli.position.y*3.28))+'FT',S-3,106);
+  // ---- ENG: torque / gas temp / Nr per engine, fuel ----
+  const E=engC,ES=100,th=window.__throttle!==undefined?window.__throttle:1;
+  crtPage(E,ES,'ENGINE',null,null,null,null);
+  const tq=Math.round(38+th*52+Math.sin(now/700)*1.5),tgt=Math.round(610+th*190+Math.sin(now/900)*4);
+  const col=(x,lbl,frac,val,warn)=>{E.strokeStyle=PG.f;E.strokeRect(x,22,10,52);
+    const hh=52*THREE.MathUtils.clamp(frac,0,1);E.fillStyle=warn?'#ffc23a':PG.g;crtGlow(E,true);E.fillRect(x+1,74-hh,8,hh);crtGlow(E,false);
+    E.fillStyle=PG.d;E.font='5.5px '+UI.font;E.textAlign='center';E.fillText(lbl,x+5,82);E.fillStyle=PG.hi;E.font='bold 6.5px '+UI.font;E.fillText(val,x+5,90);};
+  col(8,'TQ1',tq/120,tq,tq>100);col(24,'TQ2',(tq-1)/120,tq-1,tq>100);
+  col(46,'TGT',(tgt-300)/600,tgt,tgt>810);col(62,'NR',0.82+Math.sin(now/500)*0.01,'101');
+  col(80,'HULL',hp/100,Math.round(hp),hp<40);
+  E.fillStyle=PG.d;E.font='5.5px '+UI.font;E.textAlign='left';E.fillText('FUEL 1840 LB',6,97);
+  // ---- WPN: stores page, top-down wings with what each station carries ----
+  const Wc=wpnC,WS=100;
+  crtPage(Wc,WS,'WPN',null,null,['GUN','RKT','MSL','INC'],null);
+  Wc.strokeStyle=PG.d;Wc.lineWidth=1;
+  Wc.beginPath();Wc.moveTo(50,26);Wc.lineTo(50,72);Wc.moveTo(14,46);Wc.lineTo(86,46);Wc.stroke();
+  const stn=(x,i,label,cnt)=>{const sel=wpn===i;Wc.fillStyle=sel?'#ffc23a':PG.g;Wc.strokeStyle=sel?'#ffc23a':PG.d;
+    Wc.strokeRect(x-9,50,18,18);if(sel){crtGlow(Wc,true);Wc.strokeRect(x-9,50,18,18);crtGlow(Wc,false);}
+    Wc.font='bold 5.5px '+UI.font;Wc.textAlign='center';Wc.fillText(label,x,57);Wc.fillText(cnt,x,65);};
+  stn(18,1,'RKT',String(ammo[1]));stn(38,2,'MSL',String(ammo[2]));stn(62,2,'MSL','');stn(82,3,'INC',String(ammo[3]));
+  Wc.fillStyle=wpn===0?'#ffc23a':PG.g;Wc.font='bold 6px '+UI.font;Wc.textAlign='center';Wc.fillText('GUN 30MM  '+(ammo[0]===Infinity?'1200':ammo[0]),50,82);
+  Wc.fillStyle=PG.hi;Wc.fillText('MSTR ARM',50,93);
 }
 // vertical segmented gauge — the dash cousin of hudBar()
 function vBar(ctx,x,y,w,h,frac,color,label){
@@ -7664,15 +7683,18 @@ function inShopkeeper(kind,x,z,ry){
   return g;
 }
 // a simple standing person (shopkeeper) — readable at interior scale
+// a proper figure (same proportioned body as the street crowd), coloured per part by vertex colour
 function inPerson(colTop,colBottom,x,z,ry){
-  const g=new THREE.Group();
-  const skin=new THREE.MeshStandardMaterial({color:0xe8c9a8,roughness:0.7});
-  g.add(inBox(0.5,0.75,0.28,new THREE.MeshStandardMaterial({color:colTop,roughness:0.85}),0,1.28,0));
-  g.add(inBox(0.44,0.7,0.26,new THREE.MeshStandardMaterial({color:colBottom,roughness:0.9}),0,0.62,0));
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.17,12,10),skin);head.position.y=1.8;g.add(head);
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.18,12,8,0,Math.PI*2,0,Math.PI*0.6),new THREE.MeshStandardMaterial({color:0x1a1614,roughness:0.9}));hair.position.y=1.83;g.add(hair);
-  [-1,1].forEach(s=>g.add(inBox(0.13,0.62,0.15,new THREE.MeshStandardMaterial({color:colTop,roughness:0.85}),s*0.31,1.3,0)));
-  g.position.set(x,0,z);g.rotation.y=ry||0;
+  const src=pedBodyGeo, pa=src.attributes.aPart, n=pa.count;
+  const g2=new THREE.BufferGeometry();
+  g2.setAttribute('position',src.attributes.position);g2.setAttribute('normal',src.attributes.normal);
+  const ct=new THREE.Color(colTop),cb=new THREE.Color(colBottom),sk=new THREE.Color(0xd9b393),hr=new THREE.Color(0x1a1614),sh=new THREE.Color(0x111111);
+  const col=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const p2=pa.getX(i),c=p2<0.5?ct:p2<1.5?cb:p2<2.5?sk:p2<3.5?hr:sh;col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;}
+  g2.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const m=new THREE.Mesh(g2,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.85}));
+  m.scale.setScalar(1.1);m.castShadow=true;
+  const g=new THREE.Group();g.add(m);g.position.set(x,0,z);g.rotation.y=ry||0;
   return g;
 }
 
@@ -9199,11 +9221,11 @@ function loop(now){
     if(hp<30&&hp>0){
       const pulse=0.35+0.25*Math.sin(now/220);
       vgEl.style.background=`radial-gradient(ellipse at center, transparent 40%, rgba(180,20,20,${pulse}) 100%)`;
-      cautionLight.material.color.setHex(Math.sin(now/150)>0?0xff2222:0x220000);
+      cautionLight.material.color.setHex(Math.sin(now/150)>0?0xffb020:0x1a1205);
       if(!window.__lastCaution||now-window.__lastCaution>1100){window.__lastCaution=now;sfx(0.18,0.25,1400,1800);}
     }else{
       vgEl.style.background='radial-gradient(ellipse at center, transparent 50%, rgba(6,4,18,.55) 100%)';
-      cautionLight.material.color.setHex(0x220000);
+      if(!cockpitMode)cautionLight.material.color.setHex(0x1a1205);
     }
     if(hp<=0){endRun();}
     // streak decay
@@ -9430,7 +9452,7 @@ function loop(now){
     heli.visible=!cockpitMode;
     cpFlood.intensity=cockpitMode?0.55:0;cpSpill.intensity=cockpitMode?0.9:0;
     if(document.body.classList.contains('cockpit')!==cockpitMode)document.body.classList.toggle('cockpit',cockpitMode);
-    warnLight.material.color.setHex(cockpitMode&&enemies.some(e=>e.kind==='heli'&&e.hp>0&&!e.leaving)&&((now/300|0)%2)?0xff2a1a:0x2a1a00);
+    warnLight.material.color.setHex(cockpitMode&&enemies.some(e=>e.kind==='heli'&&e.hp>0&&!e.leaving)&&((now/300|0)%2)?0xff2a1a:0x1a0505);
     drawDashMFD();
     updateCrewRescue(dt);updateCrewDelivery();
     // animate the landing pads: chevrons march down the beam, lights chase around the ring, the name
