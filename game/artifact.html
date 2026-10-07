@@ -9441,12 +9441,22 @@ const heliKeyLight=new THREE.PointLight(0xdfe6ee,0.30,20,2);heliKeyLight.positio
 const heliRimLight=new THREE.PointLight(0xffd2a8,0.18,16,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
 const mast=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,1,8),darkMat);mast.position.y=1.35;heli.add(mast);
 const rotor=new THREE.Group();
-const bladeMat=new THREE.MeshStandardMaterial({color:0x2c302a,metalness:0.1,roughness:0.6});
-for(let i=0;i<4;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.55,.05,14.5),bladeMat);bl.rotation.y=i*Math.PI/2;bl.rotation.z=0.012;rotor.add(bl);}
+// four separate blades from the hub, narrow chord, swept and tapered tips, slight droop — and
+// semi-transparent, because at 290 rpm the eye never sees a solid plank, it sees a blurred disc
+const bladeMat=new THREE.MeshStandardMaterial({color:0x22251f,metalness:0.1,roughness:0.6,transparent:true,opacity:0.42,depthWrite:false});
+const bladeGeo=(()=>{const g=new THREE.BoxGeometry(6.9,0.05,0.5,12,1,1),pa=g.attributes.position;
+  for(let i=0;i<pa.count;i++){let x=pa.getX(i)+3.45+0.35,z=pa.getZ(i);
+    if(x>6.6){const t=(x-6.6)/0.65;z=z*(1-0.45*t)+0.18*t;}                 // swept, tapered tip
+    pa.setXYZ(i,x,pa.getY(i)-x*x*0.0016,z);}                                // static droop
+  g.computeVertexNormals();return g;})();
+for(let i=0;i<4;i++){const bl=new THREE.Mesh(bladeGeo,bladeMat);bl.rotation.y=i*Math.PI/2;rotor.add(bl);}
 rotor.position.y=1.85;heli.add(rotor);
 const discTex=tex((g,w,h)=>{g.clearRect(0,0,w,h);g.translate(w/2,h/2);
-for(let i=0;i<70;i++){g.strokeStyle=`rgba(25,26,24,${Math.random()*0.09})`;g.beginPath();g.arc(0,0,w*0.08+Math.random()*w*0.42,0,7);g.stroke();}},256,256);
-const disc=new THREE.Mesh(new THREE.CircleGeometry(7.2,24),new THREE.MeshBasicMaterial({map:discTex,transparent:true,depthWrite:false}));
+  const gr=g.createRadialGradient(0,0,w*0.06,0,0,w*0.5);                   // rotor blur: faint body, darker tip-path ring
+  gr.addColorStop(0,'rgba(20,22,18,0.10)');gr.addColorStop(0.8,'rgba(20,22,18,0.12)');gr.addColorStop(0.93,'rgba(14,15,12,0.30)');gr.addColorStop(0.985,'rgba(14,15,12,0.12)');gr.addColorStop(1,'rgba(14,15,12,0)');
+  g.fillStyle=gr;g.beginPath();g.arc(0,0,w/2,0,7);g.fill();
+  for(let i=0;i<40;i++){g.strokeStyle=`rgba(25,26,24,${Math.random()*0.06})`;g.beginPath();g.arc(0,0,w*0.08+Math.random()*w*0.42,0,7);g.stroke();}},256,256);
+const disc=new THREE.Mesh(new THREE.CircleGeometry(7.25,48),new THREE.MeshBasicMaterial({map:discTex,transparent:true,depthWrite:false}));
 disc.rotation.x=-Math.PI/2;disc.position.y=1.9;heli.add(disc);
 const tailRotor=new THREE.Group();
 for(let i=0;i<2;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.06,2.8,.3),darkMat);bl.rotation.x=i*Math.PI/2;tailRotor.add(bl);}
@@ -9477,7 +9487,7 @@ heli.position.set(0,45,120);scene.add(heli);
   // ---- AH-64A APACHE, 1989 US Army: lofted from real cross-sections instead of boxes ----
   // FS 34031 olive drab, matte; the lofts get UVs so the panel/rivet/scuff map wraps the skin.
   panelTex.wrapS=panelTex.wrapT=THREE.RepeatWrapping;
-  const gm=new THREE.MeshStandardMaterial({color:0x4b5240,map:panelTex,metalness:0.05,roughness:0.72,envMapIntensity:0.4});
+  const gm=new THREE.MeshStandardMaterial({color:0x434d3a,map:panelTex,metalness:0.05,roughness:0.72,envMapIntensity:0.4});
   const gm2=new THREE.MeshStandardMaterial({color:0x3d4335,map:panelTex,metalness:0.06,roughness:0.7,envMapIntensity:0.4});
   const dk=new THREE.MeshStandardMaterial({color:0x1b1d1c,metalness:0.3,roughness:0.55,envMapIntensity:0.5});
   const soot=new THREE.MeshStandardMaterial({color:0x121211,metalness:0.1,roughness:0.9});
