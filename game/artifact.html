@@ -15,18 +15,18 @@
      ========================================================================== */
   :root {
     /* palette: turquoise on near-black, with three signal colours and nothing else */
-    --ui:        #5ff2ff;                  /* primary turquoise — structure, labels, ticks */
-    --ui-hi:     #e8feff;                  /* bright readouts — the numbers you actually read */
-    --ui-dim:    rgba(95,242,255,.46);     /* secondary text, minor ticks */
-    --ui-faint:  rgba(95,242,255,.15);     /* grid lines, inactive chrome */
-    --ui-warn:   #ffc23a;                  /* caution / selected weapon */
+    --ui:        #f1ede2;                  /* primary turquoise — structure, labels, ticks */
+    --ui-hi:     #ffffff;                  /* bright readouts — the numbers you actually read */
+    --ui-dim:    rgba(241,237,226,.46);     /* secondary text, minor ticks */
+    --ui-faint:  rgba(241,237,226,.15);     /* grid lines, inactive chrome */
+    --ui-warn:   #ffb43a;                  /* caution / selected weapon */
     --ui-alert:  #ff3b52;                  /* threat / critical only */
     --ui-ok:     #46e08a;                  /* healthy / positive only */
     /* surfaces */
-    --ui-fill:   rgba(1,12,18,.74);        /* standard panel ground — dark enough to read over neon */
-    --ui-solid:  rgba(1,12,18,.90);        /* panels that must stay readable over neon */
-    --ui-line:   rgba(95,242,255,.38);     /* the one hairline border weight */
-    --ui-glow:   0 0 6px rgba(95,242,255,.45);
+    --ui-fill:   rgba(10,12,14,.52);        /* standard panel ground — dark enough to read over neon */
+    --ui-solid:  rgba(10,12,14,.82);        /* panels that must stay readable over neon */
+    --ui-line:   rgba(241,237,226,.38);     /* the one hairline border weight */
+    --ui-glow:   0 0 6px rgba(241,237,226,.45);
     /* type — mono, uppercase, letterspaced. Four sizes, no more. */
     --f: 'Barlow Semi Condensed','Arial Narrow',sans-serif;   /* condensed sans: far more legible than thin mono */
     --hs: 1;                               /* HUD scale, set from the viewport in sizeHUD() */
@@ -79,7 +79,7 @@
   #intelLog b { color:var(--ui); letter-spacing:.14em; }
   #intelLog .ros { display:flex; flex-direction:row; gap:3px; margin-top:4px; }
   #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1 1 0; min-width:0;
-    background:rgba(95,242,255,.05); border:1px solid var(--ui-faint); padding:2px; }
+    background:rgba(241,237,226,.05); border:1px solid var(--ui-faint); padding:2px; }
   #intelLog .cm.unk { opacity:.40; filter:grayscale(1); }      /* not yet located */
   #intelLog .cm img { width:32px; height:32px; display:block; image-rendering:pixelated; }
   #intelLog .cmi { display:flex; flex-direction:column; align-items:center; line-height:1.1; }
@@ -102,7 +102,7 @@
   #actPrompt.on { display:flex; animation:actIn .25s ease-out; }
   #actPrompt .key { font-size:calc(17px * var(--hs)); font-weight:700; color:#001218; background:var(--ui);
     min-width:calc(28px * var(--hs)); text-align:center; padding:calc(1px * var(--hs)) calc(7px * var(--hs));
-    border-radius:4px; box-shadow:0 3px 0 #0a7f8c, 0 0 14px rgba(95,242,255,.5); }
+    border-radius:4px; box-shadow:0 3px 0 #8a8476, 0 0 14px rgba(241,237,226,.5); }
   #actPrompt .key.ic { background:transparent; color:var(--ui); box-shadow:none; padding:0; }
   #actPrompt .txt { display:flex; flex-direction:column; line-height:1.15; }
   #actPrompt .a { font-size:calc(16px * var(--hs)); font-weight:700; letter-spacing:.06em; color:var(--ui-hi); }
@@ -135,7 +135,7 @@
   #tacTitle { font-size:var(--t-label); letter-spacing:.16em; color:var(--ui); background:var(--ui-solid);
     border:1px solid var(--ui-line); border-bottom:none; padding:3px var(--s2); width:max-content; min-width:148px; }
   #tacmap { background:#00090e; border:1px solid var(--ui-line);
-    box-shadow:inset 0 0 18px rgba(0,0,0,.9), 0 0 12px rgba(95,242,255,.14); }
+    box-shadow:inset 0 0 18px rgba(0,0,0,.9), 0 0 12px rgba(241,237,226,.14); }
   /* ---- HELI CONTROL CLUSTER ----------------------------------------------------
      One right-edge control column on a strict pitch, with the fire button as the
      only round, only red element. Geometry lives in these four vars so the whole
@@ -152,17 +152,17 @@
   /* square-ish MFD key: flat panel ground, hairline edge, bracketed top-left corner */
   .mfd { width:var(--btn); height:var(--btn); border-radius:4px;
     background:var(--ui-solid); border:1px solid var(--ui-line);
-    box-shadow:inset 0 0 14px rgba(0,40,54,.55), 0 0 10px rgba(95,242,255,.10); }
+    box-shadow:inset 0 0 14px rgba(0,40,54,.55), 0 0 10px rgba(241,237,226,.10); }
   .mfd::before { content:''; position:absolute; top:3px; left:3px; width:8px; height:8px;
     border-top:2px solid var(--ui); border-left:2px solid var(--ui); opacity:.55; pointer-events:none; }
-  .mfd:hover { filter:brightness(1.18); box-shadow:inset 0 0 16px rgba(0,54,74,.6), 0 0 18px rgba(95,242,255,.3); }
+  .mfd:hover { filter:brightness(1.18); box-shadow:inset 0 0 16px rgba(0,54,74,.6), 0 0 18px rgba(241,237,226,.3); }
   .mfd.on { color:var(--ui-hi); border-color:var(--ui);
-    background:rgba(12,52,64,.92); box-shadow:inset 0 0 16px rgba(0,86,110,.6), 0 0 20px rgba(95,242,255,.42); }
+    background:rgba(12,52,64,.92); box-shadow:inset 0 0 16px rgba(0,86,110,.6), 0 0 20px rgba(241,237,226,.42); }
   #stick-zone { position:absolute; left:0; bottom:0; width:45%; height:55%; pointer-events:auto; z-index:7; }
   #stick-base { position:absolute; width:110px; height:110px; border-radius:50%; border:1px solid var(--ui-line);
-    background:rgba(1,12,18,.34); display:none; z-index:9; box-shadow:0 0 12px rgba(95,242,255,.12); }
-  #stick-knob { position:absolute; width:46px; height:46px; border-radius:50%; background:rgba(95,242,255,.30);
-    border:1px solid var(--ui); display:none; z-index:9; box-shadow:0 0 14px rgba(95,242,255,.4); }
+    background:rgba(1,12,18,.34); display:none; z-index:9; box-shadow:0 0 12px rgba(241,237,226,.12); }
+  #stick-knob { position:absolute; width:46px; height:46px; border-radius:50%; background:rgba(241,237,226,.30);
+    border:1px solid var(--ui); display:none; z-index:9; box-shadow:0 0 14px rgba(241,237,226,.4); }
   /* the column, bottom-up: WPN, HVR, CAM — all on one pitch, flush with the fire button's floor */
   #wpnBtn  { right:var(--col); bottom:var(--floor); }
   #stopBtn { right:var(--col); bottom:calc(var(--floor) + var(--btn-pitch)); }
@@ -255,10 +255,10 @@
   .bf-step b { display:block; font-size:16px; letter-spacing:.04em; color:#fff; }
   .bf-step span { display:block; font-size:13.5px; color:var(--ui-dim); color:#9fbcc2; margin-top:2px; line-height:1.4; }
   #brief kbd { font:700 12px/1 var(--f); color:#001218; background:#d9f9ff; border-radius:3px; padding:2px 6px 1px;
-    box-shadow:0 2px 0 #0a7f8c; }
+    box-shadow:0 2px 0 #8a8476; }
   .bf-keys { margin-top:12px; font-size:12.5px; color:#9fbcc2; line-height:2; }
   .bf-cards { display:grid; grid-template-columns:1fr; gap:6px; }
-  .bf-card { display:flex; align-items:center; gap:10px; padding:5px 8px 5px 5px; background:rgba(95,242,255,.04);
+  .bf-card { display:flex; align-items:center; gap:10px; padding:5px 8px 5px 5px; background:rgba(241,237,226,.04);
     border:1px solid var(--ui-faint); position:relative; }
   .bf-card img { width:40px; height:40px; image-rendering:pixelated; filter:grayscale(.6) contrast(1.1); }
   .bf-card b { display:block; font-size:15px; letter-spacing:.06em; }
@@ -272,7 +272,7 @@
   .bf-call { display:flex; flex-direction:column; gap:4px; font-size:11px; letter-spacing:.2em; color:var(--ui); font-weight:700; }
   .bf-call input { background:#000a0f; border:1px solid var(--ui-line); color:#fff; padding:10px 12px; width:170px;
     font:700 17px/1 var(--f); letter-spacing:.12em; text-transform:uppercase; outline:none; pointer-events:auto; }
-  .bf-call input:focus { border-color:var(--ui); box-shadow:0 0 0 2px rgba(95,242,255,.2); }
+  .bf-call input:focus { border-color:var(--ui); box-shadow:0 0 0 2px rgba(241,237,226,.2); }
   #startBtn { pointer-events:auto; cursor:pointer; border:none; padding:5px; align-self:flex-end;
     background:repeating-linear-gradient(-45deg,#ffc23a 0 10px,#1a1406 10px 20px); }
   #startBtn span { display:block; background:#c81e2a; color:#fff; font:700 20px/1 var(--f); letter-spacing:.2em;
@@ -304,6 +304,21 @@
   }
   body.in-menu .tbtn, body.in-menu #tacwrap, body.in-menu #help, body.in-menu #cmdStack, body.in-menu #hud,
   body.in-menu #steps, body.in-menu #intelLog, body.in-menu #actPrompt, body.in-menu #stick-base, body.in-menu #stick-knob { display:none !important; }
+  /* ---- LIGHT HUD: panels appear when they matter ---- */
+  body.hud-min #steps { display:none !important; }
+  body.hud-min.steps-flash #steps { display:block !important; animation:hudIn .35s ease-out; }
+  body.hud-min #intelLog { display:none !important; }
+  body.hud-min.crew-flash #intelLog { display:block !important; }
+  body.hud-min #tacwrap { transform:scale(.78); transform-origin:bottom left; opacity:.9; }
+  body.hud-min #tacTitle { display:none; }
+  body.hud-min #help { opacity:0 !important; }
+  @keyframes hudIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:none; } }
+  #objLine { left:50%; top:calc(34px * var(--hs)); transform:translateX(-50%); display:none; white-space:nowrap;
+    font:600 calc(14px * var(--hs))/1 var(--f); letter-spacing:.06em; color:var(--ui); text-shadow:0 1px 4px rgba(0,0,0,.8); }
+  #objLine em { font-style:normal; color:var(--ui-warn); margin-left:.6em; }
+  #objLine i { font-style:normal; color:var(--ui-dim); margin-right:.5em; }
+  body.hud-min #objLine { display:block; }
+  body.in-menu #objLine, body.on-foot #objLine { display:none !important; }
   /* ---- MEDAL CEREMONY ---- */
   #medal { position:absolute; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;
     background:radial-gradient(ellipse at 50% 40%, rgba(10,16,30,.7), rgba(2,4,8,.95)); pointer-events:auto; touch-action:pan-y; }
@@ -347,6 +362,7 @@
 <div class="hud panel" id="intelLog"></div>
 <div class="hud" id="actPrompt"><span class="key"></span><span class="txt"><span class="a"></span><span class="s"></span></span></div>
 <div class="hud panel" id="steps"></div>
+<div class="hud" id="objLine"></div>
 <div class="hud panel" id="dialog"><div id="dlgWho"></div><div id="dlgTxt"></div><div id="dlgHint">▼ press F to continue</div></div>
 <div class="hud" id="help">STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK</div>
 
@@ -7366,37 +7382,63 @@ const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, b
 const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
 const warnGeo=new THREE.SphereGeometry(0.42,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff1a10});   // ICAO red, lamp-sized
 
-// generic original "idol" billboard (NOT a copy of any copyrighted character)
-function idolPosterTex(){return tex((g,w,h)=>{
-  const grad=g.createLinearGradient(0,0,0,h);
-  grad.addColorStop(0,'#d8f0ff');grad.addColorStop(1,'#eef7ff');
-  g.fillStyle=grad;g.fillRect(0,0,w,h);
-  const rg=g.createRadialGradient(w/2,h*0.3,0,w/2,h*0.3,w*0.55); // glow behind the figure: lit-panel feel
-  rg.addColorStop(0,'rgba(255,255,255,.5)');rg.addColorStop(1,'rgba(255,255,255,0)');
-  g.fillStyle=rg;g.fillRect(0,0,w,h);
-  g.fillStyle='#2fd9c8';
-  g.beginPath();g.ellipse(w*0.27,h*0.56,w*0.11,h*0.33,0.35,0,7);g.fill();
-  g.beginPath();g.ellipse(w*0.73,h*0.56,w*0.11,h*0.33,-0.35,0,7);g.fill();
-  g.beginPath();g.arc(w/2,h*0.3,w*0.23,0,7);g.fill();
-  g.fillStyle='#ffe6d6';g.beginPath();g.arc(w/2,h*0.32,w*0.17,0,7);g.fill();
-  g.fillStyle='#2a5a55';
-  g.beginPath();g.arc(w*0.43,h*0.32,w*0.022,0,7);g.fill();
-  g.beginPath();g.arc(w*0.57,h*0.32,w*0.022,0,7);g.fill();
-  g.fillStyle='#ff9ac2';g.beginPath();g.arc(w*0.5,h*0.37,w*0.03,0,3.14);g.fill();
-  g.fillStyle='#3a4250';g.fillRect(w*0.3,h*0.54,w*0.4,h*0.42);
-  g.fillStyle='#2fd9c8';g.fillRect(w*0.3,h*0.54,w*0.4,h*0.05);
-  g.fillStyle='rgba(255,255,255,.85)'; // sparkle glints, so it reads as a finished ad
-  for(let i=0;i<5;i++){
-    const sx=w*(0.1+Math.random()*0.8),sy=h*(0.06+Math.random()*0.2),sr=1.4+Math.random()*1.6;
-    g.beginPath();g.moveTo(sx,sy-sr*2);g.lineTo(sx+sr*.5,sy-sr*.5);g.lineTo(sx+sr*2,sy);g.lineTo(sx+sr*.5,sy+sr*.5);
-    g.lineTo(sx,sy+sr*2);g.lineTo(sx-sr*.5,sy+sr*.5);g.lineTo(sx-sr*2,sy);g.lineTo(sx-sr*.5,sy-sr*.5);g.closePath();g.fill();
-  }
-  g.fillStyle='rgba(20,18,16,.8)';g.fillRect(w*0.28,h*0.9,w*0.44,h*0.06); // brand-tag plate
-  g.fillStyle='#2fd9c8';g.font=`bold ${Math.round(h*0.045)}px sans-serif`;g.textAlign='center';g.textBaseline='middle';
-  g.fillText('LIVE IDOL',w/2,h*0.93);
-  ledScanlines(g,w,h,0.1);
-  g.strokeStyle='rgba(0,0,0,.15)';g.strokeRect(2,2,w-4,h-4);
-},128,256,true);}
+// ---- 1989 TOKYO ADVERTISING: specific products, people and prices, all fictional brands ----
+// Bubble-era Japanese ad design is typography first: big mincho/gothic headlines, a product shot,
+// a price or a date, a small corporate mark. Each poster is one of these, never a placeholder.
+function _poster(w,h,fn){return tex((g,W2,H2)=>{fn(g,W2,H2);ledScanlines(g,W2,H2,0.06);g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=3;g.strokeRect(1,1,W2-2,H2-2);},w,h,true);}
+const POSTERS=[
+  // beer: frosted glass, foam, "生" — Kaminari Draft
+  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#0b1a2e');gr.addColorStop(1,'#1d3e66');g.fillStyle=gr;g.fillRect(0,0,w,h);
+    const bx=w*0.28,bw=w*0.44,by=h*0.2,bh=h*0.42;const bg=g.createLinearGradient(bx,0,bx+bw,0);bg.addColorStop(0,'#c27a12');bg.addColorStop(.5,'#ffd24a');bg.addColorStop(1,'#b8700e');
+    g.fillStyle=bg;g.fillRect(bx,by,bw,bh);g.fillStyle='#fbf6ea';g.beginPath();g.ellipse(bx+bw/2,by,bw*0.56,h*0.035,0,0,7);g.fill();g.fillRect(bx,by,bw,h*0.03);
+    g.fillStyle='rgba(255,255,255,.35)';for(let i=0;i<14;i++){g.beginPath();g.arc(bx+Math.random()*bw,by+h*0.05+Math.random()*bh*0.9,1.2,0,7);g.fill();}
+    _outlineText(g,'雷 生',w/2,h*0.72,h*0.09,MINCHO,'#ffffff','#0b1a2e',3);_chromeText(g,'KAMINARI',w/2,h*0.82,h*0.05,GOTHIC);
+    g.fillStyle='#ffd24a';g.font=`bold ${h*0.03}px ${GOTHIC}`;g.textAlign='center';g.fillText('DRAFT · 辛口',w/2,h*0.88);
+    g.fillStyle='rgba(255,255,255,.6)';g.font=`${h*0.022}px ${GOTHIC}`;g.fillText('お酒は二十歳になってから',w/2,h*0.95);}),
+  // portable cassette player: "STEREO WALK-MATE" by Sonika
+  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#f2efe8';g.fillRect(0,0,w,h);g.fillStyle='#d8261e';g.fillRect(0,0,w,h*0.07);
+    g.fillStyle='#2a2c30';g.fillRect(w*0.2,h*0.2,w*0.6,h*0.3);g.fillStyle='#b9bcc2';g.fillRect(w*0.24,h*0.24,w*0.52,h*0.14);
+    g.fillStyle='#1a1a1a';[0.38,0.62].forEach(f=>{g.beginPath();g.arc(w*f,h*0.31,w*0.07,0,7);g.fill();});g.fillStyle='#d8261e';g.fillRect(w*0.24,h*0.42,w*0.12,h*0.03);
+    g.strokeStyle='#2a2c30';g.lineWidth=3;g.beginPath();g.arc(w/2,h*0.16,w*0.32,Math.PI*1.05,Math.PI*1.95);g.stroke();
+    g.fillStyle='#111';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.textAlign='center';g.fillText('WALK-MATE',w/2,h*0.6);
+    g.font=`bold ${h*0.058}px ${MINCHO}`;g.fillText('音を、',w/2,h*0.7);g.fillText('連れ出そう。',w/2,h*0.78);
+    g.fillStyle='#d8261e';g.font=`bold ${h*0.035}px ${GOTHIC}`;g.fillText('¥19,800',w/2,h*0.86);g.fillStyle='#111';g.font=`bold ${h*0.03}px Arial`;g.fillText('SONIKA',w/2,h*0.94);}),
+  // idol concert: Mizuki Yui, Budokan 12.24 — a spotlit silhouette, not a cartoon face
+  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createRadialGradient(w/2,h*0.3,4,w/2,h*0.3,h*0.5);gr.addColorStop(0,'#ffd6ea');gr.addColorStop(.5,'#b23a78');gr.addColorStop(1,'#2a0a20');g.fillStyle=gr;g.fillRect(0,0,w,h);
+    g.fillStyle='#160610';g.beginPath();g.arc(w/2,h*0.2,w*0.1,0,7);g.fill();g.beginPath();g.moveTo(w*0.3,h*0.56);g.quadraticCurveTo(w*0.36,h*0.26,w/2,h*0.27);g.quadraticCurveTo(w*0.64,h*0.26,w*0.7,h*0.56);g.fill();
+    g.fillRect(w*0.62,h*0.24,w*0.025,h*0.1);
+    g.fillStyle='#fff';g.font=`bold ${h*0.06}px ${MINCHO}`;g.textAlign='center';g.fillText('水城 ゆい',w/2,h*0.64);
+    g.font=`bold ${h*0.032}px ${GOTHIC}`;g.fillText('LIVE TOUR ’89',w/2,h*0.7);g.fillText('“冬のヴィーナス”',w/2,h*0.75);
+    g.fillStyle='#ffe14d';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.fillText('12.24',w/2,h*0.84);g.fillStyle='#fff';g.font=`bold ${h*0.035}px ${MINCHO}`;g.fillText('日本武道館',w/2,h*0.9);}),
+  // cigarettes: Seven Hills Light
+  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#8fc7e8');gr.addColorStop(1,'#1d4f7a');g.fillStyle=gr;g.fillRect(0,0,w,h);
+    g.fillStyle='#f4f6f8';g.fillRect(w*0.3,h*0.22,w*0.4,h*0.3);g.fillStyle='#1d4f7a';g.fillRect(w*0.3,h*0.22,w*0.4,h*0.08);g.fillStyle='#f4f6f8';g.fillRect(w*0.38,h*0.17,w*0.06,h*0.06);
+    g.fillStyle='#1d4f7a';g.font=`bold ${h*0.03}px Arial`;g.textAlign='center';g.fillText('SEVEN HILLS',w/2,h*0.4);
+    g.fillStyle='#fff';g.font=`italic bold ${h*0.05}px Georgia`;g.fillText('Feel the',w/2,h*0.66);g.fillText('Breeze.',w/2,h*0.72);
+    g.fillStyle='rgba(255,255,255,.75)';g.font=`${h*0.016}px ${GOTHIC}`;g.fillText('健康のため吸いすぎに',w/2,h*0.92);g.fillText('注意しましょう',w/2,h*0.95);}),
+  // bubble-era condo: ¥1億2,800万, Minato-ku
+  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#1a1410';g.fillRect(0,0,w,h);const gr=g.createLinearGradient(0,h*0.1,0,h*0.5);gr.addColorStop(0,'#3a2a50');gr.addColorStop(1,'#d88a4a');g.fillStyle=gr;g.fillRect(w*0.08,h*0.06,w*0.84,h*0.44);
+    g.fillStyle='#120e14';g.fillRect(w*0.4,h*0.14,w*0.2,h*0.36);g.fillStyle='rgba(255,220,150,.9)';for(let y=0;y<10;y++)for(let x=0;x<3;x++)if(Math.random()<.7)g.fillRect(w*0.42+x*w*0.06,h*0.16+y*h*0.032,w*0.035,h*0.018);
+    g.fillStyle='#d8b46a';g.font=`bold ${h*0.04}px ${MINCHO}`;g.textAlign='center';g.fillText('グランドタワー',w/2,h*0.58);g.fillText('六本木',w/2,h*0.63);
+    g.fillStyle='#fff';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.fillText('1億2,800万円',w/2,h*0.74);g.fillStyle='#d8b46a';g.font=`${h*0.028}px ${GOTHIC}`;g.fillText('2LDK · 港区 · 即入居可',w/2,h*0.8);
+    g.fillStyle='#fff';g.font=`bold ${h*0.03}px ${GOTHIC}`;g.fillText('☎ 0120-89-1224',w/2,h*0.9);}),
+  // instant ramen: Ichiban Shoyu
+  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#ffd23a';g.fillRect(0,0,w,h);g.fillStyle='#d8261e';g.beginPath();g.arc(w/2,h*0.3,w*0.4,0,7);g.fill();
+    g.fillStyle='#fff';g.fillRect(w*0.28,h*0.18,w*0.44,h*0.22);g.fillStyle='#d8261e';g.font=`bold ${h*0.05}px ${MINCHO}`;g.textAlign='center';g.fillText('一番',w/2,h*0.27);g.font=`bold ${h*0.03}px ${GOTHIC}`;g.fillText('しょうゆ味',w/2,h*0.34);
+    _outlineText(g,'3分で、',w/2,h*0.6,h*0.058,MINCHO,'#d8261e','#fff',3);_outlineText(g,'ごちそう。',w/2,h*0.69,h*0.056,MINCHO,'#d8261e','#fff',3);
+    g.fillStyle='#111';g.font=`bold ${h*0.04}px ${GOTHIC}`;g.fillText('¥120',w/2,h*0.82);g.font=`bold ${h*0.028}px Arial`;g.fillText('MARUTOKU FOODS',w/2,h*0.92);}),
+  // pachinko: grand opening
+  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#c8102e';g.fillRect(0,0,w,h);_starburst(g,w/2,h*0.3,w*0.6,24,'#ffe14d');
+    _outlineText(g,'新装',w/2,h*0.24,h*0.1,MINCHO,'#ffe14d','#4a0010',4);_outlineText(g,'開店',w/2,h*0.36,h*0.1,MINCHO,'#ffe14d','#4a0010',4);
+    g.fillStyle='#fff';g.font=`bold ${h*0.045}px ${GOTHIC}`;g.textAlign='center';g.fillText('パチンコ',w/2,h*0.56);g.fillText('大東京',w/2,h*0.62);
+    g.font=`bold ${h*0.035}px ${GOTHIC}`;g.fillText('AM 10:00 開店',w/2,h*0.74);g.fillStyle='#ffe14d';g.fillText('全台 大放出',w/2,h*0.82);}),
+  // film: Tokyo 1999
+  ()=>_poster(192,576,(g,w,h)=>{const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#1a1e2c');rg.addColorStop(1,'#080a12');g.fillStyle=rg;g.fillRect(0,0,w,h);
+    g.fillStyle='rgba(120,180,255,.45)';g.beginPath();g.ellipse(w/2,h*0.28,w*0.32,h*0.18,0,0,7);g.fill();g.fillStyle='#05060a';g.beginPath();g.arc(w/2,h*0.25,w*0.09,0,7);g.fill();g.fillRect(w*0.38,h*0.3,w*0.24,h*0.3);
+    _glowText(g,'東京',w/2,h*0.66,h*0.1,MINCHO,'#9fd0ff',12);_glowText(g,'1999',w/2,h*0.76,h*0.07,GOTHIC,'#9fd0ff',10);
+    g.fillStyle='#c01818';g.fillRect(w*0.08,h*0.86,w*0.84,h*0.05);g.fillStyle='#fff';g.font=`bold ${h*0.024}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';g.fillText('12月 全国ロードショー',w/2,h*0.885);}),
+];
+function idolPosterTex(){return _pick(POSTERS)();}
 // faint horizontal scanlines + bright rows so static "LED" boards read as emissive panels, not paper
 function ledScanlines(g,w,h,strength){
   g.fillStyle=`rgba(0,0,0,${strength})`;
@@ -7420,21 +7462,23 @@ function adTex(){return tex((g,w,h)=>{
 // big animated screens: word/ad screen + generic teal-haired "idol" screen (not any real IP)
 const bigScreens=[];
 function bigScreenTex(){
+  // 1989 jumbotron: the Nikkei at its all-time peak, the time and temperature, then an ad spot
   const cv=document.createElement('canvas');cv.width=256;cv.height=160;
   const g=cv.getContext('2d');
   const t=new THREE.CanvasTexture(cv);
-  const words=['セール','東京','未来','夢','ネオン','希望'];
+  const ads=[['雷 生','KAMINARI DRAFT','#0b1a2e','#ffd24a'],['WALK-MATE','音を、連れ出そう。','#f2efe8','#d8261e'],['水城 ゆい','12.24 日本武道館','#4a1030','#ffd6ea']];
   function draw(ph){
-    const h1=(ph*40)%360;
-    const gr=g.createLinearGradient(0,0,256,160);
-    gr.addColorStop(0,`hsl(${h1},80%,50%)`);gr.addColorStop(1,`hsl(${(h1+80)%360},80%,28%)`);
-    g.fillStyle=gr;g.fillRect(0,0,256,160);
-    g.font='bold 64px sans-serif';g.textAlign='center';g.textBaseline='middle';
-    g.fillStyle='rgba(255,255,255,.95)';g.shadowColor='#fff';g.shadowBlur=16;
-    g.fillText(words[Math.floor(ph)%words.length],128,80);
-    g.shadowBlur=0;
-    g.fillStyle='rgba(0,0,0,.18)';
-    for(let y=0;y<160;y+=4)g.fillRect(0,y,256,1.5);
+    const k=Math.floor(ph/3)%3;
+    g.clearRect(0,0,256,160);
+    if(k===0){g.fillStyle='#020a14';g.fillRect(0,0,256,160);g.fillStyle='#ffe14d';g.font='bold 22px '+GOTHIC;g.textAlign='left';g.textBaseline='middle';g.fillText('日経平均',12,30);
+      const v=38915+Math.round(Math.sin(ph*0.7)*40);g.fillStyle='#fff';g.font='bold 40px Arial';g.fillText(v.toLocaleString('en-US'),12,76);
+      g.fillStyle='#ff4d4d';g.font='bold 22px Arial';g.fillText('▲ +'+(120+Math.round(Math.sin(ph)*30)),12,118);
+      g.fillStyle='#8fd0ff';g.font='14px '+GOTHIC;g.fillText('円 / ドル 143.40   金 1,612',12,146);}
+    else if(k===1){g.fillStyle='#04121c';g.fillRect(0,0,256,160);g.fillStyle='#fff';g.font='bold 52px Arial';g.textAlign='center';g.textBaseline='middle';
+      g.fillText(typeof clockText==='function'?clockText():'19:00',128,62);g.fillStyle='#8fd0ff';g.font='bold 22px '+GOTHIC;g.fillText('東京 8°C  くもり',128,116);}
+    else{const a=ads[Math.floor(ph/9)%ads.length];g.fillStyle=a[2];g.fillRect(0,0,256,160);g.fillStyle=a[3];g.font='bold 48px '+MINCHO;g.textAlign='center';g.textBaseline='middle';
+      g.fillText(a[0],128,66);g.font='bold 18px '+GOTHIC;g.fillText(a[1],128,118);}
+    g.fillStyle='rgba(0,0,0,.18)';for(let y=0;y<160;y+=4)g.fillRect(0,y,256,1.5);
     t.needsUpdate=true;
   }
   draw(0);
@@ -7445,28 +7489,15 @@ function idolScreenTex(){
   const g=cv.getContext('2d');
   const t=new THREE.CanvasTexture(cv);
   function draw(ph){
-    const h1=(Math.sin(ph*0.6)*24+200);
-    const gr=g.createLinearGradient(0,0,0,320);
-    gr.addColorStop(0,`hsl(${h1},70%,15%)`);gr.addColorStop(1,`hsl(${h1+30},70%,6%)`);
+    const gr=g.createRadialGradient(96,110,6,96,110,200);gr.addColorStop(0,'#ffd6ea');gr.addColorStop(.35,'#b23a78');gr.addColorStop(1,'#14040e');
     g.fillStyle=gr;g.fillRect(0,0,192,320);
-    const bob=Math.sin(ph*2)*6;
-    g.fillStyle='#2fd9c8';
-    g.beginPath();g.ellipse(96*0.68,150+bob,20,88,0.3,0,7);g.fill();
-    g.beginPath();g.ellipse(96*1.32-96,150+bob,20,88,-0.3,0,7);g.fill();
-    g.beginPath();g.arc(96,90+bob,44,0,7);g.fill();
-    g.fillStyle='#ffe6d6';g.beginPath();g.arc(96,96+bob,32,0,7);g.fill();
-    g.fillStyle='#2a5a55';
-    g.beginPath();g.arc(96-13,96+bob,4,0,7);g.fill();
-    g.beginPath();g.arc(96+13,96+bob,4,0,7);g.fill();
-    g.fillStyle='rgba(255,255,255,.92)';g.font='bold 20px sans-serif';g.textAlign='center';
-    g.shadowColor='#2fd9c8';g.shadowBlur=10;
-    g.fillText('LIVE',96,246);
-    g.shadowBlur=0;
-    g.fillStyle='rgba(255,255,255,.8)'; // a couple of sparkle glints so the screen feels finished
-    for(let i=0;i<3;i++){
-      const sx=40+((i*67+ph*30)%160),sy=30+((i*53)%50),sr=2+((i*7)%3);
-      g.beginPath();g.moveTo(sx,sy-sr*2);g.lineTo(sx+sr,sy);g.lineTo(sx,sy+sr*2);g.lineTo(sx-sr,sy);g.closePath();g.fill();
-    }
+    g.fillStyle='rgba(255,255,255,.12)';g.beginPath();g.moveTo(96,0);g.lineTo(40+Math.sin(ph)*20,320);g.lineTo(150+Math.sin(ph)*20,320);g.fill();
+    const bob=Math.sin(ph*2)*3;g.fillStyle='#120410';
+    g.beginPath();g.arc(96,92+bob,22,0,7);g.fill();
+    g.beginPath();g.moveTo(54,250);g.quadraticCurveTo(62,120+bob,96,118+bob);g.quadraticCurveTo(130,120+bob,138,250);g.fill();
+    g.fillRect(118,104+bob,5,36);
+    g.fillStyle='#fff';g.font='bold 28px '+MINCHO;g.textAlign='center';g.fillText('水城 ゆい',96,282);
+    g.font='bold 11px '+GOTHIC;g.fillStyle='#ffe14d';g.fillText('冬のヴィーナス · NOW ON SALE',96,306);
     ledScanlines(g,192,320,0.14);
     t.needsUpdate=true;
   }
@@ -7635,7 +7666,7 @@ const billboardFrameXf=[],billboardGlowXf=[];
 function mountBillboard(grp,bw,bd,bh,cx,cz,forcedSide){
   const roll=Math.random();
   let t,w2,h2;
-  if(roll<0.24){t=idolPosterTex();w2=bw*0.62;h2=bw*1.15;}
+  if(roll<0.55){t=idolPosterTex();w2=bw*0.46;h2=bw*1.38;}           // 1989 ad pool (beer, Walk-Mate, idol tour, cigarettes, condos...)
   else if(roll<0.4){t=vintagePosterTex();w2=bw*0.46;h2=bw*1.2;}
   else if(roll<0.58){t=foodAdTex();w2=bw*0.48;h2=bw*1.2;}
   else if(roll<0.76){t=noirPosterTex();w2=bw*0.46;h2=bw*1.2;}
@@ -7738,6 +7769,41 @@ const groundPoolXf=(window.__artPools||[]).slice(); // {x,z,s,c:[r,g,b]} — ave
 // map stay in front, and the glass on top is a low-roughness reflector. Beyond ~140 m it falls
 // back to the flat texture (too small to see, and cheaper).
 // ============================================================================
+// ---- the helicopter in the glass + windows that live: shared by every facade shader ----
+// Reflected view ray is traced against the Apache (two ellipsoids + the rotor disc) in its own
+// frame, so the dark shape of the aircraft and its red/green/strobe lights slide across the
+// towers as you fly past — a real reflection, not a decal. Windows switch on/off over time.
+const GLASS_U={uHeliPos:{value:new THREE.Vector3()},uHeliX:{value:new THREE.Vector3(1,0,0)},uHeliY:{value:new THREE.Vector3(0,1,0)},
+  uHeliZ:{value:new THREE.Vector3(0,0,1)},uStrobe:{value:0},uT:{value:0}};
+const GLASS_GLSL=`
+uniform vec3 uHeliPos,uHeliX,uHeliY,uHeliZ;uniform float uStrobe,uT;
+float gh1(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+float ellHit(vec3 o,vec3 d,vec3 c,vec3 r){vec3 oo=(o-c)/r,dd=d/r;float a=dot(dd,dd),b=dot(oo,dd),k=dot(oo,oo)-1.0;float h=b*b-a*k;
+  if(h<0.0)return 0.0;float t=(-b-sqrt(h))/a;return t>0.0?1.0:0.0;}
+float ptGlow(vec3 o,vec3 d,vec3 p,float s){vec3 v=p-o;float t=dot(v,d);if(t<0.0)return 0.0;float dd=length(v-d*t);return exp(-dd*dd/s);}
+// returns rgb = light glints to add, a = how much of the pane the aircraft covers
+vec4 heliReflect(vec3 P,vec3 N){
+  vec3 C=(viewMatrix*vec4(uHeliPos,1.0)).xyz;
+  if(length(P-C)>220.0)return vec4(0.0);
+  mat3 vm=mat3(viewMatrix);vec3 ax=normalize(vm*uHeliX),ay=normalize(vm*uHeliY),az=normalize(vm*uHeliZ);
+  vec3 R=reflect(normalize(P),N);vec3 q=P-C;
+  vec3 o=vec3(dot(q,ax),dot(q,ay),dot(q,az)),d=normalize(vec3(dot(R,ax),dot(R,ay),dot(R,az)));
+  float hit=max(ellHit(o,d,vec3(0.0,0.1,-1.6),vec3(1.05,1.0,4.0)),ellHit(o,d,vec3(0.0,0.45,6.2),vec3(0.42,0.5,5.0)));
+  hit=max(hit,ellHit(o,d,vec3(0.0,0.45,0.35),vec3(3.3,0.25,0.7)));                 // stub wings + pods
+  if(abs(d.y)>1e-3){float t=(1.95-o.y)/d.y;if(t>0.0){vec3 h=o+d*t;float rr=length(h.xz-vec2(0.0,0.25));hit=max(hit,0.38*step(rr,7.25)*step(0.5,rr));}}
+  vec3 g=vec3(1.0,0.12,0.08)*ptGlow(o,d,vec3(-2.95,0.48,0.35),0.04)*2.5+vec3(0.15,1.0,0.35)*ptGlow(o,d,vec3(2.95,0.48,0.35),0.04)*2.5
+        +vec3(1.0)*ptGlow(o,d,vec3(0.0,3.05,11.1),0.05)*4.0*uStrobe;
+  return vec4(g,hit);
+}
+// a window's light over the night: most stay as they are, a few switch on or off every half
+// minute or so, and a few apartments flicker blue with a television
+vec3 winLive(vec2 ci,vec3 light,float on){
+  float h=gh1(ci*1.37+7.1), slot=floor(uT/37.0+h*9.0), k=gh1(ci+slot*3.17);
+  if(on>0.05&&k<0.07)return vec3(0.0);
+  if(on<=0.05&&k>0.965)return vec3(1.0,0.82,0.58);
+  return light;
+}
+`;
 const FACADE_ROOM_GLSL=`
 uniform vec2 uGrid;
 float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
@@ -7746,8 +7812,8 @@ function facadeInteriors(m,preset){
   const u={uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}};
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
-    Object.assign(sh.uniforms,u);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+FACADE_ROOM_GLSL)
+    Object.assign(sh.uniforms,u,GLASS_U);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+GLASS_GLSL+FACADE_ROOM_GLSL)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   float dist=length(vViewPosition);
@@ -7769,7 +7835,7 @@ function facadeInteriors(m,preset){
     vec4 lc=texture2D(emissiveMap,(ci+0.5)/uGrid); lc.rgb=emissiveMapTexelToLinear(lc).rgb;
     vec4 lh=texture2D(emissiveMap,vUv); lh.rgb=emissiveMapTexelToLinear(lh).rgb;
     float on=max(lc.r,max(lc.g,lc.b));
-    vec3 light=on>0.05?lc.rgb/on:vec3(0.0);
+    vec3 light=winLive(ci,on>0.05?lc.rgb/on:vec3(0.0),on);
     float shade=on>0.05?clamp(max(lh.r,max(lh.g,lh.b))/on,0.12,1.0):1.0;
     vec3 rc=vec3(0.6);
     if(dist<140.0&&win>0.01){
@@ -7799,11 +7865,13 @@ function facadeInteriors(m,preset){
       rc*=0.55+0.45*(1.0+hp.z/D);
       rc=mix(vec3(0.6),rc,1.0-smoothstep(90.0,140.0,dist));
     }
-    vec3 glassEm=rc*light*emissive*1.5*shade + rc*0.012;
+    vec3 glassEm=rc*light*max(emissive,vec3(0.35))*1.5*shade + rc*0.012;
+    vec4 hr=heliReflect(-vViewPosition,normal);
     float fres=pow(1.0-abs(dot(normalize(-vViewPosition),normal)),3.0);
     #ifdef USE_FOG
-    glassEm+=fogColor*(0.10+0.55*fres);                                      // the evening sky in the pane, stronger at grazing angles
+    glassEm+=fogColor*(0.10+0.55*fres)*(1.0-hr.a*0.9);                       // the evening sky in the pane, stronger at grazing angles
     #endif
+    glassEm=glassEm*(1.0-hr.a*0.55)+hr.rgb;                                   // the Apache going past in the glass
     vec3 col=wallC;
     col=mix(col,wallC*1.22+0.02,sill);                                     // sill catches the light
     col=mix(col,vec3(0.05,0.052,0.055),frm);                               // window frame
@@ -7828,8 +7896,8 @@ function crispFacade(m,mode,cols,rows){
   const u={uGridC:{value:new THREE.Vector2(cols,rows)}};
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
-    Object.assign(sh.uniforms,u);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;')
+    Object.assign(sh.uniforms,u,GLASS_U);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;\n'+GLASS_GLSL)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   vec2 cell=vUv*uGridC, ci=floor(cell), cf=fract(cell);
@@ -7838,8 +7906,9 @@ function crispFacade(m,mode,cols,rows){
     vec2 aw=fw*0.75+1e-4;
     float fade=1.0-smoothstep(0.1,0.16,pxs);
     vec4 lc=texture2D(emissiveMap,(ci+0.5)/uGridC); lc.rgb=emissiveMapTexelToLinear(lc).rgb;
-    float on=max(lc.r,max(lc.g,lc.b)); vec3 light=on>0.05?lc.rgb/on:vec3(0.0);
+    float on=max(lc.r,max(lc.g,lc.b)); vec3 light=winLive(ci,on>0.05?lc.rgb/on:vec3(0.0),on); on=max(on,step(0.1,light.r)*0.6);
     float fres=pow(1.0-abs(dot(normalize(-vViewPosition),normal)),3.0);
+    vec4 hr=heliReflect(-vViewPosition,normal);
     vec3 sky=vec3(0.06,0.065,0.08);
     #ifdef USE_FOG
     sky=fogColor;
@@ -7856,7 +7925,7 @@ function crispFacade(m,mode,cols,rows){
       col=mix(mlc,vec3(0.03,0.035,0.04),spnd);
       col=mix(col,vec3(0.02,0.025,0.03),win);
       float depthG=0.55+0.45*cf.y;                                         // ceiling light falls off toward the floor
-      em=(light*emissive*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres))*win + sky*0.05*spnd;
+      em=(light*max(emissive,vec3(0.35))*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres)*(1.0-hr.a*0.9)+hr.rgb)*win + sky*0.05*spnd;
     }else{
       vec2 lo=vec2(0.14,0.42), hi=vec2(0.86,0.84);
       vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); win=s1.x*s1.y;
@@ -7871,7 +7940,8 @@ function crispFacade(m,mode,cols,rows){
       col=mix(col,vec3(0.02,0.022,0.025),win);
       col=mix(col,vec3(0.06),split);
       col=mix(col,vec3(0.10,0.10,0.11),max(railTop,bal*0.85));
-      em=(light*emissive*1.4*step(0.05,on)+sky*(0.08+0.5*fres))*win*(1.0-split);
+      float tv=step(gh1(ci+3.3),0.05)*(0.5+0.5*sin(uT*7.0+gh1(ci)*20.0)*sin(uT*2.3));   // a television flickering
+      em=(light*max(emissive,vec3(0.35))*1.4*step(0.05,on)+vec3(0.25,0.4,0.9)*tv*0.5+sky*(0.08+0.5*fres)*(1.0-hr.a*0.9)+hr.rgb)*win*(1.0-split);
     }
     diffuseColor.rgb=mix(diffuseColor.rgb,col,fade);
     totalEmissiveRadiance=mix(totalEmissiveRadiance,em,fade);
@@ -8286,7 +8356,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const grp=new THREE.Group();
   const wallMat=new THREE.MeshStandardMaterial({color:0x5a5f57,roughness:0.92,metalness:0.04});
   // moat: dark reflective water ring
-  const moat=new THREE.Mesh(new THREE.RingGeometry(innerR,outerR,72),new THREE.MeshStandardMaterial({color:0x0a2436,roughness:0.14,metalness:0.45,emissive:0x03101c,emissiveIntensity:0.55}));
+  const moat=new THREE.Mesh(new THREE.RingGeometry(innerR,outerR,72),new THREE.MeshStandardMaterial({color:0x0c1a16,roughness:0.22,metalness:0.2,envMapIntensity:0.28,emissive:0x020806,emissiveIntensity:0.5})   /* dark still moat water — it was mirroring the dusk sky as a pale band */);
   moat.rotation.x=-Math.PI/2;moat.position.set(cx,0.12,cz);grp.add(moat);
   // inner grounds (grass), lifted just above the streets it covers
   const green=new THREE.Mesh(new THREE.CircleGeometry(innerR+3,56),grassMat);
@@ -10094,7 +10164,7 @@ fb.addEventListener('pointerdown',e=>{fireHeld=true;e.preventDefault();});
 fb.addEventListener('pointerup',()=>fireHeld=false);
 fb.addEventListener('pointercancel',()=>fireHeld=false);
 document.getElementById('camBtn').addEventListener('pointerdown',e=>{cockpitMode=!cockpitMode;e.preventDefault();});
-const HELP_FLY='STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK';
+const HELP_FLY='STEER WASD / ARROWS · FIRE SPACE · WEAPON 1-4 · C COCKPIT · X HOVER · E ENTER VENUE ON THE PAD · F TALK · H FULL HUD';
 const HELP_FOOT='ON FOOT — ARROWS walk and turn · MOUSE look · F talk at the counter · X leave';
 { // on-foot buttons drive the same keys the keyboard does, so there is one code path
   const tb=document.getElementById('talkBtn'), xb=document.getElementById('exitBtn');
@@ -10954,6 +11024,13 @@ const DPR=()=>Math.min(devicePixelRatio||1,2);   // 3x meant clearing+redrawing 
 // laptop was unreadable; the canvas HUD is drawn in logical units and blown up by this,
 // and the DOM panels read the same factor through the --hs custom property.
 let HUD_S=1;
+// H toggles between the light HUD (default: open view, things appear when they matter)
+// and the full instrument HUD (panels, tapes, checklist and roster always on).
+let HUD_FULL=false;
+addEventListener('keydown',e=>{if(e.code==='KeyH'&&!e.repeat){HUD_FULL=!HUD_FULL;document.body.classList.toggle('hud-min',!HUD_FULL);
+  if(typeof flashMsg==='function')flashMsg(HUD_FULL?'FULL HUD':'LIGHT HUD',UI.ui);}});
+document.body.classList.add('hud-min');
+const _flashT={};function hudPeek(cls,ms){document.body.classList.add(cls);clearTimeout(_flashT[cls]);_flashT[cls]=setTimeout(()=>document.body.classList.remove(cls),ms);}
 const FLT_H=92, ARM_H=146, COL_W=216;   // fixed panel heights: nothing below them ever jumps
 function sizeHUD(){
   HUD_S=Math.max(0.9,Math.min(1.25,Math.min(W()/1280,H()/780)));
@@ -10973,10 +11050,10 @@ sizeHUD();
 // from here. No literal colours below this line.
 // ============================================================================
 const UI={
-  ui:'#5ff2ff', hi:'#e8feff',
-  dim:'rgba(95,242,255,.46)', faint:'rgba(95,242,255,.15)',
-  warn:'#ffc23a', alert:'#ff3b52', ok:'#46e08a',
-  fill:'rgba(1,12,18,.74)', solid:'rgba(1,12,18,.92)', line:'rgba(95,242,255,.38)',
+  ui:'#f1ede2', hi:'#ffffff',
+  dim:'rgba(241,237,226,.46)', faint:'rgba(241,237,226,.15)',
+  warn:'#ffb43a', alert:'#ff4d4d', ok:'#7ddf8a',
+  fill:'rgba(10,12,14,.52)', solid:'rgba(10,12,14,.84)', line:'rgba(241,237,226,.38)',
   ink:'#00090e',                                     // scanner ground
   font:'"Barlow Semi Condensed","Arial Narrow",sans-serif',
   micro:10, label:11, body:13, val:16,               // the four type sizes (logical px, x HUD_S on screen)
@@ -11056,7 +11133,7 @@ function drawTacMap(now){
   tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4-FOOT);tacC.clip();
 
   // reference grid — wide and very faint; the range rings carry distance, not this
-  tacC.strokeStyle='rgba(95,242,255,.07)';tacC.lineWidth=1;
+  tacC.strokeStyle='rgba(241,237,226,.07)';tacC.lineWidth=1;
   for(let g=0;g<=TAC;g+=22){
     tacC.beginPath();tacC.moveTo(g,0);tacC.lineTo(g,TAC);tacC.stroke();
     tacC.beginPath();tacC.moveTo(0,g);tacC.lineTo(TAC,g);tacC.stroke();
@@ -11065,7 +11142,7 @@ function drawTacMap(now){
   // ---- world layer: north-up, rotated by yaw so the heli icon always points up ----
   tacC.translate(C,C);tacC.rotate(yaw);
   // roads
-  tacC.strokeStyle='rgba(95,242,255,.20)';
+  tacC.strokeStyle='rgba(241,237,226,.20)';
   laneRoads.z.concat(ROADS_Z.filter(r=>r.major)).forEach(r=>{
     const dz=(r.p-heli.position.z)*scale;if(Math.abs(dz)>TAC)return;
     tacC.lineWidth=r.major?2:1;tacC.beginPath();tacC.moveTo(-TAC,dz);tacC.lineTo(TAC,dz);tacC.stroke();
@@ -11076,7 +11153,7 @@ function drawTacMap(now){
   });
   // avenues (curving) and the Yamanote loop with its stations
   const polyTSD=(pts,closed)=>{tacC.beginPath();pts.forEach((p,i)=>{const x=(p[0]-heli.position.x)*scale,z=(p[1]-heli.position.z)*scale;i?tacC.lineTo(x,z):tacC.moveTo(x,z);});if(closed)tacC.closePath();tacC.stroke();};
-  tacC.strokeStyle='rgba(95,242,255,.34)';ARTERIALS.forEach(A=>{tacC.lineWidth=Math.max(2,A.w*scale*0.8);polyTSD(A.pts,false);});
+  tacC.strokeStyle='rgba(241,237,226,.34)';ARTERIALS.forEach(A=>{tacC.lineWidth=Math.max(2,A.w*scale*0.8);polyTSD(A.pts,false);});
   tacC.strokeStyle='rgba(154,205,50,.75)';tacC.lineWidth=2;polyTSD(YAMANOTE,true);
   tacC.font='bold 7px '+UI.font;tacC.textAlign='center';
   YAMANOTE_ST.forEach(S=>{const x=(S.p[0]-heli.position.x)*scale,z=(S.p[1]-heli.position.z)*scale;if(Math.abs(x)>TAC/2+8||Math.abs(z)>TAC/2+8)return;
@@ -11096,7 +11173,7 @@ function drawTacMap(now){
     tacC.strokeStyle='rgba(70,224,138,.22)';tacC.lineWidth=1;tacC.beginPath();tacC.arc(pdx,pdz,pr,0,7);tacC.stroke();
   }
   // building footprints
-  tacC.fillStyle='rgba(95,242,255,.11)';
+  tacC.fillStyle='rgba(241,237,226,.11)';
   buildings.forEach(b=>{
     const dx=(b.m.position.x-heli.position.x)*scale,dz=(b.m.position.z-heli.position.z)*scale;
     if(Math.abs(dx)>C||Math.abs(dz)>C)return;
@@ -11173,12 +11250,12 @@ function drawTacMap(now){
   // ---- fixed overlay: rings, sweep, bezel, own-ship ----
   tacC.save();tacC.beginPath();tacC.rect(2,2,TAC-4,TAC-4-FOOT);tacC.clip();
   // range rings — the primary distance cue, so a step above the grid in weight
-  tacC.strokeStyle='rgba(95,242,255,.26)';tacC.lineWidth=1;
+  tacC.strokeStyle='rgba(241,237,226,.26)';tacC.lineWidth=1;
   [TAC*0.17,TAC*0.31,TAC*0.45].forEach(r=>{tacC.beginPath();tacC.arc(C,C,r,0,7);tacC.stroke();});
   // sweep — a soft turquoise wedge, the one moving element
   const sweep=(now/2600)%(Math.PI*2);
   const sg=tacC.createLinearGradient(C,C,C+Math.cos(sweep)*C,C+Math.sin(sweep)*C);
-  sg.addColorStop(0,'rgba(95,242,255,0)');sg.addColorStop(1,'rgba(95,242,255,.45)');
+  sg.addColorStop(0,'rgba(241,237,226,0)');sg.addColorStop(1,'rgba(241,237,226,.45)');
   tacC.strokeStyle=sg;tacC.lineWidth=2;
   tacC.beginPath();tacC.moveTo(C,C);tacC.lineTo(C+Math.cos(sweep)*C,C+Math.sin(sweep)*C);tacC.stroke();
   tacC.restore();
@@ -11440,14 +11517,37 @@ function drawHUD(now){
   hudX.moveTo(fpx,fpy-4);hudX.lineTo(fpx,fpy-8);hudX.stroke();
 
   // ---------------- CENTRE: tapes + heading ----------------
-  const tapeH=compact?Math.min(150,h*0.30):Math.min(190,h*0.34);
-  const tapeOff=compact?Math.max(84,w*0.17):118;   // narrow screens: keep tapes clear of the buttons
-  tape(cx-tapeOff,cy,tapeH,spdK,20,'KPH','L',null);
-  tape(cx+tapeOff,cy,tapeH,alt,20,'ALT M','R',20);
-  headingTape(cx,M+18,Math.min(440,w*0.5),hdg);
+  const full=HUD_FULL;
+  if(full){
+    const tapeH=compact?Math.min(150,h*0.30):Math.min(190,h*0.34);
+    const tapeOff=compact?Math.max(84,w*0.17):118;   // narrow screens: keep tapes clear of the buttons
+    tape(cx-tapeOff,cy,tapeH,spdK,20,'KPH','L',null);
+    tape(cx+tapeOff,cy,tapeH,alt,20,'ALT M','R',20);
+    headingTape(cx,M+18,Math.min(440,w*0.5),hdg);
+  }else{
+    // LIGHT HUD: the flying view stays open. Speed and altitude as two quiet numbers either side of
+    // the reticle, heading as a single figure, and a thin status strip in each top corner.
+    hudX.save();hudX.shadowColor='rgba(0,0,0,.65)';hudX.shadowBlur=4;
+    hudX.font=T(15,true);hudX.fillStyle=UI.ui;
+    hudX.textAlign='right';hudX.fillText(String(spdK),cx-46,cy+5);
+    hudX.textAlign='left';hudX.fillStyle=alt<20?UI.warn:UI.ui;hudX.fillText(String(Math.round(alt)),cx+46,cy+5);
+    hudX.font=T(9);hudX.fillStyle=UI.dim;hudX.textAlign='right';hudX.fillText('KPH',cx-46,cy+16);hudX.textAlign='left';hudX.fillText('M',cx+46,cy+16);
+    hudX.textAlign='center';hudX.font=T(13,true);hudX.fillStyle=UI.ui;hudX.fillText(String(Math.round(hdg)).padStart(3,'0')+'°',cx,M+14);
+    // top-left: clock · score · kills
+    hudX.textAlign='left';hudX.font=T(12,true);hudX.fillStyle=UI.ui;hudX.fillText(clockText(),M+2,M+12);
+    hudX.font=T(12);hudX.fillStyle=UI.dim;hudX.fillText(String(score).padStart(5,' ')+' PTS · '+kills+' KILLS'+(mult>1?'  x'+mult.toFixed(1):''),M+48,M+12);
+    // top-right: selected weapon + ammo, hull as a hairline
+    const wn=['MINIGUN','HYDRA 70','HELLFIRE','NAPALM'][wpn], am=ammo[wpn]===Infinity?'∞':String(ammo[wpn]);
+    hudX.textAlign='right';hudX.font=T(13,true);hudX.fillStyle=ammo[wpn]<=0?UI.alert:UI.warn;hudX.fillText(wn+'  '+am,w-M-2,M+12);
+    const hcol=hp>60?UI.ui:hp>30?UI.warn:UI.alert, bw=120;
+    hudX.shadowBlur=0;hudX.fillStyle='rgba(0,0,0,.35)';hudX.fillRect(w-M-bw,M+19,bw,3);
+    hudX.fillStyle=hcol;hudX.fillRect(w-M-bw,M+19,bw*Math.max(0,hp)/100,3);
+    hudX.font=T(9);hudX.fillStyle=UI.dim;hudX.fillText('HULL',w-M-bw-6,M+23);
+    hudX.restore();hudX.textAlign='left';
+  }
 
   // ---------------- TOP-LEFT: flight status ----------------
-  if(!cockpitMode){
+  if(!cockpitMode&&full){
     const pw=compact?190:COL_W, ph=FLT_H;
     hudPanel(M,M,pw,ph,compact?'FLIGHT':'FLIGHT · '+pilotName.toUpperCase().slice(0,10));
     hudX.font=T(UI.label,true);hudX.textAlign='right';
@@ -11489,7 +11589,7 @@ function drawHUD(now){
   }
 
   // ---------------- TOP-RIGHT: armament ----------------
-  if(!cockpitMode){
+  if(!cockpitMode&&full){
     const pw=compact?170:COL_W, px=w-M-pw, py=M;
     const rowH=18;
     const ph=compact?30+4*rowH+40+(guidedWpn?16:0):ARM_H;
@@ -13090,6 +13190,12 @@ function updateGuide(){
       });
     }
     if(html!==_stepsHtml){st.innerHTML=html;_stepsHtml=html;}
+    if(g!==window.__lastG){window.__lastG=g;hudPeek('steps-flash',6500);}
+    const ol=document.getElementById('objLine');
+    if(ol){const cur=g===6?'OPERATION COMPLETE':(['FLY TO '+v.name,'LAND ON THE PAD','GO INSIDE','TALK TO THE OWNER','HOIST '+(who?who.call:''),'DROP AT AN LZ'][g]||'');
+      const dd=g===0&&dist?dist+' m':g===5&&ship?ship+' m':'';
+      const oh='<i>'+(Math.min(stage,VENUES.length-1)+1)+'/'+VENUES.length+'</i>'+cur+(dd?'<em>'+dd+'</em>':'');
+      if(ol.__h!==oh){ol.innerHTML=oh;ol.__h=oh;}}
     st.style.display=gameOver&&!missionDone?'none':'block';
   }
   // ---- action prompt (flight only; the interior sets its own below) ----
@@ -13430,7 +13536,7 @@ function updateCrewRescue(dt){
     c.aboard=true;aboard.push(c);
     if(c.marker){scene.remove(c.marker);c.marker=null;}
     winch.crew=null;winch.t=0;winch.line.visible=false;winch.glow.intensity=0;
-    crewBoardT=performance.now();crewBoardWho=c;
+    crewBoardT=performance.now();crewBoardWho=c;hudPeek('crew-flash',7000);
     setTimeout(()=>{if(!gameOver&&aboard.length)startInterception();},2200);   // the sky answers
     flashMsg(c.call+' ABOARD — '+c.perk,UI.ok);
     const BUDDY={DUSTY:'TOOK YOU LONG ENOUGH, CHIEF. I OWE YOU A BEER.',SPARKS:'HELL YEAH! GIMME THE DOOR GUN.',
@@ -13461,7 +13567,7 @@ function updateCrewDelivery(){
   window.__deckState=(d>30)?null:(!low?(D.ship?'DESCEND TO THE DECK':'DESCEND TO THE LZ'):!slow?'SLOW DOWN':d>R?'CENTRE OVER THE H':'SET DOWN');
   if(d<R&&low&&slow){
     aboard.forEach(c=>{c.rescued=true;c.aboard=false;});
-    const n=aboard.length;aboard=[];
+    const n=aboard.length;aboard=[];hudPeek('crew-flash',7000);
     addScore(2500*n);
     flashMsg(n+' CREW DELIVERED  +'+(2500*n),UI.warn);
     window.__deckState=null;
@@ -13503,7 +13609,7 @@ ov.innerHTML=`
         <div class="bf-step"><i>02</i><div><b>LAND ON THE PAD · <kbd>E</kbd> GO INSIDE</b><span>Walk to the counter, <kbd>F</kbd> to talk. The owner knows where your crew is.</span></div></div>
         <div class="bf-step"><i>03</i><div><b>HOVER LOW &amp; SLOW TO HOIST</b><span>Four seconds over a hostile street. Drift and the cable pays out.</span></div></div>
         <div class="bf-step"><i>04</i><div><b>DROP THEM AT AN LZ</b><span>Any rooftop helideck (green H) or the Navy ship. Gunships launch the moment someone is aboard.</span></div></div>
-        <div class="bf-keys"><kbd>W A S D</kbd> fly · <kbd>SPACE</kbd> fire · <kbd>1-4</kbd> weapon · <kbd>X</kbd> hover · <kbd>C</kbd> cockpit</div>
+        <div class="bf-keys"><kbd>W A S D</kbd> fly · <kbd>SPACE</kbd> fire · <kbd>1-4</kbd> weapon · <kbd>X</kbd> hover · <kbd>C</kbd> cockpit · <kbd>H</kbd> full HUD</div>
       </div>
       <div class="bf-crew">
         <div class="bf-h">MISSING · 5</div>
@@ -14116,6 +14222,9 @@ function loop(now){
     pedBodyMesh.visible=pedHeadMesh.visible=!window.__pedHidden;
     // pedestrians: sidewalk walkers + crossing walkers, animated via instance-matrix updates (cheap; 0 extra draw calls)
     PED_TIME.value=now*0.001;
+    GLASS_U.uT.value=now*0.001;GLASS_U.uHeliPos.value.copy(heli.position);
+    {const e=heli.matrixWorld.elements;GLASS_U.uHeliX.value.set(e[0],e[1],e[2]).normalize();GLASS_U.uHeliY.value.set(e[4],e[5],e[6]).normalize();GLASS_U.uHeliZ.value.set(e[8],e[9],e[10]).normalize();}
+    GLASS_U.uStrobe.value=(now%1300)<90?1:0;
     if(peds.length&&!window.__pedHidden){
       const pdum=window.__pedDummy||(window.__pedDummy=new THREE.Object3D());
       for(let i=0;i<peds.length;i++){
@@ -14143,6 +14252,9 @@ function loop(now){
       cam.lookAt(heli.position.clone().add(fwd.clone().multiplyScalar(10)));
     }
     cam.position.y+=Math.sin(now/28)*0.03;
+    { // sense of speed: the lens opens a little as you push the throttle, eases back in the hover
+      const thr=window.__throttle!==undefined?window.__throttle:1, fv=(cockpitMode?66:62)+thr*10;
+      if(Math.abs(cam.fov-fv)>0.05){cam.fov+=(fv-cam.fov)*Math.min(1,dt*2.5);cam.updateProjectionMatrix();} }
     if(shake>0){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake;}
     sky.position.copy(cam.position);
     updateTOD(dt,now);
