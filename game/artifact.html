@@ -217,12 +217,11 @@
     #actPrompt .a { font-size:15px; } #actPrompt .key { font-size:16px; }
   }
   /* ---- MISSION BRIEFING (start / game-over screen) ---- */
-  #brief { position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; overflow:auto;
-    padding:24px 16px; color:var(--ui-hi); font-family:var(--f); pointer-events:auto;
-    background:radial-gradient(ellipse at 50% 45%, rgba(2,10,14,.62), rgba(2,6,9,.93) 75%),
-               repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px); }
+  #brief { position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:flex-start; overflow:auto;
+    padding:24px 16px 24px 3vw; color:var(--ui-hi); font-family:var(--f); pointer-events:auto;
+    background:linear-gradient(90deg, rgba(2,8,11,.88) 0%, rgba(2,8,11,.6) 38%, rgba(2,8,11,0) 62%); }
   #brief, #brief * { touch-action:pan-y; }   /* the briefing scrolls on phones */
-  .bf-sheet { width:min(920px,100%); margin:auto; background:rgba(1,12,18,.86); border:1px solid var(--ui-line);
+  .bf-sheet { width:min(560px,100%); margin:auto 0; background:rgba(1,12,18,.86); border:1px solid var(--ui-line);
     box-shadow:0 0 0 1px rgba(0,0,0,.6), 0 30px 80px rgba(0,0,0,.6); position:relative; }
   .bf-sheet::before,.bf-sheet::after { content:''; position:absolute; width:14px; height:14px; border:2px solid var(--ui); }
   .bf-sheet::before { left:-1px; top:-1px; border-right:none; border-bottom:none; }
@@ -237,9 +236,18 @@
     text-align:center; transform:rotate(-7deg); opacity:.9; box-shadow:inset 0 0 0 3px rgba(200,30,42,.25); }
   .bf-sit { padding:6px 26px 16px; font-size:15px; line-height:1.55; color:#cfe6ea; max-width:780px; }
   .bf-sit b { color:#fff; }
-  .bf-cols { display:grid; grid-template-columns:1.15fr 1fr; gap:0; border-top:1px solid var(--ui-faint); border-bottom:1px solid var(--ui-faint); }
+  .bf-cols { display:grid; grid-template-columns:1fr; gap:0; border-top:1px solid var(--ui-faint); border-bottom:1px solid var(--ui-faint); }
   .bf-steps,.bf-crew { padding:16px 26px 18px; }
-  .bf-crew { border-left:1px solid var(--ui-faint); }
+  .bf-crew { border-top:1px solid var(--ui-faint); }
+  .bf-cards { grid-template-columns:repeat(5,minmax(0,1fr)) !important; gap:5px !important; }
+  .bf-card { flex-direction:column; gap:3px !important; padding:5px 2px 6px !important; min-width:0; text-align:center; }
+  .bf-card img { width:44px !important; height:44px !important; }
+  .bf-card b { font-size:12px !important; letter-spacing:.02em; } .bf-card span { display:block; margin:0 !important; font-size:10px !important; }
+  .bf-card em { font-size:10px !important; } .bf-card u { margin:2px 0 0 !important; }
+  .bf-steps,.bf-crew { padding-top:12px !important; padding-bottom:12px !important; }
+  .bf-step { padding:4px 0 !important; } .bf-sit { font-size:14px !important; padding-bottom:12px !important; }
+  .bf-head { padding-top:16px !important; } .bf-title { font-size:clamp(28px,3.6vw,44px) !important; }
+  .bf-launch { flex-wrap:wrap; } .bf-meta { margin-left:0; width:100%; }
   .bf-h { font-size:12px; font-weight:700; letter-spacing:.2em; color:var(--ui); margin-bottom:10px; }
   .bf-step { display:flex; gap:12px; align-items:flex-start; padding:7px 0; }
   .bf-step i { font-style:normal; font:700 13px/1 'Courier New',monospace; color:#001218; background:var(--ui);
@@ -294,6 +302,25 @@
     .bf-hanko { width:60px; height:60px; font-size:19px; } .bf-meta { margin-left:0; width:100%; }
     .bf-class span:last-child { display:none; }
   }
+  body.in-menu .tbtn, body.in-menu #tacwrap, body.in-menu #help, body.in-menu #cmdStack, body.in-menu #hud,
+  body.in-menu #steps, body.in-menu #intelLog, body.in-menu #actPrompt, body.in-menu #stick-base, body.in-menu #stick-knob { display:none !important; }
+  /* ---- MEDAL CEREMONY ---- */
+  #medal { position:absolute; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;
+    background:radial-gradient(ellipse at 50% 40%, rgba(10,16,30,.7), rgba(2,4,8,.95)); pointer-events:auto; touch-action:pan-y; }
+  @keyframes mdIn { from { opacity:0; } to { opacity:1; } }
+  .md-card { width:min(560px,100%); text-align:center; color:#efe8d6; font-family:Georgia,'Times New Roman',serif; padding:22px 26px 20px;
+    background:linear-gradient(#1a1f2a,#11141b); border:1px solid #8a7444; box-shadow:0 0 0 4px #11141b, 0 0 0 5px #5a4a2a, 0 30px 80px rgba(0,0,0,.7); }
+  .md-top { font:700 12px/1 'Courier New',monospace; letter-spacing:.24em; color:#c9a85e; }
+  #mdCross { width:150px; height:188px; margin:12px auto 4px; display:block; filter:drop-shadow(0 6px 10px rgba(0,0,0,.6)); }
+  .md-name { font-size:21px; letter-spacing:.08em; color:#f3d48a; margin-bottom:10px; }
+  .md-cite { font-size:14.5px; line-height:1.6; font-style:italic; color:#ddd5c2; }
+  .md-cite b { font-style:normal; color:#fff; letter-spacing:.04em; }
+  .md-crew { display:flex; justify-content:center; gap:8px; margin:14px 0 8px; flex-wrap:wrap; }
+  .md-crew span { display:flex; flex-direction:column; align-items:center; gap:2px; font:700 10px/1.1 var(--f); color:#c9d4c0; }
+  .md-crew img { width:40px; height:40px; image-rendering:pixelated; }
+  .md-crew i { font-style:normal; color:#46e08a; font-size:9px; letter-spacing:.1em; }
+  .md-stats { font:600 13px var(--f); color:#9fb0b8; margin-bottom:12px; } .md-stats b { color:#fff; }
+  #mdClose { pointer-events:auto; cursor:pointer; border:1px solid #c9a85e; background:#2a2414; color:#f3d48a; font:700 15px var(--f); letter-spacing:.2em; padding:10px 30px; }
   /* ---- NEON TITLE WORDMARK ---- */
   .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
   .logo-main { font-family:'Arial Black',Impact,sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; font-style:italic;
@@ -7903,10 +7930,10 @@ const VENUE_CLEAR=15; // small plot: the pad is tucked between buildings, a tigh
 // Where the five crew are waiting. Declared here so the city keeps a shaft open over
 // each one — tight enough that the descent is still a squeeze, open enough to survive.
 const CREW_SPOTS=[
-  {x:-360,z: 120},  // KAZE  — Shibuya
-  {x: 250,z:-300},  // MIKO  — Akihabara backstreets
+  {x:-360,z: 120},  // DUSTY  — Shibuya
+  {x: 250,z:-300},  // SPARKS  — Akihabara backstreets
   {x:-520,z:-330},  // BULL  — Shinjuku tower feet
-  {x: 330,z: 300},  // REI   — Ginza / bayside
+  {x: 330,z: 300},  // ROSIE   — Ginza / bayside
   {x:-140,z: 420},  // DOC   — Minato waterfront
 ];
 const CREW_CLEAR=13;
@@ -9220,6 +9247,15 @@ const peds=[];
   pedBodyMesh.instanceMatrix.needsUpdate=true;pedHeadMesh.instanceMatrix.needsUpdate=true;
 }
 
+// rooftop-LZ buildings are chosen BEFORE the roof clutter goes on, so their roofs stay clear
+{
+  const cand=buildings.filter(B=>B.w>=12&&B.d>=12&&B.h>16&&B.h<70&&B.m.position.z<SEA_Z0-60&&Math.abs(B.m.position.x)<540&&Math.abs(B.m.position.z)<540
+    &&!VENUE_SPOTS.some(v=>Math.hypot(v.x-B.m.position.x,v.z-B.m.position.z)<70)
+    &&!CREW_SPOTS.some(v=>Math.hypot(v.x-B.m.position.x,v.z-B.m.position.z)<70));
+  const picked=[];
+  cand.sort(()=>Math.random()-0.5).forEach(B=>{if(picked.length<7&&picked.every(P=>Math.hypot(P.m.position.x-B.m.position.x,P.m.position.z-B.m.position.z)>260))picked.push(B);});
+  picked.forEach(B=>B.lz=true);window.__lzPick=picked;
+}
 // ROOFTOP SILHOUETTE — the critic's #1 building fix vs Ghostwire: Tokyo. The old pass added a tiny
 // dish/pipe on ~45% of roofs, so from altitude every building still read as a clean flat-topped box.
 // This adds PROMINENT silhouette-breakers — stair/elevator penthouse blocks (the biggest jag), the
@@ -9229,6 +9265,7 @@ const peds=[];
 const dummy=new THREE.Object3D();
 const HOUS=[],TANK=[],TLEG=[],ACU=[],MAST=[],MLED=[];
 buildings.forEach(b=>{
+  if(b.lz)return;                       // keep LZ roofs clear
   const bx=b.m.position.x,bz=b.m.position.z,by=b.h,bw=b.w,bd=b.d;
   const tall=by>24;
   // stair/elevator penthouse housing — the strongest silhouette break; taller on taller buildings
@@ -9584,6 +9621,12 @@ heli.position.set(0,45,120);scene.add(heli);
   // antennas + the wire-strike cutters an AH-64A carries above and below the cockpit
   bar(0,1.6,-2.6,0,1.95,-2.1,0.04,dk);bar(0,-0.55,-4.3,0,-0.95,-4.6,0.04,dk);
   [[-0.3,1.62,1.6],[0.3,1.62,1.4]].forEach(([x,y,z])=>bar(x,y-0.3,z,x,y+0.25,z+0.12,0.03,dk));
+  // 1989 subdued markings: black U.S. ARMY on the boom, serial on the fin
+  {const tx=(t,w,h,fs)=>tex((g,W2,H2)=>{g.clearRect(0,0,W2,H2);g.fillStyle='rgba(12,12,10,.88)';g.font=`bold ${fs}px Arial`;g.textAlign='center';g.textBaseline='middle';g.fillText(t,W2/2,H2/2);},w,h);
+   const army=new THREE.MeshStandardMaterial({map:tx('U.S. ARMY',512,96,72),transparent:true,roughness:0.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
+   const sn=new THREE.MeshStandardMaterial({map:tx('85-25398',256,64,40),transparent:true,roughness:0.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
+   [-1,1].forEach(sd=>{const a=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.45),army);a.position.set(sd*0.37,0.48,5.0);a.rotation.y=sd*Math.PI/2;a.rotation.x=0;heli.add(a);
+     const n2=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.3),sn);n2.position.set(sd*0.13,1.6,10.25);n2.rotation.y=sd*Math.PI/2;heli.add(n2);});}
   tailRotor.position.set(-0.42,2.55,11.05);     // AH-64 tail rotor sits on the LEFT of the fin
   navR.position.set(-2.95,0.48,0.35);navG.position.set(2.95,0.48,0.35);
   strobe.position.set(0,3.05,11.1);
@@ -10877,6 +10920,16 @@ function drawTacMap(now){
     tacC.fillText('H',0,0.5);
     tacC.restore();
   });
+  // rooftop LZs — green H squares; only in range ones fit the scope, the rest clamp to the edge when crew are aboard
+  (window.__LZs||[]).forEach(L=>{
+    const dx=(L.pos.x-heli.position.x)*scale,dz=(L.pos.z-heli.position.z)*scale;
+    if(!aboard.length&&(Math.abs(dx)>C-6||Math.abs(dz)>C-6))return;
+    const cl=Math.max(-C+6,Math.min(C-6,dx)),cd=Math.max(-C+6,Math.min(C-6,dz));
+    tacC.save();tacC.translate(cl,cd);tacC.rotate(-yaw);
+    tacC.strokeStyle=UI.ok;tacC.lineWidth=1.2;tacC.strokeRect(-4.5,-4.5,9,9);
+    tacC.fillStyle=UI.ok;tacC.font='bold 7px '+UI.font;tacC.textAlign='center';tacC.textBaseline='middle';tacC.fillText('H',0,0.5);
+    tacC.restore();
+  });
   // located crew still on the ground — green, the thing you're actually collecting
   CREW.forEach(c=>{
     if(!c.found||c.rescued||c.aboard)return;
@@ -11288,7 +11341,7 @@ function drawHUD(now){
   if(started&&!gameOver&&!missionDone){
     let tgt=null,label='',col=UI.ui;
     const kc=CREW.filter(c=>c.found&&!c.rescued&&!c.aboard);
-    if(aboard.length&&window.__navyShip){tgt=window.__navyShip.padPos.clone();label='NAVY SHIP';col=UI.ok;}
+    if(aboard.length){const D=nearestDrop();if(D){tgt=D.pos.clone();label=D.label;col=UI.ok;}}
     else if(kc.length){
       let bd=1e9;
       kc.forEach(c=>{const d=Math.hypot(heli.position.x-c.x,heli.position.z-c.z);if(d<bd){bd=d;tgt=new THREE.Vector3(c.x,3,c.z);label=c.id;}});
@@ -11668,30 +11721,30 @@ function endInterception(){
 // power curve of the night.
 // ============================================================================
 const CREW=[
-  {id:'KAZE', call:'KAZE',  name:'HAYASHI, A.', rank:'WO1',  rankJP:'准尉', role:'CO-PILOT',
+  {id:'DUSTY', call:'DUSTY',  name:'HAYES, J.',   rank:'WO1',  rankJP:'', role:'CO-PILOT',
    x:CREW_SPOTS[0].x, z:CREW_SPOTS[0].z,  found:false, rescued:false,
    perk:'AIRSPEED +18%',   perkNote:'takes the collective on straights',
-   face:{skin:'#e8c49b', hair:'#141014', visor:'#5ff2ff', helmet:'#2c3540', scar:false, brow:0.5},
+   face:{skin:'#efc9a8', hair:'#7a5230', visor:'#5ff2ff', helmet:'#3b4232', scar:false, brow:0.5, stache:false},
    where:'SHIBUYA — on a rooftop west of the river bend, south of the Palace.'},
-  {id:'MIKO', call:'MIKO',  name:'TANAKA, Y.',  rank:'SGT',  rankJP:'三曹', role:'GUNNER',
+  {id:'SPARKS', call:'SPARKS',  name:'MARTINEZ, R.',rank:'SGT',  rankJP:'', role:'GUNNER',
    x:CREW_SPOTS[1].x, z:CREW_SPOTS[1].z, found:false, rescued:false,
    perk:'RATE OF FIRE +30%', perkNote:'works the door gun so you can fly',
-   face:{skin:'#d8a97e', hair:'#20160f', visor:'#ff9ad0', helmet:'#3a2c34', scar:false, brow:0.9},
+   face:{skin:'#c69067', hair:'#1a120c', visor:'#ff9ad0', helmet:'#3b4232', scar:false, brow:0.9, stache:true},
    where:'AKIHABARA — north-east, in the electric-town backstreets by the expressway.'},
-  {id:'BULL', call:'BULL',  name:'OKADA, T.',   rank:'MSGT', rankJP:'曹長', role:'CREW CHIEF',
+  {id:'BULL', call:'BULL',  name:"O'BRIEN, T.", rank:'MSGT', rankJP:'', role:'CREW CHIEF',
    x:CREW_SPOTS[2].x, z:CREW_SPOTS[2].z, found:false, rescued:false,
    perk:'AMMO CAPACITY +50%', perkNote:'rebalances the racks mid-flight',
-   face:{skin:'#c99870', hair:'#2a2118', visor:'#ffc23a', helmet:'#3d3a2c', scar:true, brow:1.3},
+   face:{skin:'#f2c6a6', hair:'#a8481e', visor:'#ffc23a', helmet:'#3b4232', scar:true, brow:1.3, stache:true},
    where:'SHINJUKU — far north-west, at the foot of the skyscraper cluster.'},
-  {id:'REI',  call:'REI',   name:'NAKAMURA, S.',rank:'CPL',  rankJP:'士長', role:'MEDIC',
+  {id:'ROSIE',  call:'ROSIE',   name:'WASHINGTON, D.',rank:'CPL', rankJP:'', role:'MEDIC',
    x:CREW_SPOTS[3].x, z:CREW_SPOTS[3].z, found:false, rescued:false,
    perk:'HULL REPAIR 1.5/s',  perkNote:'patches the airframe as you fly',
-   face:{skin:'#f0d3b0', hair:'#3a2a1e', visor:'#46e08a', helmet:'#2c3a34', scar:false, brow:0.4},
+   face:{skin:'#7a4a30', hair:'#140c08', visor:'#46e08a', helmet:'#3b4232', scar:false, brow:0.4, stache:false},
    where:'GINZA/MINATO — south-east, near the bay-side avenues.'},
-  {id:'DOC',  call:'DOC',   name:'SHIMIZU, K.', rank:'SSGT', rankJP:'二曹', role:'ENGINEER',
+  {id:'DOC',  call:'DOC',   name:'KOWALSKI, K.',rank:'SSGT', rankJP:'', role:'ENGINEER',
    x:CREW_SPOTS[4].x, z:CREW_SPOTS[4].z, found:false, rescued:false,
    perk:'DAMAGE TAKEN -25%',  perkNote:'reroutes hydraulics around the hits',
-   face:{skin:'#dcb489', hair:'#151519', visor:'#b98aff', helmet:'#33303e', scar:true, brow:1.0},
+   face:{skin:'#f0caa8', hair:'#d8b46a', visor:'#b98aff', helmet:'#3b4232', scar:true, brow:1.0, stache:true},
    where:'MINATO — due south toward the waterfront, near Tokyo Tower.'},
 ];
 
@@ -11699,10 +11752,10 @@ const CREW=[
 // One place that answers "what is this crewman worth?". Read by the flight model,
 // the weapons and the damage path, so a perk is a real number, not flavour text.
 function hasCrew(id){const c=CREW.find(m=>m.id===id);return !!c&&(c.aboard||c.rescued);}
-function perkSpeed(){    return hasCrew('KAZE')?1.18:1; }
-function perkFireRate(){ return hasCrew('MIKO')?0.70:1; }   // multiplies weapon cooldown
+function perkSpeed(){    return hasCrew('DUSTY')?1.18:1; }
+function perkFireRate(){ return hasCrew('SPARKS')?0.70:1; }   // multiplies weapon cooldown
 function perkAmmoCap(){  return hasCrew('BULL')?1.5:1; }
-function perkRepair(){   return hasCrew('REI') ?1.5:0; }    // hull points per second
+function perkRepair(){   return hasCrew('ROSIE') ?1.5:0; }    // hull points per second
 function perkArmour(){   return hasCrew('DOC') ?0.75:1; }   // multiplies incoming damage
 
 // ---- CREW PORTRAITS ---------------------------------------------------------
@@ -11720,8 +11773,8 @@ function crewAvatar(c){
   const gr=g.createLinearGradient(0,0,0,S);
   gr.addColorStop(0,'rgba(95,242,255,.16)');gr.addColorStop(1,'rgba(0,0,0,.35)');
   g.fillStyle=gr;g.fillRect(0,0,S,S);
-  // shoulders / flight suit
-  g.fillStyle='#2b3a44';
+  // shoulders / Nomex flight suit, Army olive drab
+  g.fillStyle='#4a5038';
   g.beginPath();g.moveTo(S*0.10,S);g.quadraticCurveTo(S*0.5,S*0.62,S*0.90,S);g.closePath();g.fill();
   g.fillStyle='rgba(0,0,0,.25)';g.fillRect(S*0.30,S*0.90,S*0.40,3);       // collar seam
   // neck
@@ -11750,8 +11803,13 @@ function crewAvatar(c){
   g.fillStyle='#1a1418';
   g.fillRect(S*0.395,S*0.485,S*0.055,3);
   g.fillRect(S*0.55,S*0.485,S*0.055,3);
-  // mouth + optional scar
+  // mouth, 80s Army mustache, optional scar
   g.fillStyle='rgba(90,50,45,.75)';g.fillRect(S*0.455,S*0.555,S*0.09,2.5);
+  if(F.stache){g.fillStyle=F.hair;g.beginPath();g.moveTo(S*0.42,S*0.55);g.quadraticCurveTo(S*0.5,S*0.515,S*0.58,S*0.55);
+    g.lineTo(S*0.575,S*0.565);g.quadraticCurveTo(S*0.5,S*0.535,S*0.425,S*0.565);g.closePath();g.fill();}
+  // US flag shoulder patch on the OD flight suit
+  {const fx=S*0.12,fy=S*0.86,fw=S*0.17,fh=S*0.1;for(let k=0;k<7;k++){g.fillStyle=k%2?'#e8e4da':'#b22234';g.fillRect(fx,fy+k*fh/7,fw,fh/7+0.5);}
+   g.fillStyle='#3c3b6e';g.fillRect(fx,fy,fw*0.45,fh*0.55);}
   if(F.scar){g.strokeStyle='rgba(150,70,60,.8)';g.lineWidth=1.6;
     g.beginPath();g.moveTo(S*0.63,S*0.44);g.lineTo(S*0.60,S*0.55);g.stroke();}
   // boom mic
@@ -11787,12 +11845,12 @@ const VENUES=[
   {key:'sushi', name:'SUSHI KANDA',   jp:'鮨 かんだ',       x:VENUE_SPOTS[0].x, z:VENUE_SPOTS[0].z, visited:false,
    keeper:'THE ITAMAE', keeperJP:'大将',
    line:'The itamae wipes his hands, then draws on a napkin — a rooftop, west of the river bend.',
-   reveals:['KAZE'], reward:'CITY MAP + LEAD',
+   reveals:['DUSTY'], reward:'CITY MAP + LEAD',
    nextLine:'"Uogashi. The fish market. Ask for the old man on the ice — he hears everything off the harbour radio."'},
   {key:'fish',  name:'UOGASHI MARKET',jp:'魚河岸',          x:VENUE_SPOTS[1].x, z:VENUE_SPOTS[1].z, visited:false,
    keeper:'THE FISHMONGER', keeperJP:'魚屋',
    line:'The fishmonger has had the harbour band on all night. He knows which backstreet your gunner is in.',
-   reveals:['MIKO'], reward:'HYDRA + HELLFIRE RESUPPLY',
+   reveals:['SPARKS'], reward:'HYDRA + HELLFIRE RESUPPLY',
    nextLine:'"Denki-do, in Akihabara. The old man there builds scanners out of junk. He owes me."'},
   {key:'denki', name:'DENKI-DO 1989', jp:'電気堂',          x:VENUE_SPOTS[2].x, z:VENUE_SPOTS[2].z, visited:false,
    keeper:'THE OLD MAN', keeperJP:'店主',
@@ -11802,7 +11860,7 @@ const VENUES=[
   {key:'laund', name:'SENTAKU 24',    jp:'コインランドリー', x:VENUE_SPOTS[3].x, z:VENUE_SPOTS[3].z, visited:false,
    keeper:'THE LAUNDRESS', keeperJP:'女将',
    line:'She folds a flight suit she was never paid for. Your medic left it — and left word where she went.',
-   reveals:['REI'], reward:'HULL PATCH + LEAD',
+   reveals:['ROSIE'], reward:'HULL PATCH + LEAD',
    nextLine:'"Muramasa. The sword shop south-west. He kept your engineer out of the street — go, before they find him."'},
   {key:'sword', name:'MURAMASA TOKEN',jp:'刀剣 村正',       x:VENUE_SPOTS[4].x, z:VENUE_SPOTS[4].z, visited:false,
    keeper:'THE SWORDSMITH', keeperJP:'刀匠',
@@ -12663,6 +12721,37 @@ function buildVenueMarkers(){
   });
 }
 buildVenueMarkers();
+// ---------- ROOFTOP LZs: friendly helidecks on top of buildings across the city ----------
+// You don't have to fly every rescue out to the ship: drop crew on the nearest rooftop LZ,
+// where an Army team takes them off your hands. The ship stays the safest, biggest pad.
+window.__LZs=[];
+{
+  const deckMat=new THREE.MeshStandardMaterial({color:0x3a3d40,roughness:0.85,metalness:0.3});
+  const hTex=tex((g,w,h)=>{g.fillStyle='#2c3034';g.fillRect(0,0,w,h);
+    for(let i=0;i<900;i++){g.fillStyle=`rgba(0,0,0,${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,3,3);}
+    g.strokeStyle='#e8e4d8';g.lineWidth=10;g.strokeRect(14,14,w-28,h-28);
+    g.strokeStyle='#ffd23a';g.lineWidth=12;g.beginPath();g.arc(w/2,h/2,w*0.33,0,7);g.stroke();
+    g.fillStyle='#e8e4d8';g.font='bold 150px Arial';g.textAlign='center';g.textBaseline='middle';g.fillText('H',w/2,h/2+8);},256,256,true);
+  const padTopMat=new THREE.MeshStandardMaterial({map:hTex,roughness:0.8,metalness:0.1});
+  const lightMat=new THREE.MeshBasicMaterial({color:0x6dff8e});
+  const picked=(window.__lzPick||[]).filter(B=>buildings.indexOf(B)>=0);
+  picked.forEach((B,i)=>{
+    const g=new THREE.Group(),y=B.h+1.8,x=B.m.position.x,z=B.m.position.z;
+    const deck=new THREE.Mesh(new THREE.BoxGeometry(11,0.35,11),deckMat);deck.position.y=-0.18;g.add(deck);
+    const top=new THREE.Mesh(new THREE.PlaneGeometry(10.6,10.6),padTopMat);top.rotation.x=-Math.PI/2;top.position.y=0.005;g.add(top);
+    [[-5,-5],[5,-5],[-5,5],[5,5]].forEach(([lx,lz])=>{const leg=new THREE.Mesh(new THREE.BoxGeometry(0.3,1.8,0.3),deckMat);leg.position.set(lx,-0.9,lz);g.add(leg);});
+    for(let k=0;k<12;k++){const a=k/12*Math.PI*2;const l=new THREE.Mesh(new THREE.SphereGeometry(0.16,6,5),lightMat);l.position.set(Math.cos(a)*5.3,0.1,Math.sin(a)*5.3);g.add(l);}
+    const sock=new THREE.Mesh(new THREE.ConeGeometry(0.35,1.6,8,1,true),new THREE.MeshStandardMaterial({color:0xff7a1a,side:THREE.DoubleSide}));
+    sock.rotation.z=Math.PI/2;sock.position.set(5.2,2.2,5.2);g.add(sock);
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,2.4,6),deckMat);pole.position.set(6,1.2,5.2);g.add(pole);
+    g.position.set(x,y,z);scene.add(g);
+    window.__LZs.push({pos:new THREE.Vector3(x,y,z),label:'LZ '+'ABCDEFG'[i],g});
+  });
+}
+// every place you can hand crew over: the ship's pad and each rooftop LZ
+function dropSites(){const a=window.__LZs.slice();if(window.__navyShip)a.push({pos:window.__navyShip.padPos,label:'NAVY SHIP',ship:true});return a;}
+function nearestDrop(){let best=null,bd=1e9;dropSites().forEach(d=>{const k=Math.hypot(heli.position.x-d.pos.x,heli.position.z-d.pos.z);if(k<bd){bd=k;best=d;}});
+  if(best)best.dist=bd;return best;}
 refreshStageMarkers();
 // ---------- crew beacons in the city ----------
 const crewBeaconMat=new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
@@ -12706,7 +12795,7 @@ function renderIntelLog(){
 function missionHeadline(){
   if(missionDone)return 'OPERATION COMPLETE';
   if(deliverCountdown)return deliverCountdown;                 // timed delivery overrides
-  if(aboard.length)return 'FERRY '+aboard.length+' TO THE NAVY SHIP';
+  if(aboard.length)return 'DROP '+aboard.length+' AT A ROOFTOP LZ OR THE SHIP';
   const pend=stagePendingCrew();
   if(pend.length)return 'HOIST '+pend.map(c=>c.rank+' '+c.call).join(' & ');
   const v=activeVenue();
@@ -12715,7 +12804,7 @@ function missionHeadline(){
 }
 function objectiveText(){
   if(missionDone)return 'ALL CREW RECOVERED — OPERATION COMPLETE';
-  if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — SET DOWN ON THE NAVY SHIP IN THE BAY';
+  if(aboard.length)return 'CREW ABOARD ('+aboard.length+') — SET DOWN ON THE NEAREST ROOFTOP LZ (GREEN H) OR THE NAVY SHIP';
   const pend=stagePendingCrew();
   if(winch.crew)return 'HOISTING '+winch.crew.call+' — '+(winch.fail?winch.fail:'HOLD STEADY')+' ('+Math.round(winch.t/EXTRACT_TIME*100)+'%)';
   if(pend.length)return 'LEAD '+(stage+1)+'/'+VENUES.length+' — HOVER LOW AND SLOW OVER '+pend.map(c=>c.call).join(' & ')+' TO RUN THE HOIST';
@@ -12762,7 +12851,7 @@ function updateGuide(){
   const left=stagePendingCrew().filter(c=>!c.aboard);
   const who=(left[0]||aboard[0]);
   let ship=0;
-  if(window.__navyShip){const P=window.__navyShip.padPos;ship=Math.round(Math.hypot(heli.position.x-P.x,heli.position.z-P.z));}
+  {const D=nearestDrop();if(D)ship=Math.round(D.dist);}
   // ---- steps panel ----
   if(st){
     let html='';
@@ -12774,7 +12863,7 @@ function updateGuide(){
         ['GO INSIDE','E'],
         ['TALK TO THE OWNER','F'],
         [(winch.crew?'HOISTING ':'HOIST ')+(who?who.call:'THE CREW'), g===4?(winch.crew?Math.round(winch.t/EXTRACT_TIME*100)+'%':'LOW · SLOW'):''],
-        ['FLY TO THE NAVY SHIP', g===5&&ship?ship+' m':''],
+        ['DROP AT AN LZ OR THE SHIP', g===5&&ship?ship+' m':''],
       ];
       html='<div class="hd">LEAD '+(Math.min(stage,VENUES.length-1)+1)+'/'+VENUES.length+' · '+v.name+'</div>';
       rows.forEach((r,i)=>{
@@ -12798,7 +12887,7 @@ function updateGuide(){
     const d=Math.hypot(heli.position.x-who.x,heli.position.z-who.z);
     if(d<70){setAct('▼','HOVER OVER '+who.call,'stay under 24 m, almost stopped — hoist runs '+EXTRACT_TIME+'s');return;}
   }
-  if(window.__deckState){setAct('▼',window.__deckState,'stay over the deck to hand over the crew',window.__deckState!=='SET DOWN');return;}
+  if(window.__deckState){setAct('▼',window.__deckState,'set down on the H to hand over the crew',window.__deckState!=='SET DOWN');return;}
   setAct(null);
 }
 function setInteriorAct(key,a,sub){setAct(key,a,sub);}
@@ -12843,8 +12932,8 @@ const DIALOG={
     {who:'ITAMAE · 板前',t:'…irasshai. You have been flying all night, pilot. Sit.'},
     {who:'ITAMAE · 板前',t:'Two of your people came through my shop before the trouble started. I drew where they went.'},
     {who:'ITAMAE · 板前',t:'▶ RECEIVED: <span class="item">KANDA DISTRICT MAP</span> — their beacons are on your map now.',give:true},
-    {who:'ITAMAE · 板前',t:'<span class="place">KAZE</span> is on a rooftop in <span class="place">SHIBUYA</span> — west, past the bend in the river.'},
-    {who:'ITAMAE · 板前',t:'<span class="place">MIKO</span> went north-east to <span class="place">AKIHABARA</span>, the backstreets under the expressway.'},
+    {who:'ITAMAE · 板前',t:'<span class="place">DUSTY</span> is on a rooftop in <span class="place">SHIBUYA</span> — west, past the bend in the river.'},
+    {who:'ITAMAE · 板前',t:'<span class="place">SPARKS</span> went north-east to <span class="place">AKIHABARA</span>, the backstreets under the expressway.'},
     {who:'ITAMAE · 板前',t:'Go. Fly low over the green beacon and they will run to you. Bring them to the ship.'}
   ],
   fish:[
@@ -12852,7 +12941,7 @@ const DIALOG={
     {who:'FISHMONGER · 魚屋',t:'Two of your crew are out there, and the Black Dragon boys are looking for them too.'},
     {who:'FISHMONGER · 魚屋',t:'▶ RECEIVED: <span class="item">HARBOUR CHART + HYDRA/HELLFIRE RESUPPLY</span>',give:true},
     {who:'FISHMONGER · 魚屋',t:'<span class="place">BULL</span> is far north-west in <span class="place">SHINJUKU</span>, at the foot of the towers.'},
-    {who:'FISHMONGER · 魚屋',t:'<span class="place">REI</span> is south-east near the bay avenues, <span class="place">GINZA/MINATO</span> side.'},
+    {who:'FISHMONGER · 魚屋',t:'<span class="place">ROSIE</span> is south-east near the bay avenues, <span class="place">GINZA/MINATO</span> side.'},
     {who:'FISHMONGER · 魚屋',t:'Take the ordnance. You will need it before the night is done.'}
   ],
   denki:[
@@ -13126,7 +13215,9 @@ function updateCrewRescue(dt){
     crewBoardT=performance.now();crewBoardWho=c;
     setTimeout(()=>{if(!gameOver&&aboard.length)startInterception();},2200);   // the sky answers
     flashMsg(c.call+' ABOARD — '+c.perk,UI.ok);
-    comRadio('CREW: '+c.rank+' '+c.name+' IS ON THE HOIST. '+c.perkNote.toUpperCase()+'.');
+    const BUDDY={DUSTY:'TOOK YOU LONG ENOUGH, CHIEF. I OWE YOU A BEER.',SPARKS:'HELL YEAH! GIMME THE DOOR GUN.',
+      BULL:'KNEW YOU WOULDN\'T LEAVE ME, SIR. LET\'S GO HOME.',ROSIE:'I\'M OK. YOU\'RE BLEEDING OIL, I\'LL PATCH WHAT I CAN.',DOC:'THAT\'S ALL OF US. GET US OUTTA HERE, CHIEF.'};
+    comRadio(c.call+': '+(BUDDY[c.call]||'GOOD TO SEE YOU, CHIEF.'));
     applyCrewPerks();
     addScore(1500);
     renderIntelLog();
@@ -13144,13 +13235,13 @@ function applyCrewPerks(){
 // ---------- DELIVERY: set them down on the deck -----------------------------
 // Also no longer a fly-past: you have to actually come down onto the pad, slowly.
 function updateCrewDelivery(){
-  if(!aboard.length||!window.__navyShip)return;
-  const P=window.__navyShip.padPos;
-  const d=Math.hypot(heli.position.x-P.x,heli.position.z-P.z);
+  if(!aboard.length)return;
+  const D=nearestDrop(); if(!D)return;
+  const P=D.pos, d=D.dist, R=D.ship?15:7.5;
   const low=heli.position.y<P.y+9;
   const slow=winch.spd<16;
-  window.__deckState=(d>30)?null:(!low?'DESCEND TO THE DECK':!slow?'SLOW DOWN':'SET DOWN');
-  if(d<15&&low&&slow){
+  window.__deckState=(d>30)?null:(!low?(D.ship?'DESCEND TO THE DECK':'DESCEND TO THE LZ'):!slow?'SLOW DOWN':d>R?'CENTRE OVER THE H':'SET DOWN');
+  if(d<R&&low&&slow){
     aboard.forEach(c=>{c.rescued=true;c.aboard=false;});
     const n=aboard.length;aboard=[];
     addScore(2500*n);
@@ -13159,6 +13250,7 @@ function updateCrewDelivery(){
     endInterception();
     if(crewRemaining()===0){
       missionDone=true;
+      setTimeout(showMedal,3200);
       flashMsg('OPERATION COMPLETE — ALL CREW HOME',UI.ok);
       comRadio('COMMAND: EVERY LAST ONE OF THEM IS ON THE DECK. OUTSTANDING NIGHT, PILOT.');
       addScore(10000);
@@ -13180,19 +13272,19 @@ ov.id='brief';
 // and amber as the in-flight HUD so the briefing and the cockpit are one design.
 ov.innerHTML=`
   <div class="bf-sheet">
-    <div class="bf-class"><span>極秘 · TOP SECRET // CREW RECOVERY</span><span>JTF-東京 · 24 NOV 1989 · 18:35 JST</span></div>
+    <div class="bf-class"><span>★ U.S. ARMY · SECRET // PERSONNEL RECOVERY</span><span>CAMP ZAMA · 24 NOV 1989 · 18:35 JST</span></div>
     <div class="bf-head">
       <div class="bf-title"><small>OPERATION 黒龍 · BLACK DRAGON</small>ONE NIGHT IN TOKYO</div>
       <div class="bf-hanko">東京<br>一夜</div>
     </div>
-    <div class="bf-sit">AH-9 <b>RAVEN 2-1</b> went down over central Tokyo at 17:50. The crew bailed out and scattered across the city as it fell. The 黒龍会 syndicate runs the streets tonight and its gunships are already up. <b>Bring all five home to the Navy ship in the bay before the night is out.</b></div>
+    <div class="bf-sit">AH-64A <b>RAVEN 2-1</b> went down over central Tokyo at 17:50. Five of your crew are out there somewhere in the city, and the 黒龍会 syndicate's gunships are already up. Nobody's ordering you in. You're going anyway. <b>Leave no one behind.</b></div>
     <div class="bf-cols">
       <div class="bf-steps">
         <div class="bf-h">HOW IT WORKS</div>
         <div class="bf-step"><i>01</i><div><b>FLY TO THE MARKED SHOP</b><span>Follow the cyan beam. Five shops, one at a time.</span></div></div>
         <div class="bf-step"><i>02</i><div><b>LAND ON THE PAD · <kbd>E</kbd> GO INSIDE</b><span>Walk to the counter, <kbd>F</kbd> to talk. The owner knows where your crew is.</span></div></div>
         <div class="bf-step"><i>03</i><div><b>HOVER LOW &amp; SLOW TO HOIST</b><span>Four seconds over a hostile street. Drift and the cable pays out.</span></div></div>
-        <div class="bf-step"><i>04</i><div><b>SET DOWN ON THE NAVY SHIP</b><span>Gunships launch the moment someone is aboard.</span></div></div>
+        <div class="bf-step"><i>04</i><div><b>DROP THEM AT AN LZ</b><span>Any rooftop helideck (green H) or the Navy ship. Gunships launch the moment someone is aboard.</span></div></div>
         <div class="bf-keys"><kbd>W A S D</kbd> fly · <kbd>SPACE</kbd> fire · <kbd>1-4</kbd> weapon · <kbd>X</kbd> hover · <kbd>C</kbd> cockpit</div>
       </div>
       <div class="bf-crew">
@@ -13208,6 +13300,35 @@ ov.innerHTML=`
     <div class="bf-foot">leaderboard scores are shared with other players of this game</div>
   </div>`;
 document.body.appendChild(ov);
+// ---------- THE MEDAL: Distinguished Flying Cross, with a citation in the pilot's name ----------
+function showMedal(){
+  if(document.getElementById('medal'))return;
+  const m=document.createElement('div');m.id='medal';
+  const nm=(pilotName||'PILOT').toUpperCase();
+  m.innerHTML=`<div class="md-card">
+    <div class="md-top">★ DEPARTMENT OF THE ARMY ★</div>
+    <canvas id="mdCross" width="240" height="300"></canvas>
+    <div class="md-name">THE DISTINGUISHED FLYING CROSS</div>
+    <div class="md-cite">is awarded to <b>CW2 ${nm}</b>, Company B, 1st Battalion, 101st Aviation Regiment, for heroism while participating in aerial flight over Tokyo, Japan, on the night of 24 November 1989. Flying alone and under fire from hostile gunships, he located and personally recovered all five members of the downed aircraft RAVEN 2-1. His courage and airmanship reflect great credit upon himself, his unit, and the United States Army.</div>
+    <div class="md-crew">${CREW.map(c=>`<span><img src="${crewAvatarURL(c)}" alt="">${c.rank} ${c.call}<i>HOME</i></span>`).join('')}</div>
+    <div class="md-stats">SCORE <b>${score}</b> · KILLS <b>${kills}</b></div>
+    <button id="mdClose">CONTINUE</button></div>`;
+  document.body.appendChild(m);
+  const g=document.getElementById('mdCross').getContext('2d');
+  // ribbon: blue, white, red centre, white, blue (DFC pattern)
+  [['#1d3c8a',0,30],['#f2efe6',30,8],['#c8202c',38,24],['#f2efe6',62,8],['#1d3c8a',70,30]].forEach(([c,x,w])=>{g.fillStyle=c;g.fillRect(70+x*1.0,0,w*1.0,92);});
+  g.strokeStyle='rgba(0,0,0,.35)';g.strokeRect(70,0,100,92);
+  g.strokeStyle='#c9963e';g.lineWidth=5;g.beginPath();g.arc(120,104,11,0,7);g.stroke();   // suspension ring
+  // bronze cross pattée over a four-bladed propeller, rayed square behind
+  const cx=120,cy=186;const br=g.createLinearGradient(60,120,180,240);br.addColorStop(0,'#f0c878');br.addColorStop(.5,'#a8742e');br.addColorStop(1,'#e2b464');
+  g.fillStyle=br;g.strokeStyle='#5a3a12';g.lineWidth=2;
+  for(let i=0;i<36;i++){const a=i/36*Math.PI*2;g.beginPath();g.moveTo(cx,cy);g.lineTo(cx+Math.cos(a)*58,cy+Math.sin(a)*58);g.lineTo(cx+Math.cos(a+0.06)*58,cy+Math.sin(a+0.06)*58);g.fill();}
+  for(let k=0;k<4;k++){g.save();g.translate(cx,cy);g.rotate(k*Math.PI/2);g.beginPath();g.moveTo(-10,-14);g.lineTo(-24,-62);g.lineTo(24,-62);g.lineTo(10,-14);g.closePath();g.fill();g.stroke();g.restore();}
+  g.save();g.translate(cx,cy);g.rotate(Math.PI/4);for(let k=0;k<4;k++){g.rotate(Math.PI/2);g.beginPath();g.ellipse(0,-26,6,24,0,0,7);g.fillStyle='#d9a856';g.fill();g.stroke();}g.restore();
+  g.beginPath();g.arc(cx,cy,9,0,7);g.fillStyle='#8a5a1e';g.fill();g.stroke();
+  document.getElementById('mdClose').addEventListener('pointerdown',e=>{e.preventDefault();m.remove();});
+  sfx&&sfx(0.25,0.6,520);
+}
 const comboEl=document.createElement('div');
 comboEl.style.cssText='position:absolute;top:22%;left:50%;transform:translate(-50%,-50%);font-size:24px;font-weight:bold;letter-spacing:.12em;color:var(--ui-warn);text-shadow:0 0 14px var(--ui-warn);opacity:0;transition:opacity .25s;pointer-events:none;z-index:40;font-family:var(--f);';
 document.body.appendChild(comboEl);
@@ -13283,7 +13404,7 @@ function startRun(){
   saveMeta();
   resetRunState();
   gameOver=false;started=true;
-  ov.style.display='none';
+  ov.style.display='none';document.body.classList.remove('in-menu');
   {const hEl=document.getElementById('help');hEl.style.opacity=.65;clearTimeout(window.__helpT);window.__helpT=setTimeout(()=>{hEl.style.opacity=0;},12000);}
   startAudio();
   startWave();
@@ -13834,10 +13955,22 @@ function loop(now){
     // cinematic menu flythrough around the tower (real-game feel)
     if(_actKey)setAct(null);
     {const st=document.getElementById('steps');if(st&&st.style.display!=='none')st.style.display='none';}
-    const t=now/11000;
-    const cx=TOWER.x+Math.cos(t)*250, cz=TOWER.z+Math.sin(t)*250;
-    cam.position.lerp(new THREE.Vector3(cx,74+Math.sin(t*2.1)*30,cz),0.02);
-    cam.lookAt(TOWER.x,66,TOWER.z);
+    // the Apache in a hover over the city, three-quarter-side, slowly drifting round it —
+    // framed right of centre so the briefing on the left never covers it
+    const t=now/1000;
+    heli.visible=true;cockpitGroup.visible=false;
+    if(!document.body.classList.contains('in-menu'))document.body.classList.add('in-menu');
+    heli.position.set(0,46+Math.sin(t*0.9)*0.35,120);
+    heli.rotation.set(Math.sin(t*0.7)*0.025,0.35,Math.sin(t*0.5)*0.03,'YXZ');
+    rotor.rotation.y+=30*dt;tailRotor.rotation.x+=42*dt;
+    const ma=Math.PI*0.5+0.35+Math.sin(t*0.08)*0.55, mr=17;
+    const ctr=heli.position.clone().add(new THREE.Vector3(0,0.6,1.2));
+    cam.position.set(ctr.x+Math.sin(ma)*mr,ctr.y+2.6+Math.sin(t*0.11)*1.2,ctr.z+Math.cos(ma)*mr);
+    cam.lookAt(ctr);
+    if(innerWidth>720){ // shift the subject right: aim a little left of it
+      const side=new THREE.Vector3().subVectors(ctr,cam.position).cross(new THREE.Vector3(0,1,0)).normalize();
+      cam.lookAt(ctr.clone().addScaledVector(side,-5.5));
+    }
     sky.position.copy(cam.position);
     updateTOD(dt,now);
     window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
