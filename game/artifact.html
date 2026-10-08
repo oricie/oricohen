@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>TOKIO NEON — HELI RESCUE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <style>
   /* ============================================================================
      HUD DESIGN TOKENS — the single source of truth for the whole instrument set.
@@ -28,7 +28,8 @@
     --ui-line:   rgba(241,237,226,.38);     /* the one hairline border weight */
     --ui-glow:   0 0 6px rgba(241,237,226,.45);
     /* type — mono, uppercase, letterspaced. Four sizes, no more. */
-    --f: 'Barlow Semi Condensed','Arial Narrow',sans-serif;   /* condensed sans: far more legible than thin mono */
+    --f: 'Barlow Semi Condensed','Arial Narrow',sans-serif;
+    --tw: 'Courier Prime','Courier New',Courier,monospace;   /* IBM Selectric Courier: Army typing pool, 1989 */   /* condensed sans: far more legible than thin mono */
     --hs: 1;                               /* HUD scale, set from the viewport in sizeHUD() */
     --t-micro: calc(10px * var(--hs));     /* unit suffixes, sub-labels */
     --t-label: calc(11px * var(--hs));     /* field names, headers */
@@ -81,7 +82,7 @@
   #intelLog .cm { display:flex; flex-direction:column; align-items:center; gap:2px; flex:1 1 0; min-width:0;
     background:rgba(241,237,226,.05); border:1px solid var(--ui-faint); padding:2px; }
   #intelLog .cm.unk { opacity:.40; filter:grayscale(1); }      /* not yet located */
-  #intelLog .cm img { width:32px; height:32px; display:block; image-rendering:pixelated; }
+  #intelLog .cm img { width:32px; height:32px; display:block; }
   #intelLog .cmi { display:flex; flex-direction:column; align-items:center; line-height:1.1; }
   #intelLog .cmi b { font-size:10px; letter-spacing:.04em; }
   #intelLog .rl, #intelLog .pk { display:none; }               /* shown in the hoist panel instead */
@@ -216,91 +217,88 @@
     #steps { display:none !important; }
     #actPrompt .a { font-size:15px; } #actPrompt .key { font-size:16px; }
   }
-  /* ---- MISSION BRIEFING (start / game-over screen) ---- */
+  /* ---- MISSION BRIEFING (start / game-over screen) ----
+     A 1989 Army memorandum, not a game menu: off-white bond typed on an IBM Selectric (Courier),
+     SECRET marked top and bottom, numbered paragraphs, DA photos clipped to the file, a red MIA
+     rubber stamp, a signature block. It sits on a manila folder whose tab carries the title. */
   #brief { position:absolute; inset:0; z-index:60; display:flex; align-items:center; justify-content:flex-start; overflow:auto;
-    padding:24px 16px 24px 3vw; color:var(--ui-hi); font-family:var(--f); pointer-events:auto;
-    background:linear-gradient(90deg, rgba(2,8,11,.88) 0%, rgba(2,8,11,.6) 38%, rgba(2,8,11,0) 62%); }
-  #brief, #brief * { touch-action:pan-y; }   /* the briefing scrolls on phones */
-  .bf-sheet { width:min(560px,100%); margin:auto 0; background:rgba(1,12,18,.86); border:1px solid var(--ui-line);
-    box-shadow:0 0 0 1px rgba(0,0,0,.6), 0 30px 80px rgba(0,0,0,.6); position:relative; }
-  .bf-sheet::before,.bf-sheet::after { content:''; position:absolute; width:14px; height:14px; border:2px solid var(--ui); }
-  .bf-sheet::before { left:-1px; top:-1px; border-right:none; border-bottom:none; }
-  .bf-sheet::after { right:-1px; bottom:-1px; border-left:none; border-top:none; }
-  .bf-class { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:7px 18px;
-    background:var(--ui-warn); color:#120c00; font:700 12px/1.2 'Courier New',monospace; letter-spacing:.12em; }
-  .bf-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 26px 6px; }
-  .bf-title { font-weight:700; font-size:clamp(30px,5.6vw,56px); line-height:.95; letter-spacing:.02em; color:#fff; }
-  .bf-title small { display:block; font-size:clamp(11px,1.6vw,14px); letter-spacing:.26em; color:var(--ui); margin-bottom:10px; font-weight:600; }
-  .bf-hanko { flex:none; width:78px; height:78px; border:3px solid #c81e2a; border-radius:6px; color:#d8242f;
-    font:700 25px/1.05 "Hiragino Mincho ProN","Yu Mincho",serif; display:flex; align-items:center; justify-content:center;
-    text-align:center; transform:rotate(-7deg); opacity:.9; box-shadow:inset 0 0 0 3px rgba(200,30,42,.25); }
-  .bf-sit { padding:6px 26px 16px; font-size:15px; line-height:1.55; color:#cfe6ea; max-width:780px; }
-  .bf-sit b { color:#fff; }
-  .bf-cols { display:grid; grid-template-columns:1fr; gap:0; border-top:1px solid var(--ui-faint); border-bottom:1px solid var(--ui-faint); }
-  .bf-steps,.bf-crew { padding:16px 26px 18px; }
-  .bf-crew { border-top:1px solid var(--ui-faint); }
-  .bf-cards { grid-template-columns:repeat(5,minmax(0,1fr)) !important; gap:5px !important; }
-  .bf-card { flex-direction:column; gap:3px !important; padding:5px 2px 6px !important; min-width:0; text-align:center; }
-  .bf-card img { width:44px !important; height:44px !important; }
-  .bf-card b { font-size:12px !important; letter-spacing:.02em; } .bf-card span { display:block; margin:0 !important; font-size:10px !important; }
-  .bf-card em { font-size:10px !important; } .bf-card u { margin:2px 0 0 !important; }
-  .bf-steps,.bf-crew { padding-top:12px !important; padding-bottom:12px !important; }
-  .bf-step { padding:4px 0 !important; } .bf-sit { font-size:14px !important; padding-bottom:12px !important; }
-  .bf-head { padding-top:16px !important; } .bf-title { font-size:clamp(28px,3.6vw,44px) !important; }
-  .bf-launch { flex-wrap:wrap; } .bf-meta { margin-left:0; width:100%; }
-  .bf-h { font-size:12px; font-weight:700; letter-spacing:.2em; color:var(--ui); margin-bottom:10px; }
-  .bf-step { display:flex; gap:12px; align-items:flex-start; padding:7px 0; }
-  .bf-step i { font-style:normal; font:700 13px/1 'Courier New',monospace; color:#001218; background:var(--ui);
-    padding:5px 5px 4px; margin-top:1px; }
-  .bf-step b { display:block; font-size:16px; letter-spacing:.04em; color:#fff; }
-  .bf-step span { display:block; font-size:13.5px; color:var(--ui-dim); color:#9fbcc2; margin-top:2px; line-height:1.4; }
-  #brief kbd { font:700 12px/1 var(--f); color:#001218; background:#d9f9ff; border-radius:3px; padding:2px 6px 1px;
-    box-shadow:0 2px 0 #8a8476; }
-  .bf-keys { margin-top:12px; font-size:12.5px; color:#9fbcc2; line-height:2; }
-  .bf-cards { display:grid; grid-template-columns:1fr; gap:6px; }
-  .bf-card { display:flex; align-items:center; gap:10px; padding:5px 8px 5px 5px; background:rgba(241,237,226,.04);
-    border:1px solid var(--ui-faint); position:relative; }
-  .bf-card img { width:40px; height:40px; image-rendering:pixelated; filter:grayscale(.6) contrast(1.1); }
-  .bf-card b { display:block; font-size:15px; letter-spacing:.06em; }
-  .bf-card span { font-size:12px; color:#9fbcc2; margin-right:8px; }
-  .bf-card em { font-style:normal; font-size:12px; color:var(--ui); letter-spacing:.08em; }
-  .bf-card u { text-decoration:none; margin-left:auto; font:700 11px/1 'Courier New',monospace; color:#ff5a64;
-    border:1.5px solid #ff5a64; padding:3px 5px; transform:rotate(-4deg); letter-spacing:.1em; }
-  .bf-card.home u { color:var(--ui-ok); border-color:var(--ui-ok); }
-  .bf-card.home img { filter:none; }
-  .bf-launch { display:flex; align-items:center; gap:18px; padding:18px 26px; flex-wrap:wrap; }
-  .bf-call { display:flex; flex-direction:column; gap:4px; font-size:11px; letter-spacing:.2em; color:var(--ui); font-weight:700; }
-  .bf-call input { background:#000a0f; border:1px solid var(--ui-line); color:#fff; padding:10px 12px; width:170px;
-    font:700 17px/1 var(--f); letter-spacing:.12em; text-transform:uppercase; outline:none; pointer-events:auto; }
-  .bf-call input:focus { border-color:var(--ui); box-shadow:0 0 0 2px rgba(241,237,226,.2); }
-  #startBtn { pointer-events:auto; cursor:pointer; border:none; padding:5px; align-self:flex-end;
-    background:repeating-linear-gradient(-45deg,#ffc23a 0 10px,#1a1406 10px 20px); }
-  #startBtn span { display:block; background:#c81e2a; color:#fff; font:700 20px/1 var(--f); letter-spacing:.2em;
-    padding:13px 34px 12px; box-shadow:inset 0 -3px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25); }
-  #startBtn:hover span { background:#e0242f; }
-  #startBtn:active span { transform:translateY(2px); box-shadow:inset 0 -1px 0 rgba(0,0,0,.35); }
-  .bf-meta { margin-left:auto; display:flex; gap:22px; align-items:flex-start; font-size:13px; color:#9fbcc2; }
-  .bf-meta b { color:#fff; }
-  #ovStats .down { display:block; color:#ff5a64; font-weight:700; font-size:18px; letter-spacing:.08em; margin-bottom:2px; }
+    padding:34px 16px 24px 3vw; color:#1d1b17; font-family:var(--tw); pointer-events:auto;
+    background:linear-gradient(90deg, rgba(2,6,9,.78) 0%, rgba(2,6,9,.45) 40%, rgba(2,6,9,0) 64%); }
+  #brief, #brief * { touch-action:pan-y; }
+  .bf-folder { position:relative; width:min(600px,100%); margin:auto 0; background:#c9a86a; padding:10px 10px 12px; border-radius:2px 6px 6px 6px;
+    box-shadow:0 30px 80px rgba(0,0,0,.65), inset 0 0 0 1px rgba(90,60,20,.35); }
+  .bf-tab { position:absolute; left:0; top:-26px; height:28px; padding:0 18px 0 12px; background:#c9a86a; border-radius:6px 10px 0 0;
+    display:flex; align-items:center; box-shadow:inset 0 1px 0 rgba(255,255,255,.25); }
+  .bf-tab b { background:#f4f0e2; padding:3px 10px 2px; font:700 13px/1 var(--tw); letter-spacing:.14em; color:#1d1b17; border:1px solid rgba(0,0,0,.2); }
+  .bf-sheet { position:relative; background:#f1ecdc; padding:14px 26px 10px; transform:rotate(-0.4deg);
+    background-image:radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.5),rgba(255,255,255,0) 60%),radial-gradient(ellipse at 80% 90%,rgba(160,130,80,.14),rgba(0,0,0,0) 55%);
+    box-shadow:0 2px 6px rgba(0,0,0,.35); font-size:12.5px; line-height:1.38; }
+  .bf-classif { text-align:center; font:700 14px/1 Arial,sans-serif; letter-spacing:.3em; color:#b3141d; margin:0 0 6px; opacity:.9; }
+  .bf-classif.bot { margin:6px 0 0; }
+  .bf-dept { text-align:center; font-weight:700; letter-spacing:.06em; line-height:1.3; }
+  .bf-dept small { display:block; font-weight:400; font-size:12px; letter-spacing:.02em; }
+  .bf-titlerow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .bf-hanko { flex:none; width:54px; height:54px; border:3px solid #c81e2a; border-radius:6px; color:#c81e2a;
+    font:700 17px/1.05 "Hiragino Mincho ProN","Yu Mincho",serif; display:flex; align-items:center; justify-content:center;
+    text-align:center; transform:rotate(-9deg); opacity:.72; mix-blend-mode:multiply; margin-right:6px; }
+  .bf-ref { display:flex; justify-content:space-between; margin:8px 0 6px; }
+  .bf-memo { margin:0 0 2px; padding-left:8.2em; text-indent:-8.2em; }
+  .bf-title { font:700 clamp(22px,3vw,30px)/1 var(--tw); letter-spacing:.04em; margin:8px 0 0; }
+  .bf-title small { display:block; font-size:11px; font-weight:400; letter-spacing:.2em; margin-bottom:4px; color:#4a463c; }
+  .bf-p { margin:6px 0 0; }
+  .bf-p > b { font-weight:700; }
+  .bf-p b.r { color:#1d1b17; text-decoration:underline; }
+  .bf-steps { margin:2px 0 0 1.6em; }
+  .bf-step { margin:1px 0; padding-left:1.6em; text-indent:-1.6em; }
+  .bf-step i { font-style:normal; }
+  #brief kbd { font:700 12px/1 var(--tw); color:#1d1b17; border:1px solid #1d1b17; border-radius:2px; padding:1px 4px; background:rgba(255,255,255,.4); }
+  .bf-cards { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin:8px 0 0; max-width:460px; }
+  .bf-card { position:relative; text-align:left; font-size:11px; line-height:1.25; min-width:0; }
+  .bf-card img { display:block; width:100%; aspect-ratio:1; background:#fff; padding:3px 3px 3px; box-shadow:0 1px 3px rgba(0,0,0,.35);
+    transform:rotate(var(--rt,-1deg)); margin-bottom:5px; }
+  .bf-card::before { content:''; position:absolute; left:12px; top:-6px; width:7px; height:22px; border:1.5px solid #8a8e94; border-radius:4px;
+    transform:rotate(8deg); z-index:2; }   /* paper clip */
+  .bf-card b { display:block; font-size:12px; letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bf-card span, .bf-card em { display:block; font-style:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bf-card .ph { position:relative; }
+  .bf-card u { position:absolute; right:-4px; bottom:8px; transform:rotate(-14deg); text-decoration:none; z-index:3;
+    font:900 12px/1 Arial,sans-serif; letter-spacing:.12em; color:#c81e2a; border:2.5px solid #c81e2a; padding:3px 5px 2px; border-radius:3px;
+    opacity:.85; mix-blend-mode:multiply; background:rgba(241,236,220,.15); }
+  .bf-card.home u { color:#1f6a35; border-color:#1f6a35; }
+  .bf-keys { font-size:12.5px; }
+  .bf-row { display:flex; gap:16px; align-items:flex-end; justify-content:space-between; }
+  .bf-sig { flex:none; font-size:11px; line-height:1.25; margin-top:6px; }
+  .bf-sig i { display:block; font:italic 22px/1 "Brush Script MT","Segoe Script","Bradley Hand",cursive; color:#1e2a5a; margin:2px 0 0 10px; transform:rotate(-4deg); }
+  .bf-launch { display:flex; align-items:flex-end; gap:16px; padding:8px 0 0; margin-top:6px; border-top:1px dashed rgba(29,27,23,.35); flex-wrap:wrap; }
+  .bf-call { display:flex; flex-direction:column; gap:3px; font-size:11px; letter-spacing:.12em; }
+  .bf-call input { background:transparent; border:none; border-bottom:1.5px solid #1d1b17; color:#1d1b17; padding:4px 2px; width:170px;
+    font:700 18px/1 var(--tw); letter-spacing:.12em; text-transform:uppercase; outline:none; pointer-events:auto; }
+  .bf-call input:focus { background:rgba(255,255,255,.4); }
+  #startBtn { pointer-events:auto; cursor:pointer; border:3px solid #c81e2a; background:rgba(200,30,42,.06); padding:3px; border-radius:4px; transform:rotate(-2deg); }
+  #startBtn span { display:block; background:#c81e2a; color:#f8f2e2; font:900 19px/1 Arial,sans-serif; letter-spacing:.18em; padding:11px 26px 10px; border-radius:2px; }
+  #startBtn:hover span { background:#a8141e; }
+  #startBtn:active { transform:rotate(-2deg) translateY(2px); }
+  .bf-meta { margin-left:auto; display:flex; gap:22px; align-items:flex-start; font-size:12px; }
+  .bf-meta b { font-weight:700; }
+  #ovStats .down { display:block; color:#c81e2a; font-weight:700; font-size:16px; letter-spacing:.06em; margin-bottom:2px; }
   #ovBoard { min-width:150px; }
-  #ovBoard > b { display:block; font-size:11px; letter-spacing:.2em; color:var(--ui); margin-bottom:3px; }
-  #ovBoard div { display:flex; gap:8px; font-size:13px; line-height:1.5; }
-  #ovBoard div i { font-style:normal; color:var(--ui-dim); width:12px; }
-  #ovBoard div em { font-style:normal; margin-left:auto; color:#fff; }
-  #ovBoard .none { color:#6f8b91; }
-  .bf-foot { padding:0 26px 12px; font-size:11px; color:#5f7a80; }
+  #ovBoard > b { display:block; font-size:11px; letter-spacing:.14em; margin-bottom:2px; text-decoration:underline; }
+  #ovBoard div { display:flex; gap:8px; font-size:12px; line-height:1.4; }
+  #ovBoard div i { font-style:normal; width:12px; }
+  #ovBoard div em { font-style:normal; margin-left:auto; }
+  #ovBoard .none { color:#6a6458; }
+  .bf-foot { font-size:10.5px; color:#6a6458; margin-top:4px; }
+  @media (max-height:780px) and (min-width:721px) { .bf-dept small, .bf-foot { display:none; } .bf-sheet { font-size:12px; line-height:1.3; } .bf-cards { max-width:400px; } }
   @media (max-width:720px) {
-    .bf-cols { grid-template-columns:1fr; } .bf-crew { border-left:none; border-top:1px solid var(--ui-faint); }
-    .bf-cards { grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
-    .bf-card { flex-direction:column; gap:3px; padding:4px 2px 5px; min-width:0; text-align:center; }
-    .bf-card img { width:34px; height:34px; } .bf-card b { font-size:11px; letter-spacing:.02em; }
-    .bf-card span,.bf-card em { display:none; } .bf-card u { margin:0; font-size:9px; padding:2px 3px; }
-    .bf-keys { display:none; } .bf-sit { font-size:14px; } .bf-step { padding:5px 0; }
-    .bf-step b { font-size:15px; } .bf-step span { font-size:13px; }
-    .bf-launch { gap:12px; } .bf-call input { width:140px; } #startBtn span { padding:12px 22px 11px; font-size:18px; }
-    .bf-head { padding:18px 18px 4px; } .bf-sit,.bf-steps,.bf-crew,.bf-launch,.bf-foot { padding-left:18px; padding-right:18px; }
-    .bf-hanko { width:60px; height:60px; font-size:19px; } .bf-meta { margin-left:0; width:100%; }
-    .bf-class span:last-child { display:none; }
+    #brief { padding:34px 8px 16px; }
+    .bf-sheet { padding:14px 16px 12px; font-size:12.5px; }
+    .bf-hanko { width:42px; height:42px; font-size:13px; }
+    .bf-dept small { font-size:10.5px; } .bf-memo { padding-left:0; text-indent:0; }
+    .bf-card { font-size:9.5px; } .bf-card b { font-size:10px; } .bf-card em { display:none; }
+    .bf-card u { font-size:11px; padding:2px 3px; }
+    .bf-keys { display:none; } .bf-sig i { font-size:20px; }
+    .bf-call input { width:140px; } #startBtn span { padding:10px 18px 9px; font-size:16px; }
+    .bf-meta { margin-left:0; width:100%; }
   }
   body.in-menu .tbtn, body.in-menu #tacwrap, body.in-menu #help, body.in-menu #cmdStack, body.in-menu #hud,
   body.in-menu #steps, body.in-menu #intelLog, body.in-menu #actPrompt, body.in-menu #stick-base, body.in-menu #stick-knob { display:none !important; }
@@ -323,19 +321,21 @@
   #medal { position:absolute; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto;
     background:radial-gradient(ellipse at 50% 40%, rgba(10,16,30,.7), rgba(2,4,8,.95)); pointer-events:auto; touch-action:pan-y; }
   @keyframes mdIn { from { opacity:0; } to { opacity:1; } }
-  .md-card { width:min(560px,100%); text-align:center; color:#efe8d6; font-family:Georgia,'Times New Roman',serif; padding:22px 26px 20px;
-    background:linear-gradient(#1a1f2a,#11141b); border:1px solid #8a7444; box-shadow:0 0 0 4px #11141b, 0 0 0 5px #5a4a2a, 0 30px 80px rgba(0,0,0,.7); }
-  .md-top { font:700 12px/1 'Courier New',monospace; letter-spacing:.24em; color:#c9a85e; }
+  /* the citation as the certificate itself: cream stock, double gold rule, engraved serif */
+  .md-card { width:min(560px,100%); text-align:center; color:#1d1b17; font-family:Georgia,'Times New Roman',serif; padding:22px 30px 20px;
+    background:#f3eddb radial-gradient(ellipse at 50% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 65%); border:2px solid #a8843e;
+    box-shadow:inset 0 0 0 5px #f3eddb, inset 0 0 0 6px #a8843e, 0 30px 80px rgba(0,0,0,.7); }
+  .md-top { font:700 13px/1 Georgia,serif; letter-spacing:.24em; color:#1d1b17; }
   #mdCross { width:150px; height:188px; margin:12px auto 4px; display:block; filter:drop-shadow(0 6px 10px rgba(0,0,0,.6)); }
-  .md-name { font-size:21px; letter-spacing:.08em; color:#f3d48a; margin-bottom:10px; }
-  .md-cite { font-size:14.5px; line-height:1.6; font-style:italic; color:#ddd5c2; }
-  .md-cite b { font-style:normal; color:#fff; letter-spacing:.04em; }
+  .md-name { font-size:21px; letter-spacing:.08em; color:#1d1b17; margin-bottom:10px; font-variant:small-caps; }
+  .md-cite { font-size:14.5px; line-height:1.6; font-style:italic; color:#2a2620; }
+  .md-cite b { font-style:normal; color:#1d1b17; letter-spacing:.04em; }
   .md-crew { display:flex; justify-content:center; gap:8px; margin:14px 0 8px; flex-wrap:wrap; }
-  .md-crew span { display:flex; flex-direction:column; align-items:center; gap:2px; font:700 10px/1.1 var(--f); color:#c9d4c0; }
-  .md-crew img { width:40px; height:40px; image-rendering:pixelated; }
-  .md-crew i { font-style:normal; color:#46e08a; font-size:9px; letter-spacing:.1em; }
-  .md-stats { font:600 13px var(--f); color:#9fb0b8; margin-bottom:12px; } .md-stats b { color:#fff; }
-  #mdClose { pointer-events:auto; cursor:pointer; border:1px solid #c9a85e; background:#2a2414; color:#f3d48a; font:700 15px var(--f); letter-spacing:.2em; padding:10px 30px; }
+  .md-crew span { display:flex; flex-direction:column; align-items:center; gap:2px; font:700 10px/1.1 var(--tw); color:#1d1b17; }
+  .md-crew img { width:46px; height:46px; background:#fff; padding:2px; box-shadow:0 1px 2px rgba(0,0,0,.35); }
+  .md-crew i { font-style:normal; color:#1f6a35; font-size:9px; letter-spacing:.1em; }
+  .md-stats { font:400 13px var(--tw); color:#4a463c; margin-bottom:12px; } .md-stats b { color:#1d1b17; }
+  #mdClose { pointer-events:auto; cursor:pointer; border:2px solid #1d1b17; background:transparent; color:#1d1b17; font:700 15px var(--tw); letter-spacing:.2em; padding:9px 30px; }
   /* ---- NEON TITLE WORDMARK ---- */
   .logo { display:flex; flex-direction:column; align-items:center; gap:4px; line-height:.9; }
   .logo-main { font-family:'Arial Black',Impact,sans-serif; font-weight:900; font-size:66px; letter-spacing:1px; font-style:italic;
@@ -10119,13 +10119,13 @@ heli.position.set(0,45,120);scene.add(heli);
   const gm2=new THREE.MeshStandardMaterial({color:0x3d4335,map:panelTex,metalness:0.06,roughness:0.7,envMapIntensity:0.4});
   const dk=new THREE.MeshStandardMaterial({color:0x1b1d1c,metalness:0.3,roughness:0.55,envMapIntensity:0.5});
   const soot=new THREE.MeshStandardMaterial({color:0x121211,metalness:0.1,roughness:0.9});
-  const glz=new THREE.MeshPhysicalMaterial({color:0x1c2a2c,metalness:0.0,roughness:0.05,transparent:true,opacity:.62,envMapIntensity:1.6,clearcoat:1.0,side:THREE.DoubleSide});
+  const glz=new THREE.MeshPhysicalMaterial({color:0x1c2a2c,metalness:0.0,roughness:0.05,transparent:true,opacity:.62,envMapIntensity:1.6,clearcoat:1.0,side:THREE.DoubleSide,flatShading:true});   // flat-plate glazing: every pane catches its own light
   const add=m=>{m.castShadow=true;heli.add(m);return m;};
   // loft: rounded-rectangle (superellipse) sections along Z -> one smooth skin
-  function loft(secs,n,seg){
+  function loft(secs,n,seg,ph){
     seg=seg||28;const P=[],U=[],I=[];
     const zs=secs.map(q=>q.z), z0=zs[0], z1=zs[zs.length-1];
-    secs.forEach((q,si)=>{for(let k=0;k<=seg;k++){const t=k/seg*Math.PI*2,c=Math.cos(t),sn=Math.sin(t);
+    secs.forEach((q,si)=>{for(let k=0;k<=seg;k++){const t=k/seg*Math.PI*2+(ph||0),c=Math.cos(t),sn=Math.sin(t);
       const ex=2/(q.n||n);const x=Math.sign(c)*Math.pow(Math.abs(c),ex)*q.w/2, y=Math.sign(sn)*Math.pow(Math.abs(sn),ex)*q.h/2;
       P.push((q.x||0)+x,q.y+y,q.z);U.push(k/seg*2,(q.z-z0)/(z1-z0)*3);}});
     for(let si=0;si<secs.length-1;si++)for(let k=0;k<seg;k++){const a=si*(seg+1)+k,b=a+seg+1;I.push(a,b,a+1,a+1,b,b+1);}
@@ -10143,16 +10143,21 @@ heli.position.set(0,45,120);scene.add(heli);
   // avionics bays ("cheeks") along the lower fuselage — the Apache's signature side bulges
   [-1,1].forEach(sd=>{add(new THREE.Mesh(loft([S(-3.0,0.18,0.42,-0.3,{x:sd*0.55}),S(-2.6,0.5,0.66,-0.3,{x:sd*0.7}),S(0.4,0.56,0.7,-0.32,{x:sd*0.74}),
     S(1.6,0.46,0.6,-0.28,{x:sd*0.7}),S(2.3,0.12,0.3,-0.2,{x:sd*0.6})],3.5,20),gm2));});
-  // stepped tandem canopy: gunner low in front, pilot raised behind
-  add(new THREE.Mesh(loft([S(-4.25,0.5,0.22,0.5),S(-3.85,0.92,0.62,0.62),S(-3.0,1.02,0.82,0.72),S(-2.45,0.98,0.7,0.72),S(-2.3,0.7,0.4,0.66)],2.6,24),glz));
-  add(new THREE.Mesh(loft([S(-2.55,0.86,0.5,0.86),S(-2.15,1.02,0.98,1.02),S(-1.2,1.08,1.12,1.1),S(-0.55,1.02,0.98,1.06),S(-0.3,0.7,0.5,0.96)],2.6,24),glz));
-  // canopy framing: centre bows, sills, the blast shield between the seats
+  // canopy framing helper
   const bar=(x1,y1,z1,x2,y2,z2,t,mat)=>{const a=new THREE.Vector3(x1,y1,z1),b2=new THREE.Vector3(x2,y2,z2),d=b2.clone().sub(a);
     const m=new THREE.Mesh(new THREE.BoxGeometry(t,t,d.length()),mat||gm2);m.position.copy(a).add(b2).multiplyScalar(0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d.normalize());return add(m);};
-  bar(0,1.04,-3.0,0,1.04,-2.42,0.06);bar(0,1.58,-1.9,0,1.58,-0.7,0.06);
-  [-1,1].forEach(sd=>{bar(sd*0.5,0.4,-4.0,sd*0.52,0.44,-2.35,0.06);bar(sd*0.54,0.6,-2.4,sd*0.55,0.62,-0.4,0.06);
-    bar(sd*0.5,0.45,-3.85,sd*0.46,1.0,-3.0,0.05);bar(sd*0.52,0.62,-2.15,sd*0.5,1.5,-1.7,0.05);});
+  // stepped tandem canopy, gunner low in front, pilot raised behind. The AH-64A's canopy is not a
+  // bubble: it is flat plates — flat side panes, flat roof, angled shoulder panes and a flat
+  // windscreen — framed along every edge. An octagonal loft (8 segments, rotated so a face is
+  // up and a face is to each side) gives exactly that, and the frame bars run along its corners.
+  const CAN=[[S(-4.25,0.5,0.22,0.5),S(-3.85,0.92,0.62,0.62),S(-3.0,1.02,0.82,0.72),S(-2.45,0.98,0.7,0.72),S(-2.3,0.7,0.4,0.66)],
+             [S(-2.55,0.86,0.5,0.86),S(-2.15,1.02,0.98,1.02),S(-1.2,1.08,1.12,1.1),S(-0.55,1.02,0.98,1.06),S(-0.3,0.7,0.5,0.96)]];
+  const CP=(q,a)=>[Math.cos(a)*q.w/2,q.y+Math.sin(a)*q.h/2,q.z], CA=[Math.PI/8,3*Math.PI/8,5*Math.PI/8,7*Math.PI/8];
+  CAN.forEach(secs=>{add(new THREE.Mesh(loft(secs,2,8,Math.PI/8),glz));
+    for(let i=0;i<secs.length-1;i++)CA.forEach(a=>bar(...CP(secs[i],a),...CP(secs[i+1],a),0.045));
+    secs.slice(1,-1).forEach(q=>{for(let k=0;k<CA.length-1;k++)bar(...CP(q,CA[k]),...CP(q,CA[k+1]),0.04);});
+    [-1,1].forEach(sd=>bar(sd*secs[1].w/2*0.93,secs[1].y-0.02,secs[1].z,sd*secs[secs.length-2].w/2*0.93,secs[secs.length-2].y-0.02,secs[secs.length-2].z,0.06));});   // sills
   add(new THREE.Mesh(new THREE.BoxGeometry(0.98,0.7,0.06),gm2)).position.set(0,1.05,-2.42);
   // nose: TADS turret (day/night sight) under the nose, PNVS ball on top
   const tads=add(new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.86,16),gm2));tads.rotation.z=Math.PI/2;tads.position.set(0,-0.38,-5.15);
@@ -10166,14 +10171,17 @@ heli.position.set(0,45,120);scene.add(heli);
   // engines: nacelles high on the shoulders, intakes forward, Black Hole IR suppressors aft
   [-1,1].forEach(sd=>{
     add(new THREE.Mesh(loft([S(-0.75,0.5,0.55,0.95,{x:sd*0.98}),S(-0.5,0.78,0.86,0.95,{x:sd*1.0}),S(1.6,0.8,0.88,0.98,{x:sd*1.02}),S(2.4,0.62,0.7,1.02,{x:sd*1.02}),S(2.7,0.45,0.5,1.06,{x:sd*1.0})],3,20),gm));
-    const inl=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.12,16),soot));inl.rotation.x=Math.PI/2;inl.position.set(sd*1.0,0.95,-0.78);
-    const ex=add(new THREE.Mesh(new THREE.BoxGeometry(0.42,0.5,0.9),soot));ex.position.set(sd*1.18,1.08,2.65);ex.rotation.set(-0.35,sd*0.35,0);
-    const ex2=add(new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.95),gm2));ex2.position.set(sd*1.18,1.36,2.6);ex2.rotation.set(-0.35,sd*0.35,0);
+    const inl=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.08,18),soot));inl.rotation.x=Math.PI/2;inl.position.set(sd*1.0,0.95,-0.74);
+    const lip=add(new THREE.Mesh(new THREE.TorusGeometry(0.29,0.055,8,22),gm2));lip.position.set(sd*1.0,0.95,-0.79);
+    const bul=add(new THREE.Mesh(new THREE.ConeGeometry(0.11,0.22,12),gm2));bul.rotation.x=-Math.PI/2;bul.position.set(sd*1.0,0.95,-0.84);
+    const ex=add(new THREE.Mesh(new THREE.BoxGeometry(0.46,0.46,0.85),gm));ex.position.set(sd*1.14,1.02,2.78);ex.rotation.set(0,sd*0.55,0);   // 'Black Hole' IR suppressor, turned outboard
+    const ex2=add(new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.04),soot));ex2.position.set(sd*1.14+sd*Math.sin(0.55)*0.43,1.02,2.78+Math.cos(0.55)*0.43);ex2.rotation.set(0,sd*0.55,0);
   });
   // rotor mast fairing + hub
   add(new THREE.Mesh(loft([S(-0.4,0.4,0.3,1.0),S(0.0,0.9,0.5,1.12),S(1.2,0.95,0.55,1.12),S(1.9,0.5,0.32,1.02)],3,16),gm));
   const mastC=add(new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.22,0.65,12),dk));mastC.position.set(0,1.6,0.25);
-  const hub=add(new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.36,0.22,12),dk));hub.position.set(0,1.9,0.25);
+  const hub=add(new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,0.16,12),dk));hub.position.set(0,1.9,0.25);
+  for(let i=0;i<4;i++){const gp=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.11,0.17),dk);gp.position.set(Math.cos(i*Math.PI/2)*0.4,-0.04,-Math.sin(i*Math.PI/2)*0.4);gp.rotation.y=i*Math.PI/2;rotor.add(gp);}
   rotor.position.set(0,1.95,0.25);disc.position.set(0,2.0,0.25);
   // stub wings (slight anhedral): Hellfire rack inboard, M261 19-tube rocket pod outboard
   const podFace=tex((g,w,h)=>{g.fillStyle='#15181b';g.fillRect(0,0,w,h);g.fillStyle='#030405';
@@ -12359,27 +12367,27 @@ const CREW=[
   {id:'DUSTY', call:'DUSTY',  name:'HAYES, J.',   rank:'WO1',  rankJP:'', role:'CO-PILOT',
    x:CREW_SPOTS[0].x, z:CREW_SPOTS[0].z,  found:false, rescued:false,
    perk:'AIRSPEED +18%',   perkNote:'takes the collective on straights',
-   face:{skin:'#efc9a8', hair:'#7a5230', visor:'#5ff2ff', helmet:'#3b4232', scar:false, brow:0.5, stache:false},
+   face:{skin:'#e8bf9c', hair:'#6a4a2c', iris:'#4a5a66', style:'part', plate:'HAYES', fw:26, jw:18, chin:112, brow:2.2, ribbons:1},
    where:'SHIBUYA — on a rooftop west of the river bend, south of the Palace.'},
   {id:'SPARKS', call:'SPARKS',  name:'MARTINEZ, R.',rank:'SGT',  rankJP:'', role:'GUNNER',
    x:CREW_SPOTS[1].x, z:CREW_SPOTS[1].z, found:false, rescued:false,
    perk:'RATE OF FIRE +30%', perkNote:'works the door gun so you can fly',
-   face:{skin:'#c69067', hair:'#1a120c', visor:'#ff9ad0', helmet:'#3b4232', scar:false, brow:0.9, stache:true},
+   face:{skin:'#c08a62', hair:'#1a120c', iris:'#2a1a12', style:'buzz', plate:'MARTINEZ', fw:28, jw:21, chin:113, brow:3.4, stache:true, ribbons:2},
    where:'AKIHABARA — north-east, in the electric-town backstreets by the expressway.'},
   {id:'BULL', call:'BULL',  name:"O'BRIEN, T.", rank:'MSGT', rankJP:'', role:'CREW CHIEF',
    x:CREW_SPOTS[2].x, z:CREW_SPOTS[2].z, found:false, rescued:false,
    perk:'AMMO CAPACITY +50%', perkNote:'rebalances the racks mid-flight',
-   face:{skin:'#f2c6a6', hair:'#a8481e', visor:'#ffc23a', helmet:'#3b4232', scar:true, brow:1.3, stache:true},
+   face:{skin:'#e8b494', hair:'#9a5a3a', iris:'#5a6a74', style:'recede', plate:"O'BRIEN", fw:29, jw:23, chin:115, brow:2.8, stache:true, age:0.8, freckles:true, stubble:true, ribbons:3},
    where:'SHINJUKU — far north-west, at the foot of the skyscraper cluster.'},
   {id:'ROSIE',  call:'ROSIE',   name:'WASHINGTON, D.',rank:'CPL', rankJP:'', role:'MEDIC',
    x:CREW_SPOTS[3].x, z:CREW_SPOTS[3].z, found:false, rescued:false,
    perk:'HULL REPAIR 1.5/s',  perkNote:'patches the airframe as you fly',
-   face:{skin:'#7a4a30', hair:'#140c08', visor:'#46e08a', helmet:'#3b4232', scar:false, brow:0.4, stache:false},
+   face:{skin:'#7c5238', hair:'#120a06', iris:'#1e120c', style:'bun', sheen:true, plate:'WASHINGTON', fw:25, jw:16, chin:110, brow:2.0, female:true, earring:true, ribbons:1},
    where:'GINZA/MINATO — south-east, near the bay-side avenues.'},
   {id:'DOC',  call:'DOC',   name:'KOWALSKI, K.',rank:'SSGT', rankJP:'', role:'ENGINEER',
    x:CREW_SPOTS[4].x, z:CREW_SPOTS[4].z, found:false, rescued:false,
    perk:'DAMAGE TAKEN -25%',  perkNote:'reroutes hydraulics around the hits',
-   face:{skin:'#f0caa8', hair:'#d8b46a', visor:'#b98aff', helmet:'#3b4232', scar:true, brow:1.0, stache:true},
+   face:{skin:'#e6bc9a', hair:'#8a744c', iris:'#6a7a88', style:'flattop', plate:'KOWALSKI', fw:28, jw:22, chin:114, brow:1.8, glasses:true, ribbons:2},
    where:'MINATO — due south toward the waterfront, near Tokyo Tower.'},
 ];
 
@@ -12393,71 +12401,145 @@ function perkAmmoCap(){  return hasCrew('BULL')?1.5:1; }
 function perkRepair(){   return hasCrew('ROSIE') ?1.5:0; }    // hull points per second
 function perkArmour(){   return hasCrew('DOC') ?0.75:1; }   // multiplies incoming damage
 
-// ---- CREW PORTRAITS ---------------------------------------------------------
-// Drawn once per crewman and cached. Same canvas approach as the city signage: a
-// low-fi service ID photo — flight helmet, tinted visor, rank tab — so the dossier
-// reads as paperwork from 1989 rather than a modern game avatar.
+// ---- CREW PORTRAITS -------------------------------------------------------------------------
+// Each crewman as his (or her) Department of the Army official photograph, the way it sat stapled
+// into a 1989 personnel file: bareheaded, regulation haircut, Army Green Class A coat with the
+// light-green shirt and black tie, "U.S." and branch discs on the lapels, a black nameplate and a
+// ribbon rack — shot against a grey studio sweep and printed in black-and-white with grain.
+// Painted with soft shadows (blurred via shadowBlur, which every browser supports) so the faces
+// are modelled by light, not outlined like icons.
 const _avCache={};
+const _hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const _mix=(a,b,t)=>{const A=_hx(a),B=_hx(b);return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')})`;};
+// a soft-edged shape: the path is drawn far off-canvas and only its blurred shadow lands here
+function _soft(g,blur,col,path){g.save();const k=g.getTransform().a;g.shadowColor=col;g.shadowBlur=blur*k;g.shadowOffsetX=2000*k;g.translate(-2000,0);g.fillStyle='#000';g.beginPath();path(g);g.fill();g.restore();}
+function _ell(x,y,rx,ry,r){return g=>g.ellipse(x,y,rx,ry,r||0,0,7);}
 function crewAvatar(c){
   if(_avCache[c.id])return _avCache[c.id];
-  const S=96, cv=document.createElement('canvas'); cv.width=cv.height=S;
-  const g=cv.getContext('2d');
-  const F=c.face;
-  // ID-photo ground: pale institutional blue with a corner crop mark
-  g.fillStyle='#16303a';g.fillRect(0,0,S,S);
-  const gr=g.createLinearGradient(0,0,0,S);
-  gr.addColorStop(0,'rgba(95,242,255,.16)');gr.addColorStop(1,'rgba(0,0,0,.35)');
-  g.fillStyle=gr;g.fillRect(0,0,S,S);
-  // shoulders / Nomex flight suit, Army olive drab
-  g.fillStyle='#4a5038';
-  g.beginPath();g.moveTo(S*0.10,S);g.quadraticCurveTo(S*0.5,S*0.62,S*0.90,S);g.closePath();g.fill();
-  g.fillStyle='rgba(0,0,0,.25)';g.fillRect(S*0.30,S*0.90,S*0.40,3);       // collar seam
-  // neck
-  g.fillStyle=F.skin;g.fillRect(S*0.40,S*0.60,S*0.20,S*0.18);
-  // head
-  g.fillStyle=F.skin;
-  g.beginPath();g.ellipse(S*0.5,S*0.46,S*0.19,S*0.23,0,0,7);g.fill();
-  // jaw shadow
-  g.fillStyle='rgba(0,0,0,.12)';
-  g.beginPath();g.ellipse(S*0.5,S*0.58,S*0.15,S*0.09,0,0,7);g.fill();
-  // flight helmet shell
-  g.fillStyle=F.helmet;
-  g.beginPath();g.arc(S*0.5,S*0.44,S*0.235,Math.PI,0);g.fill();
-  g.fillRect(S*0.265,S*0.44,S*0.47,S*0.05);
-  g.fillStyle='rgba(255,255,255,.10)';                                     // shell highlight
-  g.beginPath();g.arc(S*0.44,S*0.40,S*0.16,Math.PI,Math.PI*1.5);g.fill();
-  // tinted visor, raised — the crew colour, so each face reads at thumbnail size
-  g.fillStyle=F.visor;g.globalAlpha=0.85;
-  g.beginPath();g.ellipse(S*0.5,S*0.335,S*0.225,S*0.075,0,0,7);g.fill();
+  const S=160,cv=document.createElement('canvas');cv.width=cv.height=S;
+  const g=cv.getContext('2d'),F=c.face,cx=80;
+  const fw=F.fw||27, jw=F.jw||19, chinY=F.chin||113, skin=F.skin;
+  // studio sweep, brighter behind the head
+  g.fillStyle='#6c7074';g.fillRect(0,0,S,S);
+  g.fillStyle=(()=>{const r=g.createRadialGradient(62,50,8,80,80,120);r.addColorStop(0,'#a8acb0');r.addColorStop(1,'#3e4246');return r;})();g.fillRect(0,0,S,S);
+  g.save();g.translate(80,70);g.scale(1.32,1.32);g.translate(-80,-70);
+  // ---- Class A coat, shirt, tie ----
+  const coat='#4c5242';
+  g.fillStyle=coat;g.beginPath();g.moveTo(0,S);g.lineTo(0,142);g.quadraticCurveTo(4,128,26,123);g.lineTo(60,116);g.lineTo(100,116);g.lineTo(134,123);g.quadraticCurveTo(156,128,S,142);g.lineTo(S,S);g.closePath();g.fill();
+  g.fillStyle='rgba(255,255,255,.07)';g.beginPath();g.moveTo(0,150);g.quadraticCurveTo(8,130,28,125);g.lineTo(40,123);g.lineTo(20,S);g.lineTo(0,S);g.fill();
+  // neck, in shadow under the jaw
+  g.fillStyle=_mix(skin,'#1a0c06',0.25);g.beginPath();g.moveTo(cx-15,96);g.lineTo(cx+15,96);g.lineTo(cx+16,126);g.lineTo(cx-16,126);g.fill();
+  _soft(g,8,'rgba(0,0,0,.45)',_ell(cx+2,112,18,7));
+  // shirt collar points and the tie (women wore the black neck tab — same read at this size)
+  g.fillStyle='#c4c2a4';
+  g.beginPath();g.moveTo(cx-17,114);g.lineTo(cx,131);g.lineTo(cx-9,138);g.lineTo(cx-20,122);g.fill();
+  g.beginPath();g.moveTo(cx+17,114);g.lineTo(cx,131);g.lineTo(cx+9,138);g.lineTo(cx+20,122);g.fill();
+  g.fillStyle='#141414';g.beginPath();g.moveTo(cx-4,128);g.lineTo(cx+4,128);g.lineTo(cx+3,136);g.lineTo(cx-3,136);g.fill();
+  if(!F.female){g.beginPath();g.moveTo(cx-3,136);g.lineTo(cx+3,136);g.lineTo(cx+6,S);g.lineTo(cx-6,S);g.fill();}
+  // notched lapels with their edge shadows
+  [-1,1].forEach(sd=>{g.fillStyle='#565d4a';g.beginPath();g.moveTo(cx+sd*20,116);g.lineTo(cx+sd*2,150);g.lineTo(cx+sd*6,S);g.lineTo(cx+sd*34,S);
+      g.lineTo(cx+sd*28,140);g.lineTo(cx+sd*36,134);g.lineTo(cx+sd*30,124);g.closePath();g.fill();
+    g.strokeStyle='rgba(0,0,0,.45)';g.lineWidth=1.2;g.beginPath();g.moveTo(cx+sd*20,116);g.lineTo(cx+sd*2,150);g.lineTo(cx+sd*6,S);g.stroke();
+    // "U.S." disc on the collar, branch disc on the lapel
+    g.fillStyle='#d8bd70';g.beginPath();g.arc(cx+sd*24,126,3.6,0,7);g.fill();g.beginPath();g.arc(cx+sd*20,143,3.6,0,7);g.fill();
+    g.fillStyle='rgba(60,40,10,.6)';g.fillRect(cx+sd*24-2,125.5,4,1);g.fillRect(cx+sd*20-2,142.5,4,1);});
+  // nameplate (subject's right) and ribbon rack (subject's left)
+  g.fillStyle='#0c0c0c';g.fillRect(22,146,28,6);g.fillStyle='#e8e8e8';g.font='bold 5px Arial';g.textAlign='center';g.textBaseline='middle';g.fillText(F.plate,36,149.2);
+  const rib=[['#c8202c','#f0f0f0','#1d3c8a'],['#e0b020','#1d6a3a','#c8202c'],['#1d3c8a','#e0b020','#f0f0f0']];
+  for(let r=0;r<(F.ribbons||2);r++)for(let k=0;k<3;k++){const x=108+k*8,y=150-r*4.4;const cs=rib[(r+k+F.plate.length)%3];
+    cs.forEach((cc,i)=>{g.fillStyle=cc;g.fillRect(x+i*2.4,y,2.4,3.6);});}
+  // ---- ears ----
+  [-1,1].forEach(sd=>{g.fillStyle=_mix(skin,'#1a0c06',0.12);g.beginPath();g.ellipse(cx+sd*(fw+2),80,5,9.5,sd*0.12,0,7);g.fill();
+    _soft(g,3,'rgba(0,0,0,.35)',_ell(cx+sd*(fw+2.5),80,2.4,5.5));
+    if(F.earring){g.fillStyle='#f4f0e0';g.beginPath();g.arc(cx+sd*(fw+2),88.5,1.4,0,7);g.fill();}});
+  // ---- the head ----
+  const face=gg=>{gg.moveTo(cx-fw,60);gg.bezierCurveTo(cx-fw-1,76,cx-fw+1,90,cx-jw-3,101);gg.quadraticCurveTo(cx-jw*0.55,chinY+1,cx,chinY);
+    gg.quadraticCurveTo(cx+jw*0.55,chinY+1,cx+jw+3,101);gg.bezierCurveTo(cx+fw-1,90,cx+fw+1,76,cx+fw,60);gg.bezierCurveTo(cx+fw,40,cx+12,33,cx,33);gg.bezierCurveTo(cx-12,33,cx-fw,40,cx-fw,60);};
+  g.fillStyle=skin;g.beginPath();face(g);g.fill();
+  g.save();g.beginPath();face(g);g.clip();
+  // key light from camera-left: lit cheek, shaded far side, modelling under cheekbones and jaw
+  g.fillStyle=(()=>{const l=g.createLinearGradient(cx-fw,0,cx+fw,0);l.addColorStop(0,'rgba(255,244,232,.12)');l.addColorStop(0.42,'rgba(255,244,232,0)');l.addColorStop(0.68,'rgba(30,14,6,.12)');l.addColorStop(1,'rgba(30,14,6,.5)');return l;})();g.fillRect(0,0,S,S);
+  g.save();g.shadowColor='rgba(30,12,4,.6)';g.shadowBlur=14;g.fillStyle='#000';g.beginPath();g.rect(-60,-60,280,280);face(g);g.fill('evenodd');g.restore();
+  _soft(g,10,F.female?'rgba(255,240,226,.32)':'rgba(255,248,236,.22)',_ell(cx-7,50,13,8));
+  _soft(g,8,'rgba(255,248,236,.2)',_ell(cx-15,84,7,6));
+  [-1,1].forEach(sd=>_soft(g,7,'rgba(40,18,8,.22)',_ell(cx+sd*17,94,5,7,sd*-0.3)));
+  if(F.sheen){_soft(g,6,'rgba(255,236,220,.32)',_ell(cx-6,48,9,4));_soft(g,5,'rgba(255,236,220,.3)',_ell(cx-15,80,5,3.5));_soft(g,5,'rgba(255,236,220,.18)',_ell(cx+15,80,4,3));_soft(g,3,'rgba(255,236,220,.35)',_ell(cx-1,80,1.6,6));}
+  _soft(g,9,'rgba(40,18,8,.32)',_ell(cx,chinY+4,22,6));
+  if(F.stubble)_soft(g,6,'rgba(30,24,20,.16)',g=>{g.moveTo(cx-jw-2,94);g.quadraticCurveTo(cx,chinY+8,cx+jw+2,94);g.lineTo(cx+jw-4,104);g.quadraticCurveTo(cx,chinY+2,cx-jw+4,104);g.closePath();});
+  if(F.age>0.5){g.strokeStyle='rgba(60,30,18,.22)';g.lineWidth=0.9;for(let i=0;i<3;i++){g.beginPath();g.moveTo(cx-14,47+i*4);g.quadraticCurveTo(cx,45+i*4,cx+14,47+i*4);g.stroke();}
+    [-1,1].forEach(sd=>{g.beginPath();g.moveTo(cx+sd*8,91);g.quadraticCurveTo(cx+sd*14,97,cx+sd*13,104);g.stroke();
+      for(let i=0;i<2;i++){g.beginPath();g.moveTo(cx+sd*21,72+i*2.5);g.lineTo(cx+sd*25,71+i*3.5);g.stroke();}});}
+  if(F.freckles){for(let i=0;i<22;i++){g.fillStyle='rgba(120,60,30,.16)';g.beginPath();g.arc(cx+(Math.random()-.5)*36,80+Math.random()*10,0.7,0,7);g.fill();}}
+  g.restore();
+  // ---- eyes: sockets, whites, iris, lid line, catchlight ----
+  const ey=72,ex=F.eyeX||12;
+  [-1,1].forEach(sd=>_soft(g,6,sd<0?'rgba(50,24,12,.3)':'rgba(40,18,8,.42)',_ell(cx+sd*ex,ey-1,9,5.5)));
+  [-1,1].forEach(sd=>{const x=cx+sd*ex;
+    g.fillStyle='#d4ccc4';g.beginPath();g.ellipse(x,ey,5.8,2.5,0,0,7);g.fill();
+    g.strokeStyle='rgba(40,18,8,.35)';g.lineWidth=0.8;g.beginPath();g.ellipse(x,ey-1.2,6.2,3.6,0,Math.PI*1.12,Math.PI*1.88);g.stroke();
+    g.fillStyle=F.iris||'#3a2a20';g.beginPath();g.arc(x+0.3,ey+0.1,2.3,0,7);g.fill();
+    g.fillStyle='#0c0806';g.beginPath();g.arc(x+0.3,ey+0.1,1,0,7);g.fill();
+    g.strokeStyle='rgba(20,10,6,.85)';g.lineWidth=1.3;g.beginPath();g.ellipse(x,ey+0.6,5.6,2.9,0,Math.PI*1.08,Math.PI*1.92);g.stroke();
+    g.strokeStyle='rgba(40,20,10,.25)';g.lineWidth=0.7;g.beginPath();g.ellipse(x,ey-0.4,5.2,2.6,0,Math.PI*0.15,Math.PI*0.85);g.stroke();
+    g.fillStyle='rgba(255,255,255,.9)';g.beginPath();g.arc(x-0.6,ey-0.6,0.65,0,7);g.fill();});
+  // brows: soft mass plus hair strokes
+  [-1,1].forEach(sd=>{const x0=cx+sd*5,x1=cx+sd*20,y=64-(F.browUp||0);
+    _soft(g,2,F.hair,g=>{g.moveTo(x0,y+1.5);g.quadraticCurveTo(cx+sd*12,y-(F.brow||2.6),x1,y+1);g.lineTo(x1,y+2);g.quadraticCurveTo(cx+sd*12,y,x0,y+1.5+(F.brow||2.6)*0.8);g.closePath();});
+    g.strokeStyle=F.hair;g.lineWidth=0.7;for(let i=0;i<9;i++){const t=i/8,x=x0+(x1-x0)*t;g.beginPath();g.moveTo(x,y+2);g.lineTo(x+sd*1.6,y-0.4+Math.abs(t-0.45)*2);g.stroke();}});
+  // nose: bridge shadow on the far side, lit tip, the shadow it casts, nostrils
+  _soft(g,3,'rgba(40,18,8,.45)',g=>{g.moveTo(cx+2.5,70);g.lineTo(cx+6,70);g.lineTo(cx+8,91);g.lineTo(cx+3,91);g.closePath();});
+  _soft(g,3,'rgba(255,248,236,.35)',_ell(cx-1.5,87,3,2.5));
+  _soft(g,3,'rgba(40,18,8,.45)',_ell(cx+1,94.5,7,2.2));
+  g.fillStyle=_mix(skin,'#140804',0.6);[-1,1].forEach(sd=>{g.beginPath();g.ellipse(cx+sd*4,93,1.8,1,sd*0.3,0,7);g.fill();});
+  g.strokeStyle='rgba(40,18,8,.35)';g.lineWidth=0.9;[-1,1].forEach(sd=>{g.beginPath();g.arc(cx+sd*5.5,90.5,2.6,sd<0?Math.PI*0.45:Math.PI*0.05,sd<0?Math.PI*0.95:Math.PI*0.55);g.stroke();});
+  // mouth
+  const my=101,mw=F.female?9.5:10,lip=_mix(skin,'#7a2c2a',F.female?0.42:0.3);
+  g.fillStyle=_mix(skin,'#3a1410',0.35);g.beginPath();g.moveTo(cx-mw,my);g.quadraticCurveTo(cx-4,my-3,cx,my-1.8);g.quadraticCurveTo(cx+4,my-3,cx+mw,my);g.quadraticCurveTo(cx,my+0.8,cx-mw,my);g.fill();
+  g.fillStyle=lip;g.beginPath();g.ellipse(cx,my+2.2,mw*0.8,F.female?3:2.3,0,0,Math.PI);g.fill();
+  _soft(g,2,'rgba(255,240,230,.3)',_ell(cx-1,my+2.2,4,0.9));
+  g.strokeStyle='rgba(30,10,6,.75)';g.lineWidth=1;g.beginPath();g.moveTo(cx-mw,my);g.quadraticCurveTo(cx,my+1.2,cx+mw,my);g.stroke();
+  _soft(g,4,'rgba(40,18,8,.3)',_ell(cx,my+7,6,2));
+  // the period Army mustache, trimmed inside the corners of the mouth per AR 670-1
+  if(F.stache){g.save();g.globalAlpha=0.85;_soft(g,1.8,F.hair,g=>{g.moveTo(cx-10,my-0.2);g.quadraticCurveTo(cx-7,my-6.2,cx-1,my-5.6);g.lineTo(cx,my-4.6);g.lineTo(cx+1,my-5.6);g.quadraticCurveTo(cx+7,my-6.2,cx+10,my-0.2);g.quadraticCurveTo(cx+5,my-2.6,cx,my-2.4);g.quadraticCurveTo(cx-5,my-2.6,cx-10,my-0.2);});g.restore();
+    g.strokeStyle=F.hair;g.lineWidth=0.6;for(let i=0;i<16;i++){const x=cx-9+i*1.2;g.beginPath();g.moveTo(x,my-5.5+Math.abs(x-cx)*0.25);g.lineTo(x+(x<cx?-0.6:0.6),my-1.5);g.stroke();}}
+  // ---- hair ----
+  const hair=F.hair,hl=_mix(hair,'#ffffff',0.25);
+  const top=F.style==='flattop'?30:F.style==='bun'?29:32;
+  const hairMass=gg=>{
+    if(F.style==='flattop'){gg.moveTo(cx-fw-1,60);gg.lineTo(cx-fw-1,40);gg.quadraticCurveTo(cx-fw,top,cx-18,top);gg.lineTo(cx+18,top);gg.quadraticCurveTo(cx+fw,top,cx+fw+1,40);gg.lineTo(cx+fw+1,60);}
+    else{gg.moveTo(cx-fw-1.5,62);gg.bezierCurveTo(cx-fw-3,40,cx-14,top,cx,top);gg.bezierCurveTo(cx+14,top,cx+fw+3,40,cx+fw+1.5,62);}
+    // the hairline back across the forehead
+    const hy=F.style==='recede'?44:F.style==='bun'?45:47;
+    if(F.style==='recede'){gg.lineTo(cx+fw-2,54);gg.quadraticCurveTo(cx+18,40,cx+10,hy);gg.quadraticCurveTo(cx,hy+2,cx-10,hy);gg.quadraticCurveTo(cx-18,40,cx-fw+2,54);}
+    else if(F.style==='part'){gg.lineTo(cx+fw-1,56);gg.quadraticCurveTo(cx+14,hy-4,cx+2,hy-1);gg.quadraticCurveTo(cx-10,hy-3,cx-fw+1,57);}
+    else{gg.lineTo(cx+fw-1,57);gg.quadraticCurveTo(cx+12,hy-3,cx,hy-2);gg.quadraticCurveTo(cx-12,hy-3,cx-fw+1,57);}
+    gg.closePath();};
+  g.save();g.globalAlpha=F.style==='buzz'||F.style==='flattop'?0.8:1;_soft(g,1.6,hair,hairMass);g.restore();
+  g.save();g.beginPath();hairMass(g);g.clip();
+  g.fillStyle=(()=>{const l=g.createLinearGradient(cx-fw,0,cx+fw,0);l.addColorStop(0,'rgba(255,255,255,.12)');l.addColorStop(1,'rgba(0,0,0,.3)');return l;})();g.fillRect(0,0,S,S);
+  g.strokeStyle=hl;g.globalAlpha=F.style==='bun'?0.35:0.28;g.lineWidth=0.6;
+  for(let i=0;i<220;i++){const x=cx-fw+Math.random()*fw*2,y=top+Math.random()*30;const a=F.style==='part'?(x<cx-12?-2.4:-0.7):F.style==='bun'?(x<cx?-2.6:-0.5):-1.57+(Math.random()-.5)*0.6;
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*(F.style==='bun'?6:2.5),y+Math.sin(a)*(F.style==='bun'?2:2.5));g.stroke();}
   g.globalAlpha=1;
-  g.fillStyle='rgba(255,255,255,.35)';g.fillRect(S*0.31,S*0.315,S*0.16,2);
-  // brows + eyes
-  g.fillStyle=F.hair;
-  g.fillRect(S*0.38,S*0.455-F.brow,S*0.09,2.5);
-  g.fillRect(S*0.53,S*0.455-F.brow,S*0.09,2.5);
-  g.fillStyle='#1a1418';
-  g.fillRect(S*0.395,S*0.485,S*0.055,3);
-  g.fillRect(S*0.55,S*0.485,S*0.055,3);
-  // mouth, 80s Army mustache, optional scar
-  g.fillStyle='rgba(90,50,45,.75)';g.fillRect(S*0.455,S*0.555,S*0.09,2.5);
-  if(F.stache){g.fillStyle=F.hair;g.beginPath();g.moveTo(S*0.42,S*0.55);g.quadraticCurveTo(S*0.5,S*0.515,S*0.58,S*0.55);
-    g.lineTo(S*0.575,S*0.565);g.quadraticCurveTo(S*0.5,S*0.535,S*0.425,S*0.565);g.closePath();g.fill();}
-  // US flag shoulder patch on the OD flight suit
-  {const fx=S*0.12,fy=S*0.86,fw=S*0.17,fh=S*0.1;for(let k=0;k<7;k++){g.fillStyle=k%2?'#e8e4da':'#b22234';g.fillRect(fx,fy+k*fh/7,fw,fh/7+0.5);}
-   g.fillStyle='#3c3b6e';g.fillRect(fx,fy,fw*0.45,fh*0.55);}
-  if(F.scar){g.strokeStyle='rgba(150,70,60,.8)';g.lineWidth=1.6;
-    g.beginPath();g.moveTo(S*0.63,S*0.44);g.lineTo(S*0.60,S*0.55);g.stroke();}
-  // boom mic
-  g.strokeStyle='#1d242a';g.lineWidth=2.4;
-  g.beginPath();g.moveTo(S*0.72,S*0.46);g.quadraticCurveTo(S*0.70,S*0.60,S*0.58,S*0.60);g.stroke();
-  g.fillStyle='#1d242a';g.beginPath();g.arc(S*0.575,S*0.60,S*0.035,0,7);g.fill();
-  // rank tab + crop marks
-  g.fillStyle='rgba(1,12,18,.85)';g.fillRect(0,S-14,S,14);
-  g.fillStyle='#5ff2ff';g.font='bold 9px "Courier New",monospace';g.textAlign='left';g.textBaseline='middle';
-  g.fillText(c.rank,4,S-7);
-  g.textAlign='right';g.fillStyle='rgba(232,254,255,.8)';g.fillText(c.call,S-4,S-7);
-  g.strokeStyle='rgba(95,242,255,.5)';g.lineWidth=2;
-  g.beginPath();g.moveTo(1,9);g.lineTo(1,1);g.lineTo(9,1);g.moveTo(S-1,S-23);g.lineTo(S-1,S-15);g.stroke();
+  if(F.style==='part'){g.strokeStyle='rgba(255,255,255,.25)';g.lineWidth=0.8;g.beginPath();g.moveTo(cx-12,top+4);g.lineTo(cx-13,48);g.stroke();}
+  if(F.style==='bun')_soft(g,4,'rgba(255,255,255,.22)',_ell(cx-8,top+8,10,3,-0.3));
+  g.restore();
+  // short tapered sides above the ears (men): the sidewall of a regulation cut
+  if(!F.female)[-1,1].forEach(sd=>{g.fillStyle=hair;g.globalAlpha=F.style==='buzz'?0.35:0.5;g.beginPath();g.moveTo(cx+sd*(fw+1.5),56);g.lineTo(cx+sd*(fw+0.5),72);g.lineTo(cx+sd*(fw-2.5),72);g.lineTo(cx+sd*(fw-1.5),56);g.fill();g.globalAlpha=1;});
+  // birth-control glasses: the Army-issue S9 frames every enlisted engineer wore in 1989
+  if(F.glasses){g.strokeStyle='#1e1a16';g.lineWidth=2.6;[-1,1].forEach(sd=>{const x=cx+sd*ex;g.beginPath();g.roundRect?g.roundRect(x-9,ey-6.5,18,12.5,4):g.rect(x-9,ey-6.5,18,12.5);g.stroke();
+      g.fillStyle='rgba(220,230,240,.1)';g.fill();g.beginPath();g.moveTo(x+sd*9,ey-4);g.lineTo(cx+sd*(fw+2),ey-2);g.stroke();});
+    g.lineWidth=2;g.beginPath();g.moveTo(cx-3,ey-3);g.quadraticCurveTo(cx,ey-5,cx+3,ey-3);g.stroke();
+    g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;g.beginPath();g.moveTo(cx-18,ey-3);g.lineTo(cx-14,ey-5);g.stroke();}
+  g.restore();
+  // ---- print it: silver-gelatin black-and-white, a touch of contrast, grain, vignette ----
+  const id=g.getImageData(0,0,S,S),d=id.data;
+  for(let i=0;i<d.length;i+=4){const p=i/4,x=p%S,y=(p/S)|0;
+    let L=(0.3*d[i]+0.59*d[i+1]+0.11*d[i+2])/255;
+    L=Math.pow(L,1.22);L=0.5+(L-0.5)*1.12;L*=1-0.35*Math.pow(Math.hypot(x-S/2,y-S*0.45)/(S*0.72),2.2);
+    L+= (Math.random()-0.5)*0.07;L=Math.max(0,Math.min(1,L));
+    d[i]=L*255*1.03;d[i+1]=L*251;d[i+2]=L*236;}
+  g.putImageData(id,0,0);
   _avCache[c.id]=cv;
   return cv;
 }
@@ -13907,39 +13989,38 @@ let started=false,streak=0,streakT=0,mult=1,bestScore=0,pilotName='PILOT';
 gameOver=true; // gate the sim until START
 const ov=document.createElement('div');
 ov.id='brief';
-// MISSION BRIEFING — the first screen sets the tone: a 1989 crew-recovery op, not a synthwave
-// arcade cabinet. Teletype classification header, a hanko-stamped title, the loop in four
-// steps, the five missing crew as dossier cards, and a guarded launch switch. Same turquoise
-// and amber as the in-flight HUD so the briefing and the cockpit are one design.
+// MISSION BRIEFING — the first screen sets the tone: a typed 1989 Army memorandum in a 201 file,
+// SECRET top and bottom, the loop as paragraph 2's sub-steps, the five missing crew as DA photos
+// clipped to the page with a red MIA stamp, and the signature block above the launch line.
 ov.innerHTML=`
+  <div class="bf-folder"><div class="bf-tab"><b>201 FILE · RAVEN 2-1</b></div>
   <div class="bf-sheet">
-    <div class="bf-class"><span>★ U.S. ARMY · SECRET // PERSONNEL RECOVERY</span><span>CAMP ZAMA · 24 NOV 1989 · 18:35 JST</span></div>
-    <div class="bf-head">
-      <div class="bf-title"><small>OPERATION 黒龍 · BLACK DRAGON</small>ONE NIGHT IN TOKYO</div>
-      <div class="bf-hanko">東京<br>一夜</div>
-    </div>
-    <div class="bf-sit">AH-64A <b>RAVEN 2-1</b> went down over central Tokyo at 17:50. Five of your crew are out there somewhere in the city, and the 黒龍会 syndicate's gunships are already up. Nobody's ordering you in. You're going anyway. <b>Leave no one behind.</b></div>
-    <div class="bf-cols">
+    <div class="bf-classif">SECRET</div>
+    <div class="bf-dept">DEPARTMENT OF THE ARMY<small>HEADQUARTERS, UNITED STATES ARMY JAPAN<br>CAMP ZAMA, JAPAN &nbsp;APO SAN FRANCISCO 96343</small></div>
+    <div class="bf-ref"><span>AJGC-PR (600-8-1)</span><span>24 November 1989</span></div>
+    <div class="bf-memo">MEMORANDUM FOR Pilot in Command, AH-64A, Co B, 1-101st Aviation</div>
+    <div class="bf-memo">SUBJECT: Personnel Recovery, Downed Aircraft RAVEN 2-1</div>
+    <div class="bf-titlerow"><div class="bf-title"><small>OPERATION 黒龍 &middot; BLACK DRAGON</small>ONE NIGHT IN TOKYO</div><div class="bf-hanko">東京<br>一夜</div></div>
+    <div class="bf-p"><b>1. SITUATION.</b> AH-64A RAVEN 2-1 went down over central Tokyo at 1750 hours. Five crewmembers are unaccounted for. 黒龍会 syndicate gunships are airborne over the city. No one is ordering you in. You are going anyway. <b class="r">Leave no one behind.</b></div>
+    <div class="bf-p"><b>2. EXECUTION.</b>
       <div class="bf-steps">
-        <div class="bf-h">HOW IT WORKS</div>
-        <div class="bf-step"><i>01</i><div><b>FLY TO THE MARKED SHOP</b><span>Follow the cyan beam. Five shops, one at a time.</span></div></div>
-        <div class="bf-step"><i>02</i><div><b>LAND ON THE PAD · <kbd>E</kbd> GO INSIDE</b><span>Walk to the counter, <kbd>F</kbd> to talk. The owner knows where your crew is.</span></div></div>
-        <div class="bf-step"><i>03</i><div><b>HOVER LOW &amp; SLOW TO HOIST</b><span>Four seconds over a hostile street. Drift and the cable pays out.</span></div></div>
-        <div class="bf-step"><i>04</i><div><b>DROP THEM AT AN LZ</b><span>Any rooftop helideck (green H) or the Navy ship. Gunships launch the moment someone is aboard.</span></div></div>
-        <div class="bf-keys"><kbd>W A S D</kbd> fly · <kbd>SPACE</kbd> fire · <kbd>1-4</kbd> weapon · <kbd>X</kbd> hover · <kbd>C</kbd> cockpit · <kbd>H</kbd> full HUD</div>
-      </div>
-      <div class="bf-crew">
-        <div class="bf-h">MISSING · 5</div>
-        <div class="bf-cards">${CREW.map(c=>`<div class="bf-card"><img src="${crewAvatarURL(c)}" alt=""><div><b>${c.rank} ${c.call}</b><span>${c.name}</span><em>${c.role}</em></div><u>MIA</u></div>`).join('')}</div>
-      </div>
-    </div>
+        <div class="bf-step"><i>a.</i> Fly to the marked shop. Follow the cyan beam; five shops, one at a time.</div>
+        <div class="bf-step"><i>b.</i> Land on the pad, <kbd>E</kbd> to go inside, <kbd>F</kbd> to talk. The owner knows where your crewmember is.</div>
+        <div class="bf-step"><i>c.</i> Hover low and slow to hoist: four seconds over a hostile street. Drift and the cable pays out.</div>
+        <div class="bf-step"><i>d.</i> Drop them at an LZ: any rooftop helideck (green H) or the Navy ship. Gunships launch the moment someone is aboard.</div>
+      </div></div>
+    <div class="bf-p"><b>3. PERSONNEL MISSING IN ACTION.</b>
+      <div class="bf-cards">${CREW.map((c,i)=>`<div class="bf-card" style="--rt:${[-1.5,1,-0.5,1.6,-1][i]}deg"><div class="ph"><img src="${crewAvatarURL(c)}" alt=""><u>MIA</u></div><b>${c.name}</b><span>${c.rank} &middot; "${c.call}"</span><em>${c.role}</em></div>`).join('')}</div></div>
+    <div class="bf-row"><div class="bf-p bf-keys"><b>4. CONTROLS.</b> <kbd>W A S D</kbd> fly &middot; <kbd>SPACE</kbd> fire &middot; <kbd>1-4</kbd> weapon &middot; <kbd>X</kbd> hover &middot; <kbd>C</kbd> cockpit &middot; <kbd>H</kbd> full HUD</div>
+    <div class="bf-sig">FOR THE COMMANDER:<i>R. J. Callahan</i>R. J. CALLAHAN<br>COL, AV, Chief of Staff</div></div>
     <div class="bf-launch">
-      <label class="bf-call"><span>CALLSIGN</span><input id="pName" maxlength="10" placeholder="PILOT" autocomplete="off"></label>
+      <label class="bf-call"><span>PILOT IN COMMAND (CALLSIGN)</span><input id="pName" maxlength="10" placeholder="PILOT" autocomplete="off"></label>
       <button id="startBtn"><span>TAKE OFF</span></button>
       <div class="bf-meta"><div id="ovStats"></div><div id="ovBoard"></div></div>
     </div>
-    <div class="bf-foot">leaderboard scores are shared with other players of this game</div>
-  </div>`;
+    <div class="bf-foot">Leaderboard scores are shared with other players of this game.</div>
+    <div class="bf-classif bot">SECRET</div>
+  </div></div>`;
 document.body.appendChild(ov);
 // ---------- THE MEDAL: Distinguished Flying Cross, with a citation in the pilot's name ----------
 function showMedal(){
