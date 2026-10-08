@@ -10065,8 +10065,8 @@ window.__navGlows={r:navRGlow,g:navGGlow,s:strobeGlow};
 // visibility: subtle key (cool) + rim (warm neon-bounce) lights riding on the airframe so the
 // heli's silhouette pops off the dark city instead of reading as a black cutout
 // faint fill so the airframe never goes to a black hole at night; neutral, not pink
-const heliKeyLight=new THREE.PointLight(0xdfe6ee,0.30,20,2);heliKeyLight.position.set(0,4.2,-2.0);heli.add(heliKeyLight);
-const heliRimLight=new THREE.PointLight(0xffd2a8,0.18,16,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
+const heliKeyLight=new THREE.PointLight(0xdfe6ee,0.55,22,2);heliKeyLight.position.set(0,4.2,-2.0);heli.add(heliKeyLight);
+const heliRimLight=new THREE.PointLight(0xffd2a8,0.34,18,2);heliRimLight.position.set(0,1.6,8.5);heli.add(heliRimLight);
 const mast=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,1,8),darkMat);mast.position.y=1.35;heli.add(mast);
 const rotor=new THREE.Group();
 // four separate blades from the hub, narrow chord, swept and tapered tips, slight droop — and
@@ -14649,13 +14649,15 @@ function loop(now){
       cam.position.copy(heli.position).add(new THREE.Vector3(0,0.82,-0.9).applyQuaternion(heli.quaternion));
       cam.lookAt(heli.position.clone().add(new THREE.Vector3(0,.3,-40).applyQuaternion(heli.quaternion)));
     }else{
-      const cpos=heli.position.clone().add(new THREE.Vector3(Math.sin(yaw)*24,10,Math.cos(yaw)*24));
-      cam.position.lerp(cpos,5*dt);
-      cam.lookAt(heli.position.clone().add(fwd.clone().multiplyScalar(10)));
+      // chase: close and low enough that the Apache owns the lower third of the frame instead of
+      // getting lost in the city (it was 24 m back and 10 m up, aimed 10 m ahead of the nose)
+      const cpos=heli.position.clone().add(new THREE.Vector3(Math.sin(yaw)*15,4.5,Math.cos(yaw)*15));
+      cam.position.lerp(cpos,Math.min(1,7.5*dt));
+      cam.lookAt(heli.position.clone().add(fwd.clone().multiplyScalar(7)).add(new THREE.Vector3(0,1.2,0)));
     }
     cam.position.y+=Math.sin(now/28)*0.03;
     { // sense of speed: the lens opens a little as you push the throttle, eases back in the hover
-      const thr=window.__throttle!==undefined?window.__throttle:1, fv=(cockpitMode?66:62)+thr*10;
+      const thr=window.__throttle!==undefined?window.__throttle:1, fv=(cockpitMode?66:58)+thr*6;
       if(Math.abs(cam.fov-fv)>0.05){cam.fov+=(fv-cam.fov)*Math.min(1,dt*2.5);cam.updateProjectionMatrix();} }
     if(shake>0){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake;}
     sky.position.copy(cam.position);
