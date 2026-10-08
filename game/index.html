@@ -3039,63 +3039,333 @@ const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, b
 const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
 const warnGeo=new THREE.SphereGeometry(0.42,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff1a10});   // ICAO red, lamp-sized
 
-// ---- 1989 TOKYO ADVERTISING: specific products, people and prices, all fictional brands ----
-// Bubble-era Japanese ad design is typography first: big mincho/gothic headlines, a product shot,
-// a price or a date, a small corporate mark. Each poster is one of these, never a placeholder.
-function _poster(w,h,fn){return tex((g,W2,H2)=>{fn(g,W2,H2);ledScanlines(g,W2,H2,0.06);g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=3;g.strokeRect(1,1,W2-2,H2-2);},w,h,true);}
-const POSTERS=[
-  // beer: frosted glass, foam, "生" — Kaminari Draft
-  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#0b1a2e');gr.addColorStop(1,'#1d3e66');g.fillStyle=gr;g.fillRect(0,0,w,h);
-    const bx=w*0.28,bw=w*0.44,by=h*0.2,bh=h*0.42;const bg=g.createLinearGradient(bx,0,bx+bw,0);bg.addColorStop(0,'#c27a12');bg.addColorStop(.5,'#ffd24a');bg.addColorStop(1,'#b8700e');
-    g.fillStyle=bg;g.fillRect(bx,by,bw,bh);g.fillStyle='#fbf6ea';g.beginPath();g.ellipse(bx+bw/2,by,bw*0.56,h*0.035,0,0,7);g.fill();g.fillRect(bx,by,bw,h*0.03);
-    g.fillStyle='rgba(255,255,255,.35)';for(let i=0;i<14;i++){g.beginPath();g.arc(bx+Math.random()*bw,by+h*0.05+Math.random()*bh*0.9,1.2,0,7);g.fill();}
-    _outlineText(g,'雷 生',w/2,h*0.72,h*0.09,MINCHO,'#ffffff','#0b1a2e',3);_chromeText(g,'KAMINARI',w/2,h*0.82,h*0.05,GOTHIC);
-    g.fillStyle='#ffd24a';g.font=`bold ${h*0.03}px ${GOTHIC}`;g.textAlign='center';g.fillText('DRAFT · 辛口',w/2,h*0.88);
-    g.fillStyle='rgba(255,255,255,.6)';g.font=`${h*0.022}px ${GOTHIC}`;g.fillText('お酒は二十歳になってから',w/2,h*0.95);}),
-  // portable cassette player: "STEREO WALK-MATE" by Sonika
-  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#f2efe8';g.fillRect(0,0,w,h);g.fillStyle='#d8261e';g.fillRect(0,0,w,h*0.07);
-    g.fillStyle='#2a2c30';g.fillRect(w*0.2,h*0.2,w*0.6,h*0.3);g.fillStyle='#b9bcc2';g.fillRect(w*0.24,h*0.24,w*0.52,h*0.14);
-    g.fillStyle='#1a1a1a';[0.38,0.62].forEach(f=>{g.beginPath();g.arc(w*f,h*0.31,w*0.07,0,7);g.fill();});g.fillStyle='#d8261e';g.fillRect(w*0.24,h*0.42,w*0.12,h*0.03);
-    g.strokeStyle='#2a2c30';g.lineWidth=3;g.beginPath();g.arc(w/2,h*0.16,w*0.32,Math.PI*1.05,Math.PI*1.95);g.stroke();
-    g.fillStyle='#111';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.textAlign='center';g.fillText('WALK-MATE',w/2,h*0.6);
-    g.font=`bold ${h*0.058}px ${MINCHO}`;g.fillText('音を、',w/2,h*0.7);g.fillText('連れ出そう。',w/2,h*0.78);
-    g.fillStyle='#d8261e';g.font=`bold ${h*0.035}px ${GOTHIC}`;g.fillText('¥19,800',w/2,h*0.86);g.fillStyle='#111';g.font=`bold ${h*0.03}px Arial`;g.fillText('SONIKA',w/2,h*0.94);}),
-  // idol concert: Mizuki Yui, Budokan 12.24 — a spotlit silhouette, not a cartoon face
-  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createRadialGradient(w/2,h*0.3,4,w/2,h*0.3,h*0.5);gr.addColorStop(0,'#ffd6ea');gr.addColorStop(.5,'#b23a78');gr.addColorStop(1,'#2a0a20');g.fillStyle=gr;g.fillRect(0,0,w,h);
-    g.fillStyle='#160610';g.beginPath();g.arc(w/2,h*0.2,w*0.1,0,7);g.fill();g.beginPath();g.moveTo(w*0.3,h*0.56);g.quadraticCurveTo(w*0.36,h*0.26,w/2,h*0.27);g.quadraticCurveTo(w*0.64,h*0.26,w*0.7,h*0.56);g.fill();
-    g.fillRect(w*0.62,h*0.24,w*0.025,h*0.1);
-    g.fillStyle='#fff';g.font=`bold ${h*0.06}px ${MINCHO}`;g.textAlign='center';g.fillText('水城 ゆい',w/2,h*0.64);
-    g.font=`bold ${h*0.032}px ${GOTHIC}`;g.fillText('LIVE TOUR ’89',w/2,h*0.7);g.fillText('“冬のヴィーナス”',w/2,h*0.75);
-    g.fillStyle='#ffe14d';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.fillText('12.24',w/2,h*0.84);g.fillStyle='#fff';g.font=`bold ${h*0.035}px ${MINCHO}`;g.fillText('日本武道館',w/2,h*0.9);}),
-  // cigarettes: Seven Hills Light
-  ()=>_poster(192,576,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0,h);gr.addColorStop(0,'#8fc7e8');gr.addColorStop(1,'#1d4f7a');g.fillStyle=gr;g.fillRect(0,0,w,h);
-    g.fillStyle='#f4f6f8';g.fillRect(w*0.3,h*0.22,w*0.4,h*0.3);g.fillStyle='#1d4f7a';g.fillRect(w*0.3,h*0.22,w*0.4,h*0.08);g.fillStyle='#f4f6f8';g.fillRect(w*0.38,h*0.17,w*0.06,h*0.06);
-    g.fillStyle='#1d4f7a';g.font=`bold ${h*0.03}px Arial`;g.textAlign='center';g.fillText('SEVEN HILLS',w/2,h*0.4);
-    g.fillStyle='#fff';g.font=`italic bold ${h*0.05}px Georgia`;g.fillText('Feel the',w/2,h*0.66);g.fillText('Breeze.',w/2,h*0.72);
-    g.fillStyle='rgba(255,255,255,.75)';g.font=`${h*0.016}px ${GOTHIC}`;g.fillText('健康のため吸いすぎに',w/2,h*0.92);g.fillText('注意しましょう',w/2,h*0.95);}),
-  // bubble-era condo: ¥1億2,800万, Minato-ku
-  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#1a1410';g.fillRect(0,0,w,h);const gr=g.createLinearGradient(0,h*0.1,0,h*0.5);gr.addColorStop(0,'#3a2a50');gr.addColorStop(1,'#d88a4a');g.fillStyle=gr;g.fillRect(w*0.08,h*0.06,w*0.84,h*0.44);
-    g.fillStyle='#120e14';g.fillRect(w*0.4,h*0.14,w*0.2,h*0.36);g.fillStyle='rgba(255,220,150,.9)';for(let y=0;y<10;y++)for(let x=0;x<3;x++)if(Math.random()<.7)g.fillRect(w*0.42+x*w*0.06,h*0.16+y*h*0.032,w*0.035,h*0.018);
-    g.fillStyle='#d8b46a';g.font=`bold ${h*0.04}px ${MINCHO}`;g.textAlign='center';g.fillText('グランドタワー',w/2,h*0.58);g.fillText('六本木',w/2,h*0.63);
-    g.fillStyle='#fff';g.font=`bold ${h*0.05}px ${GOTHIC}`;g.fillText('1億2,800万円',w/2,h*0.74);g.fillStyle='#d8b46a';g.font=`${h*0.028}px ${GOTHIC}`;g.fillText('2LDK · 港区 · 即入居可',w/2,h*0.8);
-    g.fillStyle='#fff';g.font=`bold ${h*0.03}px ${GOTHIC}`;g.fillText('☎ 0120-89-1224',w/2,h*0.9);}),
-  // instant ramen: Ichiban Shoyu
-  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#ffd23a';g.fillRect(0,0,w,h);g.fillStyle='#d8261e';g.beginPath();g.arc(w/2,h*0.3,w*0.4,0,7);g.fill();
-    g.fillStyle='#fff';g.fillRect(w*0.28,h*0.18,w*0.44,h*0.22);g.fillStyle='#d8261e';g.font=`bold ${h*0.05}px ${MINCHO}`;g.textAlign='center';g.fillText('一番',w/2,h*0.27);g.font=`bold ${h*0.03}px ${GOTHIC}`;g.fillText('しょうゆ味',w/2,h*0.34);
-    _outlineText(g,'3分で、',w/2,h*0.6,h*0.058,MINCHO,'#d8261e','#fff',3);_outlineText(g,'ごちそう。',w/2,h*0.69,h*0.056,MINCHO,'#d8261e','#fff',3);
-    g.fillStyle='#111';g.font=`bold ${h*0.04}px ${GOTHIC}`;g.fillText('¥120',w/2,h*0.82);g.font=`bold ${h*0.028}px Arial`;g.fillText('MARUTOKU FOODS',w/2,h*0.92);}),
-  // pachinko: grand opening
-  ()=>_poster(192,576,(g,w,h)=>{g.fillStyle='#c8102e';g.fillRect(0,0,w,h);_starburst(g,w/2,h*0.3,w*0.6,24,'#ffe14d');
-    _outlineText(g,'新装',w/2,h*0.24,h*0.1,MINCHO,'#ffe14d','#4a0010',4);_outlineText(g,'開店',w/2,h*0.36,h*0.1,MINCHO,'#ffe14d','#4a0010',4);
-    g.fillStyle='#fff';g.font=`bold ${h*0.045}px ${GOTHIC}`;g.textAlign='center';g.fillText('パチンコ',w/2,h*0.56);g.fillText('大東京',w/2,h*0.62);
-    g.font=`bold ${h*0.035}px ${GOTHIC}`;g.fillText('AM 10:00 開店',w/2,h*0.74);g.fillStyle='#ffe14d';g.fillText('全台 大放出',w/2,h*0.82);}),
-  // film: Tokyo 1999
-  ()=>_poster(192,576,(g,w,h)=>{const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#1a1e2c');rg.addColorStop(1,'#080a12');g.fillStyle=rg;g.fillRect(0,0,w,h);
-    g.fillStyle='rgba(120,180,255,.45)';g.beginPath();g.ellipse(w/2,h*0.28,w*0.32,h*0.18,0,0,7);g.fill();g.fillStyle='#05060a';g.beginPath();g.arc(w/2,h*0.25,w*0.09,0,7);g.fill();g.fillRect(w*0.38,h*0.3,w*0.24,h*0.3);
-    _glowText(g,'東京',w/2,h*0.66,h*0.1,MINCHO,'#9fd0ff',12);_glowText(g,'1999',w/2,h*0.76,h*0.07,GOTHIC,'#9fd0ff',10);
-    g.fillStyle='#c01818';g.fillRect(w*0.08,h*0.86,w*0.84,h*0.05);g.fillStyle='#fff';g.font=`bold ${h*0.024}px ${GOTHIC}`;g.textAlign='center';g.textBaseline='middle';g.fillText('12月 全国ロードショー',w/2,h*0.885);}),
-];
-function idolPosterTex(){return _pick(POSTERS)();}
+// ---- 1989 TOKYO ADVERTISING ------------------------------------------------------------------
+// Drawn the way Bubble-era Japanese ads actually looked — not the later "retrowave" pastiche:
+//  * the copywriter's era: one quiet line of vertical mincho copy (縦書き), lots of air, a small
+//    corporate logotype bottom-right
+//  * studio product photography: the silver 辛口 beer can on black with condensation, a coupe shot
+//    at night on wet tarmac with the city out of focus behind it, a cassette on a seamless sweep
+//  * city-pop record ads in Hiroshi Nagai's flat illustration style: hard-edged white modernism,
+//    a turquoise pool, one palm, a deep gradient sky
+//  * travel and cigarette ads built on bright location photography; painted film one-sheets
+//  * period facts: 280ps (the makers' horsepower cap), 税込 prices after the April 1989 consumption
+//    tax (CD ¥3,008), 健康のため吸いすぎに注意しましょう, B-series poster proportions (1 : 1.414)
+// All brands, names and products are fictional.
+const _M=MINCHO, _G=GOTHIC+',Arial';
+const AD={
+  lin(g,x0,y0,x1,y1,stops){const gr=g.createLinearGradient(x0,y0,x1,y1);stops.forEach(([t,c])=>gr.addColorStop(t,c));return gr;},
+  rad(g,x,y,r0,r1,stops){const gr=g.createRadialGradient(x,y,r0,x,y,r1);stops.forEach(([t,c])=>gr.addColorStop(t,c));return gr;},
+  fit(g,txt,maxW,size,weight,font){g.font=`${weight} ${size}px ${font}`;let s=size;while(s>6&&g.measureText(txt).width>maxW){s*=0.94;g.font=`${weight} ${s}px ${font}`;}return s;},
+  text(g,txt,x,y,size,font,col,o){o=o||{};const s=AD.fit(g,txt,o.maxW||1e9,size,o.weight||'bold',font);
+    g.textAlign=o.align||'center';g.textBaseline='middle';
+    if(o.spacing!=null)g.letterSpacing=o.spacing+'px';
+    if(o.shadow){g.shadowColor=o.shadow;g.shadowBlur=o.blur||s*0.25;}
+    if(o.stroke){g.lineJoin='round';g.lineWidth=o.sw||s*0.12;g.strokeStyle=o.stroke;g.strokeText(txt,x,y);}
+    g.fillStyle=col;g.fillText(txt,x,y);g.shadowBlur=0;if(o.spacing!=null)g.letterSpacing='0px';return s;},
+  // 縦書き: columns run right-to-left; 、。 sit top-right of their cell, ー〜… turn 90°, small kana nudge
+  tate(g,cols,x,y,size,font,col,o){o=o||{};g.font=`${o.weight||'500'} ${size}px ${font}`;g.fillStyle=col;g.textAlign='center';g.textBaseline='middle';
+    if(o.shadow){g.shadowColor=o.shadow;g.shadowBlur=size*0.3;}
+    cols.forEach((c,ci)=>{const cx=x-ci*size*(o.gap||1.6);let cy=y+(o.indent&&o.indent[ci]||0)*size;
+      for(const ch of c){if('、。，．'.includes(ch))g.fillText(ch,cx+size*0.55,cy-size*0.5);
+        else if('ー〜…—｜'.includes(ch)){g.save();g.translate(cx,cy);g.rotate(Math.PI/2);g.fillText(ch,0,0);g.restore();}
+        else if('ゃゅょっャュョッぁぃぅぇぉ'.includes(ch))g.fillText(ch,cx+size*0.1,cy-size*0.1);
+        else g.fillText(ch,cx,cy);
+        cy+=size*(o.lead||1.08);}});g.shadowBlur=0;},
+  blur(g,px,fn){g.save();g.filter=`blur(${px}px)`;fn();g.restore();},
+  // a sub-picture clipped to a rectangle, drawn in its own coordinates
+  frame(g,x,y,w,h,fn){g.save();g.beginPath();g.rect(x,y,w,h);g.clip();g.translate(x,y);fn(w,h);g.restore();},
+  bokeh(g,w,y0,y1,n,cols,r0,r1,a){g.save();g.globalCompositeOperation='lighter';
+    for(let i=0;i<n;i++){const x=Math.random()*w,y=y0+Math.random()*(y1-y0),r=r0+Math.random()*(r1-r0),c=cols[i%cols.length];
+      g.fillStyle=AD.rad(g,x,y,0,r,[[0,c],[0.82,c],[1,'rgba(0,0,0,0)']]);g.globalAlpha=(a||0.3)*(0.5+Math.random()*0.5);g.beginPath();g.arc(x,y,r,0,7);g.fill();}g.restore();},
+  vignette(g,w,h,k){g.fillStyle=AD.rad(g,w/2,h/2,Math.min(w,h)*0.3,Math.hypot(w,h)*0.6,[[0,'rgba(0,0,0,0)'],[1,`rgba(0,0,0,${k})`]]);g.fillRect(0,0,w,h);},
+  palm(g,x,y,s,col,lean){lean=lean||0.25;g.save();g.fillStyle=col;g.strokeStyle=col;g.lineCap='round';
+    g.lineWidth=s*0.06;g.beginPath();g.moveTo(x,y);g.quadraticCurveTo(x+s*lean,y-s*0.6,x+s*lean*0.4,y-s*1.1);g.stroke();
+    const tx=x+s*lean*0.4,ty=y-s*1.1;
+    for(let k=0;k<9;k++){const a=-Math.PI*0.97+k*Math.PI*0.24+(Math.random()-.5)*0.12,L=s*(0.48+Math.random()*0.22);
+      const ex=tx+Math.cos(a)*L,ey=ty+Math.sin(a)*L*0.5+L*0.32;
+      g.lineWidth=s*0.03;g.beginPath();g.moveTo(tx,ty);g.quadraticCurveTo(tx+Math.cos(a)*L*0.5,ty+Math.sin(a)*L*0.5-L*0.12,ex,ey);g.stroke();
+      for(let j=1;j<9;j++){const t=j/9,px=tx+(ex-tx)*t,py=ty+(ey-ty)*t-Math.sin(t*Math.PI)*L*0.1;g.lineWidth=s*0.022;
+        [1,-1].forEach(sd=>{g.beginPath();g.moveTo(px,py);g.lineTo(px+Math.cos(a+sd*1.3)*s*0.08*(1-t*0.6),py+s*0.1*(1-t*0.5));g.stroke();});}}
+    g.restore();},
+  // the corporate signature: a small logotype + rule, bottom-right, the way every period ad closed
+  sig(g,w,h,name,sub,col,o){o=o||{};const y=h-(o.pad||h*0.045),x=w-(o.padX||w*0.07);
+    AD.text(g,name,x,y-(sub?h*0.022:0),o.size||h*0.034,o.font||'Georgia,serif',col,{align:'right',weight:o.weight||'bold',spacing:o.sp!=null?o.sp:1.5,maxW:w*0.5});
+    if(sub)AD.text(g,sub,x,y+h*0.012,h*0.016,_G,col,{align:'right',weight:'normal',maxW:w*0.5});},
+  // print realism: grain, faint halftone rosette, sun-fade from the top, paper seams for wall posters
+  print(g,w,h,o){o=o||{};const id=g.getImageData(0,0,w,h),d=id.data,a=o.grain||12;
+    for(let i=0;i<d.length;i+=4){const n=(Math.random()-0.5)*a;d[i]+=n;d[i+1]+=n;d[i+2]+=n;}g.putImageData(id,0,0);
+    g.fillStyle=AD.lin(g,0,0,0,h,[[0,'rgba(255,248,232,.09)'],[0.45,'rgba(255,248,232,0)']]);g.fillRect(0,0,w,h);
+    if(o.seams){g.strokeStyle='rgba(0,0,0,.16)';g.lineWidth=1.2;for(let k=1;k<o.seams;k++){const y=h*k/o.seams;g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}}
+  },
+};
+// ---- scenes: each paints a picture into (0,0,w,h) ----
+const SCENE={
+  // studio product shot: the silver dry-beer can, black sweep, top spot, condensation, glossy floor
+  silverCan(g,w,h,o){o=o||{};g.fillStyle='#030304';g.fillRect(0,0,w,h);
+    g.fillStyle=AD.rad(g,w*(o.cx||0.5),h*0.38,0,Math.max(w,h)*0.6,[[0,'#2a2e36'],[0.45,'#0e1014'],[1,'#030304']]);g.fillRect(0,0,w,h);
+    const ch=Math.min(h*0.62,w*1.1),cw=ch*0.52,cx=w*(o.cx||0.5),top=h*0.5-ch*0.48,bot=top+ch;
+    const metal=x0=>AD.lin(g,x0,0,x0+cw,0,[[0,'#16181c'],[0.07,'#5a6068'],[0.14,'#e8ecf0'],[0.2,'#ffffff'],[0.27,'#aab0b8'],[0.42,'#50565e'],[0.55,'#c8ced6'],[0.6,'#f4f6f8'],[0.68,'#8a9098'],[0.86,'#2a2e34'],[1,'#0c0d10']]);
+    const body=(yA,yB)=>{g.fillStyle=metal(cx-cw/2);g.beginPath();g.moveTo(cx-cw/2,yA);g.lineTo(cx-cw/2,yB);g.ellipse(cx,yB,cw/2,cw*0.08,0,Math.PI,0,true);g.lineTo(cx+cw/2,yA);g.closePath();g.fill();};
+    // glossy floor reflection first
+    g.save();g.globalAlpha=0.22;g.translate(0,bot*2);g.scale(1,-1);body(top+ch*0.06,bot);g.restore();
+    g.fillStyle=AD.lin(g,0,bot,0,h,[[0,'rgba(3,3,4,.2)'],[0.5,'rgba(3,3,4,1)']]);g.fillRect(0,bot,w,h-bot);
+    body(top+ch*0.06,bot);
+    // the shoulder taper and lid
+    g.fillStyle=metal(cx-cw/2);g.beginPath();g.moveTo(cx-cw/2,top+ch*0.065);g.quadraticCurveTo(cx-cw/2,top+ch*0.02,cx-cw*0.4,top+ch*0.012);g.lineTo(cx+cw*0.4,top+ch*0.012);g.quadraticCurveTo(cx+cw/2,top+ch*0.02,cx+cw/2,top+ch*0.065);g.fill();
+    g.fillStyle=AD.lin(g,cx-cw*0.4,0,cx+cw*0.4,0,[[0,'#6a7078'],[0.3,'#f4f6f8'],[0.7,'#9aa0a8'],[1,'#3a3e44']]);g.beginPath();g.ellipse(cx,top+ch*0.012,cw*0.4,cw*0.07,0,0,7);g.fill();
+    g.strokeStyle='rgba(30,32,36,.7)';g.lineWidth=1;g.beginPath();g.ellipse(cx,top+ch*0.012,cw*0.33,cw*0.055,0,0,7);g.stroke();
+    // label: black diagonal-free period layout — logotype, 辛口 seal, small print
+    g.save();g.beginPath();g.rect(cx-cw/2,top+ch*0.06,cw,ch*0.94);g.clip();
+    g.fillStyle='rgba(10,10,14,.92)';AD.fit(g,'KAMINARI',cw*0.68/0.82,cw*0.25,'italic 900','Georgia,serif');g.textAlign='center';g.textBaseline='middle';
+    g.save();g.translate(cx,top+ch*0.4);g.scale(0.82,1);g.fillText('KAMINARI',0,0);g.restore();
+    g.fillStyle='#c8101e';g.beginPath();g.arc(cx,top+ch*0.22,cw*0.12,0,7);g.fill();g.fillStyle='#fff';g.font=`900 ${cw*0.1}px ${_M}`;g.fillText('辛口',cx,top+ch*0.222);
+    g.fillStyle='rgba(10,10,14,.85)';g.font=`bold ${cw*0.1}px Arial`;g.fillText('DRY',cx,top+ch*0.52);
+    g.fillStyle='rgba(10,10,14,.6)';g.fillRect(cx-cw*0.3,top+ch*0.58,cw*0.6,ch*0.004);g.font=`${cw*0.055}px ${_G}`;g.fillText('雷 生 ビ ー ル',cx,top+ch*0.62);
+    g.fillStyle='#c8101e';g.fillRect(cx-cw/2,top+ch*0.86,cw,ch*0.018);
+    // re-shade the print over the cylinder so the label wraps round it
+    g.fillStyle=AD.lin(g,cx-cw/2,0,cx+cw/2,0,[[0,'rgba(0,0,0,.75)'],[0.18,'rgba(255,255,255,.18)'],[0.22,'rgba(255,255,255,.3)'],[0.45,'rgba(0,0,0,.25)'],[0.6,'rgba(255,255,255,.2)'],[0.85,'rgba(0,0,0,.45)'],[1,'rgba(0,0,0,.85)']]);g.fillRect(cx-cw/2,top,cw,ch);
+    // condensation: beads with a dark lower rim + a specular dot, and a few runs
+    for(let i=0;i<260;i++){const bx=cx-cw/2+Math.random()*cw,by=top+ch*0.08+Math.random()*ch*0.9,r=0.6+Math.random()*Math.random()*cw*0.03,edge=Math.abs((bx-cx)/(cw/2));if(edge>0.93)continue;
+      g.fillStyle='rgba(0,0,0,.28)';g.beginPath();g.ellipse(bx,by+r*0.25,r,r*1.1,0,0,7);g.fill();
+      g.fillStyle='rgba(220,232,244,.35)';g.beginPath();g.ellipse(bx,by,r*0.85,r*0.95,0,0,7);g.fill();
+      g.fillStyle='rgba(255,255,255,.95)';g.beginPath();g.arc(bx-r*0.3,by-r*0.35,Math.max(0.5,r*0.28),0,7);g.fill();}
+    for(let i=0;i<6;i++){const bx=cx-cw*0.35+Math.random()*cw*0.7,by=top+ch*(0.2+Math.random()*0.4);g.strokeStyle='rgba(230,240,250,.4)';g.lineWidth=1.4;g.beginPath();g.moveTo(bx,by);g.lineTo(bx+(Math.random()-.5)*2,by+ch*(0.1+Math.random()*0.2));g.stroke();}
+    g.restore();
+    // rim light down the right edge
+    g.fillStyle='rgba(200,220,255,.45)';g.fillRect(cx+cw*0.47,top+ch*0.07,cw*0.02,ch*0.9);},
+  // night car photography: wet tarmac, city lights out of focus behind, a coupe in profile
+  nightCar(g,w,h,o){o=o||{};g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#04060e'],[0.5,'#101a34'],[0.62,'#1a2238'],[0.63,'#06070c'],[1,'#020204']]);g.fillRect(0,0,w,h);
+    AD.blur(g,Math.max(2,w*0.012),()=>{for(let i=0;i<26;i++){const bx=Math.random()*w,bw=w*(0.04+Math.random()*0.1),bh=h*(0.1+Math.random()*0.4);g.fillStyle='#0a0e1c';g.fillRect(bx,h*0.62-bh,bw,bh);
+      for(let k=0;k<14;k++){g.fillStyle=Math.random()<0.6?'rgba(255,214,150,.8)':'rgba(180,220,255,.7)';g.fillRect(bx+Math.random()*bw,h*0.62-Math.random()*bh,2,2);}}});
+    AD.bokeh(g,w,h*0.1,h*0.6,34,['#ffb050','#ffe0a0','#ff5040','#a0d0ff'],w*0.01,w*0.05,0.35);
+    // wet road: streaked reflections of the lights
+    for(let i=0;i<40;i++){const x=Math.random()*w;g.fillStyle=`rgba(255,${180+Math.random()*60|0},120,${0.05+Math.random()*0.12})`;g.fillRect(x,h*0.64,1.5+Math.random()*3,h*(0.1+Math.random()*0.3));}
+    const L=w*(o.L||0.84),x0=(w-L)/2+(o.dx||0)*w,gy=h*(o.gy||0.82);SCENE.coupe(g,x0,gy,L,o.col||'#c4141e',true);},
+  coupe(g,x,gy,L,col,refl){const P=[[0,0.07],[0.004,0.115],[0.12,0.135],[0.3,0.16],[0.345,0.168],[0.5,0.245],[0.67,0.246],[0.84,0.185],[0.995,0.172],[1,0.09],[0.97,0.05],[0.035,0.05]];
+    const path=(s)=>{g.beginPath();P.forEach(([u,v],i)=>{const X=x+u*L,Y=gy-v*L*s;i?g.lineTo(X,Y):g.moveTo(X,Y);});g.closePath();};
+    const paint=(s,al)=>{g.save();g.globalAlpha=al;path(s);
+      g.fillStyle=AD.lin(g,0,gy-0.246*L*s,0,gy-0.05*L*s,[[0,'#dfe8f4'],[0.28,col],[0.5,'#ffd8d0'],[0.53,'#1a0a0c'],[0.6,col],[1,'#120406']]);g.fill();
+      g.fillStyle='#05070c';g.beginPath();g.moveTo(x+0.36*L,gy-0.17*L*s);g.lineTo(x+0.5*L,gy-0.236*L*s);g.lineTo(x+0.665*L,gy-0.237*L*s);g.lineTo(x+0.82*L,gy-0.18*L*s);g.closePath();g.fill();
+      g.fillStyle='rgba(150,180,220,.35)';g.beginPath();g.moveTo(x+0.4*L,gy-0.18*L*s);g.lineTo(x+0.5*L,gy-0.232*L*s);g.lineTo(x+0.53*L,gy-0.232*L*s);g.lineTo(x+0.44*L,gy-0.18*L*s);g.fill();
+      g.strokeStyle='rgba(0,0,0,.5)';g.lineWidth=1;g.beginPath();g.moveTo(x+0.56*L,gy-0.17*L*s);g.lineTo(x+0.56*L,gy-0.07*L*s);g.stroke();
+      g.fillStyle='rgba(255,255,255,.75)';g.fillRect(x+0.02*L,gy-0.132*L*s,0.96*L,1.2);
+      g.fillStyle='#ff2030';g.fillRect(x+0.985*L,gy-0.165*L*s,0.015*L,0.04*L*s);g.fillStyle='#ffe8b0';g.fillRect(x,gy-0.1*L*s,0.012*L,0.02*L*s);
+      [0.175,0.81].forEach(f=>{const wx=x+f*L,wy=gy-0.07*L*s,r=0.072*L;g.fillStyle='#050506';g.beginPath();g.arc(wx,wy,r*1.12,Math.PI,0);g.fill();
+        g.fillStyle='#0c0c0e';g.beginPath();g.arc(wx,wy,r,0,7);g.fill();g.fillStyle=AD.lin(g,0,wy-r,0,wy+r,[[0,'#f0f4f8'],[1,'#50565e']]);g.beginPath();g.arc(wx,wy,r*0.64,0,7);g.fill();
+        g.strokeStyle='#30343a';g.lineWidth=r*0.1;for(let k=0;k<5;k++){const a=k*Math.PI*0.4;g.beginPath();g.moveTo(wx+Math.cos(a)*r*0.18,wy+Math.sin(a)*r*0.18);g.lineTo(wx+Math.cos(a)*r*0.6,wy+Math.sin(a)*r*0.6);g.stroke();}
+        g.fillStyle='#30343a';g.beginPath();g.arc(wx,wy,r*0.15,0,7);g.fill();});
+      g.restore();};
+    g.fillStyle='rgba(0,0,0,.65)';g.beginPath();g.ellipse(x+L/2,gy+2,L*0.55,L*0.02,0,0,7);g.fill();
+    if(refl)AD.blur(g,1.5,()=>paint(-0.9,0.18));paint(1,1);},
+  // Hiroshi Nagai: flat, hard-edged, hot sun, white modernism, turquoise pool, one palm
+  nagai(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h*0.62,[[0,'#0a4fb4'],[0.6,'#3a98e0'],[1,'#a8dcf4']]);g.fillRect(0,0,w,h);
+    g.fillStyle='#ffffff';g.beginPath();g.ellipse(w*0.25,h*0.2,w*0.16,h*0.05,0,0,7);g.ellipse(w*0.36,h*0.17,w*0.1,h*0.06,0,0,7);g.fill();g.fillStyle='#d8e4f0';g.fillRect(w*0.1,h*0.215,w*0.36,h*0.02);
+    const bx=w*0.5,bt=h*0.18;g.fillStyle='#fbfbf6';g.fillRect(bx,bt,w*0.5,h*0.5);g.fillStyle='#b8c6dc';g.beginPath();g.moveTo(bx,bt);g.lineTo(bx+w*0.08,bt);g.lineTo(bx+w*0.08,h*0.68);g.lineTo(bx,h*0.68);g.fill();
+    for(let k=0;k<4;k++){const y=bt+h*0.06+k*h*0.11;g.fillStyle='#1a3a6a';g.fillRect(bx+w*0.12,y,w*0.34,h*0.05);g.fillStyle='#fbfbf6';g.fillRect(bx+w*0.1,y+h*0.05,w*0.4,h*0.012);
+      g.fillStyle='#b8c6dc';g.fillRect(bx+w*0.1,y+h*0.062,w*0.4,h*0.008);}
+    g.fillStyle='#e8e4d8';g.fillRect(0,h*0.66,w,h*0.04);g.fillStyle='#c8c0b0';g.fillRect(0,h*0.695,w,h*0.008);
+    g.fillStyle=AD.lin(g,0,h*0.7,0,h,[[0,'#18b4c8'],[1,'#0a7aa0']]);g.fillRect(0,h*0.7,w,h*0.3);
+    g.strokeStyle='rgba(255,255,255,.75)';g.lineWidth=Math.max(1.2,w*0.006);for(let i=0;i<22;i++){const y=h*0.72+Math.random()*h*0.27,x=Math.random()*w,l=w*(0.04+Math.random()*0.1);g.beginPath();g.moveTo(x,y);g.bezierCurveTo(x+l*0.3,y-h*0.008,x+l*0.6,y+h*0.008,x+l,y);g.stroke();}
+    g.strokeStyle='#e8eef4';g.lineWidth=w*0.012;g.beginPath();g.moveTo(w*0.82,h*0.66);g.lineTo(w*0.82,h*0.8);g.moveTo(w*0.88,h*0.66);g.lineTo(w*0.88,h*0.8);g.stroke();
+    AD.palm(g,w*0.2,h*0.7,h*0.55,'#0b3e2c',0.3);g.fillStyle='#ff5a3a';g.fillRect(w*0.62,h*0.6,w*0.12,h*0.06);g.fillStyle='#fff';g.fillRect(w*0.62,h*0.615,w*0.12,h*0.012);g.fillRect(w*0.62,h*0.64,w*0.12,h*0.012);},
+  // Waikiki: bright location photo — sky, Diamond Head, reef water, white surf, sand, soft palm
+  beach(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h*0.48,[[0,'#2a7ad8'],[1,'#d0eaf8']]);g.fillRect(0,0,w,h);
+    AD.blur(g,2,()=>{g.fillStyle='#fff';for(let i=0;i<6;i++){g.globalAlpha=0.6;g.beginPath();g.ellipse(Math.random()*w,h*(0.15+Math.random()*0.2),w*0.12,h*0.025,0,0,7);g.fill();}g.globalAlpha=1;});
+    g.fillStyle='#6a8a7a';g.beginPath();g.moveTo(-w*0.05,h*0.48);g.quadraticCurveTo(w*0.06,h*0.39,w*0.2,h*0.41);g.quadraticCurveTo(w*0.3,h*0.43,w*0.36,h*0.48);g.fill();
+    g.fillStyle=AD.lin(g,0,h*0.48,0,h*0.72,[[0,'#0a4a8a'],[0.5,'#1a8ab8'],[1,'#4ad0d0']]);g.fillRect(0,h*0.48,w,h*0.24);
+    for(let i=0;i<5;i++){const y=h*(0.6+i*0.025);g.fillStyle=`rgba(255,255,255,${0.5+i*0.08})`;AD.blur(g,1,()=>{g.fillRect(0,y,w,h*0.006);});}
+    g.fillStyle=AD.lin(g,0,h*0.72,0,h,[[0,'#f0e2c0'],[1,'#d8c49a']]);g.fillRect(0,h*0.72,w,h*0.28);
+    g.fillStyle='rgba(255,255,255,.7)';g.beginPath();g.moveTo(0,h*0.72);for(let x=0;x<=w;x+=w/20)g.lineTo(x,h*0.725+Math.sin(x*0.05)*h*0.006);g.lineTo(w,h*0.74);g.lineTo(0,h*0.74);g.fill();
+    AD.blur(g,Math.max(2,w*0.01),()=>AD.palm(g,w*1.02,h*1.05,h*0.9,'#123a22',-0.35));},
+  // the cigarette sea: deep blue, sun glitter, a white sail heeling over
+  sail(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h*0.55,[[0,'#0a3a8a'],[1,'#b8dcf4']]);g.fillRect(0,0,w,h);
+    g.fillStyle=AD.lin(g,0,h*0.55,0,h,[[0,'#0a3070'],[1,'#041a40']]);g.fillRect(0,h*0.55,w,h*0.45);
+    g.save();g.globalCompositeOperation='lighter';for(let i=0;i<220;i++){const y=h*0.56+Math.pow(Math.random(),1.5)*h*0.44,x=w*0.6+(Math.random()-0.5)*w*0.5*(1+(y-h*0.55)/h);g.fillStyle=`rgba(255,250,230,${0.2+Math.random()*0.5})`;g.fillRect(x,y,1+Math.random()*3,1);}g.restore();
+    const sx=w*0.38,sy=h*0.58,S=h*0.4;g.fillStyle=AD.lin(g,sx-S*0.3,0,sx+S*0.3,0,[[0,'#c8d4e0'],[0.6,'#ffffff'],[1,'#e0e8f0']]);
+    g.beginPath();g.moveTo(sx,sy-S);g.quadraticCurveTo(sx+S*0.32,sy-S*0.5,sx+S*0.36,sy-S*0.06);g.lineTo(sx+S*0.02,sy-S*0.04);g.closePath();g.fill();
+    g.beginPath();g.moveTo(sx-S*0.02,sy-S*0.9);g.quadraticCurveTo(sx-S*0.2,sy-S*0.4,sx-S*0.26,sy-S*0.06);g.lineTo(sx-S*0.03,sy-S*0.05);g.closePath();g.fill();
+    g.strokeStyle='#30343a';g.lineWidth=1.5;g.beginPath();g.moveTo(sx,sy-S);g.lineTo(sx,sy);g.stroke();
+    g.fillStyle='#f4f6f8';g.beginPath();g.moveTo(sx-S*0.3,sy-S*0.04);g.lineTo(sx+S*0.4,sy-S*0.04);g.lineTo(sx+S*0.3,sy+S*0.03);g.lineTo(sx-S*0.24,sy+S*0.03);g.fill();
+    g.fillStyle='rgba(255,255,255,.6)';AD.blur(g,2,()=>{g.beginPath();g.ellipse(sx+S*0.42,sy+S*0.02,S*0.12,S*0.02,0,0,7);g.fill();});},
+  // blue-hour city, shot wide open: skyline sharp-ish, foreground lights melting into bokeh
+  dusk(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#0c1838'],[0.55,'#34508c'],[0.8,'#c88a8a'],[1,'#f0b080']]);g.fillRect(0,0,w,h);
+    let x=0;while(x<w){const bw=w*(0.05+Math.random()*0.1),bh=h*(0.2+Math.random()*0.45);g.fillStyle='#0a1024';g.fillRect(x,h-bh,bw,bh);
+      for(let k=0;k<bw*bh/90;k++){g.fillStyle=Math.random()<0.7?'rgba(255,220,160,.85)':'rgba(200,230,255,.8)';g.fillRect(x+Math.random()*bw,h-Math.random()*bh,1.5,1.5);}x+=bw+1;}
+    AD.bokeh(g,w,h*0.3,h,26,['#ffd090','#ff9060','#ffffff','#90c0ff'],w*0.04,w*0.12,0.28);},
+  // painted one-sheet: Tokyo burning under a red sky, gunship silhouettes in the searchlights
+  filmPaint(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#0c0204'],[0.35,'#5a0a08'],[0.62,'#e0461a'],[0.7,'#ffb050'],[0.72,'#1a0604'],[1,'#050102']]);g.fillRect(0,0,w,h);
+    AD.blur(g,3,()=>{for(let i=0;i<14;i++){g.fillStyle=`rgba(${120+Math.random()*80|0},${20+Math.random()*30|0},10,.5)`;g.beginPath();g.ellipse(Math.random()*w,h*(0.2+Math.random()*0.4),w*0.3,h*0.05,Math.random()*0.4-0.2,0,7);g.fill();}});
+    g.save();g.globalCompositeOperation='lighter';[[0.3,-0.5],[0.7,0.4]].forEach(([fx,a])=>{g.fillStyle=AD.lin(g,0,h*0.7,0,h*0.1,[[0,'rgba(255,240,200,.35)'],[1,'rgba(255,240,200,0)']]);g.beginPath();g.moveTo(w*fx,h*0.7);g.lineTo(w*fx+Math.sin(a)*h*0.7-w*0.05,h*0.05);g.lineTo(w*fx+Math.sin(a)*h*0.7+w*0.05,h*0.05);g.closePath();g.fill();});g.restore();
+    let x=0;while(x<w){const bw=w*(0.04+Math.random()*0.09),bh=h*(0.08+Math.random()*0.3);g.fillStyle='#0c0304';g.fillRect(x,h*0.72-bh,bw,bh);
+      for(let k=0;k<bw*bh/120;k++){g.fillStyle='rgba(255,170,80,.7)';g.fillRect(x+Math.random()*bw,h*0.72-Math.random()*bh,1.5,2);}x+=bw;}
+    const heli=(hx,hy,s)=>{g.save();g.translate(hx,hy);g.scale(s,s);g.fillStyle='#080102';g.beginPath();g.ellipse(0,0,20,6,0,0,7);g.fill();g.beginPath();g.moveTo(14,-2);g.lineTo(46,-4);g.lineTo(46,-1);g.lineTo(14,3);g.fill();
+      g.fillRect(44,-11,3,10);g.fillRect(-34,-10,68,1.6);g.fillRect(-1,-9,2,4);g.fillRect(-14,4,6,2);g.fillRect(6,4,6,2);g.restore();};
+    heli(w*0.62,h*0.24,w/300);heli(w*0.3,h*0.36,w/520);g.fillStyle='#050102';g.fillRect(0,h*0.72,w,h*0.28);},
+  // cassette on a seamless grey sweep, softbox from the top-left
+  tape(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#f2f2f0'],[0.6,'#dcdcda'],[1,'#c4c4c2']]);g.fillRect(0,0,w,h);
+    const C=Math.min(w*0.7,h*0.9),cx=w*0.5,cy=h*0.52;
+    AD.blur(g,6,()=>{g.fillStyle='rgba(0,0,0,.35)';g.beginPath();g.ellipse(cx+C*0.06,cy+C*0.34,C*0.5,C*0.07,0,0,7);g.fill();});
+    g.save();g.translate(cx,cy);g.rotate(-0.08);const W=C,H=C*0.64;
+    g.fillStyle=AD.lin(g,0,-H/2,0,H/2,[[0,'#3a3c42'],[1,'#121316']]);g.fillRect(-W/2,-H/2,W,H);
+    g.fillStyle='#f6f4ee';g.fillRect(-W*0.45,-H*0.44,W*0.9,H*0.56);
+    ['#c81e2a','#f0a020','#1a4aa0'].forEach((c,i)=>{g.fillStyle=c;g.fillRect(-W*0.45,-H*0.44+i*H*0.035,W*0.9,H*0.03);});
+    g.fillStyle='#1a1a1e';g.font=`italic 900 ${H*0.12}px Georgia,serif`;g.textAlign='left';g.textBaseline='middle';g.fillText('TAIYO',-W*0.42,-H*0.24);
+    g.font=`bold ${H*0.09}px Arial`;g.textAlign='right';g.fillText('HF-S 90',W*0.42,-H*0.24);
+    g.fillStyle='rgba(20,20,24,.85)';g.fillRect(-W*0.28,-H*0.14,W*0.56,H*0.2);g.fillStyle='rgba(120,90,60,.9)';g.fillRect(-W*0.14,-H*0.1,W*0.28,H*0.12);
+    g.fillStyle='#e8e8e8';[-0.18,0.18].forEach(f=>{g.beginPath();g.arc(W*f,-H*0.04,H*0.075,0,7);g.fill();g.fillStyle='#1a1a1e';for(let k=0;k<6;k++){const a=k*Math.PI/3;g.fillRect(W*f+Math.cos(a)*H*0.05-1,-H*0.04+Math.sin(a)*H*0.05-1,2.5,2.5);}g.fillStyle='#e8e8e8';});
+    g.fillStyle='#1a1a1e';g.font=`${H*0.045}px Arial`;g.textAlign='center';g.fillText('HIGH POSITION · TYPE II',0,H*0.08);
+    g.fillStyle='#24262c';g.beginPath();g.moveTo(-W*0.34,H/2);g.lineTo(-W*0.28,H*0.22);g.lineTo(W*0.28,H*0.22);g.lineTo(W*0.34,H/2);g.fill();
+    g.fillStyle=AD.lin(g,-W/2,-H/2,W*0.2,H*0.2,[[0,'rgba(255,255,255,.35)'],[0.5,'rgba(255,255,255,0)']]);g.fillRect(-W/2,-H/2,W,H);g.restore();},
+  // bubble condo: tower at dusk, every window lit
+  tower(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#1a1840'],[0.6,'#7a4a6a'],[1,'#e89a6a']]);g.fillRect(0,0,w,h);
+    const tx=w*0.34,tw=w*0.32;g.fillStyle='#14121c';g.fillRect(tx,h*0.08,tw,h*0.92);g.fillStyle='#1e1a28';g.fillRect(tx,h*0.08,tw*0.3,h*0.92);
+    for(let y=h*0.1;y<h;y+=h*0.03)for(let x=tx+tw*0.06;x<tx+tw-4;x+=tw*0.12)if(Math.random()<0.8){g.fillStyle=Math.random()<0.8?'rgba(255,214,150,.9)':'rgba(255,240,220,.95)';g.fillRect(x,y,tw*0.07,h*0.015);}
+    g.fillStyle='#ff2a1a';g.beginPath();g.arc(tx+tw/2,h*0.075,2.5,0,7);g.fill();
+    AD.blur(g,3,()=>{g.fillStyle='#0a1a10';for(let i=0;i<10;i++){g.beginPath();g.arc(Math.random()*w,h*(0.9+Math.random()*0.1),w*(0.08+Math.random()*0.1),0,7);g.fill();}});},
+};
+// ---- portrait posters, B-series proportion (w:h = 1:1.414) ----
+const AD_PORTRAIT={
+  beer(g,w,h){SCENE.silverCan(g,w,h,{cx:0.42});
+    AD.tate(g,['飲むほどに、','辛口。'],w*0.86,h*0.12,w*0.075,_M,'#ffffff',{indent:[0,2.4]});
+    AD.text(g,'KAMINARI DRY',w*0.42,h*0.9,w*0.06,'Georgia,serif','#ffffff',{weight:'italic bold',spacing:2});
+    AD.text(g,'お酒は二十歳になってから。',w*0.06,h*0.965,w*0.026,_G,'rgba(255,255,255,.6)',{align:'left',weight:'normal'});
+    AD.sig(g,w,h,'雷酒造',null,'#ffffff',{font:_M,size:h*0.026,sp:4});},
+  car(g,w,h){SCENE.nightCar(g,w,h,{L:0.92,gy:0.62});
+    AD.text(g,'速さは、静けさの中に。',w*0.5,h*0.12,w*0.06,_M,'#ffffff',{weight:'500',maxW:w*0.86});
+    AD.text(g,'MIRAGE',w*0.5,h*0.74,w*0.12,'Georgia,serif','#ffffff',{weight:'italic bold',spacing:6,maxW:w*0.8});
+    AD.text(g,'2.0 TWIN CAM 24  TWIN TURBO  280ps',w*0.5,h*0.8,w*0.03,_G,'#b8c4d8',{weight:'normal',maxW:w*0.86,spacing:1});
+    g.fillStyle='rgba(255,255,255,.25)';g.fillRect(w*0.3,h*0.835,w*0.4,1);
+    AD.text(g,'東京地区標準現金価格 ¥3,298,000',w*0.5,h*0.865,w*0.026,_G,'#b8c4d8',{weight:'normal',maxW:w*0.86});
+    AD.sig(g,w,h,'TAKADA','高田自動車','#ffffff',{font:'Arial',sp:5});},
+  album(g,w,h){g.fillStyle='#f4f2ec';g.fillRect(0,0,w,h);const s=w*0.8,x=(w-s)/2,y=w*0.1;
+    g.fillStyle='rgba(0,0,0,.18)';g.fillRect(x+4,y+5,s,s);AD.frame(g,x,y,s,s,(W,H)=>SCENE.nagai(g,W,H));
+    AD.text(g,'水城ゆい',x,y+s*0.08,s*0.075,_M,'#ffffff',{align:'left',weight:'500'});
+    AD.text(g,'Blue Hotel',w*0.5,y+s+h*0.07,w*0.1,'Georgia,serif','#1a3a6a',{weight:'italic normal',maxW:w*0.86});
+    AD.text(g,'水城ゆい ニュー・アルバム',w*0.5,y+s+h*0.125,w*0.045,_G,'#1a1a1a',{weight:'bold',maxW:w*0.86});
+    AD.text(g,'11月21日発売  CD ¥3,008(税込)  カセット ¥2,884(税込)',w*0.5,y+s+h*0.165,w*0.032,_G,'#3a3a3a',{weight:'normal',maxW:w*0.86});
+    AD.sig(g,w,h,'STAR RECORDS',null,'#1a3a6a',{font:'Arial',size:h*0.022,sp:3});},
+  dept(g,w,h){g.fillStyle='#fbfaf6';g.fillRect(0,0,w,h);AD.frame(g,w*0.08,h*0.06,w*0.56,h*0.66,(W,H)=>SCENE.dusk(g,W,H));
+    AD.tate(g,['夜を、','着がえる。'],w*0.86,h*0.08,w*0.075,_M,'#1a1a1a',{indent:[0,1.2],gap:1.7});
+    AD.text(g,'クリスマス・コレクション  12月1日—25日',w*0.08,h*0.8,w*0.032,_G,'#3a3a3a',{align:'left',weight:'normal',maxW:w*0.84});
+    AD.text(g,'HIBIYA',w*0.92,h*0.92,w*0.07,'Georgia,serif','#1a1a1a',{align:'right',weight:'normal',spacing:8});
+    AD.text(g,'日比谷百貨店',w*0.92,h*0.955,w*0.026,_M,'#1a1a1a',{align:'right',weight:'normal',spacing:3});},
+  travel(g,w,h){SCENE.beach(g,w,h);
+    AD.text(g,'ハワイ',w*0.08,h*0.1,w*0.16,_G,'#ffffff',{align:'left',shadow:'rgba(0,40,90,.5)'});
+    AD.text(g,'6日間',w*0.08,h*0.19,w*0.09,_G,'#ffffff',{align:'left',shadow:'rgba(0,40,90,.5)'});
+    g.fillStyle='rgba(255,255,255,.92)';g.fillRect(0,h*0.79,w,h*0.21);
+    AD.text(g,'¥98,000〜',w*0.06,h*0.845,w*0.11,_G,'#d01020',{align:'left',maxW:w*0.62});
+    AD.text(g,'成田発 往復航空券+ホテル6泊',w*0.06,h*0.9,w*0.03,_G,'#1a1a1a',{align:'left',weight:'normal',maxW:w*0.6});
+    AD.text(g,'1・2月出発 ワイキキ・ビーチ',w*0.06,h*0.935,w*0.03,_G,'#1a1a1a',{align:'left',weight:'normal',maxW:w*0.6});
+    g.fillStyle='#c8101e';g.beginPath();g.arc(w*0.82,h*0.86,w*0.04,0,7);g.fill();AD.sig(g,w,h,'JAPAN SKY','ジャパンスカイツアーズ','#0a2a6a',{font:'Arial',size:h*0.024,sp:2});},
+  smoke(g,w,h){SCENE.sail(g,w,h);
+    AD.text(g,'SEVEN HILLS',w*0.5,h*0.1,w*0.09,'Georgia,serif','#ffffff',{spacing:3,maxW:w*0.86});
+    AD.text(g,'Feel the breeze.',w*0.5,h*0.16,w*0.055,'Georgia,serif','#ffffff',{weight:'italic normal'});
+    g.fillStyle='#ffffff';g.fillRect(w*0.06,h*0.88,w*0.88,h*0.08);g.strokeStyle='#1a1a1a';g.lineWidth=1.5;g.strokeRect(w*0.07,h*0.888,w*0.86,h*0.064);
+    AD.text(g,'健康のため吸いすぎに注意しましょう',w*0.5,h*0.92,w*0.04,_G,'#1a1a1a',{maxW:w*0.82});},
+  film(g,w,h){SCENE.filmPaint(g,w,h);
+    AD.text(g,'速水 剛   ジェイ・ハリス   水城ゆい',w*0.5,h*0.04,w*0.035,_G,'#e8d8c8',{weight:'normal',maxW:w*0.9});
+    AD.text(g,'その夜、東京は戦場になった。',w*0.5,h*0.09,w*0.045,_M,'#ffffff',{weight:'500',maxW:w*0.9});
+    AD.text(g,'東京1999',w*0.5,h*0.79,w*0.2,_M,'#ffffff',{weight:'900',shadow:'#ff3a10',blur:w*0.04,maxW:w*0.9});
+    g.fillStyle='rgba(255,255,255,.55)';for(let i=0;i<3;i++)g.fillRect(w*0.14,h*0.86+i*h*0.01,w*0.72,1);
+    AD.text(g,'12月16日(土)より 全国ロードショー',w*0.5,h*0.93,w*0.045,_G,'#ffd8a0',{maxW:w*0.9});},
+  tape(g,w,h){SCENE.tape(g,w,h);
+    AD.tate(g,['いい音は、','記憶に残る。'],w*0.9,h*0.06,w*0.06,_M,'#1a1a1a',{indent:[0,1.2]});
+    AD.text(g,'TAIYO HF-S',w*0.08,h*0.84,w*0.08,'Georgia,serif','#1a1a1a',{align:'left',weight:'italic bold'});
+    AD.text(g,'ハイポジション 46/60/90分  ¥580より',w*0.08,h*0.89,w*0.03,_G,'#3a3a3a',{align:'left',weight:'normal',maxW:w*0.8});
+    AD.sig(g,w,h,'TAIYO',null,'#c81e2a',{font:'Arial',size:h*0.03,sp:4});},
+  condo(g,w,h){AD.frame(g,0,0,w,h*0.62,(W,H)=>SCENE.tower(g,W,H));g.fillStyle='#14100c';g.fillRect(0,h*0.62,w,h*0.38);
+    g.fillStyle='#c8a050';g.fillRect(w*0.08,h*0.66,w*0.84,1);
+    AD.text(g,'グランドタワー六本木',w*0.5,h*0.71,w*0.075,_M,'#e8d0a0',{weight:'500',maxW:w*0.86});
+    AD.text(g,'1億2,800万円',w*0.5,h*0.79,w*0.09,_G,'#ffffff',{maxW:w*0.86});
+    AD.text(g,'2LDK 78.4㎡  港区六本木  日比谷線「六本木」駅 徒歩4分',w*0.5,h*0.845,w*0.03,_G,'#c8b890',{weight:'normal',maxW:w*0.86});
+    AD.text(g,'モデルルーム公開中 ☎ 0120-89-1224',w*0.5,h*0.9,w*0.036,_G,'#ffffff',{weight:'normal',maxW:w*0.86});
+    AD.sig(g,w,h,'MINATO ESTATE',null,'#c8a050',{font:'Georgia,serif',size:h*0.022,sp:2});},
+  disco(g,w,h){g.fillStyle='#050404';g.fillRect(0,0,w,h);g.strokeStyle='#c8a050';g.lineWidth=2;g.strokeRect(w*0.05,h*0.035,w*0.9,h*0.93);g.lineWidth=1;g.strokeRect(w*0.07,h*0.05,w*0.86,h*0.9);
+    g.save();g.translate(w/2,h*0.3);for(let i=0;i<13;i++){const a=-Math.PI/2+(i-6)*0.12;g.strokeStyle='rgba(200,160,80,.75)';g.beginPath();g.moveTo(0,h*0.08);g.lineTo(Math.cos(a)*h*0.22,h*0.08+Math.sin(a)*h*0.22);g.stroke();}g.restore();
+    g.fillStyle=AD.lin(g,0,h*0.32,0,h*0.42,[[0,'#fff0c0'],[0.5,'#c89a40'],[1,'#7a5a20']]);g.font=`bold ${w*0.13}px Georgia,serif`;g.textAlign='center';g.textBaseline='middle';g.letterSpacing='4px';AD.fit(g,'ATLANTIS',w*0.8,w*0.13,'bold','Georgia,serif');g.fillText('ATLANTIS',w/2,h*0.42);g.letterSpacing='0px';
+    AD.text(g,'SHIBAURA · TOKYO',w*0.5,h*0.48,w*0.035,'Georgia,serif','#c8a050',{weight:'normal',spacing:4});
+    AD.text(g,'X\'MAS NIGHT 12.24',w*0.5,h*0.6,w*0.06,'Georgia,serif','#f0e0b0',{weight:'normal',spacing:2,maxW:w*0.8});
+    AD.text(g,'OPEN 18:00 — 24:00',w*0.5,h*0.66,w*0.04,'Georgia,serif','#c8a050',{weight:'normal',maxW:w*0.8});
+    AD.text(g,'ドレス・コード  男性 ネクタイ着用',w*0.5,h*0.78,w*0.033,_G,'#c8a050',{weight:'normal',maxW:w*0.8});
+    AD.text(g,'港区芝浦2-1  ☎ 03-3452-1989',w*0.5,h*0.83,w*0.03,_G,'#8a7040',{weight:'normal',maxW:w*0.8});},
+  pachinko(g,w,h){g.fillStyle=AD.lin(g,0,0,0,h,[[0,'#d0102a'],[1,'#7a0012']]);g.fillRect(0,0,w,h);
+    g.save();g.translate(w/2,h*0.3);for(let i=0;i<28;i++){g.rotate(Math.PI*2/28);g.fillStyle=i%2?'rgba(255,225,77,.4)':'rgba(255,255,255,.07)';g.beginPath();g.moveTo(0,0);g.lineTo(h,-h*0.07);g.lineTo(h,h*0.07);g.fill();}g.restore();
+    const gold=AD.lin(g,0,h*0.12,0,h*0.42,[[0,'#fff6c8'],[0.45,'#ffc22e'],[0.5,'#9a5a00'],[1,'#ffe14d']]);
+    ['新装','開店'].forEach((t,i)=>{g.font=`900 ${w*0.28}px ${_M}`;g.textAlign='center';g.textBaseline='middle';g.lineWidth=w*0.035;g.strokeStyle='#3a0008';g.strokeText(t,w/2,h*(0.2+i*0.2));g.fillStyle=gold;g.fillText(t,w/2,h*(0.2+i*0.2));});
+    g.fillStyle='#ffffff';g.fillRect(0,h*0.58,w,h*0.13);AD.text(g,'パチンコ 大東京',w*0.5,h*0.645,w*0.1,_M,'#c8102e',{weight:'900',maxW:w*0.9});
+    AD.text(g,'12月15日(金) 朝10時',w*0.5,h*0.77,w*0.065,_G,'#ffe14d',{maxW:w*0.9});
+    AD.text(g,'全台新台入替 · 480台',w*0.5,h*0.84,w*0.055,_G,'#ffffff',{maxW:w*0.9});
+    AD.text(g,'新宿区歌舞伎町1-24  駐車場完備',w*0.5,h*0.91,w*0.035,_G,'#ffd8d8',{weight:'normal',maxW:w*0.9});},
+};
+// ---- landscape versions (rooftop boards and trivision faces), 2 : 1 ----
+const AD_WIDE={
+  beer(g,w,h){SCENE.silverCan(g,w,h,{cx:0.72});
+    AD.tate(g,['飲むほどに、','辛口。'],w*0.47,h*0.1,h*0.11,_M,'#ffffff',{indent:[0,2.4]});
+    AD.text(g,'KAMINARI DRY',w*0.08,h*0.82,h*0.11,'Georgia,serif','#ffffff',{align:'left',weight:'italic bold',spacing:2});
+    AD.text(g,'お酒は二十歳になってから。',w*0.08,h*0.92,h*0.045,_G,'rgba(255,255,255,.6)',{align:'left',weight:'normal'});},
+  car(g,w,h){SCENE.nightCar(g,w,h,{L:0.62,dx:0.14,gy:0.86});
+    AD.text(g,'速さは、静けさの中に。',w*0.05,h*0.14,h*0.1,_M,'#ffffff',{align:'left',weight:'500'});
+    AD.text(g,'MIRAGE',w*0.05,h*0.3,h*0.16,'Georgia,serif','#ffffff',{align:'left',weight:'italic bold',spacing:6});
+    AD.text(g,'TWIN TURBO 280ps',w*0.05,h*0.42,h*0.055,_G,'#b8c4d8',{align:'left',weight:'normal',spacing:1});
+    AD.text(g,'TAKADA',w*0.95,h*0.12,h*0.07,'Arial','#ffffff',{align:'right',spacing:5});},
+  album(g,w,h){g.fillStyle='#f4f2ec';g.fillRect(0,0,w,h);const s=h*0.84,x=h*0.08,y=h*0.08;g.fillStyle='rgba(0,0,0,.18)';g.fillRect(x+3,y+4,s,s);AD.frame(g,x,y,s,s,(W,H)=>SCENE.nagai(g,W,H));
+    const tx=x+s+(w-x-s)/2;AD.text(g,'Blue Hotel',tx,h*0.3,h*0.17,'Georgia,serif','#1a3a6a',{weight:'italic normal',maxW:w-s-h*0.3});
+    AD.text(g,'水城ゆい ニュー・アルバム',tx,h*0.5,h*0.08,_G,'#1a1a1a',{maxW:w-s-h*0.3});
+    AD.text(g,'11月21日発売 CD ¥3,008(税込)',tx,h*0.64,h*0.06,_G,'#3a3a3a',{weight:'normal',maxW:w-s-h*0.3});
+    AD.text(g,'STAR RECORDS',tx,h*0.84,h*0.05,'Arial','#1a3a6a',{spacing:3});},
+  travel(g,w,h){SCENE.beach(g,w,h);
+    AD.text(g,'ハワイ 6日間',w*0.05,h*0.18,h*0.17,_G,'#ffffff',{align:'left',shadow:'rgba(0,40,90,.5)'});
+    g.fillStyle='rgba(255,255,255,.92)';g.fillRect(0,h*0.74,w,h*0.26);
+    AD.text(g,'¥98,000〜',w*0.05,h*0.87,h*0.16,_G,'#d01020',{align:'left'});
+    AD.text(g,'成田発 航空券+ホテル6泊',w*0.47,h*0.87,h*0.06,_G,'#1a1a1a',{align:'left',weight:'normal',maxW:w*0.24});
+    AD.text(g,'JAPAN SKY',w*0.96,h*0.87,h*0.06,'Arial','#0a2a6a',{align:'right',spacing:2,maxW:w*0.22});},
+  smoke(g,w,h){SCENE.sail(g,w,h);
+    AD.text(g,'SEVEN HILLS',w*0.72,h*0.2,h*0.13,'Georgia,serif','#ffffff',{spacing:3});
+    AD.text(g,'Feel the breeze.',w*0.72,h*0.33,h*0.08,'Georgia,serif','#ffffff',{weight:'italic normal'});
+    g.fillStyle='#ffffff';g.fillRect(w*0.52,h*0.82,w*0.44,h*0.12);AD.text(g,'健康のため吸いすぎに注意しましょう',w*0.74,h*0.88,h*0.05,_G,'#1a1a1a',{maxW:w*0.42});},
+  dept(g,w,h){g.fillStyle='#fbfaf6';g.fillRect(0,0,w,h);AD.frame(g,w*0.04,h*0.08,w*0.56,h*0.84,(W,H)=>SCENE.dusk(g,W,H));
+    AD.tate(g,['夜を、','着がえる。'],w*0.88,h*0.1,h*0.12,_M,'#1a1a1a',{indent:[0,1.2],gap:1.7});
+    AD.text(g,'HIBIYA',w*0.68,h*0.86,h*0.09,'Georgia,serif','#1a1a1a',{align:'left',weight:'normal',spacing:6});},
+};
+const AD_KEYS=Object.keys(AD_PORTRAIT), _adCache={};
+// one texture per design, shared by every board that carries it — 11 posters, not one per wall
+function adPortraitTex(key){key=key||_pick(AD_KEYS);if(_adCache[key])return _adCache[key];
+  return _adCache[key]=tex((g,w,h)=>{AD_PORTRAIT[key](g,w,h);AD.print(g,w,h,{grain:12,seams:2});
+  g.strokeStyle='rgba(0,0,0,.3)';g.lineWidth=2;g.strokeRect(1,1,w-2,h-2);},362,512,true);}
+function idolPosterTex(){return adPortraitTex();}
+const AD_WIDE_KEYS=Object.keys(AD_WIDE), _adWideCv={}, _adAtlasPool=[];
+// trivision atlas: three wide ads stacked; the prism shader below turns slats between them.
+// Each wide ad is painted once; four shuffled atlases are shared by every board in the city.
+function _adWide(k){if(_adWideCv[k])return _adWideCv[k];const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');AD_WIDE[k](g,512,256);AD.print(g,512,256,{grain:10});return _adWideCv[k]=c;}
+function trivisionAtlas(){if(_adAtlasPool.length<4){const ks=AD_WIDE_KEYS.slice().sort(()=>Math.random()-0.5).slice(0,3);
+    _adAtlasPool.push(tex((g,w,h)=>{ks.forEach((k,i)=>g.drawImage(_adWide(k),0,i*h/3,w,h/3));},512,768,true));return _adAtlasPool[_adAtlasPool.length-1];}
+  return _pick(_adAtlasPool);}
+// TRIVISION: the board face is N vertical triangular slats; every ~7 s they turn 120° one after another,
+// left to right, so the next ad wipes across. Each slat is solved analytically in the fragment shader
+// (which prism face is under this pixel, at what face-local u, and how lit) — no extra geometry.
+const ADS_T={value:0};
+function trivisionMat(atlas){const m=new THREE.MeshBasicMaterial({map:atlas,color:0xd0d0d0});
+  const off=Math.random()*7;m.userData.adOff=off;
+  m.onBeforeCompile=s=>{s.uniforms.uAdT=ADS_T;s.uniforms.uOff={value:off};
+    s.fragmentShader='uniform float uAdT;uniform float uOff;\n'+s.fragmentShader.replace('#include <map_fragment>',`
+      {const float N=18.0;const float P=7.0;const float TAU3=2.0943951;
+       float sl=floor(vUv.x*N), lx=fract(vUv.x*N)-0.5;
+       float t=uAdT+uOff-sl*0.045;
+       float cyc=floor(t/P), ph=clamp((t-cyc*P)/0.9,0.0,1.0);
+       ph=ph*ph*(3.0-2.0*ph);
+       float phi=(cyc+ph)*TAU3;
+       float rin=0.288675;vec4 col=vec4(0.02,0.02,0.03,1.0);float best=-1.0;
+       for(int j=0;j<3;j++){float a=phi+float(j)*TAU3;float ca=cos(a),sa=sin(a);
+         if(ca>0.02){float x0=rin*sa-0.5*ca;float u=(lx-x0)/ca;
+           if(u>=0.0&&u<=1.0&&ca>best){best=ca;
+             float face=mod(float(j)+3.0*64.0,3.0);
+             vec2 auv=vec2((sl+u)/N,(2.0-face+vUv.y)/3.0);
+             vec4 tc=texture2D(map,auv);
+             float edge=smoothstep(0.0,0.04,u)*smoothstep(1.0,0.96,u);
+             col=vec4(tc.rgb*(0.35+0.65*ca)*(0.8+0.2*edge),1.0);}}}
+       diffuseColor*=col;}`);};
+  return m;}
+
 // faint horizontal scanlines + bright rows so static "LED" boards read as emissive panels, not paper
 function ledScanlines(g,w,h,strength){
   g.fillStyle=`rgba(0,0,0,${strength})`;
@@ -3323,13 +3593,15 @@ const billboardFrameXf=[],billboardGlowXf=[];
 function mountBillboard(grp,bw,bd,bh,cx,cz,forcedSide){
   const roll=Math.random();
   let t,w2,h2;
-  if(roll<0.55){t=idolPosterTex();w2=bw*0.46;h2=bw*1.38;}           // 1989 ad pool (beer, Walk-Mate, idol tour, cigarettes, condos...)
+  if(roll<0.55){t=idolPosterTex();w2=bw*0.56;h2=w2*1.414;}   // 1989 wall posters, B-series proportion
   else if(roll<0.4){t=vintagePosterTex();w2=bw*0.46;h2=bw*1.2;}
   else if(roll<0.58){t=foodAdTex();w2=bw*0.48;h2=bw*1.2;}
   else if(roll<0.76){t=noirPosterTex();w2=bw*0.46;h2=bw*1.2;}
-  else{t=adTex();w2=bw*0.95;h2=bw*0.48;}
-  // LED/backlit panels: a hair under full white, so poster content survives night exposure + bloom
-  const bb=new THREE.Mesh(new THREE.PlaneGeometry(w2,h2),new THREE.MeshBasicMaterial({map:t,color:0xc8c8c8}));
+  else{t=null;w2=bw*0.95;h2=bw*0.48;}                               // trivision: three ads on turning prism slats
+  // LED/backlit panels: a hair under full white, so poster content survives night exposure + bloom.
+  // Materials are shared per texture, so boards showing the same design batch together.
+  const mat=t?(t.__bbMat||(t.__bbMat=new THREE.MeshBasicMaterial({map:t,color:0xc8c8c8}))):trivisionMat(trivisionAtlas());
+  const bb=new THREE.Mesh(new THREE.PlaneGeometry(w2,h2),mat);
   const side=forcedSide!==undefined?forcedSide:Math.floor(Math.random()*4);
   const off=[[0,bd/2+0.3,0],[0,-bd/2-0.3,Math.PI],[bw/2+0.3,0,Math.PI/2],[-bw/2-0.3,0,-Math.PI/2]][side];
   const py=bh*0.52+Math.random()*bh*0.3;
@@ -4809,6 +5081,44 @@ void reflStreaks;
     window.__fires.push({f,f2,x,z,ph:Math.random()*9});
     (window.__lampPts||(window.__lampPts=[])).push({x,z,fire:true});
   });
+  // ---- GROUND MIST + BARREL SMOKE: banks of soft camera-facing puffs lying low in the streets and
+  // over the river, drifting and breathing; a smoke column rising off every burning barrel. One
+  // instanced draw, value-noise in the fragment shader, fades out as the camera flies into it.
+  {
+    const PUFF=[];   // [x,y,z,size,seed,kind]  kind 0 = mist, 1 = smoke
+    const bank=(x,z,ax,n)=>{for(let i=0;i<n;i++){const t=(i/(n-1||1)-0.5)*n*9;const px=x+(ax?0:t)+(Math.random()-.5)*6,pz=z+(ax?t:0)+(Math.random()-.5)*6;
+      PUFF.push([px,2+Math.random()*3,pz,18+Math.random()*16,Math.random()*50,0]);}};
+    for(let k=0,tries=0;k<64&&tries<5000;tries++){const useX=Math.random()<0.5,R=(useX?ROADS_X:ROADS_Z).filter(r=>r.p<SEA_Z0-30);const r=_pick(R);
+      const along=(Math.random()-0.5)*1100;const x=useX?r.p:along,z=useX?along:r.p;
+      if(Math.abs(x)>620||z<-620||z>SEA_Z0-20)continue;if(Math.abs(x-riverCX(z))<RIVER_HW+10)continue;
+      bank(x,z,useX,4+Math.floor(Math.random()*4));k++;}
+    for(let k=0;k<9;k++){const z=-560+k*130+Math.random()*40;bank(riverCX(z),z,true,5);}            // river mist
+    window.__fires.forEach(F=>{for(let i=0;i<7;i++)PUFF.push([F.x,CURB_H+2,F.z,3,i/7,1]);});
+    const geo=new THREE.PlaneGeometry(1,1),seed=new Float32Array(PUFF.length*2);
+    const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,
+      uniforms:{uT:{value:0},uCol:{value:new THREE.Color(0xa6adbd)},uLit:{value:new THREE.Color(0xffa060)}},
+      vertexShader:`attribute vec2 iSeed;uniform float uT;varying vec2 vUv;varying float vS;varying float vA;varying float vK;varying float vH;
+        void main(){vec3 c=vec3(instanceMatrix[3]);float sz=length(vec3(instanceMatrix[0]));float sd=iSeed.x;vK=iSeed.y;vH=0.0;
+          if(vK>0.5){float ph=fract(uT*0.11+sd);c.y+=ph*16.0;c.x+=sin(uT*0.5+sd*6.0)*ph*2.5+ph*3.0;c.z+=ph*1.5;sz=2.6+ph*9.0;vH=ph;}
+          else{c.x+=sin(uT*0.05+sd)*4.0;c.z+=cos(uT*0.043+sd*1.7)*4.0;c.y+=sin(uT*0.2+sd)*0.6;sz*=1.0+0.08*sin(uT*0.15+sd*3.0);}
+          vec3 R=vec3(viewMatrix[0][0],viewMatrix[1][0],viewMatrix[2][0]),U=vec3(viewMatrix[0][1],viewMatrix[1][1],viewMatrix[2][1]);
+          vec3 wp=c+(R*position.x+U*position.y*(vK>0.5?1.0:0.5))*sz;vUv=position.xy+0.5;
+          float d=distance(cameraPosition,c);vA=smoothstep(sz*0.4,sz*1.6,d)*(1.0-smoothstep(450.0,1100.0,d));vS=sd*7.3;
+          gl_Position=projectionMatrix*viewMatrix*vec4(wp,1.0);}`,
+      fragmentShader:`uniform float uT;uniform vec3 uCol;uniform vec3 uLit;varying vec2 vUv;varying float vS;varying float vA;varying float vK;varying float vH;
+        float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
+        void main(){vec2 q=vUv-0.5;float r=length(q)*2.0;if(r>1.0)discard;
+          float n=vn(vUv*3.0+vS+vec2(uT*0.05,uT*0.03))*0.6+vn(vUv*7.0+vS-vec2(uT*0.08,0.0))*0.4;
+          float a=pow(1.0-r,1.15)*(0.5+0.8*n);vec3 col;
+          if(vK>0.5){a=min(0.9,a*1.8*pow(1.0-vH,1.2)*smoothstep(0.0,0.06,vH));col=mix(uLit*1.2,vec3(0.36,0.34,0.33)+uCol*0.4,smoothstep(0.0,0.35,vH));}
+          else{a*=0.8;col=uCol*1.2+uLit*0.08*(1.0-vUv.y);}
+          a*=vA;if(a<0.004)discard;gl_FragColor=vec4(col,a);}`});
+    const im=new THREE.InstancedMesh(geo,mat,PUFF.length);const M=new THREE.Matrix4();
+    PUFF.forEach((P,i)=>{M.makeScale(P[3],P[3],P[3]);M.setPosition(P[0],P[1],P[2]);im.setMatrixAt(i,M);seed[i*2]=P[4];seed[i*2+1]=P[5];});
+    geo.setAttribute('iSeed',new THREE.InstancedBufferAttribute(seed,2));
+    im.frustumCulled=false;im.renderOrder=2;scene.add(im);window.__mist=mat;
+  }
   // abandoned patrol cars, doors open, light bars still going
   window.__beacons=[];
   const pcBody=new THREE.MeshStandardMaterial({color:0xe8e8e8,roughness:0.45,metalness:0.3});
@@ -5431,10 +5741,10 @@ const discTex=tex((g,w,h)=>{g.clearRect(0,0,w,h);g.translate(w/2,h/2);
   gr.addColorStop(0,'rgba(20,22,18,0.10)');gr.addColorStop(0.8,'rgba(20,22,18,0.12)');gr.addColorStop(0.93,'rgba(14,15,12,0.30)');gr.addColorStop(0.985,'rgba(14,15,12,0.12)');gr.addColorStop(1,'rgba(14,15,12,0)');
   g.fillStyle=gr;g.beginPath();g.arc(0,0,w/2,0,7);g.fill();
   for(let i=0;i<40;i++){g.strokeStyle=`rgba(25,26,24,${Math.random()*0.06})`;g.beginPath();g.arc(0,0,w*0.08+Math.random()*w*0.42,0,7);g.stroke();}},256,256);
-const disc=new THREE.Mesh(new THREE.CircleGeometry(7.25,48),new THREE.MeshBasicMaterial({map:discTex,transparent:true,depthWrite:false}));
+const disc=new THREE.Mesh(new THREE.CircleGeometry(7.32,48),new THREE.MeshBasicMaterial({map:discTex,transparent:true,depthWrite:false}));
 disc.rotation.x=-Math.PI/2;disc.position.y=1.9;heli.add(disc);
 const tailRotor=new THREE.Group();
-for(let i=0;i<2;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.06,2.8,.3),darkMat);bl.rotation.x=i*Math.PI/2;tailRotor.add(bl);}
+for(let i=0;i<2;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(.06,2.79,.25),darkMat);bl.rotation.x=i*0.96;tailRotor.add(bl);}   // AH-64 scissor tail rotor: two pairs ~55° apart
 tailRotor.position.set(.4,1.6,10.9);heli.add(tailRotor);
 heli.position.set(0,45,120);scene.add(heli);
 // ---------- REAL-TIME REFLECTION PROBE (dynamic cubemap for PBR reflections) ----------
@@ -5528,32 +5838,32 @@ heli.position.set(0,45,120);scene.add(heli);
   const wingG=loft([S(0,0.12,1.2,0,{n:2.2}),S(1,0.1,0.95,0,{n:2.2})],2.2,12);
   wingG.rotateY(Math.PI/2);   // span along X
   [-1,1].forEach(sd=>{
-    const w=add(new THREE.Mesh(wingG,gm));w.scale.set(2.25*sd,1,1);w.position.set(sd*0.66,0.48,0.35);w.rotation.z=sd*0.05;
-    const py1=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py1.position.set(sd*1.55,0.28,0.35);
-    const py2=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py2.position.set(sd*2.45,0.25,0.35);
-    const rack=add(new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,1.2),dk));rack.position.set(sd*1.55,0.06,0.35);
-    for(let i=0;i<4;i++){const mx=sd*1.55+(i%2?0.17:-0.17), my=-0.08-(i<2?0:0.27);
+    const w=add(new THREE.Mesh(wingG,gm));w.scale.set(1.96*sd,1,1);w.position.set(sd*0.66,0.48,0.35);w.rotation.z=sd*0.05;
+    const py1=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py1.position.set(sd*1.42,0.28,0.35);
+    const py2=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py2.position.set(sd*2.22,0.25,0.35);
+    const rack=add(new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,1.2),dk));rack.position.set(sd*1.42,0.06,0.35);
+    for(let i=0;i<4;i++){const mx=sd*1.42+(i%2?0.17:-0.17), my=-0.08-(i<2?0:0.27);
       const ms=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,1.62,10),new THREE.MeshStandardMaterial({color:0x37402f,roughness:0.6})));ms.rotation.x=Math.PI/2;ms.position.set(mx,my,0.35);
       const tip=add(new THREE.Mesh(new THREE.SphereGeometry(0.09,10,8,0,Math.PI*2,0,Math.PI/2),dk));tip.rotation.x=-Math.PI/2;tip.position.set(mx,my,-0.46);
       [0,1].forEach(f=>{const fin=add(new THREE.Mesh(new THREE.BoxGeometry(f?0.28:0.02,f?0.02:0.28,0.16),dk));fin.position.set(mx,my,1.05);});}
-    const pod=add(new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,1.62,18),gm2));pod.rotation.x=Math.PI/2;pod.position.set(sd*2.45,-0.12,0.35);
-    const podNose=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,0.14,18),gm2));podNose.rotation.x=Math.PI/2;podNose.position.set(sd*2.45,-0.12,-0.5);
-    const face=new THREE.Mesh(new THREE.CircleGeometry(0.3,18),new THREE.MeshBasicMaterial({map:podFace}));face.position.set(sd*2.45,-0.12,-0.575);face.rotation.y=Math.PI;heli.add(face);
+    const pod=add(new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,1.62,18),gm2));pod.rotation.x=Math.PI/2;pod.position.set(sd*2.22,-0.12,0.35);
+    const podNose=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,0.14,18),gm2));podNose.rotation.x=Math.PI/2;podNose.position.set(sd*2.22,-0.12,-0.5);
+    const face=new THREE.Mesh(new THREE.CircleGeometry(0.3,18),new THREE.MeshBasicMaterial({map:podFace}));face.position.set(sd*2.22,-0.12,-0.575);face.rotation.y=Math.PI;heli.add(face);
   });
   // tail: swept, tapered vertical fin; all-moving stabilator; tail wheel
-  {const fin=new THREE.Shape();fin.moveTo(-0.6,0);fin.lineTo(0.75,0);fin.lineTo(1.25,2.45);fin.lineTo(0.45,2.45);fin.lineTo(-0.6,0);
+  {const fin=new THREE.Shape();fin.moveTo(-0.7,0);fin.lineTo(0.75,0);fin.lineTo(1.15,1.5);fin.lineTo(0.35,1.5);fin.lineTo(-0.7,0);
    const fg=new THREE.ExtrudeGeometry(fin,{depth:0.2,bevelEnabled:true,bevelThickness:0.04,bevelSize:0.04,bevelSegments:2});
-   fg.translate(0,0,-0.1);fg.rotateY(-Math.PI/2);const vf=add(new THREE.Mesh(fg,gm));vf.position.set(0,0.55,10.0);}
+   fg.translate(0,0,-0.1);fg.rotateY(-Math.PI/2);const vf=add(new THREE.Mesh(fg,gm));vf.position.set(0,0.42,10.0);}
   {const stab=add(new THREE.Mesh(loft([S(0,0.1,0.85,0,{n:2.2}),S(1,0.08,0.7,0,{n:2.2})],2.2,12).rotateY(Math.PI/2),gm));
-   stab.scale.set(1.75,1,1);stab.position.set(0,0.6,10.55);
-   const stab2=add(new THREE.Mesh(stab.geometry,gm));stab2.scale.set(-1.75,1,1);stab2.position.copy(stab.position);}
-  const tSt=add(new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,1.25,8),dk));tSt.position.set(0,-0.15,9.85);tSt.rotation.x=0.25;
-  const tWh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.18,14),dk));tWh.rotation.z=Math.PI/2;tWh.position.set(0,-0.75,10.0);
+   stab.scale.set(1.7,1,1);stab.position.set(0,0.5,10.5);
+   const stab2=add(new THREE.Mesh(stab.geometry,gm));stab2.scale.set(-1.7,1,1);stab2.position.copy(stab.position);}
+  const tSt=add(new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,1.75,8),dk));tSt.position.set(0,-0.62,10.15);tSt.rotation.x=0.18;
+  const tWh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.18,14),dk));tWh.rotation.z=Math.PI/2;tWh.position.set(0,-1.56,10.3);
   // main gear: trailing-arm struts with fat tyres under the cockpits
   [-1,1].forEach(sd=>{
-    const st=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.45,8),dk));st.position.set(sd*1.15,-1.1,-1.7);st.rotation.z=sd*-0.3;
-    const arm=add(new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.9),dk));arm.position.set(sd*1.42,-1.78,-1.45);
-    const wh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.3,18),dk));wh.rotation.z=Math.PI/2;wh.position.set(sd*1.45,-1.85,-1.6);
+    const st=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.0,8),dk));st.position.set(sd*0.86,-0.95,-1.75);st.rotation.z=sd*-0.25;
+    const arm=add(new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.9),dk));arm.position.set(sd*0.9,-1.36,-1.45);
+    const wh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.3,18),dk));wh.rotation.z=Math.PI/2;wh.position.set(sd*1.02,-1.4,-1.6);
     const hw=add(new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.32,12),new THREE.MeshStandardMaterial({color:0x50544e,roughness:0.5,metalness:0.6})));hw.rotation.z=Math.PI/2;hw.position.copy(wh.position);
   });
   // antennas + the wire-strike cutters an AH-64A carries above and below the cockpit
@@ -5565,10 +5875,17 @@ heli.position.set(0,45,120);scene.add(heli);
    const sn=new THREE.MeshStandardMaterial({map:tx('85-25398',256,64,40),transparent:true,roughness:0.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
    [-1,1].forEach(sd=>{const a=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.45),army);a.position.set(sd*0.37,0.48,5.0);a.rotation.y=sd*Math.PI/2;a.rotation.x=0;heli.add(a);
      const n2=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.3),sn);n2.position.set(sd*0.13,1.6,10.25);n2.rotation.y=sd*Math.PI/2;heli.add(n2);});}
-  tailRotor.position.set(-0.42,2.55,11.05);     // AH-64 tail rotor sits on the LEFT of the fin
-  navR.position.set(-2.95,0.48,0.35);navG.position.set(2.95,0.48,0.35);
-  strobe.position.set(0,3.05,11.1);
+  tailRotor.position.set(-0.36,1.5,10.95);      // AH-64 tail rotor sits on the LEFT of the fin, ~0.6 m below the rotor head
+  navR.position.set(-2.66,0.46,0.35);navG.position.set(2.66,0.46,0.35);
+  strobe.position.set(0,1.98,11.18);
   navRGlow.position.copy(navR.position);navGGlow.position.copy(navG.position);strobeGlow.position.copy(strobe.position);
+  // true length: the lofts ran ~10% long (16.8 m). Squeeze the airframe fore-aft about the mast to the
+  // AH-64A's 15.0 m fuselage, so the 14.63 m rotor overhangs the nose by the right amount. Rotor
+  // discs stay circular — only their hub positions move.
+  const AF=new THREE.Group(),KZ=0.89,MZ=0.25;
+  [...heli.children].forEach(c=>{if(c!==rotor&&c!==disc&&c!==tailRotor)AF.add(c);});
+  AF.scale.z=KZ;AF.position.z=MZ*(1-KZ);heli.add(AF);
+  tailRotor.position.z=MZ+(tailRotor.position.z-MZ)*KZ;
 }
 
 // ---------- 3D COCKPIT INTERIOR ----------
@@ -9879,7 +10196,7 @@ function loop(now){
     pedBodyMesh.visible=pedHeadMesh.visible=!window.__pedHidden;
     // pedestrians: sidewalk walkers + crossing walkers, animated via instance-matrix updates (cheap; 0 extra draw calls)
     PED_TIME.value=now*0.001;
-    GLASS_U.uT.value=now*0.001;GLASS_U.uHeliPos.value.copy(heli.position);
+    GLASS_U.uT.value=now*0.001;ADS_T.value=window.__adFreeze!=null?window.__adFreeze:now*0.001;if(window.__mist){window.__mist.uniforms.uT.value=now*0.001;window.__mist.uniforms.uCol.value.copy(scene.fog.color);}GLASS_U.uHeliPos.value.copy(heli.position);
     {const e=heli.matrixWorld.elements;GLASS_U.uHeliX.value.set(e[0],e[1],e[2]).normalize();GLASS_U.uHeliY.value.set(e[4],e[5],e[6]).normalize();GLASS_U.uHeliZ.value.set(e[8],e[9],e[10]).normalize();}
     GLASS_U.uStrobe.value=(now%1300)<90?1:0;
     if(peds.length&&!window.__pedHidden){
