@@ -5796,7 +5796,7 @@ heli.position.set(0,45,120);scene.add(heli);
   const S=(z,w,h,y,o)=>Object.assign({z,w,h,y},o||{});
   // fuselage: nose -> cockpits -> engine deck -> tail boom
   add(new THREE.Mesh(loft([S(-5.25,0.55,0.55,-0.1),S(-5.0,0.9,0.92,-0.05),S(-4.4,1.02,1.08,0.0),S(-3.5,1.08,1.26,0.02),S(-2.2,1.2,1.46,-0.04),
-    S(-0.6,1.34,1.68,0.0),S(1.0,1.42,1.72,0.06),S(2.5,1.24,1.46,0.18),S(3.5,0.86,1.02,0.36),S(6.0,0.6,0.78,0.45),S(9.0,0.46,0.62,0.52),S(10.7,0.38,0.52,0.56),S(11.0,0.2,0.3,0.58)],3.2),gm));
+    S(-0.6,1.34,1.68,0.0),S(1.0,1.42,1.72,0.06),S(2.5,1.24,1.46,0.18),S(3.5,0.86,1.02,0.25),S(6.0,0.6,0.78,0.05),S(9.0,0.46,0.62,-0.15),S(10.7,0.38,0.52,-0.24),S(11.0,0.2,0.3,-0.24)],3.2),gm));
   // avionics bays ("cheeks") along the lower fuselage — the Apache's signature side bulges
   [-1,1].forEach(sd=>{add(new THREE.Mesh(loft([S(-3.0,0.18,0.42,-0.3,{x:sd*0.55}),S(-2.6,0.5,0.66,-0.3,{x:sd*0.7}),S(0.4,0.56,0.7,-0.32,{x:sd*0.74}),
     S(1.6,0.46,0.6,-0.28,{x:sd*0.7}),S(2.3,0.12,0.3,-0.2,{x:sd*0.6})],3.5,20),gm2));});
@@ -5827,7 +5827,7 @@ heli.position.set(0,45,120);scene.add(heli);
   const gShroud=add(new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.6,10),dk));gShroud.rotation.x=Math.PI/2;gShroud.position.set(0,-0.92,-3.7);
   // engines: nacelles high on the shoulders, intakes forward, Black Hole IR suppressors aft
   [-1,1].forEach(sd=>{
-    add(new THREE.Mesh(loft([S(-0.75,0.5,0.55,0.95,{x:sd*0.98}),S(-0.5,0.78,0.86,0.95,{x:sd*1.0}),S(1.6,0.8,0.88,0.98,{x:sd*1.02}),S(2.4,0.62,0.7,1.02,{x:sd*1.02}),S(2.7,0.45,0.5,1.06,{x:sd*1.0})],3,20),gm));
+    add(new THREE.Mesh(loft([S(-0.75,0.5,0.62,0.95,{x:sd*0.98}),S(-0.5,0.74,1.02,0.95,{x:sd*1.0}),S(1.6,0.76,1.06,0.98,{x:sd*1.02}),S(2.4,0.6,0.82,1.02,{x:sd*1.02}),S(2.7,0.44,0.56,1.06,{x:sd*1.0})],3,20),gm));   // T700 nacelles: taller than wide
     const inl=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.08,18),soot));inl.rotation.x=Math.PI/2;inl.position.set(sd*1.0,0.95,-0.74);
     const lip=add(new THREE.Mesh(new THREE.TorusGeometry(0.29,0.055,8,22),gm2));lip.position.set(sd*1.0,0.95,-0.79);
     const bul=add(new THREE.Mesh(new THREE.ConeGeometry(0.11,0.22,12),gm2));bul.rotation.x=-Math.PI/2;bul.position.set(sd*1.0,0.95,-0.84);
@@ -5836,8 +5836,8 @@ heli.position.set(0,45,120);scene.add(heli);
   });
   // rotor mast fairing + hub
   add(new THREE.Mesh(loft([S(-0.4,0.4,0.3,1.0),S(0.0,0.9,0.5,1.12),S(1.2,0.95,0.55,1.12),S(1.9,0.5,0.32,1.02)],3,16),gm));
-  const mastC=add(new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.22,0.65,12),dk));mastC.position.set(0,1.6,0.25);
-  const hub=add(new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,0.16,12),dk));hub.position.set(0,1.9,0.25);
+  const mastC=add(new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.2,1.08,12),dk));mastC.position.set(0,1.38,0.25);mastC.userData.ns=1;   // the Apache's tall mast
+  const hub=add(new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,0.16,12),dk));hub.position.set(0,1.9,0.25);hub.userData.ns=1;
   for(let i=0;i<4;i++){const gp=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.11,0.17),dk);gp.position.set(Math.cos(i*Math.PI/2)*0.4,-0.04,-Math.sin(i*Math.PI/2)*0.4);gp.rotation.y=i*Math.PI/2;rotor.add(gp);}
   rotor.position.set(0,1.95,0.25);disc.position.set(0,2.0,0.25);
   // stub wings (slight anhedral): Hellfire rack inboard, M261 19-tube rocket pod outboard
@@ -5846,33 +5846,33 @@ heli.position.set(0,45,120);scene.add(heli);
   const wingG=loft([S(0,0.12,1.2,0,{n:2.2}),S(1,0.1,0.95,0,{n:2.2})],2.2,12);
   wingG.rotateY(Math.PI/2);   // span along X
   [-1,1].forEach(sd=>{
-    const w=add(new THREE.Mesh(wingG,gm));w.scale.set(1.96*sd,1,1);w.position.set(sd*0.66,0.48,0.35);w.rotation.z=sd*0.05;
-    const py1=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py1.position.set(sd*1.42,0.28,0.35);
-    const py2=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py2.position.set(sd*2.22,0.25,0.35);
-    const rack=add(new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,1.2),dk));rack.position.set(sd*1.42,0.06,0.35);
-    for(let i=0;i<4;i++){const mx=sd*1.42+(i%2?0.17:-0.17), my=-0.08-(i<2?0:0.27);
+    const w=add(new THREE.Mesh(wingG,gm));w.scale.set(1.96*sd,1,1);w.position.set(sd*0.66,0.12,0.35);w.rotation.z=sd*0.05;
+    const py1=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py1.position.set(sd*1.42,-0.08,0.35);
+    const py2=add(new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.9),gm2));py2.position.set(sd*2.22,-0.11,0.35);
+    const rack=add(new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,1.2),dk));rack.position.set(sd*1.42,-0.3,0.35);
+    for(let i=0;i<4;i++){const mx=sd*1.42+(i%2?0.17:-0.17), my=-0.44-(i<2?0:0.27);
       const ms=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,1.62,10),new THREE.MeshStandardMaterial({color:0x37402f,roughness:0.6})));ms.rotation.x=Math.PI/2;ms.position.set(mx,my,0.35);
       const tip=add(new THREE.Mesh(new THREE.SphereGeometry(0.09,10,8,0,Math.PI*2,0,Math.PI/2),dk));tip.rotation.x=-Math.PI/2;tip.position.set(mx,my,-0.46);
       [0,1].forEach(f=>{const fin=add(new THREE.Mesh(new THREE.BoxGeometry(f?0.28:0.02,f?0.02:0.28,0.16),dk));fin.position.set(mx,my,1.05);});}
-    const pod=add(new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,1.62,18),gm2));pod.rotation.x=Math.PI/2;pod.position.set(sd*2.22,-0.12,0.35);
-    const podNose=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,0.14,18),gm2));podNose.rotation.x=Math.PI/2;podNose.position.set(sd*2.22,-0.12,-0.5);
-    const face=new THREE.Mesh(new THREE.CircleGeometry(0.3,18),new THREE.MeshBasicMaterial({map:podFace}));face.position.set(sd*2.22,-0.12,-0.575);face.rotation.y=Math.PI;heli.add(face);
+    const pod=add(new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,1.62,18),gm2));pod.rotation.x=Math.PI/2;pod.position.set(sd*2.22,-0.48,0.35);
+    const podNose=add(new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.36,0.14,18),gm2));podNose.rotation.x=Math.PI/2;podNose.position.set(sd*2.22,-0.48,-0.5);
+    const face=new THREE.Mesh(new THREE.CircleGeometry(0.3,18),new THREE.MeshBasicMaterial({map:podFace}));face.position.set(sd*2.22,-0.48,-0.575);face.rotation.y=Math.PI;heli.add(face);
   });
   // tail: swept, tapered vertical fin; all-moving stabilator; tail wheel
-  {const fin=new THREE.Shape();fin.moveTo(-0.7,0);fin.lineTo(0.75,0);fin.lineTo(1.15,1.5);fin.lineTo(0.35,1.5);fin.lineTo(-0.7,0);
+  {const fin=new THREE.Shape();fin.moveTo(-0.75,0);fin.lineTo(0.75,0);fin.lineTo(1.3,2.4);fin.lineTo(0.45,2.4);fin.lineTo(-0.75,0);
    const fg=new THREE.ExtrudeGeometry(fin,{depth:0.2,bevelEnabled:true,bevelThickness:0.04,bevelSize:0.04,bevelSegments:2});
-   fg.translate(0,0,-0.1);fg.rotateY(-Math.PI/2);const vf=add(new THREE.Mesh(fg,gm));vf.position.set(0,0.42,10.0);}
+   fg.translate(0,0,-0.1);fg.rotateY(-Math.PI/2);const vf=add(new THREE.Mesh(fg,gm));vf.position.set(0,-0.05,9.95);}
   {const stab=add(new THREE.Mesh(loft([S(0,0.1,0.85,0,{n:2.2}),S(1,0.08,0.7,0,{n:2.2})],2.2,12).rotateY(Math.PI/2),gm));
-   stab.scale.set(1.7,1,1);stab.position.set(0,0.5,10.5);
+   stab.scale.set(1.7,1,1);stab.position.set(0,-0.12,10.45);
    const stab2=add(new THREE.Mesh(stab.geometry,gm));stab2.scale.set(-1.7,1,1);stab2.position.copy(stab.position);}
-  const tSt=add(new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,1.75,8),dk));tSt.position.set(0,-0.62,10.15);tSt.rotation.x=0.18;
-  const tWh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.18,14),dk));tWh.rotation.z=Math.PI/2;tWh.position.set(0,-1.56,10.3);
+  const tSt=add(new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,1.05,8),dk));tSt.position.set(0,-1.05,10.2);tSt.rotation.x=0.18;tSt.userData.ns=1;
+  const tWh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.18,14),dk));tWh.rotation.z=Math.PI/2;tWh.position.set(0,-1.56,10.3);tWh.userData.ns=1;
   // main gear: trailing-arm struts with fat tyres under the cockpits
   [-1,1].forEach(sd=>{
-    const st=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.0,8),dk));st.position.set(sd*0.86,-0.95,-1.75);st.rotation.z=sd*-0.25;
-    const arm=add(new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.9),dk));arm.position.set(sd*0.9,-1.36,-1.45);
-    const wh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.3,18),dk));wh.rotation.z=Math.PI/2;wh.position.set(sd*1.02,-1.4,-1.6);
-    const hw=add(new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.32,12),new THREE.MeshStandardMaterial({color:0x50544e,roughness:0.5,metalness:0.6})));hw.rotation.z=Math.PI/2;hw.position.copy(wh.position);
+    const st=add(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,1.0,8),dk));st.position.set(sd*0.86,-0.95,-1.75);st.rotation.z=sd*-0.25;st.userData.ns=1;
+    const arm=add(new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.9),dk));arm.position.set(sd*0.9,-1.36,-1.45);arm.userData.ns=1;
+    const wh=add(new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.3,18),dk));wh.rotation.z=Math.PI/2;wh.position.set(sd*1.02,-1.4,-1.6);wh.userData.ns=1;
+    const hw=add(new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.32,12),new THREE.MeshStandardMaterial({color:0x50544e,roughness:0.5,metalness:0.6})));hw.rotation.z=Math.PI/2;hw.position.copy(wh.position);hw.userData.ns=1;
   });
   // antennas + the wire-strike cutters an AH-64A carries above and below the cockpit
   bar(0,1.6,-2.6,0,1.95,-2.1,0.04,dk);bar(0,-0.55,-4.3,0,-0.95,-4.6,0.04,dk);
@@ -5881,18 +5881,22 @@ heli.position.set(0,45,120);scene.add(heli);
   {const tx=(t,w,h,fs)=>tex((g,W2,H2)=>{g.clearRect(0,0,W2,H2);g.fillStyle='rgba(12,12,10,.88)';g.font=`bold ${fs}px Arial`;g.textAlign='center';g.textBaseline='middle';g.fillText(t,W2/2,H2/2);},w,h);
    const army=new THREE.MeshStandardMaterial({map:tx('U.S. ARMY',512,96,72),transparent:true,roughness:0.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
    const sn=new THREE.MeshStandardMaterial({map:tx('85-25398',256,64,40),transparent:true,roughness:0.75,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2});
-   [-1,1].forEach(sd=>{const a=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.45),army);a.position.set(sd*0.37,0.48,5.0);a.rotation.y=sd*Math.PI/2;a.rotation.x=0;heli.add(a);
-     const n2=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.3),sn);n2.position.set(sd*0.13,1.6,10.25);n2.rotation.y=sd*Math.PI/2;heli.add(n2);});}
-  tailRotor.position.set(-0.36,1.5,10.95);      // AH-64 tail rotor sits on the LEFT of the fin, ~0.6 m below the rotor head
-  navR.position.set(-2.66,0.46,0.35);navG.position.set(2.66,0.46,0.35);
-  strobe.position.set(0,1.98,11.18);
+   [-1,1].forEach(sd=>{const a=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.45),army);a.position.set(sd*0.37,0.14,5.0);a.rotation.y=sd*Math.PI/2;a.rotation.x=0;heli.add(a);
+     const n2=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.3),sn);n2.position.set(sd*0.13,1.3,10.4);n2.rotation.y=sd*Math.PI/2;heli.add(n2);});}
+  tailRotor.position.set(-0.36,1.45,10.95);      // AH-64 tail rotor sits on the LEFT of the fin, ~0.6 m below the rotor head
+  navR.position.set(-2.66,0.1,0.35);navG.position.set(2.66,0.1,0.35);
+  strobe.position.set(0,2.4,11.25);
   navRGlow.position.copy(navR.position);navGGlow.position.copy(navG.position);strobeGlow.position.copy(strobe.position);
   // true length: the lofts ran ~10% long (16.8 m). Squeeze the airframe fore-aft about the mast to the
   // AH-64A's 15.0 m fuselage, so the 14.63 m rotor overhangs the nose by the right amount. Rotor
   // discs stay circular — only their hub positions move.
-  const AF=new THREE.Group(),KZ=0.89,MZ=0.25;
-  [...heli.children].forEach(c=>{if(c!==rotor&&c!==disc&&c!==tailRotor)AF.add(c);});
-  AF.scale.z=KZ;AF.position.z=MZ*(1-KZ);heli.add(AF);
+  // True height too: measured against a front silhouette, the cockpit, nacelles and wings sat too
+  // high under too short a mast (canopy top at 92% of rotor-head height instead of 80%). The
+  // airframe is squeezed 0.81x vertically about the belly line; the mast, wheels and struts keep
+  // their real proportions and are placed directly.
+  const AF=new THREE.Group(),AFZ=new THREE.Group(),KZ=0.89,MZ=0.25,KY=0.81,BY=-0.82;
+  [...heli.children].forEach(c=>{if(c===rotor||c===disc||c===tailRotor)return;(c.userData.ns?AFZ:AF).add(c);});
+  AF.scale.set(1,KY,KZ);AF.position.set(0,BY*(1-KY),MZ*(1-KZ));AFZ.scale.z=KZ;AFZ.position.z=MZ*(1-KZ);heli.add(AF,AFZ);
   tailRotor.position.z=MZ+(tailRotor.position.z-MZ)*KZ;
 }
 
@@ -10299,7 +10303,7 @@ function loop(now){
       pedBodyMesh.instanceMatrix.needsUpdate=true;pedHeadMesh.instanceMatrix.needsUpdate=true;
     }
     if(cockpitMode){
-      cam.position.copy(heli.position).add(new THREE.Vector3(0,1.0,-0.9).applyQuaternion(heli.quaternion));
+      cam.position.copy(heli.position).add(new THREE.Vector3(0,0.82,-0.9).applyQuaternion(heli.quaternion));
       cam.lookAt(heli.position.clone().add(new THREE.Vector3(0,.3,-40).applyQuaternion(heli.quaternion)));
     }else{
       const cpos=heli.position.clone().add(new THREE.Vector3(Math.sin(yaw)*24,10,Math.cos(yaw)*24));
