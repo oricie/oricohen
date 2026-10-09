@@ -7832,7 +7832,7 @@ const facadeNormalMaps=facadeGridPresets.map(p=>heightToNormal(makeFacadeHeightC
 const facadeNormalMap=facadeNormalMaps[1]; // kept for any external reference; standard-grid map
 // real Tokyo facade stock: beige and grey tile, raw and painted concrete, white
 // panel, dark granite, brown brick — the colour comes from the material, not a tint
-const facadeBaseColors=['#b9b1a3','#9c9a95','#c8c3b8','#7d7a75','#a8998a','#5e5b58','#d2cdc2','#8f8578','#6e6a66','#b0a898'];
+const facadeBaseColors=['#c4c3bf','#9ea1a4','#d8d7d2','#7f8286','#b6b5b0','#5f6266','#e0dfda','#8d9094','#6b6e72','#bdbcb6'];   // concrete greys, white tile, a few dark granite — the brown cast is gone
 // each entry pairs a texture with its own material feel (roughness/metalness/env) so FACADE
 // MATERIAL varies building-to-building, not just the window pattern
 const facades=facadeBaseColors.map((base,i)=>{
@@ -7993,7 +7993,7 @@ function resTexPair(base){
     }
   });
 }
-const resFacades=[resTexPair('#c4bcae'),resTexPair('#a9a49c'),resTexPair('#b8a894'),resTexPair('#d0ccc4')];   // cream tile, grey, beige, white
+const resFacades=[resTexPair('#cac6be'),resTexPair('#a9a8a4'),resTexPair('#bdb9b0'),resTexPair('#d6d4ce')];   // white tile, grey, pale stone, white
 const grassTex=tex((g,w,h)=>{
   g.fillStyle='#3a4630';g.fillRect(0,0,w,h);
   for(let i=0;i<2600;i++){g.fillStyle=`rgba(${45+Math.random()*30},${60+Math.random()*30},${35+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
@@ -8233,8 +8233,8 @@ const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
     emissive:0xffffff,emissiveMap:fac.lit,emissiveIntensity:0});
   // was HSL hue 222-326 — a random blue-to-magenta cast on every building. Now a near-white
   // multiplier with a whisper of warm or cool, so the facade's own material shows through.
-  const warm=Math.random()<0.6;
-  m.color.setHSL((warm?28+Math.random()*16:205+Math.random()*15)/360,0.03+Math.random()*0.06,0.80+Math.random()*0.16);
+  const warm=Math.random()<0.3;
+  m.color.setHSL((warm?36+Math.random()*10:205+Math.random()*15)/360,0.02+Math.random()*0.04,0.82+Math.random()*0.15);
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0],winGain:0.8+Math.random()*0.45,facade:true});
   facadeInteriors(m,fac.preset||facadeGridPresets[0]);
   a.push(m);} return a;})();
@@ -10506,6 +10506,32 @@ document.getElementById('wpnBtn').addEventListener('pointerdown',e=>{setWpn((wpn
 
 // ---------- STATE ----------
 let yaw=0,pitch=0,roll=0,vSpeed=0;
+// Where a run begins: low in a built-up street in the north wards, nose pointed down it, after a
+// four-second descent from high over the rooftops. (It used to start hovering over the Palace
+// lawns at 45 m, which read as an empty, unreal stretch of city.)
+// The streets are laid out fresh each load, so the spot is chosen, not hard-coded: the street whose
+// next 120 m is lined most densely on BOTH sides, with a clear straight corridor 220 m ahead.
+let SPAWN=null,SPAWN_HIGH=null;
+function pickSpawn(){
+  if(SPAWN)return;
+  const B=buildings.map(o=>({x:o.m.position.x,z:o.m.position.z,w:o.w,d:o.d,h:o.h}));
+  const cand=[];
+  [...ROADS_X.map(r=>({p:r.p,w:r.w,ax:'x'})),...ROADS_Z.map(r=>({p:r.p,w:r.w,ax:'z'}))].filter(r=>r.w>=12).forEach(r=>{
+    for(let t=-560;t<=540;t+=20)[1,-1].forEach(dir=>{
+      const x=r.ax==='x'?r.p:t,z=r.ax==='x'?t:r.p,dx=r.ax==='x'?0:dir,dz=r.ax==='x'?dir:0;
+      if(z>SEA_Z0-60||Math.hypot(x-PALACE.x,z-PALACE.z)<PALACE.r+70)return;
+      let L=0,R=0,tall=0;
+      for(const o of B){const rx=o.x-x,rz=o.z-z,along=rx*dx+rz*dz,side=rx*dz-rz*dx;
+        if(along>-10&&along<130&&Math.abs(side)<45){if(side>0)L++;else R++;if(o.h>30)tall++;}}
+      cand.push({x,z,dx,dz,score:Math.min(L,R)*2+tall+(r.w>=20?6:0)});});});
+  cand.sort((a,c)=>c.score-a.score);
+  const clear=c=>!B.some(o=>{if(o.h<=8)return false;for(let s=0;s<=220;s+=4){const px=c.x+c.dx*s,pz=c.z+c.dz*s;
+    if(Math.abs(px-o.x)<o.w/2+8*Math.abs(c.dz)+1&&Math.abs(pz-o.z)<o.d/2+8*Math.abs(c.dx)+1)return true;}return false;});
+  const c=cand.slice(0,80).find(clear)||{x:0,z:120,dx:0,dz:-1};
+  SPAWN={x:c.x,y:18,z:c.z,yaw:Math.atan2(-c.dx,-c.dz)};
+  SPAWN_HIGH={x:c.x-c.dx*160,y:140,z:c.z-c.dz*160};
+  window.__spawn=SPAWN;
+}
 let hp=100,score=0,kills=0,wave=1,cockpitMode=false,gameOver=false;
 let killPopT=-1e9; // timestamp of most recent kill, drives the HUD kill-counter flash
 let wpn=0;
@@ -14121,8 +14147,8 @@ function resetRunState(){
   if(typeof refreshStageMarkers==='function')refreshStageMarkers();
   {const el=document.getElementById('intelLog');if(el){el.innerHTML='';el.style.display='none';}}
   deliverCountdown=null;
-  yaw=0;vSpeed=0;pitch=0;roll=0;shake=0;
-  heli.position.set(0,45,120);heli.visible=true;
+  pickSpawn();yaw=SPAWN.yaw;vSpeed=0;pitch=0;roll=0;shake=0;
+  heli.position.set(SPAWN_HIGH.x,SPAWN_HIGH.y,SPAWN_HIGH.z);heli.visible=true;
   document.getElementById('msg').style.display='none';
 }
 function startRun(){
@@ -14133,6 +14159,8 @@ function startRun(){
   ov.style.display='none';document.body.classList.remove('in-menu');
   {const hEl=document.getElementById('help');hEl.style.opacity=.65;clearTimeout(window.__helpT);window.__helpT=setTimeout(()=>{hEl.style.opacity=0;},12000);}
   startAudio();
+  window.__intro={t0:performance.now(),dur:4200,a:new THREE.Vector3(SPAWN_HIGH.x,SPAWN_HIGH.y,SPAWN_HIGH.z),b:new THREE.Vector3(SPAWN.x,SPAWN.y,SPAWN.z),yaw:SPAWN.yaw};
+  window.__throttle=0.1;
   startWave();
   // legacy free-roam hostage objective retired — startRun opens on the first shop instead
   setTimeout(()=>{if(!gameOver)comRadio('COMMAND: FIVE OF YOURS WENT DOWN OVER TOKYO. WORK THE SHOPS, FIND THEM, HOIST THEM OUT — AND WATCH THE SKIES.');},1400);
@@ -14262,6 +14290,11 @@ function loop(now){
     if(window.__forceLowAlt){heli.position.y=6;vSpeed=0;} // TEMP DEBUG - remove before final
     heli.position.x=Math.max(-620,Math.min(620,heli.position.x));
     heli.position.z=Math.max(-620,Math.min(820,heli.position.z)); // +z extended into Tokyo Bay so you can ferry survivors out to the Navy ship
+    if(window.__intro){   // opening descent: high over the rooftops, easing down into the street
+      const I=window.__intro,k=Math.min(1,(performance.now()-I.t0)/I.dur),e=1-Math.pow(1-k,3);
+      heli.position.lerpVectors(I.a,I.b,e);yaw=I.yaw;vSpeed=0;window.__throttle=0.12;
+      if(k>=1)window.__intro=null;
+    }
     // altitude-based fade for tiny bright emitters (neon-sign glow, warm sidewalk spill, billboard glow):
     // full strength near the street, damped when zoomed out from height so they stop sub-pixel twinkling
     const __altFade=THREE.MathUtils.clamp(1-(heli.position.y-55)/110,0.22,1);
@@ -14652,6 +14685,11 @@ function loop(now){
       // chase: close and low enough that the Apache owns the lower third of the frame instead of
       // getting lost in the city (it was 24 m back and 10 m up, aimed 10 m ahead of the nose)
       const cpos=heli.position.clone().add(new THREE.Vector3(Math.sin(yaw)*15,4.5,Math.cos(yaw)*15));
+      { // down in the streets the boom camera would sit inside a wall: shorten it until it's clear
+        const near=[];for(const B of buildings){const bp=B.m.position;if(Math.abs(bp.x-cpos.x)<B.w/2+20&&Math.abs(bp.z-cpos.z)<B.d/2+20)near.push(B);}
+        if(near.length){const inside=q=>near.some(B=>{const bp=B.m.position;return Math.abs(q.x-bp.x)<B.w/2+1.2&&Math.abs(q.z-bp.z)<B.d/2+1.2&&q.y<B.h+1.5;});
+          if(inside(cpos)){const q=new THREE.Vector3();for(let f=0.85;f>=0.25;f-=0.15){q.lerpVectors(heli.position,cpos,f);if(!inside(q)){cpos.copy(q);break;}}
+            if(inside(cpos))cpos.lerpVectors(heli.position,cpos,0.25);}}}
       cam.position.lerp(cpos,Math.min(1,7.5*dt));
       cam.lookAt(heli.position.clone().add(fwd.clone().multiplyScalar(7)).add(new THREE.Vector3(0,1.2,0)));
     }
@@ -14720,8 +14758,8 @@ function loop(now){
     const t=now/1000;
     heli.visible=true;cockpitGroup.visible=false;
     if(!document.body.classList.contains('in-menu'))document.body.classList.add('in-menu');
-    heli.position.set(0,46+Math.sin(t*0.9)*0.35,120);
-    heli.rotation.set(Math.sin(t*0.7)*0.025,0.35,Math.sin(t*0.5)*0.03,'YXZ');
+    pickSpawn();heli.position.set(SPAWN_HIGH.x,SPAWN_HIGH.y+Math.sin(t*0.9)*0.35,SPAWN_HIGH.z);
+    heli.rotation.set(Math.sin(t*0.7)*0.025,SPAWN.yaw+0.35,Math.sin(t*0.5)*0.03,'YXZ');
     rotor.rotation.y+=30*dt;tailRotor.rotation.x+=42*dt;
     const ma=Math.PI*0.5+0.35+Math.sin(t*0.08)*0.55, mr=17;
     const ctr=heli.position.clone().add(new THREE.Vector3(0,0.6,1.2));
