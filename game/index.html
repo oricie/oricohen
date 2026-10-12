@@ -2964,7 +2964,7 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
 // (8, up from 3) keeps repetition across the city far less noticeable.
 function drawShopBay(g,x0,y0,sw,h){
   const shut=Math.random()<0.12; // closed shutter bay
-  const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.62;
+  const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.74;   // glazing ~0.4-3.5 m on the 4.2 m strip (its sill sat at 1.3 m, chest high)
   if(shut){
     g.fillStyle='#232227';g.fillRect(bx,by,bw2,bh2);
     for(let sx=bx;sx<bx+bw2;sx+=6){g.fillStyle='rgba(0,0,0,.22)';g.fillRect(sx,by,1.4,bh2);}
@@ -3001,7 +3001,7 @@ function drawShopBay(g,x0,y0,sw,h){
   g.fillStyle='rgba(255,255,255,.1)';g.fillRect(bx,by+bh2*0.8,bw2,1.2);
   // mannequin silhouette (some bays)
   if(Math.random()<0.3){
-    const mx=bx+bw2*(0.2+Math.random()*0.6),mbase=by+bh2*0.82,mh=bh2*0.62,mw=Math.max(2,mh*0.24);
+    const mx=bx+bw2*(0.2+Math.random()*0.6),mbase=by+bh2*0.97,mh=bh2*0.55,mw=Math.max(2,mh*0.24);
     g.fillStyle='rgba(8,6,10,.68)';
     g.beginPath();g.arc(mx,mbase-mh*0.92,mw*0.34,0,7);g.fill();
     g.beginPath();g.moveTo(mx-mw*0.42,mbase);g.lineTo(mx-mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.42,mbase);g.closePath();g.fill();
@@ -3056,7 +3056,7 @@ const sfFrameXf=[],sfSignXf=[],sfAwningXf=[],_sfCol=new THREE.Color();
 const sfInnerXf=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>[]);
 const parapetXf=[]; // PERF: every building's roof parapet, batched into one InstancedMesh
 const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, batched + shared material
-const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
+const antGeo=new THREE.CylinderGeometry(.18,.32,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
 const warnGeo=new THREE.SphereGeometry(0.42,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff1a10});   // ICAO red, lamp-sized
 
 // ---- 1989 TOKYO ADVERTISING ------------------------------------------------------------------
@@ -3935,7 +3935,7 @@ const RES_POOL=resFacades.map(pr=>{
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
 // texture tile -> metres, per material: rows/cols of one tile, floor-to-floor range, window-bay width.
 // The bay follows the preset (loft panes ~4.2 m .. a tight high-rise grid ~2 m) so window SIZE still varies.
-const SHOP_Y0=5.4;   // ground-floor shop storey: shopfront + sign band + frame top
+const SHOP_Y0=5.0;   // ground-floor shop storey: shopfront + sign band + frame top
 const FACADE_GRID=new Map();
 (window.__bldgMats||[]).forEach(e=>{if(e.facade)FACADE_GRID.set(e.mat,{rows:e.preset.rows,cols:e.preset.cols,storey:[3.3,3.8],bay:{5:4.2,7:3.6,10:3.0,13:2.5,16:2.0}[e.preset.cols]||3.2});});
 GLASS_POOL.forEach(m=>FACADE_GRID.set(m,{rows:GLASS_ROWS,cols:12,storey:[3.85,4.0],bay:1.5,rowsPerStorey:4}));
@@ -3984,7 +3984,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
   }
   // REAL STOREYS: the window grid used to be one texture tile per face, so a storey was simply the
   // building's height / the tile's rows (7-26): 0.5 m on a low block, 18 m on a tall one. Now every
-  // face repeats the tile at a true floor-to-floor height above a 5.4 m shop storey (offices 3.3-3.8 m,
+  // face repeats the tile at a true floor-to-floor height above a 5.0 m shop storey (offices 3.3-3.8 m,
   // apartments 2.8-2.95 m, curtain-wall towers 3.9 m = 4 rows), with whole window bays across each face,
   // and the roof lands on a floor line.
   const FG=FACADE_GRID.get(mat), storey=FG.storey[0]+Math.random()*(FG.storey[1]-FG.storey[0]);
@@ -4019,13 +4019,13 @@ function spawnBuilding(cx,cz,bw,bd,style){
       const zc=o[0], ry=o[1], fs=zc>=0?1:-1, wz=cz+zc; // fs = outward normal; wz = world-z of the face
       // lit interior window recessed behind a dark frame (bulkhead+kickplate), an emissive sign band,
       // and protruding awning canopies — all collected as world-space transforms for later instancing.
-      sfInnerXf[sfi].push({x:cx,y:2.5,z:wz,yaw:ry,w:bw*0.98,h:4.2});
-      sfFrameXf.push({x:cx,y:4.9,z:wz+fs*0.12,yaw:ry,w:bw,h:1.0,d:0.5});
+      sfInnerXf[sfi].push({x:cx,y:2.1,z:wz,yaw:ry,w:bw*0.98,h:4.2});   // shop storey brought down to street level: glass from the floor, 3.5 m head
+      sfFrameXf.push({x:cx,y:4.5,z:wz+fs*0.12,yaw:ry,w:bw,h:1.0,d:0.5});
       sfFrameXf.push({x:cx,y:0.35,z:wz+fs*0.12,yaw:ry,w:bw,h:0.7,d:0.5});
-      sfSignXf.push({x:cx,y:4.75,z:wz+fs*0.42,yaw:ry,w:bw*0.9,h:0.42,d:0.12,c:sfSignCols[Math.floor(Math.random()*sfSignCols.length)]});
+      sfSignXf.push({x:cx,y:4.35,z:wz+fs*0.42,yaw:ry,w:bw*0.9,h:0.42,d:0.12,c:sfSignCols[Math.floor(Math.random()*sfSignCols.length)]});
       const segN=2, segW=bw/segN;
       for(let s2=0;s2<segN;s2++){
-        sfAwningXf.push({x:cx-bw/2+segW*(s2+0.5),y:4.05,z:wz+fs*0.75,yaw:ry,w:segW*0.92,h:0.14,d:1.3,c:sfAwningCols[Math.floor(Math.random()*sfAwningCols.length)]});
+        sfAwningXf.push({x:cx-bw/2+segW*(s2+0.5),y:3.65,z:wz+fs*0.75,yaw:ry,w:segW*0.92,h:0.14,d:1.3,c:sfAwningCols[Math.floor(Math.random()*sfAwningCols.length)]});
       }
       // warm shop-light spill onto the sidewalk below the storefront (instanced after the district loop)
       const push=o[0]>=0?2.0:-2.0;
@@ -5672,7 +5672,7 @@ instAdd(new THREE.CylinderGeometry(1,1,1,14),tankMat,TANK,true);
 instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x2c2830,roughness:0.8,metalness:0.3}),TLEG,false);
 instAdd(new THREE.BoxGeometry(1,1,1),acMat,ACU,false);
 instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshStandardMaterial({color:0x50505a,roughness:0.6,metalness:0.5}),MAST,false);
-instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
+instAdd(new THREE.SphereGeometry(0.28,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);   // obstruction lamp ~0.5 m (was a 1 m ball)
 
 // trees: parks + ginkgo rows on the avenues
 // Street trees (zelkova / ginkgo): a canopy is a CLUSTER of lumpy blobs, not one sphere —
