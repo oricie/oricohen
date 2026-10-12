@@ -1196,7 +1196,12 @@ function sfxExplosion(big){
 }
 
 // ---------- TEXTURES ----------
-function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);if(aniso)t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
+// surface-only randomness (cladding picks, per-building wear seeds) has its own stream, so adding
+// texture variety never reshuffles the city layout that Math.random lays out
+const TEXR=(()=>{let s=0x2545F491;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296;};})();
+// every canvas texture is mipmapped (CanvasTexture default: trilinear) and at least 4x anisotropic,
+// so nothing smears at grazing angles or shimmers at a distance; the ones asked for get the maximum
+function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);const mx=renderer.capabilities.getMaxAnisotropy();t.anisotropy=aniso?mx:Math.min(4,mx);return t;}
 // Build a tangent-space NORMAL MAP from a grayscale HEIGHT pattern (Sobel gradient). This is the
 // missing ingredient that made textures read "flat": with a normal map, the scene lights rake
 // across aggregate grain, crack grooves, tar-seam ridges and tire ruts so the pavement has real
@@ -1297,7 +1302,7 @@ function facadeTexPair(base,opts){
       let run=Math.random()<0.5;
       for(let x=0;x<cols;x++){
         const px=x*cw+cw*0.16,py=y*ch+ch*0.22,ww=cw*0.68,wh=ch*0.56;
-        g.fillStyle='rgba(0,0,0,.45)';g.fillRect(px-2,py-2,ww+4,wh+4);   // frame / reveal
+        g.fillStyle='rgba(150,152,155,.75)';g.fillRect(px-2,py-2,ww+4,wh+4);   // aluminium sash frame (matches the near shader)
         _winGlass(g,px,py,ww,wh);
         if(Math.random()<0.25)run=!run;
         if(run&&Math.random()<occ*2.0)_winLit(gl,px,py,ww,wh,pickWinFam());
@@ -1315,23 +1320,26 @@ function facadeTexPair(base,opts){
 function facadeTex(base,opts){return facadeTexPair(base,opts).map;}   // albedo-only callers
 
 // curtain-wall glass towers: mullion grid, spandrel bands, a sky-gradient sheen
+// the curtain wall now TILES up the tower (one row = 1 m, see GLASS_POOL), so no full-face gradient
+// or sheen any more — each pane carries its own slight tilt-reflection instead (real float glass
+// panes are never perfectly coplanar, which is what breaks a glass tower into a grid of tones)
+const GLASS_ROWS=24;
 function glassTexPair(){
   return _pairTex(512,512,(g,gl,w,h)=>{
-    const gr=g.createLinearGradient(0,0,w*.25,h);
-    gr.addColorStop(0,'#7c8792');gr.addColorStop(.35,'#4a545e');gr.addColorStop(.7,'#2c333a');gr.addColorStop(1,'#1d2227');
-    g.fillStyle=gr;g.fillRect(0,0,w,h);
-    const C=12,R=22,cw=w/C,ch=h/R;
+    const C=12,R=GLASS_ROWS,cw=w/C,ch=h/R;
+    for(let y=0;y<R;y++)for(let x=0;x<C;x++){const v=44+TEXR()*22;g.fillStyle=`rgb(${v},${v+7},${v+13})`;g.fillRect(x*cw,y*ch,cw,ch);}
+    const mr=Math.random;
     for(let y=0;y<R;y++){
+      if(y>=22)Math.random=TEXR;                     // rows past the old 22 draw from the texture stream (layout RNG untouched)
       if(y%4===3){g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,y*ch+ch*0.55,w,ch*0.45);}  // slab spandrel
       const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
       for(let x=0;x<C;x++)if(Math.random()<occ*1.4)_winLit(gl,x*cw+2,y*ch+2,cw-4,ch-4,pickWinFam());
     }
+    Math.random=mr;
     g.strokeStyle='rgba(12,14,16,.75)';
     for(let x=0;x<=C;x++){g.lineWidth=x%3===0?2.5:1.2;g.beginPath();g.moveTo(x*cw,0);g.lineTo(x*cw,h);g.stroke();}
     for(let y=0;y<=R;y++){g.lineWidth=1.2;g.beginPath();g.moveTo(0,y*ch);g.lineTo(w,y*ch);g.stroke();}
     g.lineWidth=1;
-    g.fillStyle='rgba(255,255,255,.06)';
-    g.beginPath();g.moveTo(0,h);g.lineTo(w*.45,0);g.lineTo(w*.62,0);g.lineTo(w*.17,h);g.fill();
   });
 }
 function glassTex(){return glassTexPair().map;}
@@ -1535,6 +1543,13 @@ wetRoughTex.repeat.set(6,60);
 // ground is clipped to the LAND slab (ends at the coastline) so nothing sits under the bay
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,LAND_LEN),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.92,metalness:0.0,envMapIntensity:0.35})); // matte asphalt: dropped wet roughnessMap so open ground reads dry, not slick
 ground.rotation.x=-Math.PI/2;ground.position.z=LAND_CZ;ground.receiveShadow=true;scene.add(ground);
+// the 38x tiled slab texture read as a carpet from the air: break it with world-space broad tone
+// (old and new pours, soot, damp) at 15-90 m scales — low frequency, so nothing to alias
+ground.material.onBeforeCompile=sh=>{fogHook(sh);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vGP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvGP=(modelMatrix*vec4(transformed,1.0)).xz;');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vGP;float gh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float gn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(gh(i),gh(i+vec2(1,0)),f.x),mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x),f.y);}')
+    .replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb*=0.62+0.5*gn(vGP*0.011)+0.25*(gn(vGP*0.067+4.0)-0.5);');};
+ground.material.customProgramCacheKey=()=>'ground2';
 
 // ============ WET-STREET PLANAR REFLECTION ============================================
 // A real mirror. Env-map reflections can't paint neon onto flat road (they mirror the dark overhead
@@ -1783,7 +1798,7 @@ function makePlainAsphaltTex(){return tex((g,w,h)=>{
 // Fine detail fades with distance so it does not shimmer from the air.
 // ============================================================================
 const ASPHALT_GLSL=`
-varying vec3 vWP;uniform vec3 uRoad;
+varying vec3 vWP;uniform vec3 uRoad;float gAggK=1.0;
 float ah(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float an(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
   return mix(mix(ah(i),ah(i+vec2(1,0)),f.x),mix(ah(i+vec2(0,1)),ah(i+vec2(1,1)),f.x),f.y);}
@@ -1798,7 +1813,7 @@ struct AS{float h;float crack;float seal;float patchIn;float seam;float hole;flo
 AS asurf(vec2 p,float near,float dist){
   AS s;
   s.age=afbm(p*0.022+3.0);
-  s.agg=an(p*8.5)*0.6+an(p*21.0)*0.4;
+  s.agg=mix(0.5,an(p*38.0)*0.6+an(p*91.0)*0.4,gAggK);              // 1-3 cm stones in the bitumen
   s.track=0.0;s.oil=0.0;
   if(uRoad.z>0.5){
     float acr=(uRoad.x<0.5?p.x:p.y)-uRoad.y+uRoad.z*0.5, along=(uRoad.x<0.5?p.y:p.x);
@@ -1822,28 +1837,72 @@ AS asurf(vec2 p,float near,float dist){
   if(qh<0.03){vec2 c=(qi+0.25+0.5*vec2(ah(qi+2.2),ah(qi+4.4)))*7.0; float r=0.35+0.6*ah(qi+6.6);
     float dd=length(p-c)/r+0.35*(an((p-c)*3.0)-0.5);
     s.hole=1.0-smoothstep(0.82,1.0,dd); s.rim=(1.0-smoothstep(1.0,1.4,dd))*(1.0-s.hole);}
-  s.h=(s.agg-0.5)*0.35*near - s.crack*0.9 - s.seam*0.6 + s.seal*0.15 - s.hole*2.2 + s.rim*0.35*(an(p*6.0)) - s.track*0.15
+  s.h=(s.agg-0.5)*0.06*near - s.crack*0.9 - s.seam*0.6 + s.seal*0.15 - s.hole*2.2 + s.rim*0.35*(an(p*6.0)) - s.track*0.15
       + (s.patchIn>0.5?0.12:0.0);
   return s;
 }
 `;
+// ROAD PAINT, computed in the shader in metres (it was baked into tiling canvases whose dashes came
+// out 0.8 m long on a 1.5 m beat, and blurred to nothing past 60 m). Japanese 1989 practice:
+// lane lines are 15 cm white dashes 5 m on / 5 m off, the centre of an arterial is a yellow
+// no-overtaking line, every kerbed street has a white 外側線 edge line and a 50 cm precast concrete
+// L-gutter (L形側溝) along the kerb. Everything is anti-aliased against the pixel footprint, so a
+// line thinner than a pixel fades to its true coverage instead of flickering. Paint is worn
+// (chipped by tyres along the wheel tracks) and sits flat on the surface relief.
+// uMark = (mode: 0 none / 1 grid street / 2 avenue ribbon, width, class: 0 alley 1 street 2 arterial
+// 3 expressway, per-road seed)
+const ROAD_PAINT_GLSL=`
+uniform vec4 uMark;
+float pLine(float x,float c,float hw,float f){return 1.0-smoothstep(hw-f,hw+f,abs(x-c));}
+float pDash(float y,float on,float per,float f){float d=fract(y/per)*per;
+  float m=smoothstep(-f,f,d)-smoothstep(on-f,on+f,d)+smoothstep(per-f,per+f,d);
+  return mix(m,on/per,smoothstep(0.1,0.3,f/per));}
+// returns (white paint, yellow paint, L-gutter) coverage
+vec3 roadPaint(float acr,float along,vec2 p,float fA,float fL,float w){
+  float hw=w*0.5, k=uMark.z, sd=uMark.w, a=abs(acr), fa=fA*0.7+0.002, fl=fL*0.7+0.002;
+  float wht=0.0,yel=0.0,gut=0.0;
+  if(k<0.5){                                                            // alley: edge lines only
+    wht=pLine(a,hw-0.55,0.075,fa);
+  }else if(k<1.5){                                                      // two-lane street
+    wht=pLine(a,hw-1.25,0.075,fa);
+    float c=pLine(acr,0.0,0.075,fa);
+    wht=max(wht,fract(sd*7.0)<0.5?c:c*pDash(along,5.0,10.0,fl));
+    gut=step(hw-0.5,a);
+  }else if(k<2.5){                                                      // arterial: 2+2 lanes and a shoulder
+    float ln=hw>11.0?5.4:hw*0.5;
+    yel=pLine(a,0.15,0.075,fa);
+    wht=pLine(a,ln,0.075,fa)*pDash(along+sd*10.0,5.0,10.0,fl);
+    wht=max(wht,pLine(a,hw-1.6,0.1,fa));
+    gut=step(hw-0.5,a);
+  }else{                                                                // expressway deck
+    wht=max(pLine(a,hw-0.6,0.1,fa),pLine(acr,0.0,0.075,fa)*pDash(along,8.0,20.0,fl));
+  }
+  float wear=smoothstep(0.18,0.62,an(p*vec2(5.3,4.7)+sd*13.0)*0.7+an(p*19.0)*0.3);
+  wear=mix(wear,0.72,smoothstep(0.01,0.04,max(fA,fL)));                // far off: the average wear, not speckle
+  return vec3(wht*wear,yel*wear,gut);
+}
+`;
 function asphaltify(mat,road){
-  const u={uRoad:{value:new THREE.Vector3(road?(road.axis==='x'?0:1):0,road?road.p:0,road?road.w:0)}};
+  const mode=road?(road.avenue?2:1):0;
+  const u={uRoad:{value:new THREE.Vector3(road&&!road.avenue?(road.axis==='x'?0:1):0,road&&!road.avenue?road.p:0,road&&!road.avenue?road.w:0)},
+    uMark:{value:new THREE.Vector4(mode,road?road.w||0:0,road?(road.kind!==undefined?road.kind:(road.w>=20?2:road.w>10?1:0)):0,TEXR())}};
   mat.normalMap=null;                          // the stretched photo normal map was the "wrinkled leather"
   mat.roughnessMap=null;
   mat.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
-      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat aRough=0.0;vec3 aNrm=vec3(0.0,1.0,0.0);')
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying vec2 vRU;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;vRU=uv;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+ROAD_PAINT_GLSL+'\nvarying vec2 vRU;float aRough=0.0;vec3 aNrm=vec3(0.0,1.0,0.0);')
       .replace('#include <map_fragment>',`#include <map_fragment>
 { vec2 p=vWP.xz; float dist=length(vViewPosition);
   float near=1.0-smoothstep(14.0,55.0,dist);
+  vec2 fp=fwidth(p); float fpx=max(fp.x,fp.y);
+  gAggK=1.0-smoothstep(0.004,0.014,fpx);                                  // stone-scale grain only where a stone is a few pixels
   AS a=asurf(p,near,dist);
   vec3 col=mix(vec3(0.048,0.048,0.05),vec3(0.13,0.126,0.118),smoothstep(0.25,0.62,a.age));   // most city asphalt is weathered grey
   col*=0.86+0.28*an(p*0.55);
-  col*=mix(1.0,0.8+0.4*a.agg,near);
+  col*=0.85+0.3*a.agg;
   float rgh=0.68+0.2*an(p*0.13);
   col*=1.0-0.30*a.track; rgh-=0.18*a.track;
   col*=1.0-0.35*a.oil; rgh-=0.2*a.oil;
@@ -1854,19 +1913,33 @@ function asphaltify(mat,road){
   col=mix(col,vec3(0.12,0.115,0.105)*(0.8+0.4*a.agg),a.rim*0.8);
   col=mix(col,vec3(0.008,0.009,0.011),a.hole); rgh=mix(rgh,0.03,a.hole);
   // relief: finite-difference the same height field, only where it can be seen
+  float flatK=0.0;
+  if(uMark.x>0.5){
+    float acr,along,fA,fL,rw=uMark.y;
+    if(uMark.x<1.5){acr=(uRoad.x<0.5?p.x:p.y)-uRoad.y; along=(uRoad.x<0.5?p.y:p.x); fA=uRoad.x<0.5?fp.x:fp.y; fL=uRoad.x<0.5?fp.y:fp.x;}
+    else{rw=floor((vRU.x+50.0)/100.0); acr=vRU.x-rw*100.0; along=vRU.y; vec2 fr=fwidth(vRU); fA=fr.x; fL=fr.y;}   // avenue uv.x = width*100 + metres across
+    vec3 pt=roadPaint(acr,along,p,fA,fL,rw);
+    if(pt.z>0.5){                                                          // precast L-gutter: pale concrete, 2 m units
+      float j=pLine(fract(along/2.0)*2.0,0.0,0.006,fL*0.7+0.002)+pLine(fract(along/2.0)*2.0,2.0,0.006,fL*0.7+0.002);
+      col=vec3(0.2,0.195,0.185)*(0.75+0.35*an(p*2.3))*(1.0-0.5*j)*(1.0-0.45*smoothstep(0.2,0.5,an(p*0.4+7.0)));
+      rgh=0.85; flatK=1.0;
+    }
+    float pw=max(pt.x,pt.y);
+    col=mix(col,mix(vec3(0.6,0.6,0.58),vec3(0.62,0.48,0.12),step(pt.x,pt.y))*(0.85+0.15*a.agg),pw);
+    rgh=mix(rgh,0.55,pw); flatK=max(flatK,pw*0.7);
+  }
   if(near>0.02){
-    float e=0.03, k=near*1.6;
+    float e=0.012, k=near*1.6*(1.0-flatK);
     float hx=asurf(p+vec2(e,0.0),near,dist).h, hz=asurf(p+vec2(0.0,e),near,dist).h;
     aNrm=normalize(vec3(-(hx-a.h)/e*0.05*k,1.0,-(hz-a.h)/e*0.05*k));
   }
-  float paint=smoothstep(0.08,0.2,max(texelColor.r,texelColor.g));
-  diffuseColor.rgb=mix(col,diffuseColor.rgb*0.9,paint);
-  aRough=mix(rgh,0.7,paint);
+  diffuseColor.rgb=col;
+  aRough=rgh;
 }`)
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=aRough;')
       .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(aNrm,0.0)).xyz);');
   };
-  mat.customProgramCacheKey=()=>'asphalt2';
+  mat.customProgramCacheKey=()=>'asphalt3';
   mat.envMapIntensity=0.55;
   mat.needsUpdate=true;
   return mat;
@@ -2009,9 +2082,8 @@ const curbMat=curbFaceMat; // legacy alias
 //     a repeated variant tiles far less often and out of phase with any other road using it
 //  4. the recognisable baked shapes that made repeats obvious (manhole, pothole blobs) were removed
 //     from the tileable texture entirely — grain/oil/cracks read as continuous noise, not a pattern
-const ROAD_POOL_MAJOR=[0,1,2].map(()=>makeMajorRoadTex());
-const ROAD_POOL_STRIP=[0,1,2].map(()=>makeRoadStripTex());
-const ROAD_POOL_ALLEY=[0,1].map(()=>makeAlleyTex());
+const ROAD_BLANK=(()=>{const t=new THREE.DataTexture(new Uint8Array([12,12,13,255]),1,1);t.needsUpdate=true;return t;})();   // lane paint is drawn by the asphalt shader now
+const ROAD_POOL_MAJOR=[ROAD_BLANK],ROAD_POOL_STRIP=[ROAD_BLANK],ROAD_POOL_ALLEY=[ROAD_BLANK];
 const WETROUGH_POOL=[0,1,2,3].map(()=>makeWetRoughTex());
 function pickPool(pool){return pool[Math.floor(Math.random()*pool.length)];}
 function roadTexFor(r){
@@ -2094,9 +2166,9 @@ ROADS_Z.forEach(r=>addRoad('z',r));
   };
   const KL=9.6, LREF=CITY*2;                                      // kerb tile length, walk texture span
   SW_SEGS.forEach(({axis,c,a0,a1,kerb})=>{
-    const x0=c-SW/2,x1=c+SW/2,h=CURB_H;
+    const x0=c-SW/2,x1=c+SW/2,h=CURB_H, pt=10*[0,0,1,1,2][Math.abs(Math.round(c*7.31+a0*0.013))%5];   // paving type per walk
     quad(TP,TN,TU,[V(axis,x0,a0,h),V(axis,x1,a0,h),V(axis,x1,a1,h),V(axis,x0,a1,h)],
-      [[Math.abs(x0-kerb),a0],[Math.abs(x1-kerb),a0],[Math.abs(x1-kerb),a1],[Math.abs(x0-kerb),a1]],[0,1,0]);   // u = metres from the kerb
+      [[pt+Math.abs(x0-kerb),a0],[pt+Math.abs(x1-kerb),a0],[pt+Math.abs(x1-kerb),a1],[pt+Math.abs(x0-kerb),a1]],[0,1,0]);   // u = metres from the kerb (+10 x paving type)
     const nAc=s2=>axis==='x'?[s2,0,0]:[0,0,s2], nAl=s2=>axis==='x'?[0,0,s2]:[s2,0,0];
     const L=(a1-a0)/KL, Wd=SW/KL;
     [[x0,-1],[x1,1]].forEach(([xc,s2])=>quad(KP,KN,KU,[V(axis,xc,a0,0),V(axis,xc,a1,0),V(axis,xc,a1,h),V(axis,xc,a0,h)],
@@ -2115,42 +2187,55 @@ ROADS_Z.forEach(r=>addRoad('z',r));
   const pavMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85,metalness:0.0,envMapIntensity:0.35,
     map:new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1)});
   pavMat.map.needsUpdate=true;
+  // PAVEMENT shader, laid in the walk's own frame (u = metres from the kerb, v = metres along it, so it
+  // follows the curved avenues too). uv.x carries the paving type as +10/+20: (0) 30 cm grey concrete
+  // flags, (1) 1980s interlocking blocks, 10x20 cm, half-bond, grey with runs of terracotta, (2) older
+  // 45 cm slabs. A 30 cm yellow 線状 guide strip (four raised bars along the walk — the 1980s guide
+  // block; dots are for crossings) runs about a metre in. Joints are anti-aliased against the pixel
+  // footprint and fade to their real coverage, so a walk seen from 300 m is an even grey, not moiré.
   pavMat.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
       .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat pRough=0.85;vec3 pNrm=vec3(0,1,0);'+`
-float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
-  vec2 g=p/0.45, gi=floor(g), gf=fract(g);
-  float joint=1.0-smoothstep(0.0,0.035,min(min(gf.x,1.0-gf.x),min(gf.y,1.0-gf.y)));
-  float t=ah(gi);
-  col=mix(vec3(0.16,0.155,0.15),vec3(0.24,0.225,0.21),t)*(0.85+0.3*an(p*3.0));
-  col*=1.0-0.35*smoothstep(0.55,0.85,an(p*0.35+2.0));                 // grime and old stains
-  col=mix(col,vec3(0.05,0.045,0.04),step(0.993,ah(floor(p*6.0))));    // gum spots
-  rough=0.82-0.25*(1.0-smoothstep(0.0,0.6,u));                         // damp along the kerb
-  col*=1.0-0.25*(1.0-smoothstep(0.0,0.5,u));
-  float h=-joint*0.6+(t-0.5)*0.15;
-  if(u>0.45&&u<0.75){                                                  // tenji strip
-    vec2 tg=p/0.3, tf=fract(tg);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat pRough=0.85;'+`
+float pJ(vec2 g,vec2 fw,float jw){vec2 f=fract(g),d=min(f,1.0-f),a=fw*0.7+1e-4;
+  vec2 m=1.0-smoothstep(jw-a,jw+a,d); m=mix(m,vec2(2.0*jw),smoothstep(0.2,0.45,fw)); return max(m.x,m.y);}
+float pavH(vec2 q,vec2 fq,float typ,vec2 p,out vec3 col,out float rough){
+  vec2 per=typ<0.5?vec2(0.3):typ<1.5?vec2(0.1,0.2):vec2(0.45);
+  vec2 g=q/per; if(typ>0.5&&typ<1.5)g.x+=0.5*mod(floor(g.y),2.0);
+  vec2 gi=floor(g), fw=fq/per; float fade=1.0-smoothstep(0.2,0.5,max(fw.x,fw.y));
+  float joint=pJ(g,fw,typ>0.5&&typ<1.5?0.05:0.035), t=(ah(gi)-0.5)*fade+0.5;
+  col=typ<0.5?vec3(0.25,0.245,0.235):typ<1.5?vec3(0.24,0.235,0.225):vec3(0.2,0.192,0.182);
+  if(typ>0.5&&typ<1.5)col=mix(col,vec3(0.27,0.16,0.12),step(0.86,ah(gi+3.3))*fade);   // mottled terracotta blocks
+  col*=(0.86+0.24*t)*(0.88+0.24*an(p*1.7));
+  col*=1.0-0.32*smoothstep(0.55,0.85,an(p*0.35+2.0));                  // grime and old stains
+  col=mix(col,vec3(0.05,0.045,0.04),step(0.993,ah(floor(p*6.0)))*(1.0-smoothstep(0.03,0.08,max(fq.x,fq.y))));   // gum
+  rough=0.82-0.25*(1.0-smoothstep(0.0,0.6,q.x));                      // damp along the kerb
+  col*=1.0-0.22*(1.0-smoothstep(0.0,0.5,q.x));
+  float h=-joint*0.004+(t-0.5)*0.002;
+  if(q.x>0.9&&q.x<1.2){                                                // yellow guide strip
+    vec2 tg=vec2(q.x-0.9,q.y)/0.3, tf=fract(tg), tw=fq/0.3;
     col=vec3(0.52,0.36,0.03)*(0.8+0.3*an(p*2.0));
-    float tj=1.0-smoothstep(0.0,0.03,min(min(tf.x,1.0-tf.x),min(tf.y,1.0-tf.y)));
-    vec2 dp=fract(tg*4.0)-0.5; float dome=1.0-smoothstep(0.18,0.32,length(dp));
-    h=dome*0.5-tj*0.5; col*=1.0-0.3*tj; rough=0.6;
+    float tj=pJ(tg,tw,0.02);
+    float ba=tw.x*2.8+1e-4, bar=(1.0-smoothstep(0.17-ba,0.17+ba,abs(fract(tf.x*4.0)-0.5)))*smoothstep(0.06,0.1,tf.y)*(1.0-smoothstep(0.9,0.94,tf.y));
+    bar*=1.0-smoothstep(0.004,0.012,fq.x);
+    h=bar*0.005-tj*0.003; col*=(1.0-0.3*tj)*(1.0+0.15*bar); rough=0.6;
   }
-  col=mix(col,col*0.35,joint);
-  return h*near;
+  col=mix(col,col*0.4,joint);
+  return h;
 }`)
       .replace('#include <map_fragment>',`#include <map_fragment>
-{ vec2 p=vWP.xz; float dist=length(vViewPosition), near=1.0-smoothstep(10.0,45.0,dist), u=vUv.x;
-  vec3 col; float r; float h=pavH(p,u,near,col,r);
-  if(near>0.02){ vec3 c2; float r2; float e=0.02;
-    float hx=pavH(p+vec2(e,0.0),u,near,c2,r2), hz=pavH(p+vec2(0.0,e),u,near,c2,r2);
-    pNrm=normalize(vec3(-(hx-h)/e*0.03,1.0,-(hz-h)/e*0.03)); }
-  diffuseColor.rgb=col; pRough=r; }`)
+{ vec2 p=vWP.xz; float typ=floor(vUv.x/10.0); vec2 q=vec2(vUv.x-typ*10.0,vUv.y), fq=fwidth(q);
+  vec3 col; float r; float h=pavH(q,fq,typ,p,col,r);
+  diffuseColor.rgb=col; pRough=r; pH=h; }`)
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=pRough;')
-      .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(pNrm,0.0)).xyz);');
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+{ vec3 pv=-vViewPosition, dpx=dFdx(pv), dpy=dFdy(pv), r1=cross(dpy,normal), r2=cross(normal,dpx);
+  float det=dot(dpx,r1); vec3 gr=sign(det)*(dFdx(pH)*r1+dFdy(pH)*r2);
+  normal=normalize(abs(det)*normal-gr*1.5); }`);
+    sh.fragmentShader=sh.fragmentShader.replace('float pRough=0.85;','float pRough=0.85;float pH=0.0;');
   };
-  pavMat.customProgramCacheKey=()=>'pavement';
+  pavMat.customProgramCacheKey=()=>'pavement2';
   mk(TP,TN,TU,pavMat);mk(KP,KN,KU,window.__kerbMat);window.__pavMat=pavMat;
   window.__swStats={segments:SW_SEGS.length};
 }
@@ -2168,7 +2253,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
       const a=pts[i],b=pts[i+1],na=nrm[i],nb=nrm[i+1],seg=Math.hypot(b[0]-a[0],b[1]-a[1]);
       const at=(p,nn,o,y)=>[p[0]+nn[0]*o,y,p[1]+nn[1]*o];
       // carriageway (lane paint from the strip texture; v in tiles of 40 m)
-      push(at(a,na,-hw,0.062),at(a,na,hw,0.062),at(b,nb,hw,0.062),at(b,nb,-hw,0.062),[[0,dist/40],[1,dist/40],[1,(dist+seg)/40],[0,(dist+seg)/40]],[0,1,0],P,N,U);
+      push(at(a,na,-hw,0.062),at(a,na,hw,0.062),at(b,nb,hw,0.062),at(b,nb,-hw,0.062),[[A.w*100-hw,dist],[A.w*100+hw,dist],[A.w*100+hw,dist+seg],[A.w*100-hw,dist+seg]],[0,1,0],P,N,U);
       // walks + kerbs both sides, gapped where a street or another avenue crosses
       [-1,1].forEach(sd=>{
         const mx=(a[0]+b[0])/2+(na[0]+nb[0])/2*sd*(hw+SW/2), mz=(a[1]+b[1])/2+(na[1]+nb[1])/2*sd*(hw+SW/2);
@@ -2176,7 +2261,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
         if(ARTERIALS.some((B,bi)=>bi!==ai&&polyDist(mx,mz,B.pts,false)<B.w/2+0.4))return;
         if(Math.abs(mx-riverCX(mz))<RIVER_HW+4)return;
         const i0=sd*hw,i1=sd*(hw+SW);
-        push(at(a,na,i0,CURB_H),at(a,na,i1,CURB_H),at(b,nb,i1,CURB_H),at(b,nb,i0,CURB_H),[[0,0],[SW,0],[SW,1],[0,1]],[0,1,0],SP,SN,SU);
+        push(at(a,na,i0,CURB_H),at(a,na,i1,CURB_H),at(b,nb,i1,CURB_H),at(b,nb,i0,CURB_H),[[10,dist],[10+SW,dist],[10+SW,dist+seg],[10,dist+seg]],[0,1,0],SP,SN,SU);   // avenue walks: interlocking blocks
         const kn=[na[0]*sd,0,na[1]*sd];
         push(at(a,na,i0,0),at(b,nb,i0,0),at(b,nb,i0,CURB_H),at(a,na,i0,CURB_H),[[0,0],[seg/9.6,0],[seg/9.6,1],[0,1]],[-kn[0],0,-kn[2]],KP,KN,KU);
         // lamps every ~42 m, trees between them
@@ -2190,8 +2275,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
   });
   const mkG=(PP,NN,UU)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(PP,3));
     g.setAttribute('normal',new THREE.Float32BufferAttribute(NN,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(UU,2));g.computeBoundingSphere();return g;};
-  const rt=pickPool(ROAD_POOL_MAJOR).clone();rt.needsUpdate=true;rt.wrapS=rt.wrapT=THREE.RepeatWrapping;rt.repeat.set(1,1);
-  const roadM=asphaltify(new THREE.MeshStandardMaterial({map:rt,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-9,polygonOffsetUnits:-9}),null);
+  const roadM=asphaltify(new THREE.MeshStandardMaterial({map:ROAD_BLANK,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-9,polygonOffsetUnits:-9}),{avenue:true,kind:2});
   const road=new THREE.Mesh(mkG(P,N,U),roadM);road.receiveShadow=true;road.frustumCulled=false;scene.add(road);
   const walk=new THREE.Mesh(mkG(SP,SN,SU),window.__pavMat);walk.receiveShadow=true;walk.frustumCulled=false;scene.add(walk);
   const kerb=new THREE.Mesh(mkG(KP,KN,KU),window.__kerbMat);kerb.frustumCulled=false;scene.add(kerb);
@@ -2492,33 +2576,69 @@ ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
   scene.add(patch);
 });});
 
-// zebra crossings at avenue intersections — kept, but WORN: patchy alpha, chipped ends, occasional
-// faded stripe, grime specks, so it reads as old repainted road paint, not a crisp fresh decal
+// ---------- JUNCTION PAINT, as it was in 1989 ----------
+// Zebras sat only at avenue crossings, stretched to the road (bars 1-2 m wide) and UNLIT, so they
+// glowed white at night. Now every kerbed junction gets lit, worn paint at true size: 45 cm bars on a
+// 90 cm beat between the two side lines of the pre-1992 ladder crossing (はしご型), a 45 cm stop line
+// across the inbound half on the left, 止まれ elongated in the lane on alleys meeting a bigger road,
+// and the ◇ "crossing ahead" diamond 30 m before. Two merged meshes for the whole city.
+const XW_TILE=7.2;                                        // crossing texture: 8 bars across 7.2 m
 const zebraTex=tex((g,w,h)=>{
-  for(let x=6;x<w;x+=20){
-    const wear=0.4+Math.random()*0.38;
-    g.fillStyle=`rgba(228,226,220,${wear})`;
-    const chip=Math.random()*3;
-    g.fillRect(x,3+chip,10,h-6-chip*1.6);
-  }
-  for(let i=0;i<180;i++){g.fillStyle=`rgba(20,18,16,${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-},512,64,true);
-const zebraMat=new THREE.MeshBasicMaterial({map:zebraTex,transparent:true,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
-ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
-  if(!(rx.major||rz.major))return;
-  if(Math.abs(rx.p)>500||Math.abs(rz.p)>500)return;
-  // crossings over the x-road (pedestrian walks along x): north+south approaches
-  [-1,1].forEach(sd=>{
-    const c1=new THREE.Mesh(new THREE.PlaneGeometry(rx.w-1,4),zebraMat);
-    c1.rotation.x=-Math.PI/2;
-    c1.position.set(rx.p,0.052,rz.p+sd*(rz.w/2+2.6));
-    scene.add(c1);
-    const c2=new THREE.Mesh(new THREE.PlaneGeometry(rz.w-1,4),zebraMat);
-    c2.rotation.set(-Math.PI/2,0,Math.PI/2);
-    c2.position.set(rx.p+sd*(rx.w/2+2.6),0.052,rz.p);
-    scene.add(c2);
-  });
-});});
+  const pm=w/XW_TILE, side=0.22*h/4;                         // v spans the 4 m crossing
+  for(let i=0;i<8;i++){const x=(i*0.9+0.225)*pm;g.fillStyle=`rgba(236,236,228,${0.82+TEXR()*0.14})`;g.fillRect(x,side,0.45*pm,h-2*side);}
+  g.fillStyle='rgba(236,236,228,.9)';g.fillRect(0,0,w,side*0.8);g.fillRect(0,h-side*0.8,w,side*0.8);   // ladder side lines
+  g.globalCompositeOperation='destination-out';             // wear: tyre tracks, chips, scuffs
+  [0.18,0.42,0.63,0.88].forEach(f=>{const gr=g.createLinearGradient(f*w-30,0,f*w+30,0);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(.5,`rgba(0,0,0,${0.35+TEXR()*0.3})`);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(f*w-30,0,60,h);});
+  for(let i=0;i<900;i++){g.fillStyle=`rgba(0,0,0,${0.2+TEXR()*0.6})`;const s=1+TEXR()*3;g.fillRect(TEXR()*w,TEXR()*h,s,s);}
+  g.globalCompositeOperation='source-over';
+},512,128,true);
+zebraTex.wrapS=THREE.RepeatWrapping;
+// paint atlas: 止まれ (top 60%), the diamond (next 25%), plain paint for stop lines (bottom strip)
+const markTex=tex((g,w,h)=>{
+  g.fillStyle='rgba(238,238,230,.95)';
+  g.font=`bold ${Math.round(w*0.86)}px "Hiragino Kaku Gothic ProN",sans-serif`;g.textAlign='center';g.textBaseline='middle';
+  ['止','ま','れ'].forEach((c,i)=>{g.save();g.translate(w/2,h*0.6*(i+0.5)/3);g.scale(1,1.12);g.fillText(c,0,0);g.restore();});
+  const y0=h*0.62,y1=h*0.85,cx=w/2;g.lineWidth=w*0.09;g.strokeStyle='rgba(238,238,230,.95)';
+  g.beginPath();g.moveTo(cx,y0+6);g.lineTo(w-14,(y0+y1)/2);g.lineTo(cx,y1-6);g.lineTo(14,(y0+y1)/2);g.closePath();g.stroke();
+  g.fillRect(0,h*0.9,w,h*0.1);
+  g.globalCompositeOperation='destination-out';
+  for(let i=0;i<1400;i++){g.fillStyle=`rgba(0,0,0,${0.2+TEXR()*0.6})`;const s=1+TEXR()*3;g.fillRect(TEXR()*w,TEXR()*h,s,s);}
+  g.globalCompositeOperation='source-over';
+},256,1024,true);
+const zebraMat=new THREE.MeshStandardMaterial({map:zebraTex,transparent:true,depthWrite:false,roughness:0.6,metalness:0,envMapIntensity:0.6,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
+const markMat=new THREE.MeshStandardMaterial({map:markTex,transparent:true,depthWrite:false,roughness:0.6,metalness:0,envMapIntensity:0.6,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
+{
+  const XP=[],XU=[],MP=[],MU=[];
+  // quad in an approach frame: J = junction centre, f = toward the junction, r = driver's right;
+  // l = metres right of the road centre, a = metres back from the junction centre
+  const quad=(P,U,J,f,l0,l1,a0,a1,u0,u1,v0,v1)=>{
+    const r=[-f[1],f[0]], at=(l,a)=>[J[0]-f[0]*a+r[0]*l,0.054,J[1]-f[1]*a+r[1]*l];
+    const c=[at(l0,a0),at(l1,a0),at(l1,a1),at(l0,a1)], t=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]];
+    const e1=[c[1][0]-c[0][0],c[1][2]-c[0][2]],e2=[c[2][0]-c[0][0],c[2][2]-c[0][2]],up=(e1[1]*e2[0]-e1[0]*e2[1])>0;
+    (up?[0,1,2,0,2,3]:[0,2,1,0,3,2]).forEach(k=>{P.push(...c[k]);U.push(...t[k]);});
+  };
+  const near=(list,p,skip)=>list.some(q=>q!==skip&&Math.abs(q.p-p)<40);
+  ROADS_X.forEach(rx=>ROADS_Z.forEach(rz=>{
+    if(rz.p>SEA_Z0-4||arterialAt(rx.p,rz.p,6))return;
+    const J=[rx.p,rz.p];
+    [[rx,rz,ROADS_Z,[0,1]],[rz,rx,ROADS_X,[1,0]]].forEach(([R,Q,crossList,ax])=>[-1,1].forEach(sd=>{
+      const f=[-sd*ax[0],-sd*ax[1]], hw=R.w/2, mouth=Q.w/2+0.4;
+      const xing=R.w>10&&Q.w>10, edge=R.w>=20?1.6:R.w>10?1.25:0.55;
+      let a=mouth;
+      if(xing){const o=TEXR()*XW_TILE;quad(XP,XU,J,f,-hw+0.5,hw-0.5,a+4,a,(o-hw+0.5)/XW_TILE,(o+hw-0.5)/XW_TILE,0,1);a+=4+1.0;}
+      if(xing||R.w<Q.w){quad(MP,MU,J,f,-(hw-edge),-0.15,a+0.45,a,0.1,0.9,0.005,0.095);a+=0.45;}       // stop line, inbound half
+      if(R.w<=7&&Q.w>7)quad(MP,MU,J,f,-hw*0.5-0.8,-hw*0.5+0.8,a+1.5+6,a+1.5,0,1,0.4,1.0);               // 止まれ
+      if(xing&&!near(crossList,Q.p+sd*(a+32),Q)){                                                     // ◇ crossing ahead
+        (R.w>=20?[3.4,7.4]:[hw*0.5]).forEach(l=>quad(MP,MU,J,f,-l-0.75,-l+0.75,a+30+5,a+30,0,1,0.15,0.38));
+      }
+    }));
+  }));
+  const mk=(P,U,mat)=>{if(!P.length)return;const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+    const N=new Float32Array(P.length);for(let i=1;i<N.length;i+=3)N[i]=1;g.setAttribute('normal',new THREE.BufferAttribute(N,3));
+    g.computeBoundingSphere();const m=new THREE.Mesh(g,mat);m.frustumCulled=false;m.receiveShadow=true;scene.add(m);};
+  mk(XP,XU,zebraMat);mk(MP,MU,markMat);
+}
 
 // ---------- RIVER (recessed, embankments, bridges) ----------
 const waterTex=tex((g,w,h)=>{
@@ -2946,9 +3066,11 @@ function drawShopBay(g,x0,y0,sw,h){
   const shut=Math.random()<0.12; // closed shutter bay
   const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.62;
   if(shut){
-    g.fillStyle='#232227';g.fillRect(bx,by,bw2,bh2);
-    for(let sx=bx;sx<bx+bw2;sx+=6){g.fillStyle='rgba(0,0,0,.22)';g.fillRect(sx,by,1.4,bh2);}
-    g.fillStyle='rgba(255,255,255,.05)';g.fillRect(bx,by,bw2,2);
+    // galvanised roller shutter (シャッター): horizontal slats, a box housing on top, a dirty bottom rail
+    g.fillStyle='#4e5154';g.fillRect(bx,by,bw2,bh2);
+    for(let sy=by;sy<by+bh2;sy+=3){g.fillStyle='rgba(0,0,0,.28)';g.fillRect(bx,sy,bw2,1);g.fillStyle='rgba(255,255,255,.06)';g.fillRect(bx,sy+1,bw2,1);}
+    g.fillStyle='#3a3c3f';g.fillRect(bx-1,by-4,bw2+2,6);
+    g.fillStyle='rgba(20,18,14,.5)';g.fillRect(bx,by+bh2-5,bw2,5);
     g.fillStyle='#111';g.beginPath();g.arc(bx+bw2*0.5,by+bh2*0.5,2.4,0,7);g.fill();
     g.fillStyle='rgba(6,4,4,.9)';g.fillRect(x0,y0,3,h);
     return;
@@ -2978,6 +3100,16 @@ function drawShopBay(g,x0,y0,sw,h){
   }
   // counter across the bottom of the window
   g.fillStyle='rgba(20,14,10,.6)';g.fillRect(bx,by+bh2*0.8,bw2,bh2*0.2);
+  // noren: the split cloth curtain over an eating-house door, backlit by the room
+  if(TEXR()<0.28){
+    const nw=Math.min(bw2*0.6,bw2),nx=bx+(bw2-nw)*TEXR(),nh=bh2*0.42,np=3+Math.floor(TEXR()*2);
+    const nc=['#1c2747','#2a2a2e','#6b1a1a','#e9e4d8'][Math.floor(TEXR()*4)],light=nc==='#e9e4d8';
+    const ch=['そば','めし','酒','らーめん','ゆ','やきとり','おでん'][Math.floor(TEXR()*7)];
+    g.fillStyle='#1a120c';g.fillRect(nx-2,by,nw+4,3);                       // the rod
+    for(let i=0;i<np;i++){const pw=nw/np;g.fillStyle=nc;g.fillRect(nx+i*pw+0.8,by+3,pw-1.6,nh);}
+    g.fillStyle=light?'#1c1c1c':'#efeae0';g.font=`bold ${Math.round(Math.min(nh*0.55,nw/ch.length*0.9))}px "Hiragino Mincho ProN",serif`;
+    g.textAlign='center';g.textBaseline='middle';g.fillText(ch,nx+nw/2,by+3+nh*0.5);
+  }
   g.fillStyle='rgba(255,255,255,.1)';g.fillRect(bx,by+bh2*0.8,bw2,1.2);
   // mannequin silhouette (some bays)
   if(Math.random()<0.3){
@@ -3495,7 +3627,7 @@ const facadeBaseColors=['#c4c3bf','#9ea1a4','#d8d7d2','#7f8286','#b6b5b0','#5f62
 const facades=facadeBaseColors.map((base,i)=>{
   const preset=facadeGridPresets[i%facadeGridPresets.length];
   return {
-    preset,
+    preset,base,
     ...(()=>{const pr=facadeTexPair(base,preset);return {map:pr.map,lit:pr.lit};})(),
     normal:facadeNormalMaps[i%facadeGridPresets.length],
     roughness:0.74+Math.random()*0.22,
@@ -3505,41 +3637,66 @@ const facades=facadeBaseColors.map((base,i)=>{
 });
 const glassPair=glassTexPair(),glassT=glassPair.map;
 // ---- REAL ROOFTOP SURFACES ----
-// The old roof was flat gravel-noise on a Lambert material with no normal map, so from altitude every
-// roof read as generic vector-purple. This is tar-felt roofing with ALIGNED panel seams, patch
-// repairs, water-pooling stains and rust streaks, plus a matching normal map so raking light picks
-// out the seams and patches. A 3-map pool + per-building pick kills the identical-layout repeat.
-function drawRoofSeams(g,w,h,albedo){
-  const strip=h/8;
-  for(let s=1;s<8;s++){const y=s*strip;
-    if(albedo){g.fillStyle='rgba(0,0,0,.34)';g.fillRect(0,y-1.5,w,3);g.fillStyle='rgba(160,156,150,.10)';g.fillRect(0,y+1.5,w,1.5);}
-    else{g.fillStyle='#c8c8c8';g.fillRect(0,y-1.5,w,3);}
+// What a Tokyo flat roof actually is, seen from a helicopter: (0) 押えコンクリート — protective concrete
+// screed cut into ~3 m bays by black sealant expansion joints, (1) green urethane waterproofing, worn
+// paler along the walkways, (2) grey sheet membrane laid in 1 m strips with lapped seams. Drawn in
+// WORLD metres in the shader with anti-aliased joints (so the grid is crisp at 20 m and resolves
+// to an even tone at 500 m instead of moiré), plus ponding stains, soot and drain streaks.
+const ROOF_GLSL=`
+varying vec3 vWP;uniform float uRoofT;
+float rh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float rn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(rh(i),rh(i+vec2(1,0)),f.x),mix(rh(i+vec2(0,1)),rh(i+vec2(1,1)),f.x),f.y);}
+float rLine(float x,float per,float hw,float fp){float f=fract(x/per)*per,d=min(f,per-f),a=fp*0.7+1e-4;
+  return mix(1.0-smoothstep(hw-a,hw+a,d),2.0*hw/per,smoothstep(0.15,0.4,fp/per));}
+`;
+function roofify(m,type){
+  m.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    sh.uniforms.uRoofT={value:type};
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ROOF_GLSL+'float rRough=0.9;')
+      .replace('#include <map_fragment>',`#include <map_fragment>
+{ vec2 p=vWP.xz; vec2 fp=fwidth(p); float f=max(fp.x,fp.y);
+  vec3 col; float j=0.0;
+  float big=rn(p*0.11), mid=rn(p*0.9);
+  if(uRoofT<0.5){
+    vec2 o=vec2(rh(floor(p/40.0)),rh(floor(p/40.0)+3.1))*3.0;              // each roof's bays start where its builder chose
+    j=max(rLine(p.x+o.x,3.0,0.012,fp.x),rLine(p.y+o.y,3.0,0.012,fp.y));
+    float bay=rh(floor((p+o)/3.0));
+    col=vec3(0.40,0.395,0.375)*(0.88+0.18*bay*(1.0-smoothstep(0.3,1.0,f)))*(0.85+0.25*mid);
+    col=mix(col,vec3(0.035,0.035,0.04),j*0.9); rRough=0.92;
+  }else if(uRoofT<1.5){
+    col=mix(vec3(0.20,0.30,0.24),vec3(0.36,0.44,0.38),smoothstep(0.45,0.8,big))*(0.9+0.18*mid);
+    rRough=0.7;
+  }else{
+    float o=rh(floor(p/40.0))*1.0;
+    j=rLine(p.x+o,1.0,0.008,fp.x);
+    col=vec3(0.46,0.47,0.47)*(0.9+0.16*rn(vec2(floor(p.x+o),p.y*0.05)))*(0.88+0.2*mid);
+    col=mix(col,col*0.62,j); rRough=0.6;
   }
+  col*=1.0-0.38*smoothstep(0.58,0.82,rn(p*0.23+11.0));                     // ponding stains where water sits
+  col*=1.0-0.18*smoothstep(0.5,0.9,rn(vec2(p.x*2.7,p.y*0.35)+5.0));         // soot / drain streaks
+  diffuseColor.rgb=col*diffuse;
+}`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=rRough;');
+  };
+  m.customProgramCacheKey=()=>'roof3';
+  return m;
 }
-function makeRoofMap(){return tex((g,w,h)=>{
-  g.fillStyle='#57534e';g.fillRect(0,0,w,h);
-  for(let i=0;i<11000;i++){const v=Math.random()*34;g.fillStyle=`rgba(${74+v},${71+v},${66+v},.6)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-  const strip=h/8;
-  for(let s=0;s<8;s++){const v=Math.random()*26;g.fillStyle=`rgba(${30+v},${29+v},${27+v},.12)`;g.fillRect(0,s*strip,w,strip);}
-  drawRoofSeams(g,w,h,true);
-  for(let i=0;i<6;i++){const pw=26+Math.random()*80,ph=20+Math.random()*60,px=Math.random()*w,py=Math.random()*h;
-    g.fillStyle='rgba(14,13,12,.45)';g.fillRect(px,py,pw,ph);g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;g.strokeRect(px,py,pw,ph);}
-  for(let i=0;i<9;i++){const cx=Math.random()*w,cy=Math.random()*h,rr=16+Math.random()*44;
-    const gr=g.createRadialGradient(cx,cy,rr*0.15,cx,cy,rr);
-    gr.addColorStop(0,'rgba(64,60,78,.20)');gr.addColorStop(.75,'rgba(36,32,46,.10)');gr.addColorStop(1,'rgba(8,6,12,0)');
-    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,rr,0,7);g.fill();}
-  for(let i=0;i<7;i++){g.strokeStyle=`rgba(${96+Math.random()*40},${52+Math.random()*18},28,.16)`;g.lineWidth=2+Math.random()*3;
-    const x=Math.random()*w,y=Math.random()*h;g.beginPath();g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*24,y+24+Math.random()*46);g.stroke();}
-},512,512,true);}
-const roofNrm=normalMapFromHeight((g,w,h)=>{
-  drawRoofSeams(g,w,h,false);
-  for(let i=0;i<3500;i++){const v=110+Math.random()*90;g.fillStyle=`rgb(${v},${v},${v})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-},512,512,1.9);
-const roofMats=[0,1,2].map(()=>new THREE.MeshStandardMaterial({map:makeRoofMap(),normalMap:roofNrm,normalScale:new THREE.Vector2(0.75,0.75),roughness:0.85,metalness:0.05}));
+const roofMats=[0,1,2].map(t=>roofify(new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9,metalness:0.02,envMapIntensity:0.4}),t));
 const roofMat=roofMats[0]; // alias for any single-reference use
 function pickRoof(){return roofMats[Math.floor(Math.random()*roofMats.length)];}
-const parapetMat=new THREE.MeshLambertMaterial({color:0x3a3448});
-const woodMat=new THREE.MeshLambertMaterial({color:0x4e3a2e});
+const parapetMat=new THREE.MeshLambertMaterial({color:0xffffff});   // tinted per building (instance colour) to its own cladding
+// shared cooling-tower parts (one material each, so the merge pass fuses every tower in the city)
+const coolMat=new THREE.MeshStandardMaterial({roughness:0.6,metalness:0.05,map:tex((g,w,h)=>{
+  g.fillStyle='#93b4ac';g.fillRect(0,0,w,h);
+  for(let y=6;y<h-4;y+=4){g.fillStyle='rgba(20,40,36,.42)';g.fillRect(0,y,w,2);}          // air-inlet louvres
+  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(0,0,w,3);g.fillStyle='rgba(0,0,0,.3)';g.fillRect(0,h-3,w,3);
+},64,64,true)});
+const coolTopMat=new THREE.MeshStandardMaterial({color:0x4a504e,roughness:0.6,metalness:0.4});
+const COOL_GEO=[new THREE.CylinderGeometry(1.45,1.7,2.6,18),new THREE.CylinderGeometry(0.95,1.05,0.7,14),new THREE.BoxGeometry(2.6,0.6,2.6)];
 // Showa enka / theatre bill: gold title band, vertical mincho kanji with cream outline, cast line.
 function vintagePosterTex(){return tex((g,w,h)=>{
   const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#b8281e');rg.addColorStop(1,'#6c1610');
@@ -3650,7 +3807,7 @@ function resTexPair(base){
     }
   });
 }
-const resFacades=[resTexPair('#cac6be'),resTexPair('#a9a8a4'),resTexPair('#bdb9b0'),resTexPair('#d6d4ce')];   // white tile, grey, pale stone, white
+const RES_BASES=['#cac6be','#a9a8a4','#bdb9b0','#d6d4ce'],resFacades=RES_BASES.map(resTexPair);   // white tile, grey, pale stone, white
 const grassTex=tex((g,w,h)=>{
   g.fillStyle='#3a4630';g.fillRect(0,0,w,h);
   for(let i=0;i<2600;i++){g.fillStyle=`rgba(${45+Math.random()*30},${60+Math.random()*30},${35+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
@@ -3737,17 +3894,105 @@ const FACADE_ROOM_GLSL=`
 uniform vec2 uGrid;
 float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
 `;
-function facadeInteriors(m,preset){
-  const u={uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}};
+// ---- WALL MATERIAL + WEATHERING, shared by every facade shader -------------------------------
+// The wall between the windows was a flat fill. Tokyo 1989 is clad: 45 mm mosaic tile, 二丁掛
+// brick-format tile, board-marked concrete with tie holes, 吹付 spray coat, granite. Each pattern is
+// drawn in METRES from the face's own grid (uCell = bay width, storey height, shop-level height) and
+// every high-frequency term fades to its own average as its period approaches a pixel, so joints
+// are crisp at the kerb and never moiré from the air. On top: grime at the foot, a dirty coping and
+// drips under the roof edge, and the rain streaks that run from every sill. vBI (per vertex) =
+// the box's top height, a per-building seed, and whether this face is a windowless party wall.
+const WALL_VERT=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bInfo;varying vec3 vBI;varying vec3 vWP;')
+  .replace('#include <begin_vertex>','#include <begin_vertex>\nvBI=bInfo;vWP=(modelMatrix*vec4(transformed,1.0)).xyz;');};
+const WALL_GLSL=`
+uniform vec3 uCell;uniform vec4 uClad;uniform vec3 uWallC;varying vec3 vBI;varying vec3 vWP;
+float wh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float wn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(wh(i),wh(i+vec2(1,0)),f.x),mix(wh(i+vec2(0,1)),wh(i+vec2(1,1)),f.x),f.y);}
+// anti-aliased joint grid: 1 on the tile face, 0 in the joint; fades to the true coverage far off
+float wJoint(vec2 p,vec2 per,vec2 jw,vec2 fp){
+  vec2 f=fract(p/per)*per, d=min(f,per-f), a=fp*0.7+1e-4;
+  vec2 m=smoothstep(jw*0.5-a,jw*0.5+a,d), mean=1.0-jw/per;
+  vec2 k=smoothstep(vec2(0.18),vec2(0.45),fp/per);
+  m=mix(m,mean,k); return m.x*m.y;}
+// a tone that changes per tile, faded out where tiles are sub-pixel (no sparkle)
+float wTone(vec2 id,vec2 per,vec2 fp){return (wh(id)-0.5)*(1.0-smoothstep(0.2,0.5,max(fp.x/per.x,fp.y/per.y)));}
+vec3 wallMat(vec3 c,vec2 m,vec2 fp,inout float rough){
+  float t=uClad.x, sd=vBI.y*61.0;
+  float lo=0.94+0.12*wn(m*0.35+sd);                                         // broad patchiness
+  if(t<0.5){                                                                 // 45 mm mosaic tile
+    vec2 per=vec2(0.05);
+    c*=mix(0.62,1.0,wJoint(m,per,vec2(0.006),fp))*(1.0+0.07*wTone(floor(m/per)+sd,per,fp));
+    rough=0.55;
+  }else if(t<1.5){                                                           // 二丁掛 tile, running bond
+    vec2 per=vec2(0.237,0.07), q=m; q.x+=0.5*per.x*mod(floor(q.y/per.y),2.0);
+    c*=mix(0.6,1.0,wJoint(q,per,vec2(0.01),fp))*(1.0+0.12*wTone(floor(q/per)+sd,per,fp));
+    rough=0.6;
+  }else if(t<2.5){                                                           // board-marked concrete
+    vec2 per=vec2(0.9,1.8), id=floor(m/per);
+    c*=mix(0.86,1.0,wJoint(m,per,vec2(0.014),fp))*(1.0+0.16*wTone(id+sd,per,fp));
+    vec2 hf=fract(m/vec2(0.45,0.6))-0.5; float hk=1.0-smoothstep(0.02,0.06,max(fp.x,fp.y));
+    c*=1.0-0.55*hk*(1.0-smoothstep(0.022,0.032,length(hf*vec2(0.45,0.6))));   // tie-bolt holes
+    c*=0.9+0.2*mix(wn(m*3.1+sd),0.5,smoothstep(0.03,0.12,max(fp.x,fp.y)));
+    rough=0.92;
+  }else if(t<3.5){                                                           // 吹付 spray coat
+    c*=0.94+0.12*mix(wn(m*37.0+sd),0.5,smoothstep(0.006,0.02,max(fp.x,fp.y)));
+    rough=0.95;
+  }else{                                                                     // granite panels
+    vec2 per=vec2(1.2,0.6);
+    c*=mix(0.55,1.0,wJoint(m,per,vec2(0.007),fp))*(1.0+0.18*wTone(floor(m/per)+sd,per,fp));
+    c*=0.88+0.24*mix(wh(floor(m*90.0)),0.5,smoothstep(0.004,0.012,max(fp.x,fp.y)));
+    rough=0.38;
+  }
+  return c*lo;
+}
+// grime multiplier (1 = clean). cf/lo/hi locate the window in its cell so streaks hang off sills.
+float wallDirt(vec2 m,vec2 fp,vec2 cf,float hasWin,float sillY,float x0,float x1){
+  float y=vWP.y, top=vBI.x, sd=vBI.y*37.0, amt=(0.45+0.75*wh(vec2(sd,3.1)))*uClad.y;
+  float sk=1.0-smoothstep(0.03,0.1,fp.x);                                     // streak detail fades far off
+  float strk=mix(0.5,wn(vec2(m.x*9.0,sd))*wn(vec2(m.x*2.3,sd+5.0))*2.0,sk);
+  float d=0.0;
+  d+=0.42*(1.0-smoothstep(0.0,0.7+0.9*wn(vec2(m.x*0.7,sd)),y));              // splash-back at the foot
+  d+=0.12*(1.0-smoothstep(0.0,14.0,y));                                      // traffic soot on the low floors
+  float tr=top-y;
+  d+=0.35*(1.0-smoothstep(0.0,0.45,tr));                                      // dirty coping
+  d+=0.55*strk*exp(-tr/(1.2+7.0*wn(vec2(m.x*0.9,sd+2.0))))*step(0.0,tr);       // drips off the roof edge
+  float ds=sillY-cf.y*uCell.y;                                                 // metres below the sill
+  float inW=smoothstep(x0-0.05,x0+0.05,cf.x)*(1.0-smoothstep(x1-0.05,x1+0.05,cf.x));
+  d+=0.6*hasWin*inW*strk*step(0.0,ds)*exp(-ds/(0.35+0.9*wn(vec2(m.x*1.3,sd+9.0))));
+  d+=0.18*wn(vec2(m.x*0.5,m.y*0.08)+sd);                                      // long vertical weather marks
+  return 1.0-clamp(d*amt,0.0,0.75);
+}
+`;
+// per-material wall uniforms: grid cell in metres, cladding type/dirt/AC density, wall albedo
+function wallUniforms(W){return {uCell:{value:new THREE.Vector3(...W.cell)},uClad:{value:new THREE.Vector4(...W.clad)},uWallC:{value:new THREE.Color(W.col)}};}
+// shared prelude: where this pixel sits on the face, whether its cell is a real window (above the
+// shop level, below the parapet, not on a party wall), and the clad + weathered wall colour
+const WALL_PRELUDE=(lo,hi)=>`
+  vec2 mW=cell*uCell.xy, fpm=fw*uCell.xy;
+  float cBot=vWP.y-cf.y*uCell.y, cTop=cBot+uCell.y;
+  float hasWin=step(uCell.z-0.05,cBot)*step(cTop,vBI.x-0.55);
+  if(vBI.z>0.5)hasWin*=step(fh(vec2(ci.x*1.7,floor(vBI.y*977.0))),0.13)*(1.0-smoothstep(0.25,0.5,pxs));   // party wall: a stair window column at most
+  float wRough=0.8; vec3 wallC=wallMat(uWallC*diffuse,mW,fpm,wRough);
+  float dm=wallDirt(mW,fpm,cf,hasWin,${lo}.y*uCell.y,${lo}.x,${hi}.x);
+  wallC*=dm;
+  diffuseColor.rgb=mix(wallC,diffuseColor.rgb*dm,hasWin);
+  totalEmissiveRadiance*=hasWin;
+  roughnessFactor=mix(wRough,roughnessFactor,hasWin);
+  normal=normalize(mix(normalize(vNormal),normal,hasWin));`;
+function facadeInteriors(m,preset,W){
+  const u=Object.assign({uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}},wallUniforms(W));
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u,GLASS_U);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+GLASS_GLSL+FACADE_ROOM_GLSL)
+    WALL_VERT(sh);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+GLASS_GLSL+FACADE_ROOM_GLSL+WALL_GLSL)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   float dist=length(vViewPosition);
   vec2 cell=vUv*uGrid, ci=floor(cell), cf=fract(cell);
   vec2 fw=fwidth(cell); float pxs=max(fw.x,fw.y);
+  ${WALL_PRELUDE('vec2(0.16,0.22)','vec2(0.84,0.78)')}
   if(pxs<0.14){                                                            // close enough to draw windows ourselves
     // the window, frame, mullion and sill are drawn here with anti-aliased edges — resolution
     // independent, so they stay sharp up close instead of a magnified 512px texture
@@ -3755,10 +4000,19 @@ function facadeInteriors(m,preset){
     vec2 aw=fw*0.75+1e-4;
     vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); float win=s1.x*s1.y;
     vec2 s2=smoothstep(lo-fr-aw,lo-fr+aw,cf)-smoothstep(hi+fr-aw,hi+fr+aw,cf); float frm=clamp(s2.x*s2.y-win,0.0,1.0);
-    float mull=win*(1.0-smoothstep(0.012-aw.x,0.012+aw.x,abs(cf.x-0.5)))*step(4.5,uGrid.y/uGrid.x*2.0+1.0);
+    win*=hasWin; frm*=hasWin;
+    float mull=win*(1.0-smoothstep(0.012-aw.x,0.012+aw.x,abs(cf.x-0.5)))*step(0.2,fh(ci.yx*0.37+floor(vBI.y*313.0)));   // aluminium sash: mostly two sliding leaves (引き違い)
     vec2 s3=smoothstep(vec2(lo.x-fr*1.6,lo.y-fr-0.035)-aw,vec2(lo.x-fr*1.6,lo.y-fr-0.035)+aw,cf)
-           -smoothstep(vec2(hi.x+fr*1.6,lo.y-fr)-aw,vec2(hi.x+fr*1.6,lo.y-fr)+aw,cf); float sill=clamp(s3.x*s3.y,0.0,1.0);
-    vec3 wallC=diffuseColor.rgb;
+           -smoothstep(vec2(hi.x+fr*1.6,lo.y-fr)-aw,vec2(hi.x+fr*1.6,lo.y-fr)+aw,cf); float sill=clamp(s3.x*s3.y,0.0,1.0)*hasWin;
+    // wall-hung air-conditioner outdoor unit under some windows: pale casing, dark fan disc, its shadow
+    float acu=0.0,acFan=0.0,acSh=0.0;
+    if(fh(ci*0.71+floor(vBI.y*131.0))<uClad.z*hasWin){
+      vec2 aq=(cf-vec2(0.3+0.4*fh(ci+2.0),0.02))*uCell.xy;                      // metres from the unit's corner
+      vec2 a2=aw*uCell.xy;
+      vec2 ab=smoothstep(vec2(-0.4,0.0)-a2,vec2(-0.4,0.0)+a2,aq)-smoothstep(vec2(0.4,0.56)-a2,vec2(0.4,0.56)+a2,aq);
+      acu=ab.x*ab.y; acFan=acu*(1.0-smoothstep(0.17-a2.x,0.17+a2.x,length(aq-vec2(-0.12,0.28))));
+      vec2 sb=smoothstep(vec2(-0.4,-0.18),vec2(-0.36,-0.12),aq)-smoothstep(vec2(0.4,0.0),vec2(0.44,0.02),aq); acSh=sb.x*sb.y;
+    }
     float fadeNear=1.0-smoothstep(0.08,0.14,pxs);
     // room behind the glass (interior mapping) — only where a room is big enough to read
     vec4 lc=texture2D(emissiveMap,(ci+0.5)/uGrid); lc.rgb=emissiveMapTexelToLinear(lc).rgb;
@@ -3801,14 +4055,15 @@ function facadeInteriors(m,preset){
     glassEm+=fogColor*(0.10+0.55*fres)*(1.0-hr.a*0.9);                       // the evening sky in the pane, stronger at grazing angles
     #endif
     glassEm=glassEm*(1.0-hr.a*0.55)+hr.rgb;                                   // the Apache going past in the glass
-    vec3 col=wallC;
-    col=mix(col,wallC*1.22+0.02,sill);                                     // sill catches the light
-    col=mix(col,vec3(0.05,0.052,0.055),frm);                               // window frame
+    vec3 col=wallC*(1.0-0.45*acSh);
+    col=mix(col,vec3(0.62,0.62,0.6)*dm,sill);                              // pressed aluminium sill
+    col=mix(col,vec3(0.42,0.43,0.44)*dm,frm);                              // anodised aluminium sash frame
     col=mix(col,vec3(0.012,0.014,0.016),win);                              // glass
-    col=mix(col,vec3(0.05,0.052,0.055),mull);
+    col=mix(col,vec3(0.36,0.37,0.38)*dm,mull);
+    col=mix(col,mix(vec3(0.66,0.64,0.58)*dm,vec3(0.03),acFan),acu);
     diffuseColor.rgb=mix(diffuseColor.rgb,col,fadeNear);
-    totalEmissiveRadiance=mix(totalEmissiveRadiance,glassEm*win*(1.0-mull),fadeNear);
-    roughnessFactor=mix(roughnessFactor,mix(roughnessFactor,0.05,win),fadeNear);
+    totalEmissiveRadiance=mix(totalEmissiveRadiance,glassEm*win*(1.0-mull)*(1.0-acu),fadeNear);
+    roughnessFactor=mix(roughnessFactor,mix(mix(wRough,0.35,max(frm,sill)),0.05,win),fadeNear);
     metalnessFactor=mix(metalnessFactor,mix(metalnessFactor,0.0,win),fadeNear);
   }
 }`);
@@ -3821,16 +4076,20 @@ function facadeInteriors(m,preset){
 // the texture only for wall colour and which windows are lit.
 //   mode 0 = curtain wall: full-height panes, mullion grid, opaque spandrel every 4th row
 //   mode 1 = apartments: sliding doors with a centre split, balcony slab and baluster rail
-function crispFacade(m,mode,cols,rows){
-  const u={uGridC:{value:new THREE.Vector2(cols,rows)}};
+function crispFacade(m,mode,cols,rows,W){
+  const u=Object.assign({uGridC:{value:new THREE.Vector2(cols,rows)}},wallUniforms(W));
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u,GLASS_U);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;\n'+GLASS_GLSL)
+    WALL_VERT(sh);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;\n'+GLASS_GLSL+WALL_GLSL+`
+float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+float wBox(vec2 q,vec2 a,vec2 b,vec2 e){vec2 s=smoothstep(a-e,a+e,q)-smoothstep(b-e,b+e,q);return clamp(s.x*s.y,0.0,1.0);}`)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   vec2 cell=vUv*uGridC, ci=floor(cell), cf=fract(cell);
   vec2 fw=fwidth(cell); float pxs=max(fw.x,fw.y);
+  ${mode===0?WALL_PRELUDE('vec2(0.045,0.0)','vec2(0.955,1.0)'):WALL_PRELUDE('vec2(0.05,0.38)','vec2(0.95,0.84)')}
   if(pxs<0.16){
     vec2 aw=fw*0.75+1e-4;
     float fade=1.0-smoothstep(0.1,0.16,pxs);
@@ -3848,39 +4107,71 @@ function crispFacade(m,mode,cols,rows){
       float spnd=step(2.5,rowTop);                                         // spandrel row
       vec2 qa=vec2(0.045), qb=vec2(0.955);
       vec2 mq=smoothstep(qa-aw,qa+aw,cf)-smoothstep(qb-aw,qb+aw,cf);
-      win=mq.x*mq.y*(1.0-spnd);
+      win=mq.x*mq.y*(1.0-spnd)*hasWin;
       float hvy=1.0-step(0.5,mod(ci.x,3.0));                             // every third mullion is a structural fin
       vec3 mlc=vec3(0.035,0.04,0.045)*(1.0+hvy*0.4);
-      col=mix(mlc,vec3(0.03,0.035,0.04),spnd);
+      col=mix(wallC,mix(mlc,vec3(0.03,0.035,0.04),spnd),hasWin);
       col=mix(col,vec3(0.02,0.025,0.03),win);
       float depthG=0.55+0.45*cf.y;                                         // ceiling light falls off toward the floor
-      em=(light*max(emissive,vec3(0.35))*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres)*(1.0-hr.a*0.9)+hr.rgb)*win + sky*0.05*spnd;
+      em=(light*max(emissive,vec3(0.35))*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres)*(1.0-hr.a*0.9)+hr.rgb)*win + sky*0.05*spnd*hasWin;
     }else{
-      vec2 lo=vec2(0.14,0.42), hi=vec2(0.86,0.84);
-      vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); win=s1.x*s1.y;
-      vec2 s2=smoothstep(lo-0.02-aw,lo-0.02+aw,cf)-smoothstep(hi+0.02-aw,hi+0.02+aw,cf); float frm=clamp(s2.x*s2.y-win,0.0,1.0);
+      vec2 lo=vec2(0.14,0.30), hi=vec2(0.86,0.88);
+      vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); float w0=s1.x*s1.y; win=w0*hasWin;
+      vec2 s2=smoothstep(lo-0.02-aw,lo-0.02+aw,cf)-smoothstep(hi+0.02-aw,hi+0.02+aw,cf); float frm=clamp(s2.x*s2.y-w0,0.0,1.0)*hasWin;
       float split=win*(1.0-smoothstep(0.008-aw.x,0.008+aw.x,abs(cf.x-0.5)));
-      float slab=smoothstep(0.955-aw.y,0.955+aw.y,cf.y);                    // balcony slab edge
-      float railTop=1.0-smoothstep(0.012,0.012+aw.y*2.0,abs(cf.y-0.38));
+      float slab=smoothstep(0.955-aw.y,0.955+aw.y,cf.y)*hasWin;            // balcony slab edge
+      float railTop=(1.0-smoothstep(0.012,0.012+aw.y*2.0,abs(cf.y-0.38)))*hasWin;
       float balFine=(1.0-smoothstep(0.08-aw.x*3.0,0.08+aw.x*3.0,abs(fract(cf.x*14.0)-0.5)*2.0));
-      float bal=step(cf.y,0.38)*step(0.05,cf.y)*mix(0.35,balFine,1.0-smoothstep(0.025,0.05,fw.x));   // balusters resolve to a band far off (no moire)
-      col=mix(col,col*1.25+0.03,slab);
-      col=mix(col,vec3(0.05),frm);
+      float bal=step(cf.y,0.38)*step(0.05,cf.y)*mix(0.35,balFine,1.0-smoothstep(0.025,0.05,fw.x))*hasWin;   // balusters resolve to a band far off (no moire)
+      col=wallC;
+      col=mix(col,col*1.18+0.03,slab);
+      col=mix(col,vec3(0.40,0.41,0.42)*dm,frm);
       col=mix(col,vec3(0.02,0.022,0.025),win);
-      col=mix(col,vec3(0.06),split);
-      col=mix(col,vec3(0.10,0.10,0.11),max(railTop,bal*0.85));
+      col=mix(col,vec3(0.36),split);
+      // balcony life: the AC outdoor unit on the floor, washing on the pole, a futon over the rail
+      vec2 q=cf*uCell.xy, e=aw*uCell.xy; float sd=floor(vBI.y*211.0);
+      float ac=0.0,fan=0.0;
+      if(fh(ci*1.31+sd)<uClad.z){float ax=(0.22+0.56*fh(ci+5.0))*uCell.x;
+        ac=wBox(q,vec2(ax-0.4,0.16),vec2(ax+0.4,0.74),e)*hasWin; fan=ac*(1.0-smoothstep(0.18-e.x,0.18+e.x,length(q-vec2(ax-0.12,0.45))));}
+      col=mix(col,mix(vec3(0.68,0.67,0.62)*dm,vec3(0.035),fan),ac);
+      col=mix(col,vec3(0.24,0.245,0.25)*dm,max(railTop,bal*0.85));
+      float wash=0.0;
+      if(fh(ci*2.3+sd)<0.32&&hasWin>0.5){
+        float pole=wBox(q,vec2(0.1,0.86*uCell.y),vec2(uCell.x-0.1,0.86*uCell.y+0.03),e);
+        float id=floor(q.x/0.42), h2=fh(vec2(id,ci.y)+ci.x*7.0+sd);
+        float len=0.45+0.5*fh(vec2(id+3.0,ci.y)+sd), xl=fract(q.x/0.42)*0.42;
+        wash=wBox(vec2(xl,q.y),vec2(0.05,0.86*uCell.y-len),vec2(0.37,0.86*uCell.y),e)*step(0.35,h2)*(1.0-smoothstep(0.2,0.6,fw.x*uCell.x));
+        vec3 wc=h2<0.6?vec3(0.85,0.85,0.82):h2<0.75?vec3(0.32,0.42,0.62):h2<0.88?vec3(0.75,0.55,0.55):vec3(0.55,0.6,0.5);
+        col=mix(col,vec3(0.1),pole); col=mix(col,wc*dm,wash);
+      }
+      float fut=0.0;
+      if(fh(ci*3.7+sd)<0.1&&hasWin>0.5){float fx=(0.25+0.5*fh(ci+9.0))*uCell.x;
+        fut=wBox(q,vec2(fx-0.5,0.38*uCell.y-0.55),vec2(fx+0.5,0.38*uCell.y+0.06),e);
+        vec3 fc=fh(ci+11.0)<0.5?vec3(0.86,0.8,0.7):vec3(0.8,0.62,0.66);
+        col=mix(col,fc*dm,fut);}
       float tv=step(gh1(ci+3.3),0.05)*(0.5+0.5*sin(uT*7.0+gh1(ci)*20.0)*sin(uT*2.3));   // a television flickering
-      em=(light*max(emissive,vec3(0.35))*1.4*step(0.05,on)+vec3(0.25,0.4,0.9)*tv*0.5+sky*(0.08+0.5*fres)*(1.0-hr.a*0.9)+hr.rgb)*win*(1.0-split);
+      em=(light*max(emissive,vec3(0.35))*1.4*step(0.05,on)+vec3(0.25,0.4,0.9)*tv*0.5+sky*(0.08+0.5*fres)*(1.0-hr.a*0.9)+hr.rgb)*win*(1.0-split)
+         *(1.0-max(wash,fut))*(1.0-ac);
+      win*=1.0-max(max(wash,fut),ac);
     }
     diffuseColor.rgb=mix(diffuseColor.rgb,col,fade);
     totalEmissiveRadiance=mix(totalEmissiveRadiance,em,fade);
-    roughnessFactor=mix(roughnessFactor,mix(roughnessFactor,0.06,win),fade);
+    roughnessFactor=mix(roughnessFactor,mix(wRough,0.06,win),fade);
   }
 }`);
   };
   m.customProgramCacheKey=()=>'crisp'+mode;
   return m;
 }
+// one grid cell per structural bay x storey, by preset: big loft panes on wide bays down to the tight
+// small-office grid; a 1980s Tokyo floor is 3.1-3.6 m. Shop level (storefront + its sign) is 5.4 m.
+const FACADE_CELLS=[[4.2,3.6],[3.6,3.45],[3.2,3.3],[2.8,3.2],[2.4,3.1]], SHOP_H=5.4;
+// cladding: 0 mosaic tile, 1 二丁掛 tile, 2 board-marked concrete, 3 吹付 spray coat, 4 granite.
+// [type, dirt, wall-AC density]: concrete weathers worst, polished granite offices have central air
+const CLADS=[[0,0.8,0.14],[1,0.8,0.12],[2,1.25,0.08],[3,1.0,0.16],[4,0.45,0.0]];
+function pickClad(base){const v=new THREE.Color(base),l=(v.r+v.g+v.b)/3;
+  if(l<0.45)return TEXR()<0.6?CLADS[4]:CLADS[2];
+  const r=TEXR();return r<0.38?CLADS[0]:r<0.58?CLADS[1]:r<0.74?CLADS[2]:CLADS[3];}
 const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const fac=facades[i%facades.length];
   if(fac.map){fac.map.wrapS=fac.map.wrapT=THREE.RepeatWrapping;fac.map.needsUpdate=true;}
@@ -3892,8 +4183,10 @@ const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   // multiplier with a whisper of warm or cool, so the facade's own material shows through.
   const warm=Math.random()<0.3;
   m.color.setHSL((warm?36+Math.random()*10:205+Math.random()*15)/360,0.02+Math.random()*0.04,0.82+Math.random()*0.15);
-  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0],winGain:0.8+Math.random()*0.45,facade:true});
-  facadeInteriors(m,fac.preset||facadeGridPresets[0]);
+  const preset=fac.preset||facadeGridPresets[0],pi=Math.max(0,facadeGridPresets.indexOf(preset)),cl=pickClad(fac.base);
+  m.userData.cell={bay:FACADE_CELLS[pi][0],h:FACADE_CELLS[pi][1],rps:1,cols:preset.cols,rows:preset.rows};m.userData.wall=fac.base;
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset,winGain:0.8+Math.random()*0.45,facade:true});
+  facadeInteriors(m,preset,{cell:[FACADE_CELLS[pi][0],FACADE_CELLS[pi][1],SHOP_H],clad:[cl[0],cl[1],cl[2],0],col:fac.base});
   a.push(m);} return a;})();
 glassT.wrapS=glassT.wrapT=THREE.RepeatWrapping;glassT.needsUpdate=true;
 glassPair.lit.wrapS=glassPair.lit.wrapT=THREE.RepeatWrapping;glassPair.lit.needsUpdate=true;
@@ -3901,40 +4194,49 @@ const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++){
   const m=new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.10+Math.random()*0.08,metalness:0.25,envMapIntensity:1.5,clearcoat:0.5,clearcoatRoughness:0.15,
     emissive:0xffffff,emissiveMap:glassPair.lit,emissiveIntensity:0});
   m.color.setHSL((200+Math.random()*20)/360,0.06+Math.random()*0.06,0.78+Math.random()*0.15);   // faint blue-green float glass
+  // curtain wall: 1.6 m mullion bays, 1 m rows, a spandrel every 4th row = a 4 m office floor
+  m.userData.cell={bay:1.6,h:1.0,rps:4,cols:12,rows:GLASS_ROWS};m.userData.wall='#8d9094';
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.9});
-  crispFacade(m,0,12,22);
+  crispFacade(m,0,12,GLASS_ROWS,{cell:[1.6,1.0,SHOP_H],clad:[4,0.3,0,0],col:'#8d9094'});
   a.push(m);}return a;})();
-const RES_POOL=resFacades.map(pr=>{
+const RES_POOL=resFacades.map((pr,i)=>{
   [pr.map,pr.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;});
   const m=new THREE.MeshStandardMaterial({map:pr.map,emissive:0xffffff,emissiveMap:pr.lit,emissiveIntensity:0,roughness:0.85,metalness:0.0,envMapIntensity:0.35});
+  // mansion bay: one balcony with a pair of sliding doors, 3.4 m wide; residential floor 2.9 m
+  m.userData.cell={bay:3.4,h:2.9,rps:1,cols:5,rows:9};m.userData.wall=RES_BASES[i];
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.85});
-  crispFacade(m,1,5,9);
+  crispFacade(m,1,5,9,{cell:[3.4,2.9,SHOP_H],clad:[i%2?3:0,1.0,0.5,0],col:RES_BASES[i]});
   return m;});
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
-// Facade UVs are 0..1 per box face, so a tall tower stretched ONE window grid over its whole height —
-// which reads as a blank slab. Repeat the grid per ~`unit` metres instead, per face, so window rows
-// stay a constant size on a 12u shophouse and a 280u tower alike.
-function scaleFacadeUVs(geo,bw,bh,bd,unit){
-  const uv=geo.attributes.uv; if(!uv||uv.count<24)return;
-  const ux=Math.max(1,Math.round(bw/unit)), uz=Math.max(1,Math.round(bd/unit)), uy=Math.max(1,Math.round(bh/unit));
-  for(let i=0;i<24;i++){
-    let su,sv;
-    if(i<8){su=uz;sv=uy;}          // +X / -X faces
-    else if(i<16){su=ux;sv=uz;}    // +Y / -Y (roof / underside)
-    else{su=ux;sv=uy;}             // +Z / -Z faces
-    uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);
+// Facade UVs IN METRES. They were 0..1 per box face, so one window grid was stretched over every face:
+// a 14 m shophouse showed 26 half-metre "floors" and a 170 m tower 7 m ones. Now one grid cell is one
+// bay x one storey of the material (userData.cell), columns rounded to whole bays per face so no
+// window is cut at a corner, rows counted up from the shop level so floors line up across the block,
+// and a per-building cell offset so neighbours sharing a material don't light the same windows.
+// bInfo carries (top of this box, building seed, party-wall flag) to the facade shaders.
+function facadeUVs(geo,bw,bh,bd,y0,mat,seed,street){
+  const C=mat.userData.cell, uv=geo.attributes.uv, pos=geo.attributes.position, n=uv.count;
+  if(!C||n<24)return;
+  const bi=new Float32Array(n*3), ox=Math.floor(seed*997)%C.cols, oy=Math.floor(seed*7919)%C.rows;
+  const bit=[1,2,0,0,4,8];                                 // box faces: +x,-x,+y,-y,+z,-z
+  for(let i=0;i<n;i++){
+    const f=Math.floor(i/4);
+    bi[i*3]=y0+bh;bi[i*3+1]=seed;bi[i*3+2]=(street!==undefined&&bit[f]&&!(street&bit[f]))?1:0;
+    if(f===2||f===3)continue;
+    const span=f<2?bd:bw, nb=Math.max(1,Math.round(span/C.bay)), y=pos.getY(i)+bh/2+y0;
+    uv.setXY(i,(uv.getX(i)*nb+ox)/C.cols,((y-SHOP_H)/C.h+oy*C.rps)/C.rows);
   }
-  uv.needsUpdate=true;
+  uv.needsUpdate=true;geo.setAttribute('bInfo',new THREE.BufferAttribute(bi,3));
 }
-function spawnBuilding(cx,cz,bw,bd,style){
+// roof caps: texture in world metres (one tile = 12 m) instead of one tile stretched per roof
+function roofUVs(geo,bw,bd){const uv=geo.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*bw/12,uv.getY(i)*bd/12);uv.needsUpdate=true;}
+function spawnBuilding(cx,cz,bw,bd,style,street){
   if(corridorHit(cx,cz,Math.hypot(bw,bd)/2))return;     // the avenues and the Yamanote line cut through the blocks
   const grp=new THREE.Group();
   const rm=pickRoof();
   let bh,mat;
   // TOKYO HEIGHT MIX: a 3-storey shophouse sits right against a 20-storey block. Each style spans a
   // wide range and occasionally throws a spike, so skylines are jagged instead of uniformly medium.
-  // Heights stay jagged but bounded: one window grid is stretched over each face, so beyond roughly
-  // 175u the window rows get visibly oversized. Spikes are capped just under that.
   if(style==='glass'){ bh=66+Math.random()*74; if(Math.random()<0.2)bh=145+Math.random()*30; mat=_pickPool(GLASS_POOL); }
   else if(style==='res'){
     const r=Math.random();
@@ -3946,20 +4248,22 @@ function spawnBuilding(cx,cz,bw,bd,style){
     else               bh = r<0.32 ? (14+Math.random()*16) : r<0.82 ? (34+Math.random()*38) : (78+Math.random()*52);
     mat=_pickPool(FACADE_POOL);
   }
-  // NOTE: do NOT tile the facade UVs. facadeTex paints a full-face composition — a diagonal glass
-  // sheen, edge-anchored sky/ground gradients — so repeating it bands the towers with diagonal
-  // parallelograms. One grid per face is correct; tall buildings are kept in range by the height caps.
+  const seed=TEXR(), pw=style==='glass'?undefined:street;   // towers stand free; block infill has party walls
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
+  facadeUVs(box.geometry,bw,bh,bd,0,mat,seed,pw);
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
+  roofUVs(cap.geometry,bw,bd);
   cap.position.y=bh+0.1;cap.receiveShadow=true;grp.add(cap);
-  parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7}); // batched after the loop
+  parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7,c:mat.__coping||(mat.__coping=new THREE.Color().copy(mat.color).multiply(new THREE.Color(mat.userData.wall||'#9a9a96')).multiplyScalar(0.72))}); // batched after the loop
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
     const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
     const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),mat);
+    facadeUVs(b2.geometry,w2,h2,d2,bh,mat,seed);
     b2.position.y=bh+h2/2;b2.castShadow=true;grp.add(b2);
     const cap2=new THREE.Mesh(new THREE.BoxGeometry(w2*1.004,0.35,d2*1.004),rm);
+    roofUVs(cap2.geometry,w2,d2);
     cap2.position.y=bh+h2+0.1;grp.add(cap2);
     topY=bh+h2;bh=topY;
   }
@@ -3999,8 +4303,10 @@ function spawnBuilding(cx,cz,bw,bd,style){
     if(style==='neon'||style==='mixed')addBillboard(grp,bw,bd,bh,cx,cz);
     else if(Math.random()<0.35)addBillboard(grp,bw,bd,bh,cx,cz); // some ads on towers/apartments too
     if(Math.random()<(style==='neon'?0.3:0.15)){
-      const tank=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.6,3,8),woodMat);tank.position.y=bh+3.6;grp.add(tank);
-      const cone=new THREE.Mesh(new THREE.ConeGeometry(1.7,1.3,8),new THREE.MeshLambertMaterial({color:0x3d3a36}));cone.position.y=bh+5.8;grp.add(cone);
+      // round FRP cooling tower (丸型冷却塔) on its stand — this was a New York wooden water tank
+      const tw=new THREE.Mesh(COOL_GEO[0],coolMat);tw.position.y=bh+1.9;grp.add(tw);
+      const fan=new THREE.Mesh(COOL_GEO[1],coolTopMat);fan.position.y=bh+3.55;grp.add(fan);
+      const st=new THREE.Mesh(COOL_GEO[2],coolTopMat);st.position.y=bh+0.3;grp.add(st);
     }
     // extra wall-mounted animated video screen high on neon/mixed towers (idol or ad loop, throttled draw)
     if(bh>34&&Math.random()<0.16&&bigScreens.length<14){
@@ -4129,7 +4435,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     if(bw<3.6||bd2<3.6)continue;
     let style=d;
     if(d==='mixed')style=Math.random()<0.08?'glass':(Math.random()<0.5?'neon':'mixed');
-    spawnBuilding(lcx,lcz,bw,bd2,style==='cbd'?'mixed':style);
+    spawnBuilding(lcx,lcz,bw,bd2,style==='cbd'?'mixed':style,(a===nx-1?1:0)|(a===0?2:0)|(b===nz-1?4:0)|(b===0?8:0));
   }
 }
 
@@ -4201,9 +4507,12 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   sfBoxBatch(sfSignXf,sfSignInstMat,true);
   sfBoxBatch(sfAwningXf,sfAwningInstMat,true);
   if(parapetXf.length){
-    const m=new THREE.InstancedMesh(sfUnitBox,parapetMat,parapetXf.length);
-    parapetXf.forEach((t,i)=>{dummy.position.set(t.x,t.y,t.z);dummy.rotation.set(0,0,0);dummy.scale.set(t.w,t.h,t.d);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});
-    m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);
+    // a RING of four 30 cm walls, not a solid box: the solid box sat over the whole roof, so from the
+    // air every roof read as one flat navy lid and the roof surface underneath was never seen
+    const m=new THREE.InstancedMesh(sfUnitBox,parapetMat,parapetXf.length*4),T=0.3;let k=0;
+    parapetXf.forEach(t=>{[[0,t.d/2-T/2,t.w,T],[0,-t.d/2+T/2,t.w,T],[t.w/2-T/2,0,T,t.d-2*T],[-t.w/2+T/2,0,T,t.d-2*T]].forEach(([ox,oz,sx,sz])=>{
+      dummy.position.set(t.x+ox,t.y,t.z+oz);dummy.rotation.set(0,0,0);dummy.scale.set(sx,t.h,sz);dummy.updateMatrix();m.setMatrixAt(k,dummy.matrix);if(t.c)m.setColorAt(k,t.c);k++;});});
+    m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);
   }
   const posBatch=(arr,geo,mat)=>{ // batch fixed-size props that only vary in position
     if(!arr.length)return;
@@ -4231,17 +4540,27 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   // These were UNLIT boxes with a violet night baked in, so at dusk the far city sat there
   // as glowing night blocks. Now they take light like the near city, with their windows on
   // the emissive channel the time-of-day rig dials up as it gets dark.
-  const impPair=(base,step,pLit)=>_pairTex(48,128,(g,gl,w,h)=>{
+  // an exact 6-bay x 16-storey grid (8 px cells) that TILES: the vertex shader below sizes it to each
+  // instance's own scale, so a far block's floors are 3.4 m like the near city's (they were stretched
+  // over 18-168 m boxes, so far towers showed 10 m storeys)
+  const impPair=(base,pLit)=>_pairTex(48,128,(g,gl,w,h)=>{
     g.fillStyle=base;g.fillRect(0,0,w,h);
-    for(let y=6;y<h;y+=step+2){for(let x=4;x<w;x+=step){
-      g.fillStyle='rgba(40,46,52,.55)';g.fillRect(x,y,2,2.4);            // window
-      if(Math.random()<pLit){gl.fillStyle=Math.random()<0.55?'rgb(255,214,160)':'rgb(214,230,255)';gl.fillRect(x,y,2,2.4);}
+    for(let y=0;y<16;y++){g.fillStyle='rgba(0,0,0,.12)';g.fillRect(0,y*8,w,1);
+      for(let x=0;x<6;x++){
+      g.fillStyle='rgba(40,46,52,.6)';g.fillRect(x*8+2,y*8+2.5,4.5,3.8);            // window
+      if(TEXR()<pLit){gl.fillStyle=TEXR()<0.55?'rgb(255,214,160)':'rgb(214,230,255)';gl.fillRect(x*8+2,y*8+2.5,4.5,3.8);}
     }}
   });
-  const pA=impPair('#a39d93',7,0.30),pB=impPair('#8a8782',6,0.24);
+  const pA=impPair('#a39d93',0.30),pB=impPair('#8a8782',0.24);
+  [pA.map,pA.lit,pB.map,pB.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;});
   const geo=new THREE.BoxGeometry(1,1,1);
-  const matA=new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0});
-  const matB=new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0});
+  const impUV=m=>{m.onBeforeCompile=sh=>{fogHook(sh);sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+#ifdef USE_INSTANCING
+  vec3 isc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
+  if(abs(normal.y)<0.5)vUv=vec2(max(1.0,floor((abs(normal.x)>0.5?isc.z:isc.x)/3.6+0.5))*uv.x/6.0,isc.y/3.4*uv.y/16.0);
+#endif`);};m.customProgramCacheKey=()=>'impostor';return m;};
+  const matA=impUV(new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0}));
+  const matB=impUV(new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0}));
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:matA,preset:null,winGain:1.2},{mat:matB,preset:null,winGain:1.2});
   const mA=new THREE.InstancedMesh(geo,matA,Math.ceil(count/2));
   const mB=new THREE.InstancedMesh(geo,matB,Math.floor(count/2));
@@ -4826,7 +5145,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   {const S=YAMANOTE_ST.find(x=>x.n==='SHIBUYA');let best=null,bd=1e9;
    ROADS_X.filter(r=>r.w>10).forEach(rx=>ROADS_Z.filter(r=>r.w>10).forEach(rz=>{const d=Math.hypot(rx.p-S.p[0],rz.p-S.p[1]);if(d>44&&d<bd&&!arterialAt(rx.p,rz.p,0)){bd=d;best=[rx,rz];}}));
    if(best){const [rx,rz]=best,diag=Math.hypot(rx.w,rz.w)*0.95;
-     [Math.PI/4,-Math.PI/4].forEach(a=>{const z=new THREE.Mesh(new THREE.PlaneGeometry(diag,4.2),zebraMat);z.rotation.set(-Math.PI/2,0,a);z.position.set(rx.p,0.07,rz.p);scene.add(z);});
+     [Math.PI/4,-Math.PI/4].forEach(a=>{const zg=new THREE.PlaneGeometry(diag,4.2),zu=zg.attributes.uv;for(let i=0;i<zu.count;i++)zu.setX(i,zu.getX(i)*diag/XW_TILE);const z=new THREE.Mesh(zg,zebraMat);z.rotation.set(-Math.PI/2,0,a);z.position.set(rx.p,0.07,rz.p);scene.add(z);});
      window.__scramble={x:rx.p,z:rz.p};}}
 }
 
@@ -4839,9 +5158,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const concDarkM=new THREE.MeshStandardMaterial({color:0x5e5c58,roughness:0.95,metalness:0.0});
   const deck=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.6,hw),concDarkM);
   deck.position.set(0,hy,HWY_Z);deck.castShadow=true;deck.receiveShadow=true;scene.add(deck);
-  const deckT=makeRoadStripTex();deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,CITY*2/40);
   const top=new THREE.Mesh(new THREE.PlaneGeometry(hw-1.2,CITY*2),
-    asphaltify(new THREE.MeshStandardMaterial({map:deckT,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{axis:'z',p:HWY_Z,w:hw-1.2}));
+    asphaltify(new THREE.MeshStandardMaterial({map:ROAD_BLANK,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{axis:'z',p:HWY_Z,w:hw-1.2,kind:3}));
   top.rotation.set(-Math.PI/2,0,Math.PI/2);top.position.set(0,hy+0.81,HWY_Z);top.receiveShadow=true;scene.add(top);
   [-1,1].forEach(sd=>{
     const par=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.1,0.45),concM);par.position.set(0,hy+1.35,HWY_Z+sd*(hw/2-0.22));par.castShadow=true;scene.add(par);
@@ -5557,7 +5875,7 @@ function instAdd(geo,mat,arr,shadow){
 // Ribbed rusty metal (tanks), louvered vented panels (AC), formed concrete with a door (housing).
 const tankMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#4c4740';g.fillRect(0,0,w,h);
+    g.fillStyle='#c4bfae';g.fillRect(0,0,w,h);                        // ivory FRP water tank, ribbed
     for(let x=0;x<w;x+=w/12){g.fillStyle='rgba(255,255,255,.06)';g.fillRect(x,0,2,h);g.fillStyle='rgba(0,0,0,.24)';g.fillRect(x+w/24,0,2,h);}
     g.fillStyle='rgba(0,0,0,.3)';g.fillRect(0,4,w,3);g.fillRect(0,h-8,w,3);
     for(let i=0;i<26;i++){g.strokeStyle=`rgba(${110+Math.random()*50},${58+Math.random()*24},30,${.1+Math.random()*.2})`;g.lineWidth=1+Math.random()*3;
@@ -5568,7 +5886,7 @@ const tankMat=(()=>{
 })();
 const acMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#6a6674';g.fillRect(0,0,w,h);
+    g.fillStyle='#b6b4aa';g.fillRect(0,0,w,h);                        // ivory condenser casing
     for(let y=h*0.16;y<h*0.84;y+=6){g.fillStyle='rgba(0,0,0,.36)';g.fillRect(6,y,w-12,3);g.fillStyle='rgba(255,255,255,.08)';g.fillRect(6,y+3,w-12,1);}
     g.strokeStyle='rgba(0,0,0,.42)';g.lineWidth=3;g.strokeRect(3,3,w-6,h-6);
     for(const[bx,by]of[[10,10],[w-10,10],[10,h-10],[w-10,h-10]]){g.fillStyle='#2a2a30';g.beginPath();g.arc(bx,by,2.5,0,7);g.fill();}
@@ -5578,8 +5896,8 @@ const acMat=(()=>{
 })();
 const housMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#38333f';g.fillRect(0,0,w,h);
-    for(let i=0;i<2600;i++){const v=Math.random()*26;g.fillStyle=`rgba(${52+v},${48+v},${60+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+    g.fillStyle='#8c8a85';g.fillRect(0,0,w,h);                        // board-marked concrete stair/lift penthouse
+    for(let i=0;i<2600;i++){const v=Math.random()*26;g.fillStyle=`rgba(${118+v},${116+v},${110+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
     for(let x=0;x<=w;x+=w/3){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(x-1,0,2,h);}
     for(let y=0;y<=h;y+=h/2){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(0,y-1,w,2);}
     g.fillStyle='#20222a';g.fillRect(w*0.4,h*0.5,w*0.2,h*0.5);
@@ -5595,7 +5913,7 @@ const housMat=(()=>{
 })();
 instAdd(new THREE.BoxGeometry(1,1,1),housMat,HOUS,true);
 instAdd(new THREE.CylinderGeometry(1,1,1,14),tankMat,TANK,true);
-instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x2c2830,roughness:0.8,metalness:0.3}),TLEG,false);
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x56605a,roughness:0.75,metalness:0.4}),TLEG,false);   // galvanised steel stand
 instAdd(new THREE.BoxGeometry(1,1,1),acMat,ACU,false);
 instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshStandardMaterial({color:0x50505a,roughness:0.6,metalness:0.5}),MAST,false);
 instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
@@ -9869,14 +10187,16 @@ loadMeta();
     let mergedMeshes=0,removed=0;
     byMat.forEach(({mat,list})=>{
       if(list.length<2)return;
-      const P=[],N=[],U=[],I=[]; let voff=0;
+      const P=[],N=[],U=[],I=[],BI=[]; let voff=0;
+      const hasBI=list.every(o=>o.geometry.getAttribute('bInfo'));   // facade boxes: top/seed/party-wall per vertex
       for(const o of list){
-        const g=o.geometry,pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index;
+        const g=o.geometry,pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index,bi=g.getAttribute('bInfo');
         mNorm.getNormalMatrix(o.matrixWorld);
         for(let i=0;i<pos.count;i++){
           v.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld); P.push(v.x,v.y,v.z);
           n.fromBufferAttribute(nor,i).applyNormalMatrix(mNorm).normalize(); N.push(n.x,n.y,n.z);
           U.push(uv.getX(i),uv.getY(i));
+          if(hasBI)BI.push(bi.getX(i),bi.getY(i),bi.getZ(i));
         }
         for(let i=0;i<idx.count;i++) I.push(idx.getX(i)+voff);
         voff+=pos.count;
@@ -9885,6 +10205,7 @@ loadMeta();
       geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
       geo.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
       geo.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+      if(hasBI)geo.setAttribute('bInfo',new THREE.Float32BufferAttribute(BI,3));
       geo.setIndex(new THREE.Uint32BufferAttribute(I,1));
       const mesh=new THREE.Mesh(geo,mat);
       mesh.castShadow=list.some(o=>o.castShadow);
