@@ -418,28 +418,37 @@ renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
 const scene=new THREE.Scene();
-// Aerial perspective. Colour and density are driven by the time of day (updateTOD); the fog
-// chunks are extended so haze looking TOWARD the sun picks up its glow and haze looking away
-// stays cool — the single biggest cue that makes distance read as real air.
+// Aerial perspective. Colour and density are driven by the time of day (updateTOD) and are the
+// sky's own horizon colours, so distant blocks dissolve into the sky without a seam: warm toward
+// the set sun's azimuth, blue-grey under the Earth's shadow opposite. The haze is HEIGHT-dependent
+// (an exponential layer, scale height 170 m): the city's boundary layer of damp, smoky air is
+// densest in the streets, so looking down from altitude or up at tower tops cuts through less
+// of it than looking along the ground — the main depth cue that gives the city its scale.
 scene.fog=new THREE.FogExp2(0xa6adbd,0.00092);
-const FOG_U={fogSunDir:{value:new THREE.Vector3(0,0.1,1)},fogSunCol:{value:new THREE.Color(0,0,0)}};
+const FOG_U={fogSunDir:{value:new THREE.Vector3(0,0,1)},fogSunCol:{value:new THREE.Color(0,0,0)},fogGlowCol:{value:new THREE.Color(0,0,0)}};
 // shared uniform objects injected into every material at compile (three clones ShaderLib
 // uniforms per material, so this is the only way one value reaches all of them live)
-function fogHook(sh){sh.uniforms.fogSunDir=FOG_U.fogSunDir;sh.uniforms.fogSunCol=FOG_U.fogSunCol;}
+function fogHook(sh){sh.uniforms.fogSunDir=FOG_U.fogSunDir;sh.uniforms.fogSunCol=FOG_U.fogSunCol;sh.uniforms.fogGlowCol=FOG_U.fogGlowCol;}
 THREE.Material.prototype.onBeforeCompile=fogHook;
 THREE.ShaderChunk.fog_pars_vertex='#ifdef USE_FOG\n varying float fogDepth; varying vec3 vFogView;\n#endif';
 THREE.ShaderChunk.fog_vertex='#ifdef USE_FOG\n fogDepth = - mvPosition.z; vFogView = mvPosition.xyz;\n#endif';
 THREE.ShaderChunk.fog_pars_fragment=[
  '#ifdef USE_FOG',' uniform vec3 fogColor; varying float fogDepth; varying vec3 vFogView;',
- ' uniform vec3 fogSunDir; uniform vec3 fogSunCol;',
+ ' uniform vec3 fogSunDir; uniform vec3 fogSunCol; uniform vec3 fogGlowCol;',
  ' #ifdef FOG_EXP2',' uniform float fogDensity;',' #else',' uniform float fogNear; uniform float fogFar;',' #endif','#endif'].join('\n');
 THREE.ShaderChunk.fog_fragment=[
  '#ifdef USE_FOG',
- ' #ifdef FOG_EXP2',' float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth );',
+ ' vec3 fogWDir = ( vec4( vFogView, 0.0 ) * viewMatrix ).xyz;',   // view -> world (rotation transpose), unnormalised
+ ' float fogLen = length( fogWDir ); fogWDir /= max( fogLen, 1e-4 );',
+ ' #ifdef FOG_EXP2',
+ // optical depth through an exponential layer: mean density along the ray relative to ground level
+ '  float fgK = 1.0 / 170.0, fgY = max( cameraPosition.y, 0.0 ) * fgK, fgD = fogWDir.y * fogLen * fgK;',
+ '  float fgH = exp( - fgY ) * ( abs( fgD ) > 1e-3 ? ( 1.0 - exp( - fgD ) ) / fgD : 1.0 );',
+ '  float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth * clamp( fgH, 0.28, 1.6 ) );',
  ' #else',' float fogFactor = smoothstep( fogNear, fogFar, fogDepth );',' #endif',
- ' vec3 fogWDir = normalize( ( vec4( vFogView, 0.0 ) * viewMatrix ).xyz );',   // view -> world (rotation transpose)
- ' float fogSun = pow( max( dot( fogWDir, fogSunDir ), 0.0 ), 6.0 );',
- ' gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor + fogSunCol * fogSun, fogFactor );',
+ ' float fogAz = dot( normalize( fogWDir.xz + vec2( 1e-5 ) ), fogSunDir.xz );',
+ ' vec3 fogCol = fogColor + fogSunCol * pow( clamp( fogAz * 0.5 + 0.5, 0.0, 1.0 ), 2.5 ) + fogGlowCol * pow( max( fogAz, 0.0 ), 3.0 );',
+ ' gl_FragColor.rgb = mix( gl_FragColor.rgb, fogCol, fogFactor );',
  '#endif'].join('\n');
 // near raised from 0.1 and far cut from 4000 (biggest fixed scene radius is the sky sphere at 2000)
 // to compress the depth range and kill high-altitude z-fighting/shimmer; 0.5 still clears the closest
@@ -518,9 +527,12 @@ const blurMat=new THREE.ShaderMaterial({
     }`
 });
 const compositeMat=new THREE.ShaderMaterial({
-  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4},uTexel:{value:new THREE.Vector2(1/1280,1/720)}},
+  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4},uTexel:{value:new THREE.Vector2(1/1280,1/720)},
+    uGrain:{value:0.010},uSeed:{value:0}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
-  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;uniform vec2 uTexel;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;uniform vec2 uTexel;
+    uniform float uGrain,uSeed;varying vec2 vUv;
+    float gh(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
     void main(){
       vec2 cc=vUv-0.5;
       float r2=dot(cc,cc);
@@ -534,21 +546,28 @@ const compositeMat=new THREE.ShaderMaterial({
       vec3 nb=texture2D(tScene,vUv+vec2(uTexel.x,0.0)).rgb+texture2D(tScene,vUv-vec2(uTexel.x,0.0)).rgb
              +texture2D(tScene,vUv+vec2(0.0,uTexel.y)).rgb+texture2D(tScene,vUv-vec2(0.0,uTexel.y)).rgb;
       s+=(s-nb*0.25)*0.55;
-      vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+texture2D(tBloomWide,vUv).rgb*bloomWideStrength;
-      vec3 c=s+bloom;
+      vec3 bw=texture2D(tBloomWide,vUv).rgb;
+      vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+bw*bloomWideStrength;
+      // HALATION, the 1989 colour-negative signature: light that goes through the emulsion bounces
+      // off the film base and comes back through the red-sensitive layer, so every hard light —
+      // sodium lamps, neon, headlights — wears a thin warm red-orange fringe beyond its bloom
+      vec3 c=s+bloom+vec3(1.0,0.30,0.10)*dot(bw,vec3(0.3,0.5,0.2))*0.24;
       float l=dot(c,vec3(0.299,0.587,0.114));
-      // near-neutral camera grade: a whisper of cool in the shadows and warm in the
-      // highlights, mild contrast, saturation left alone — realism lives in the light,
-      // not in a tint laid over it
-      vec3 shadowTint=vec3(-0.004,0.002,0.010);
-      vec3 highTint=vec3(0.012,0.004,-0.008);
-      c+=shadowTint*(1.0-smoothstep(0.0,0.45,l));
-      c+=highTint*smoothstep(0.5,1.0,l);
-      c=mix(c,c*c*(3.0-2.0*c),0.22);          // filmic S-curve: deeper blacks, punchier mids
-      c=mix(vec3(l),c,1.08);
+      // print grade in the Fuji/Kodak manner of the period: cool cyan-blue shadows, warm
+      // highlights, a gentle S — and blacks that sit on the print's base, never crushed
+      c+=vec3(-0.006,0.003,0.014)*(1.0-smoothstep(0.0,0.42,l));
+      c+=vec3(0.020,0.007,-0.012)*smoothstep(0.45,1.0,l);
+      vec3 k=clamp(c,0.0,1.0);
+      c=mix(c,k*k*(3.0-2.0*k),0.14);
+      c=mix(vec3(l),c,1.06);
+      c=c*0.976+vec3(0.013,0.015,0.021);
       // gentle vignette
       float vig=1.0-smoothstep(0.28,0.92,sqrt(r2));
-      c*=mix(0.82,1.0,vig);
+      c*=mix(0.84,1.0,vig);
+      // grain: per-pixel, per-frame luminance noise with a triangular spread, strongest in the
+      // mid-tones like real dye clouds — fine enough that the frame stays crisp
+      float gn=gh(gl_FragCoord.xy+uSeed*vec2(37.1,17.3))+gh(gl_FragCoord.xy*1.37+uSeed*vec2(11.7,53.9))-1.0;
+      c+=gn*uGrain*(0.3+2.4*l*(1.0-min(l,1.0)));
       gl_FragColor=vec4(clamp(c,0.0,1.0),1.0);
     }`
 });
@@ -560,7 +579,7 @@ function renderPost(){
   const _s=window.__RS||scene, _c=window.__RC||cam;
   const _inside=!!window.__RS;
   renderer.toneMappingExposure=_inside?1.2:(TOD.cur.exp||1.2);
-  if(_inside)FOG_U.fogSunCol.value.setRGB(0,0,0);   // rooms have their own fog; no sky glow in it
+  if(_inside){FOG_U.fogSunCol.value.setRGB(0,0,0);FOG_U.fogGlowCol.value.setRGB(0,0,0);}   // rooms have their own fog; no sky glow in it
   renderer.setRenderTarget(sceneRT);renderer.render(_s,_c);
   postQuad.material=brightMat;brightMat.uniforms.tDiffuse.value=sceneRT.texture;
   renderer.setRenderTarget(brightRT);renderer.render(postScene,postCam);
@@ -590,87 +609,140 @@ function renderPost(){
   postQuad.material=compositeMat;
   compositeMat.uniforms.tScene.value=sceneRT.texture;compositeMat.uniforms.uTexel.value.set(1/sceneRT.width,1/sceneRT.height);
   compositeMat.uniforms.tBloom.value=blurRT2.texture;
-  compositeMat.uniforms.tBloomWide.value=wideRT1.texture;
+  compositeMat.uniforms.tBloomWide.value=wideRT1.texture;compositeMat.uniforms.uSeed.value=(performance.now()*0.0137)%97.0;
   renderer.setRenderTarget(null);renderer.render(postScene,postCam);
 }
 
 // ============================================================================
 // TIME OF DAY + PHYSICAL SKY
-// One rig drives the sky, the sun/moon key light, ambient, aerial-perspective
-// haze, exposure, building window light, rain, the moon and the reflection
-// environment. TOD.t: 0 = golden dusk (sun a few degrees up), ~0.45 = blue
-// hour, 1 = full night. The campaign walks it from dusk to night across the
-// five shops (todForStage); key T steps through it by hand.
+// One rig drives the sky, the key light, ambient, aerial-perspective haze,
+// exposure, building window light, rain, the stars and the reflection
+// environment. TOD.t maps to the clock (todClock) and the clock to the REAL
+// sky over Tokyo on 24 November 1989: sunset 16:30 JST in the WSW (az 245°),
+// civil twilight over at 16:57, nautical 17:28, astronomical 17:59. The five
+// shops walk it from the sun on the horizon (16:26) to night (18:00);
+// key T steps through it by hand.
 //
 // What makes a city read as real at this scale is not facade detail, it is
-// light and air: a sky with a real sun in it, haze that eats distance toward
-// the horizon colour, and neutral materials lit warm on one side and cool in
-// shadow. The palette below is built around that, not around a "look".
+// light and air: a sky that behaves like twilight does (the glow sinking into
+// the WSW, the Earth's shadow rising in the east under a pink Belt of Venus,
+// then the sodium dome of the city taking over), haze that is thickest down
+// in the streets, and neutral materials lit by that sky.
 // ============================================================================
+// Ephemeris for the night (apparent RA h / Dec °, 16:30 JST; LST 21.033 h). The waning
+// crescent moon (14%) set at ~14:30 and is under the horizon all evening; Venus (-4.7) is
+// the brilliant evening star in the SSW with Saturn 8° to its right; Jupiter rises ENE ~19:00.
+const ASTRO={lat:35.68,lst0:21.0333,m0:16*60+30,
+  sun:[15.995,-20.57],moon:[12.913,-11.13],
+  planets:[[19.335,-25.51,-4.7,0xfff6e8],[18.824,-22.61,0.4,0xffe6b0],[6.705,22.89,-2.6,0xfff2dc]],
+  // the stars a Tokyo sky could still show: [RA h, Dec °, mag, colour]
+  stars:[[18.615,38.78,0.03,0xcfe0ff],[19.846,8.87,0.77,0xf0f2ff],[20.690,45.28,1.25,0xe8f0ff],[5.278,46.00,0.08,0xfff0cc],
+    [14.261,19.18,-0.05,0xffcf96],[22.961,-29.62,1.16,0xe8f0ff],[4.599,16.51,0.85,0xffbe8a],[2.530,89.26,1.98,0xfff4dc],
+    [0.140,29.09,2.06,0xe4ecff],[2.120,23.46,2.00,0xffd8a8],[1.162,35.62,2.05,0xffcc9a],[2.065,42.33,2.10,0xffd8b0],
+    [3.405,49.86,1.79,0xfff2dc],[3.136,40.96,2.10,0xdfe8ff],[21.736,9.88,2.40,0xffd8a8],[0.727,-17.99,2.02,0xfff0d8],
+    [5.919,7.41,0.50,0xffb070],[5.242,-8.20,0.13,0xd6e2ff],[6.752,-16.72,-1.46,0xe6eeff],[7.655,5.22,0.34,0xfff6e8],
+    [7.755,28.03,1.14,0xffdcb0],[7.577,31.89,1.58,0xeef2ff],[5.438,28.61,1.65,0xe0eaff],[5.419,6.35,1.64,0xdce6ff],
+    [5.603,-1.20,1.69,0xdce6ff],[0.675,56.54,2.24,0xffe0b8],[0.153,59.15,2.27,0xfff6e8],[20.370,40.26,2.23,0xfff4e4],
+    [17.582,12.56,2.08,0xf4f6ff],[3.791,24.11,2.87,0xd8e4ff]]};
+const SKY_N=ASTRO.stars.length+ASTRO.planets.length;
+// world frame: north = -z, east = +x
+function skyDir(ra,dec,min,out){
+  const D=Math.PI/180,lst=ASTRO.lst0+(min-ASTRO.m0)/60*1.0027379,H=(lst-ra)*15*D,ph=ASTRO.lat*D,de=dec*D;
+  const h=Math.asin(Math.sin(ph)*Math.sin(de)+Math.cos(ph)*Math.cos(de)*Math.cos(H));
+  const az=Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(ph)-Math.tan(de)*Math.cos(ph))+Math.PI;
+  return out.set(Math.sin(az)*Math.cos(h),Math.sin(h),-Math.cos(az)*Math.cos(h));
+}
+// TOD.t -> minutes after midnight JST: the first shop at 16:26 (sun on the horizon), the last at 18:00
+function todClock(t){ return 16*60+26+(t-TOD_START)/(TOD_STAGES[TOD_STAGES.length-1]-TOD_START)*94; }
+// keyed on SUN ELEVATION (°), not on t, so every colour belongs to a real moment of twilight.
+// Colours are display values (the sky is not tone mapped and the fog is mixed after it).
 const TOD_KEYS=[
-  // golden dusk — Belt of Venus over a blue-grey earth-shadow band, low warm sun
-  {t:0.00, sunEl:10.0,  sunCol:0xffb782, sunI:2.25, moonI:0.00,
-   hemiSky:0xa9b3cc, hemiGnd:0x7a6654, hemiI:0.85, cityI:0.00,
-   zen:0x55638a, belt:0xd3a394, hor:0xa3adbf, solar:0xffcf96, glow:0xffb070, glowI:1.00,
-   cloudLit:0xffd8bc, cloudDark:0x8f8796, cloudCov:0.42,
-   fog:0xa6adbd, fogD:0.00092, exp:0.92, win:0.06, rain:0.00, moon:0.00, sunDisc:1.0},
-  // late dusk — sun on the horizon, sky going rose and violet, first lights
-  {t:0.25, sunEl:2.5,  sunCol:0xff9a62, sunI:1.25, moonI:0.00,
-   hemiSky:0x7d86a8, hemiGnd:0x5a4a40, hemiI:0.78, cityI:0.05,
-   zen:0x37466e, belt:0xb98384, hor:0x7f87a0, solar:0xffa86a, glow:0xff8a50, glowI:0.85,
-   cloudLit:0xf2a68c, cloudDark:0x5f5a6e, cloudCov:0.46,
-   fog:0x838aa0, fogD:0.00105, exp:1.00, win:0.34, rain:0.00, moon:0.15, sunDisc:0.7},
-  // blue hour — sun gone, deep blue overhead, city lit, residual glow in the west
-  {t:0.50, sunEl:-5.0, sunCol:0xff8a5a, sunI:0.00, moonI:0.10,
-   hemiSky:0x4a5878, hemiGnd:0x3f352e, hemiI:0.72, cityI:0.14,
-   zen:0x15203e, belt:0x404a6a, hor:0x55607a, solar:0xb8735a, glow:0xa05a40, glowI:0.45,
-   cloudLit:0x6d6478, cloudDark:0x2a2c3c, cloudCov:0.55,
-   fog:0x4c5468, fogD:0.00128, exp:1.08, win:0.52, rain:0.00, moon:0.55, sunDisc:0.0},
-  // night — low overcast lit from below by sodium and LED, light rain
-  {t:1.00, sunEl:-25,  sunCol:0xff8a5a, sunI:0.00, moonI:0.12,
-   hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
-   zen:0x07080c, belt:0x121318, hor:0x3a2f29, solar:0x3a2f29, glow:0x000000, glowI:0.00,
-   cloudLit:0x4a3a30, cloudDark:0x101116, cloudCov:0.85,
-   fog:0x221f1f, fogD:0.00160, exp:1.18, win:0.46, rain:1.00, moon:0.00, sunDisc:0.0},
+  // mid-afternoon (debug only, t=0): low winter sun through the city haze
+  {el:15,  sunCol:0xffc890, sunI:2.0, keyCol:0xb0b8d0, keyI:0.00, hemiSky:0xa9b3cc, hemiGnd:0x7a6654, hemiI:0.85, cityI:0.00,
+   zen:0x5a78b4, belt:0xa8b0c8, beltI:0.0, horA:0xb2b9c8, horS:0xe0d4c0, glow:0xffd8a0, glowI:0.45, lp:0x000000,
+   cloudLit:0xfff0e0, cloudDark:0x98a0ae, cloudCov:0.40, cirrus:0xfff4ea, fogD:0.00085, exp:0.92, win:0.04, rain:0.00, starLim:-6, sunDisc:1.0},
+  // 16:26 — the sun sits on the horizon, deep orange through 30 km of Kanto haze
+  {el:0.5, sunCol:0xff6a2a, sunI:0.40, keyCol:0xc8a8b0, keyI:0.10, hemiSky:0x96a0bf, hemiGnd:0x6e5a4c, hemiI:0.80, cityI:0.03,
+   zen:0x4a68a6, belt:0xc6a2ac, beltI:0.45, horA:0x989aae, horS:0xe8a468, glow:0xff7a3a, glowI:1.00, lp:0x060402,
+   cloudLit:0xffbe96, cloudDark:0x7a7a90, cloudCov:0.30, cirrus:0xffd0a8, fogD:0.00090, exp:0.98, win:0.30, rain:0.00, starLim:-4.2, sunDisc:1.0},
+  // 16:49 — civil twilight: the glow is a low orange band, the Earth's shadow and the pink Belt of Venus stand in the east
+  {el:-4,  sunCol:0xff6a2a, sunI:0.00, keyCol:0x9ea2cc, keyI:0.34, hemiSky:0x6c7898, hemiGnd:0x54463c, hemiI:0.76, cityI:0.08,
+   zen:0x2f4a8a, belt:0xa47e96, beltI:0.75, horA:0x5c6286, horS:0xf0965a, glow:0xe8783e, glowI:0.80, lp:0x120c06,
+   cloudLit:0xd88a76, cloudDark:0x4a4c66, cloudCov:0.30, cirrus:0xff9a7a, fogD:0.00100, exp:1.04, win:0.42, rain:0.00, starLim:-1.0, sunDisc:0.0},
+  // 17:13 — blue hour: deep blue overhead, a red ember in the WSW, the city glow starting under the cloud
+  {el:-8,  sunCol:0xff6a2a, sunI:0.00, keyCol:0x7c88ba, keyI:0.22, hemiSky:0x4a5878, hemiGnd:0x45372c, hemiI:0.72, cityI:0.16,
+   zen:0x172a64, belt:0x4e5078, beltI:0.30, horA:0x384266, horS:0xb07448, glow:0xb05a30, glowI:0.50, lp:0x140c06,
+   cloudLit:0x4a4c66, cloudDark:0x1c2238, cloudCov:0.28, cirrus:0x6a6080, fogD:0.00112, exp:1.10, win:0.50, rain:0.00, starLim:0.9, sunDisc:0.0},
+  // 17:36 — end of nautical twilight: the west is a faint brown, the sodium dome now owns the horizon
+  {el:-12, sunCol:0xff6a2a, sunI:0.00, keyCol:0x8a8496, keyI:0.16, hemiSky:0x3c4458, hemiGnd:0x4c3a2c, hemiI:0.80, cityI:0.26,
+   zen:0x0f1936, belt:0x242a44, beltI:0.0, horA:0x262a3a, horS:0x48362e, glow:0x5a3420, glowI:0.22, lp:0x22160e,
+   cloudLit:0x463a38, cloudDark:0x161824, cloudCov:0.38, cirrus:0x4a3c40, fogD:0.00125, exp:1.14, win:0.52, rain:0.00, starLim:1.8, sunDisc:0.0},
+  // 18:00 — night: no twilight left; what lights the sky is Tokyo itself, sodium-orange on the cloud base
+  {el:-18, sunCol:0xff6a2a, sunI:0.00, keyCol:0xa08670, keyI:0.14, hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.92, cityI:0.32,
+   zen:0x0c1120, belt:0x161a26, beltI:0.0, horA:0x1e1c22, horS:0x201c20, glow:0x000000, glowI:0.00, lp:0x2c1e14,
+   cloudLit:0x40322c, cloudDark:0x111320, cloudCov:0.56, cirrus:0x3a2e2a, fogD:0.00135, exp:1.18, win:0.50, rain:0.00, starLim:2.6, sunDisc:0.0},
+  // late night (debug, t=1): the cloud lowers and it starts to rain
+  {el:-40, sunCol:0xff6a2a, sunI:0.00, keyCol:0xa08670, keyI:0.12, hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
+   zen:0x0a0c14, belt:0x14151e, beltI:0.0, horA:0x1c1a1e, horS:0x1c1a1e, glow:0x000000, glowI:0.00, lp:0x32201a,
+   cloudLit:0x42322a, cloudDark:0x101118, cloudCov:0.85, cirrus:0x32262a, fogD:0.00150, exp:1.18, win:0.48, rain:1.00, starLim:2.4, sunDisc:0.0},
 ];
-const TOD_COLORS=new Set(['sunCol','hemiSky','hemiGnd','zen','belt','hor','solar','glow','cloudLit','cloudDark','fog']);
-const SUN_AZ=new THREE.Vector3(-0.45,0,0.89).normalize();   // west-south-west: behind the opening view
-const MOON_DIR=new THREE.Vector3(0.35,0.82,-0.45).normalize();
+const TOD_COLORS=new Set(['sunCol','keyCol','hemiSky','hemiGnd','zen','belt','horA','horS','glow','lp','cloudLit','cloudDark','cirrus']);
 const TOD={t:0.30,target:0.30,pinned:null,env:-1,
-  cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3()};
-const _ca=new THREE.Color(),_cb=new THREE.Color();
-function todSample(t){
-  t=THREE.MathUtils.clamp(t,0,1);
-  let i=0; while(i<TOD_KEYS.length-2&&t>TOD_KEYS[i+1].t)i++;
-  const A=TOD_KEYS[i],B=TOD_KEYS[i+1],f=THREE.MathUtils.smoothstep(t,A.t,B.t);
-  const o={};
+  cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3(), moonDir:new THREE.Vector3(), clock:0};
+const _ca=new THREE.Color(),_cb=new THREE.Color(),_va=new THREE.Vector3();
+// the live clock: the shop's time, creeping on with play in between (a minute per 6 s, held short
+// of the next shop's time) and never running backwards — so the light keeps falling as you fly
+function todClockNow(){
+  const base=Math.max(0,todClock(TOD.t));
+  if(TOD.pinned!==null||typeof runClock0==='undefined'){TOD.cLast=0;return base;}
+  if(TOD.r0!==runClock0){TOD.r0=runClock0;TOD.cLast=0;TOD.tg=TOD.target;}            // a new run
+  if(TOD.tg!==TOD.target){TOD.tg=TOD.target;TOD.r0=runClock0=performance.now();}    // next shop: creep starts over
+  return TOD.cLast=Math.max(TOD.cLast||0,base+Math.min(21,(performance.now()-runClock0)/6000));
+}
+function todSample(min){
+  skyDir(ASTRO.sun[0],ASTRO.sun[1],min,TOD.sunDir);
+  // refraction lifts the disc ~0.5° at the horizon (it is why the sun is still "up" at 16:26)
+  const el=Math.asin(TOD.sunDir.y)*180/Math.PI, elA=el+0.55*THREE.MathUtils.clamp(1-el/4,0,1)*(el>-2?1:0);
+  let i=0; while(i<TOD_KEYS.length-2&&elA<TOD_KEYS[i+1].el)i++;
+  const A=TOD_KEYS[i],B=TOD_KEYS[i+1],f=THREE.MathUtils.smoothstep(elA,B.el,A.el);   // 1 at A, 0 at B
+  const o={sunEl:elA,clock:min};
   for(const k in A){
-    if(k==='t')continue;
+    if(k==='el')continue;
     const a=A[k],b=B[k];
-    if(TOD_COLORS.has(k))o[k]=_ca.setHex(a).lerp(_cb.setHex(b),f).getHex();   // colours blend in RGB
-    else o[k]=a+(b-a)*f;
+    if(TOD_COLORS.has(k))o[k]=_ca.setHex(b).lerp(_cb.setHex(a),f).getHex();   // colours blend in RGB
+    else o[k]=b+(a-b)*f;
   }
   return o;
 }
 
-// ---- the sky: analytic gradient + Mie glow + sun disc + an fbm cloud deck ----
+// ---- the sky: twilight model + city light dome + real stars + cirrus and a cloud deck ----
 // Output is raw (no tone mapping) on purpose: scene fog is mixed in AFTER tone
 // mapping in three's material shaders, so the horizon colour here and the fog
 // colour live in the same space and distant geometry melts into the sky seam-free.
+// What it models, in order: the horizon brightening toward the set sun's AZIMUTH (twilight
+// is an arch on the horizon, not a disc around the sun); the Earth's shadow rising in the
+// anti-solar sky with the pink Belt of Venus just above it, both climbing as the sun sinks;
+// the sodium dome of the city, brightest at the horizon; stars and planets from the real
+// ephemeris, only as many as the glow lets through, twinkling low down; sun-lit cirrus that
+// turns to dim city-lit streaks; and the broken cloud deck lit orange from below at night.
 const skyMat=new THREE.ShaderMaterial({
   side:THREE.BackSide, depthWrite:false, fog:false,
   uniforms:{
-    uZen:{value:new THREE.Color()}, uBelt:{value:new THREE.Color()}, uHor:{value:new THREE.Color()},
-    uSolar:{value:new THREE.Color()}, uGlow:{value:new THREE.Color()}, uGlowI:{value:1},
+    uZen:{value:new THREE.Color()}, uBelt:{value:new THREE.Color()}, uBeltI:{value:0},
+    uHorA:{value:new THREE.Color()}, uHorS:{value:new THREE.Color()}, uLP:{value:new THREE.Color()},
+    uGlow:{value:new THREE.Color()}, uGlowI:{value:1},
     uSunDir:{value:new THREE.Vector3(0,0.1,1)}, uSunCol:{value:new THREE.Color()}, uSunDisc:{value:1},
-    uCloudLit:{value:new THREE.Color()}, uCloudDark:{value:new THREE.Color()}, uCloudCov:{value:0.4},
-    uTime:{value:0}
+    uCloudLit:{value:new THREE.Color()}, uCloudDark:{value:new THREE.Color()}, uCloudCov:{value:0.4}, uCirrus:{value:new THREE.Color()},
+    uStar:{value:Array.from({length:SKY_N},()=>new THREE.Vector4(0,-1,0,9))}, uStarC:{value:Array.from({length:SKY_N},()=>new THREE.Color())},
+    uStarLim:{value:-9}, uPx:{value:0.002}, uTime:{value:0}
   },
   vertexShader:`varying vec3 vDir;
     void main(){ vDir=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader:`
-    uniform vec3 uZen,uBelt,uHor,uSolar,uGlow,uSunDir,uSunCol,uCloudLit,uCloudDark;
-    uniform float uGlowI,uSunDisc,uCloudCov,uTime;
+    #define SKY_N ${SKY_N}
+    uniform vec3 uZen,uBelt,uHorA,uHorS,uLP,uGlow,uSunDir,uSunCol,uCloudLit,uCloudDark,uCirrus;
+    uniform float uGlowI,uBeltI,uSunDisc,uCloudCov,uTime,uStarLim,uPx;
+    uniform vec4 uStar[SKY_N]; uniform vec3 uStarC[SKY_N];
     varying vec3 vDir;
     float hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -679,31 +751,54 @@ const skyMat=new THREE.ShaderMaterial({
     float fbm2(vec2 p){float s=0.0,a=0.5;for(int i=0;i<2;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s+0.18;}
     void main(){
       vec3 d=normalize(vDir);
-      float y=d.y, mu=dot(d,uSunDir);
-      float side=pow(clamp(mu*0.5+0.5,0.0,1.0),3.0);        // 0 anti-solar .. 1 toward the sun
-      float yb=max(y,0.0);
-      // horizon: blue-grey earth shadow opposite the sun, bright gold toward it
-      vec3 hor=mix(uHor,uSolar,side);
-      vec3 c=mix(hor,uBelt,smoothstep(0.0,0.17,yb));       // Belt of Venus
-      c=mix(c,uZen,smoothstep(0.10,0.80,yb));              // up into the zenith
-      // forward (Mie) scattering around the sun
-      float m=max(mu,0.0);
-      c+=uGlow*uGlowI*(pow(m,6.0)*0.30+pow(m,48.0)*0.55);
+      float y=d.y, mu=dot(d,uSunDir), yb=max(y,0.0);
+      float azc=dot(normalize(d.xz+vec2(1e-5)),normalize(uSunDir.xz+vec2(1e-5)));   // horizontal alignment with the sun
+      float side=pow(clamp(azc*0.5+0.5,0.0,1.0),2.5);       // 0 anti-solar .. 1 under the sun
+      vec3 hor=mix(uHorA,uHorS,side);
+      float gz=1.0-exp(-yb*3.2);
+      vec3 c=mix(hor,uZen,gz);                                // bright band low, deepening to the zenith
+      c=mix(c,vec3(dot(c,vec3(0.3,0.59,0.11)))*vec3(0.96,1.0,1.04),gz*(1.0-gz)*1.0);   // real twilight passes through a pale band, never magenta
+      // Earth's shadow and the Belt of Venus: they rise in the east as the sun sinks in the west
+      float anti=pow(clamp(-azc*0.5+0.5,0.0,1.0),1.5), sh=max(-uSunDir.y,0.0)+0.012;
+      float inShadow=1.0-smoothstep(sh*0.8,sh*1.2+0.01,yb);
+      float belt=smoothstep(sh*0.9,sh*1.25+0.02,yb)*(1.0-smoothstep(sh+0.05,sh+0.24,yb));
+      c=mix(c,uHorA*0.92,inShadow*anti*0.45*uBeltI);
+      c=mix(c,uBelt,belt*anti*uBeltI);
+      // the twilight arch over the sun's azimuth (thins as it sinks) + forward scatter around the sun
+      float m=max(mu,0.0), arch=exp(-yb/(0.04+0.08*uGlowI))*pow(max(azc,0.0),3.0);
+      c+=uGlow*uGlowI*(arch*0.30+pow(m,8.0)*0.07+pow(m,64.0)*0.22);
+      // the city's sodium light dome, all the way round, brightest at the horizon
+      c+=uLP*(exp(-yb*4.0)*0.9+0.12);
       // the sun itself, slightly flattened near the horizon
       // 1.0 deg core with a soft rim to 1.3 deg: the real 0.53 deg, gently exaggerated (it was 2.0-3.4 deg)
       c+=uSunCol*uSunDisc*3.0*smoothstep(0.999936,0.999962,mu);
-      // below the horizon: the haze itself
-      c=mix(c,hor*0.94,smoothstep(0.0,-0.06,y));
-      // cloud deck, projected onto a plane overhead; fades into the horizon haze
+      // stars and planets: crisp ~1px points, only those brighter than the glow allows
+      if(y>0.0&&uStarLim>-5.0){
+        float ext=smoothstep(0.03,0.22,y);                   // the haze near the horizon swallows them
+        for(int i=0;i<SKY_N;i++){
+          vec4 s=uStar[i]; if(s.y<0.0)continue;
+          float vis=clamp((uStarLim-s.w)/1.2,0.0,1.0)*ext; if(vis<=0.0)continue;
+          vec3 dv=d-s.xyz; float r2=dot(dv,dv), sg=uPx*(0.75+0.22*max(-s.w,0.0));
+          float tw=1.0+0.35*(1.0-y)*sin(uTime*(11.0+float(i)*1.73)+float(i)*4.1);   // scintillation, worse low down
+          c+=uStarC[i]*clamp(0.55-0.16*s.w,0.12,1.6)*vis*tw*exp(-r2/(sg*sg));
+        }
+      }
       if(y>0.0){
+        // cirrus: long thin streaks high up, sun-lit pink after sunset, dim city-lit later
+        vec2 cu=d.xz/(y+0.04)*0.16; cu=vec2(cu.x*0.8+cu.y*0.6,-cu.x*0.6+cu.y*0.8)+vec2(uTime*0.0012,0.0);
+        float ci=smoothstep(0.52,0.80,fbm(vec2(cu.x*0.55,cu.y*5.0)))*smoothstep(0.02,0.25,y);
+        c=mix(c,uCirrus*(0.75+0.5*side*uGlowI)+uLP*0.3,ci*0.35);
+        // cloud deck, projected onto a plane overhead; fades into the horizon haze
         vec2 uv=d.xz/(y+0.10)*0.55+vec2(uTime*0.0035,uTime*0.0012);
         float n=fbm(uv*1.3);
         float cov=smoothstep(0.62-uCloudCov*0.36,0.86,n);
         float lit=fbm2(uv*1.3+uSunDir.xz*0.09);           // offset tap ~ cheap self-shadowing
-        float l=clamp((n-lit)*3.2+0.5+side*0.35,0.0,1.0);
-        vec3 cc=mix(uCloudDark,uCloudLit,l);
+        float l=clamp((n-lit)*3.2+0.5+side*0.35*uGlowI,0.0,1.0);
+        vec3 cc=mix(uCloudDark,uCloudLit,l)+uLP*(0.55+0.5*exp(-yb*3.0));   // the city lights the cloud base from below
         c=mix(c,cc,cov*smoothstep(0.0,0.20,y)*0.92);
       }
+      // below the horizon: the haze itself
+      c=mix(c,hor*0.94+uLP,smoothstep(0.0,0.06,-y));
       gl_FragColor=vec4(c,1.0);
     }`
 });
@@ -720,6 +815,8 @@ scene.add(sky);
 // is the overcast lit from below, not moonlight.
 const MOON_UP=new URLSearchParams(location.search).get('moon')==='1';
 const MOON_K=0.14;   // illuminated fraction
+// moon: placed from the ephemeris every frame (skyFollow). On 24 Nov 1989 it is a 14% waning
+// crescent that set at ~14:30, so it stays under the horizon all evening — as it really did.
 const moonTex=tex((g,w,h)=>{
   const cx=w/2,cy=h/2,r=w*0.45;
   g.fillStyle='rgba(120,128,150,.10)';g.beginPath();g.arc(cx,cy,r,0,7);g.fill();          // earthshine on the dark limb
@@ -757,12 +854,15 @@ moonSprite.scale.set(27.8,27.8,1);moonSprite.position.set(-600,500,-1200);scene.
    if(Math.random()<.3){gl2.fillStyle='rgba(255,40,40,.95)';gl2.fillRect(x+bw/2,H2-bh-5,2,2);}  // aviation light
    x+=bw+Math.random()*12;
  }
- const geo=new THREE.CylinderGeometry(1400,1400,430,48,1,true);
- const silMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sil),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false});
+ // 286 m tall from 20 m below ground: the tallest far towers top out ~230 m (Sunshine 60 is 240 m)
+ const geo=new THREE.CylinderGeometry(1400,1400,286,48,1,true);
+ // the silhouettes take the same height fog as the city, so they sit IN the haze (they used to be
+ // flat pale cards that floated above it when seen from altitude)
+ const silMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sil),transparent:true,side:THREE.BackSide,fog:true,depthWrite:false});
  const litMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(lit),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false,blending:THREE.AdditiveBlending});
  const ring=new THREE.Group();
  const r1=new THREE.Mesh(geo,silMat),r2=new THREE.Mesh(geo,litMat);
- ring.add(r1,r2);ring.position.y=180;scene.add(ring);
+ ring.add(r1,r2);ring.position.y=123;scene.add(ring);
  ring.userData={silMat,litMat};
  window.__ring=ring;}
 
@@ -832,21 +932,22 @@ function buildEnv(s){
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;
   const g=cv.getContext('2d');
   const hex=n=>'#'+n.toString(16).padStart(6,'0');
-  const night=THREE.MathUtils.clamp((TOD.t-0.35)/0.65,0,1);
-  // sky half: zenith -> belt -> horizon
+  const night=THREE.MathUtils.clamp((-s.sunEl-2)/14,0,1);
+  // sky half: zenith -> belt -> horizon (+ the city's light dome low down)
+  _ca.setHex(s.horA).add(_cb.setHex(s.lp));
   const gr=g.createLinearGradient(0,0,0,h*0.5);
-  gr.addColorStop(0,hex(s.zen));gr.addColorStop(0.72,hex(s.belt));gr.addColorStop(1,hex(s.hor));
+  gr.addColorStop(0,hex(s.zen));gr.addColorStop(0.72,hex(s.belt));gr.addColorStop(1,'#'+_ca.getHexString());
   g.fillStyle=gr;g.fillRect(0,0,w,h*0.5);
   // ground half: the city seen from above — warm grey in daylight, near-black with sodium at night
   const gg=g.createLinearGradient(0,h*0.5,0,h);
-  _ca.setHex(s.hor).multiplyScalar(0.55);
+  _ca.setHex(s.horA).multiplyScalar(0.55);
   gg.addColorStop(0,'#'+_ca.getHexString());
   _ca.setHex(s.hemiGnd).multiplyScalar(0.6);
   gg.addColorStop(1,'#'+_ca.getHexString());
   g.fillStyle=gg;g.fillRect(0,h*0.5,w,h*0.5);
   // the sun's glow on the horizon at its azimuth (equirect: u=atan(z,x)/2pi+.5)
   if(s.glowI>0.01){
-    const su=(Math.atan2(SUN_AZ.z,SUN_AZ.x)/(Math.PI*2)+0.5)*w;
+    const su=(Math.atan2(TOD.sunDir.z,TOD.sunDir.x)/(Math.PI*2)+0.5)*w;
     const sv=h*0.5-THREE.MathUtils.clamp(s.sunEl,-4,30)/90*h*0.5;
     _ca.setHex(s.glow);
     const rg=g.createRadialGradient(su,sv,0,su,sv,w*0.22);
@@ -877,57 +978,76 @@ function buildEnv(s){
   _envRT=rt;
 }
 
-// campaign pacing: dusk at the first shop, full night for the last run home
-// EVENING, unmistakably: the sun is already on/under the horizon at the first shop, every
-// window and street lamp is on, and it sinks into blue hour by the last. Full night (t=1) was
-// tried and lost what makes the city read as real — the sky glow and the raking key light.
+// campaign pacing: the sun on the horizon at the first shop, full night for the last run home.
+// Each shop is ~23 minutes of real twilight later (todClock): 16:26 sunset, 16:49 civil
+// twilight, 17:13 blue hour, 17:36 last light, 18:00 night.
 const TOD_STAGES=[0.30,0.38,0.46,0.54,0.62];
 const TOD_START=TOD_STAGES[0];
 function todForStage(st){ return missionDone?TOD_STAGES[TOD_STAGES.length-1]:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
 // manual override: key T steps through the day, ?tod=0..1 pins it
-const TOD_PIN_STEPS=[0,0.25,0.5,1];
+const TOD_PIN_STEPS=[0,0.30,0.44,0.62,1];
 {const q=new URLSearchParams(location.search).get('tod'); if(q!==null&&!isNaN(+q))TOD.pinned=THREE.MathUtils.clamp(+q,0,1);}
 addEventListener('keydown',e=>{
   if(e.code!=='KeyT'||interiorMode)return;
   const cur=TOD.pinned===null?TOD.t:TOD.pinned;
   let i=TOD_PIN_STEPS.findIndex(v=>v>cur+0.01); if(i<0)i=0;
   TOD.pinned=TOD_PIN_STEPS[i];
-  if(typeof flashMsg==='function')flashMsg(['GOLDEN DUSK','SUNSET','BLUE HOUR','NIGHT'][i],UI.ui);
+  if(typeof flashMsg==='function')flashMsg(['AFTERNOON','SUNSET','BLUE HOUR','NIGHT','LATE NIGHT'][i],UI.ui);
 });
 
+// the sky, the moon and the skyline ring travel with whichever camera is rendering
+function skyFollow(){
+  const cp=(window.__RC&&!window.__RS?window.__RC:cam).position;
+  sky.position.copy(cp);
+  window.__ring.position.x=cp.x;window.__ring.position.z=cp.z;
+  moonSprite.position.copy(cp).addScaledVector(TOD.moonDir,1500);
+  moonHalo.position.copy(moonSprite.position);
+}
+const _starV=new THREE.Vector3();
 function updateTOD(dt,now){
   const goal=TOD.pinned!==null?TOD.pinned:TOD.target;
   TOD.t+=(goal-TOD.t)*Math.min(1,dt*0.12);              // night falls over ~10-20s, not in a cut
   if(Math.abs(goal-TOD.t)<0.0008)TOD.t=goal;
-  const s=todSample(TOD.t);TOD.cur=s;
-  // sun position from elevation; the key light hands over from sun to moon
-  const el=THREE.MathUtils.degToRad(s.sunEl);
-  TOD.sunDir.copy(SUN_AZ).multiplyScalar(Math.cos(el));TOD.sunDir.y=Math.sin(el);TOD.sunDir.normalize();
-  const mf=1-THREE.MathUtils.smoothstep(s.sunEl,-3.0,1.5);   // 0 = sun is the key, 1 = moon is
+  const s=todSample(todClockNow());TOD.cur=s;TOD.clock=s.clock;
+  // the sun where it really is at that minute (apparent elevation, refraction included)
+  const el=THREE.MathUtils.degToRad(s.sunEl),hz=Math.hypot(TOD.sunDir.x,TOD.sunDir.z)||1;
+  TOD.sunDir.set(TOD.sunDir.x/hz*Math.cos(el),Math.sin(el),TOD.sunDir.z/hz*Math.cos(el));
+  // key light: the sun while it is up; then the bright western twilight sky (soft, from the
+  // sun's azimuth ~20° up); by night the glow of the cloud base overhead. No moon tonight.
+  const sunUp=THREE.MathUtils.smoothstep(s.sunEl,-0.8,1.2), nightK=1-THREE.MathUtils.smoothstep(s.sunEl,-16,-6);
+  _va.set(TOD.sunDir.x/hz,0.36,TOD.sunDir.z/hz).normalize().lerp(_starV.set(0.22,1,0.12).normalize(),nightK).normalize();
   TOD.lightDir.copy(TOD.sunDir);if(TOD.lightDir.y<0.07)TOD.lightDir.y=0.07;TOD.lightDir.normalize();
-  TOD.lightDir.lerp(MOON_DIR,mf).normalize();
-  sun.color.setHex(s.sunCol).lerp(_ca.setHex(0x9aa8c4),mf);
-  sun.intensity=s.sunI+s.moonI;
+  TOD.lightDir.lerp(_va,1-sunUp).normalize();
+  sun.color.setHex(s.keyCol).lerp(_ca.setHex(s.sunCol),sunUp);
+  sun.intensity=s.sunI*sunUp+s.keyI;
   hemi.color.setHex(s.hemiSky);hemi.groundColor.setHex(s.hemiGnd);hemi.intensity=s.hemiI;
-  rim.color.setHex(0xff9a5c);rim.intensity=s.cityI;          // sodium/LED bounce off the low cloud
-  scene.fog.color.setHex(s.fog);scene.fog.density=s.fogD;
+  rim.color.setHex(0xff9a5c);rim.intensity=s.cityI;          // sodium bounce off the low cloud
+  // the haze is the sky's own horizon: same colours, same falloff toward the sun (fogHook)
+  scene.fog.color.setHex(s.horA).add(_ca.setHex(s.lp));scene.fog.density=s.fogD;
   renderer.toneMappingExposure=s.exp;
-  FOG_U.fogSunDir.value.copy(TOD.sunDir);
-  FOG_U.fogSunCol.value.setHex(s.glow).multiplyScalar(s.glowI*0.5);
+  FOG_U.fogSunDir.value.set(TOD.sunDir.x/hz,0,TOD.sunDir.z/hz);
+  FOG_U.fogSunCol.value.setHex(s.horS).sub(_ca.setHex(s.horA)).multiplyScalar(0.7);
+  FOG_U.fogGlowCol.value.setHex(s.glow).multiplyScalar(s.glowI*0.30);
   const u=skyMat.uniforms;
-  u.uZen.value.setHex(s.zen);u.uBelt.value.setHex(s.belt);u.uHor.value.setHex(s.hor);
-  u.uSolar.value.setHex(s.solar);u.uGlow.value.setHex(s.glow);u.uGlowI.value=s.glowI;
+  u.uZen.value.setHex(s.zen);u.uBelt.value.setHex(s.belt);u.uBeltI.value=s.beltI;
+  u.uHorA.value.setHex(s.horA);u.uHorS.value.setHex(s.horS);u.uLP.value.setHex(s.lp);
+  u.uGlow.value.setHex(s.glow);u.uGlowI.value=s.glowI;
   u.uSunDir.value.copy(TOD.sunDir);u.uSunCol.value.setHex(s.sunCol);u.uSunDisc.value=s.sunDisc;
-  u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;
+  u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;u.uCirrus.value.setHex(s.cirrus);
+  u.uStarLim.value=s.starLim;u.uPx.value=THREE.MathUtils.degToRad((window.__RC||cam).fov||58)/Math.max(200,RH());
   u.uTime.value=now*0.001;
-  moonSprite.material.opacity=moonHalo.material.opacity=s.moon;
-  moonSprite.visible=moonHalo.visible=MOON_UP&&s.moon>0.01;
+  {const st=ASTRO.stars,pl=ASTRO.planets;
+   for(let i=0;i<SKY_N;i++){const o=i<pl.length?pl[i]:st[i-pl.length];skyDir(o[0],o[1],s.clock,_starV);
+     u.uStar.value[i].set(_starV.x,_starV.y,_starV.z,o[2]);u.uStarC.value[i].setHex(o[3]);}}
+  skyDir(ASTRO.moon[0],ASTRO.moon[1],s.clock,TOD.moonDir);
+  moonSprite.visible=moonHalo.visible=MOON_UP||TOD.moonDir.y>-0.02;
   const R=window.__ring.userData;
-  R.silMat.color.setHex(s.fog).multiplyScalar(0.86-0.18*s.win);R.silMat.opacity=0.32+0.6*s.win;R.litMat.opacity=s.win;
-  groundHaze.forEach(gh=>gh.material.color.setHex(s.fog));
+  R.silMat.color.setHex(s.hemiGnd).multiplyScalar(0.3);R.silMat.opacity=0.95;
+  R.litMat.opacity=s.win*Math.max(0.35,Math.exp(-Math.pow(s.fogD*1400,2)*0.6));   // far lights dimmed by the same air
+  groundHaze.forEach(gh=>gh.material.color.copy(scene.fog.color));
   if(window.__bldgMats)window.__bldgMats.forEach(b=>{if(b.mat.emissiveMap)b.mat.emissiveIntensity=s.win*(b.winGain||1);});
   if(typeof rain!=='undefined'){rain.visible=s.rain>0.02;rain.material.opacity=0.14*s.rain;}
-  const step=Math.round(TOD.t*3);                       // dusk / sunset / blue hour / night
+  const step=Math.round(s.clock/8);                     // PMREM rebuild every ~8 min of twilight
   if(step!==TOD.env){TOD.env=step;buildEnv(s);}
 }
 
@@ -1245,9 +1365,9 @@ function normalMapFromHeight(drawHeight,w,h,strength){
 // night. Window rectangles keep the exact grid the facade normal maps were
 // built for, so bevels still line up.
 // ============================================================================
-// what Tokyo actually burns at night: mostly cool office LED and warm homes
+// what Tokyo burned at night in 1989: cool-white fluorescent tubes in offices, warm incandescent homes
 const WIN_FAMS=[
-  {p:0.36,a:[236,244,255],b:[184,202,226],office:true},  // office LED, 5000K
+  {p:0.36,a:[234,246,244],b:[182,204,204],office:true},  // office fluorescent, cool white ~4200K
   {p:0.34,a:[255,224,172],b:[226,170,108]},              // residential tungsten-warm
   {p:0.12,a:[226,252,228],b:[158,204,170],office:true},  // old fluorescent, green cast
   {p:0.10,a:[255,204,138],b:[222,146,80]},               // amber / paper lamp
@@ -2301,12 +2421,13 @@ float pavH(vec2 q,vec2 fq,float typ,vec2 p,out vec3 col,out float rough){
     const pg=new THREE.CylinderGeometry(0.13,0.17,9.5,6);pg.translate(0,4.75,0);
     const hg=new THREE.BoxGeometry(0.5,0.18,1.1);hg.translate(0,9.5,-0.5);
     const pm=new THREE.InstancedMesh(pg,new THREE.MeshStandardMaterial({color:0x6c7076,roughness:0.5,metalness:0.6}),L.length);
-    const hm=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({color:0xffd9a0}),L.length);
+    const hm=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({color:0xffffff}),L.length),_lampHeadC=new THREE.Color();
     const d=new THREE.Object3D();
     L.forEach((l,i)=>{d.position.set(l.x,0,l.z);d.rotation.set(0,Math.atan2(-l.nx,-l.nz),0);d.updateMatrix();pm.setMatrixAt(i,d.matrix);hm.setMatrixAt(i,d.matrix);
       const px=l.x+l.nx*1.3,pz=l.z+l.nz*1.3;
-      (window.__artPools||(window.__artPools=[])).push({x:px,z:pz,s:7+Math.random()*3,c:l.warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
-      (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm:l.warm});});
+      (window.__artPools||(window.__artPools=[])).push({x:px,z:pz,s:7+Math.random()*3,c:l.warm?[1.0,0.6,0.26]:[0.55,0.85,0.78]});
+      (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm:l.warm});
+      hm.setColorAt(i,_lampHeadC.setHex(l.warm?0xffb860:0xd8fff0));});   // sodium gold / mercury blue-green
     pm.instanceMatrix.needsUpdate=true;hm.instanceMatrix.needsUpdate=true;scene.add(pm,hm);
   }
 }
@@ -4580,8 +4701,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   vec3 isc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
   if(abs(normal.y)<0.5)vUv=vec2(max(1.0,floor((abs(normal.x)>0.5?isc.z:isc.x)/3.6+0.5))*uv.x/6.0,isc.y/3.4*uv.y/16.0);
 #endif`);};m.customProgramCacheKey=()=>'impostor';return m;};
-  const matA=impUV(new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0}));
-  const matB=impUV(new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0}));
+  const matA=impUV(new THREE.MeshLambertMaterial({map:pA.map,color:0x8a8a8a,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0}));
+  const matB=impUV(new THREE.MeshLambertMaterial({map:pB.map,color:0x8a8a8a,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0}));
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:matA,preset:null,winGain:1.2},{mat:matB,preset:null,winGain:1.2});
   // one texture per face stretched a 18 m block's ~13 window rows over a 168 m one (1.3-13 m storeys):
   // repeat the tile per instance size instead, so every far block keeps ~3.5 m storeys and ~3.4 m bays
@@ -5215,9 +5336,9 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     cap.position.set(x,hy-1.4,HWY_Z);scene.add(cap);
   }
   const poleM=new THREE.MeshStandardMaterial({color:0x6c7076,roughness:0.5,metalness:0.6});
-  const headM=new THREE.MeshBasicMaterial({color:0xffc27a});
+  const headM=new THREE.MeshBasicMaterial({color:0xff9a30});   // low-pressure sodium: near-monochrome 589 nm orange
   const hwyGlowTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
-    gr.addColorStop(0,'rgba(255,214,150,.55)');gr.addColorStop(.4,'rgba(255,176,96,.16)');gr.addColorStop(1,'rgba(255,160,80,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
+    gr.addColorStop(0,'rgba(255,186,80,.6)');gr.addColorStop(.4,'rgba(255,140,36,.18)');gr.addColorStop(1,'rgba(255,130,30,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
   for(let x=-CITY+30,k=0;x<=CITY;x+=60,k++){
     const sd=k%2?1:-1, z=HWY_Z+sd*(hw/2-0.2);
     const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,9,8),poleM);pole.position.set(x,hy+1.8+4.5,z);scene.add(pole);
@@ -5271,7 +5392,7 @@ const signals=[];
 // ---------- STREET FURNITURE ----------
 const coolGlowTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(230,245,255,.5)');gr.addColorStop(.4,'rgba(190,225,255,.14)');gr.addColorStop(1,'rgba(190,225,255,0)');
+  gr.addColorStop(0,'rgba(226,255,242,.5)');gr.addColorStop(.4,'rgba(170,232,214,.14)');gr.addColorStop(1,'rgba(170,232,214,0)');   // mercury vapour: blue-green
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },64,64);
 const lampMat=new THREE.MeshLambertMaterial({color:0x2c2838});
@@ -5290,16 +5411,16 @@ function lampRow(axis,r){
       if(axis==='x'?(z>SEA_Z0-2||ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+SW+1.5))
                    :(ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+SW+1.5)||Math.abs(x-riverCX(z))<RIVER_HW+10))return;   // no poles in a junction
       if(arterialAt(x,z,1))return;                                                                                 // nor in an avenue
-      const warm=Math.random()<0.5; // alternate warm-sodium / cool-mercury lamps for colour variance
+      const warm=Math.random()<0.5; // 1989 mix: new high-pressure sodium (gold) beside old mercury vapour (blue-green)
       const pole=new THREE.Mesh(new THREE.CylinderGeometry(.13,.17,9.5,6),lampMat);
       pole.position.set(x,4.75,z);scene.add(pole);
-      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:warm?0xffc070:0xf4f8ff}));
+      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:warm?0xffb860:0xd8fff0}));
       head.position.set(x,9.6,z);scene.add(head);
       const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:warm?warmLampGlowTex:coolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
       spr.scale.set(4.5,4.5,1);spr.position.set(x,9.8,z);scene.add(spr);
       // the pool of light this lamp actually casts on the road below (warm sodium or cool mercury)
       const px=x+(axis==='x'?-sd*1.2:0),pz=z+(axis==='x'?0:-sd*1.2);
-      groundPoolXf.push({x:px,z:pz,s:7+Math.random()*3,c:warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
+      groundPoolXf.push({x:px,z:pz,s:7+Math.random()*3,c:warm?[1.0,0.6,0.26]:[0.55,0.85,0.78]});
       // record the lamp so a bounded set of REAL lights can snap to the nearest ones and actually
       // illuminate the textured road (the sprite above only adds glow; it can't reveal the grain).
       (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm});
@@ -5334,9 +5455,9 @@ function updateRevealLights(){
     const L=revealLights[i],c=__revealCand[i];
     if(!c){L.intensity=0;continue;}
     if(c.fire){L.position.set(c.x,2.2,c.z);L.color.setRGB(1.0,0.5,0.16);L.intensity=3.2+Math.random()*1.4;L.distance=26;}
-    else if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.95,0.86);L.intensity=2.4;L.distance=24;}
+    else if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.86,0.68);L.intensity=2.4;L.distance=24;}
     else if(c.warm){L.position.set(c.x,7.5,c.z);L.color.setRGB(1.0,0.72,0.4);L.intensity=4.2;L.distance=34;}
-    else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.66,0.8,1.0);L.intensity=3.8;L.distance=34;}
+    else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.6,0.88,0.8);L.intensity=3.8;L.distance=34;}
   }
   // raised + softened: a bright point light close to the wet road shatters into a specular glint
   // burst directly under the aircraft (the last near-field "static"). Lifting it and cutting intensity
@@ -5708,7 +5829,7 @@ carMat.onBeforeCompile=sh=>{
     .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
   if(vPart>0.5&&vPart<1.5)roughnessFactor=0.04; else if(vPart>1.5&&vPart<2.5)roughnessFactor=0.85; else if(vPart>4.5&&vPart<5.5)roughnessFactor=0.25; else if(vPart>2.5)roughnessFactor=0.4;`)
     .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-  if(vPart>2.5&&vPart<3.5)totalEmissiveRadiance+=vec3(2.2,2.1,1.7);
+  if(vPart>2.5&&vPart<3.5)totalEmissiveRadiance+=vec3(2.3,1.95,1.4);   // halogen, ~3200K
   else if(vPart>3.5&&vPart<4.5)totalEmissiveRadiance+=vec3(1.6,0.06,0.04);
   else if(vPart>5.5&&vPart<6.5)totalEmissiveRadiance+=vec3(1.3,1.1,0.6);`);
 };
@@ -7830,10 +7951,11 @@ function tape(cx,cy,h,val,step,unit,side,warnLow){
 }
 
 // --- heading tape (top centre) ---
-// local time: 22:10 at the first shop, past 02:00 by the last; also creeps with real play time
+// local time: the sky's own clock (todClock) — 16:26 at the first shop as the sun touches the
+// horizon, 18:00 and full night by the last, creeping on with play in between (todClockNow)
 let runClock0=performance.now();
 function clockText(){
-  const m=(18*60+35)+Math.max(0,(TOD.t-TOD_START)/(TOD_STAGES[4]-TOD_START))*85+(performance.now()-runClock0)/1000/4;
+  const m=TOD.clock||todClock(TOD.t);
   const mm=Math.floor(m)%(24*60);return String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');
 }
 function headingTape(cx,y,w,hdg){
@@ -10060,7 +10182,7 @@ ov.innerHTML=`
     <div class="bf-memo">MEMORANDUM FOR Pilot in Command, AH-64A, Co B, 1-101st Aviation</div>
     <div class="bf-memo">SUBJECT: Personnel Recovery, Downed Aircraft RAVEN 2-1</div>
     <div class="bf-titlerow"><div class="bf-title"><small>OPERATION 黒龍 &middot; BLACK DRAGON</small>ONE NIGHT IN TOKYO</div><div class="bf-hanko">東京<br>一夜</div></div>
-    <div class="bf-p"><b>1. SITUATION.</b> AH-64A RAVEN 2-1 went down over central Tokyo at 1750 hours. Five crewmembers are unaccounted for. 黒龍会 syndicate gunships are airborne over the city. No one is ordering you in. You are going anyway. <b class="r">Leave no one behind.</b></div>
+    <div class="bf-p"><b>1. SITUATION.</b> AH-64A RAVEN 2-1 went down over central Tokyo at 1550 hours. Five crewmembers are unaccounted for. 黒龍会 syndicate gunships are airborne over the city. No one is ordering you in. You are going anyway. <b class="r">Leave no one behind.</b></div>
     <div class="bf-p"><b>2. EXECUTION.</b>
       <div class="bf-steps">
         <div class="bf-step"><i>a.</i> Fly to the marked shop. Follow the cyan beam; five shops, one at a time.</div>
@@ -10730,11 +10852,7 @@ function loop(now){
       const thr=window.__throttle!==undefined?window.__throttle:1, fv=(cockpitMode?66:58)+thr*6;
       if(Math.abs(cam.fov-fv)>0.05){cam.fov+=(fv-cam.fov)*Math.min(1,dt*2.5);cam.updateProjectionMatrix();} }
     if(shake>0){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake;}
-    sky.position.copy(cam.position);
-    updateTOD(dt,now);
-    window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
-    moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
-    moonHalo.position.copy(moonSprite.position);
+    updateTOD(dt,now);skyFollow();
     // (live reflection probe removed: `Math.floor(now/200)%5===0` was true for a whole 200ms
     //  window every second, so ~12 consecutive frames re-rendered the entire city 6 extra times —
     //  a hitch every second. The airframe is matte now and reads the sky environment instead.)
@@ -10801,11 +10919,7 @@ function loop(now){
       const side=new THREE.Vector3().subVectors(ctr,cam.position).cross(new THREE.Vector3(0,1,0)).normalize();
       cam.lookAt(ctr.clone().addScaledVector(side,-5.5));
     }
-    sky.position.copy(cam.position);
-    updateTOD(dt,now);
-    window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
-    moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
-    moonHalo.position.copy(moonSprite.position);
+    updateTOD(dt,now);skyFollow();
     clouds.forEach(cl=>cl.lookAt(cam.position));
     groundHaze.forEach(gh=>gh.lookAt(cam.position));
     pulseSigns.forEach(s=>{
