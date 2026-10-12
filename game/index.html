@@ -1464,7 +1464,7 @@ function glassTexPair(){
       if(y>=22)Math.random=TEXR;                     // rows past the old 22 draw from the texture stream (layout RNG untouched)
       if(y%4===3){g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,y*ch+ch*0.55,w,ch*0.45);}  // slab spandrel
       const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
-      for(let x=0;x<C;x++)if(Math.random()<occ*1.4){const fam=pickWinFam();for(let k=0;k<3;k++)_winLit(gl,x*cw+2,(y0+k)*ch+1,cw-4,ch-2,fam);}
+      for(let x=0;x<C;x++)if(Math.random()<occ*1.4)_winLit(gl,x*cw+2,y*ch+2,cw-4,ch-4,pickWinFam());
     }
     Math.random=mr;
     g.strokeStyle='rgba(12,14,16,.75)';

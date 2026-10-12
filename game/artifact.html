@@ -4761,28 +4761,37 @@ renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.2;
 const scene=new THREE.Scene();
-// Aerial perspective. Colour and density are driven by the time of day (updateTOD); the fog
-// chunks are extended so haze looking TOWARD the sun picks up its glow and haze looking away
-// stays cool — the single biggest cue that makes distance read as real air.
+// Aerial perspective. Colour and density are driven by the time of day (updateTOD) and are the
+// sky's own horizon colours, so distant blocks dissolve into the sky without a seam: warm toward
+// the set sun's azimuth, blue-grey under the Earth's shadow opposite. The haze is HEIGHT-dependent
+// (an exponential layer, scale height 170 m): the city's boundary layer of damp, smoky air is
+// densest in the streets, so looking down from altitude or up at tower tops cuts through less
+// of it than looking along the ground — the main depth cue that gives the city its scale.
 scene.fog=new THREE.FogExp2(0xa6adbd,0.00092);
-const FOG_U={fogSunDir:{value:new THREE.Vector3(0,0.1,1)},fogSunCol:{value:new THREE.Color(0,0,0)}};
+const FOG_U={fogSunDir:{value:new THREE.Vector3(0,0,1)},fogSunCol:{value:new THREE.Color(0,0,0)},fogGlowCol:{value:new THREE.Color(0,0,0)}};
 // shared uniform objects injected into every material at compile (three clones ShaderLib
 // uniforms per material, so this is the only way one value reaches all of them live)
-function fogHook(sh){sh.uniforms.fogSunDir=FOG_U.fogSunDir;sh.uniforms.fogSunCol=FOG_U.fogSunCol;}
+function fogHook(sh){sh.uniforms.fogSunDir=FOG_U.fogSunDir;sh.uniforms.fogSunCol=FOG_U.fogSunCol;sh.uniforms.fogGlowCol=FOG_U.fogGlowCol;}
 THREE.Material.prototype.onBeforeCompile=fogHook;
 THREE.ShaderChunk.fog_pars_vertex='#ifdef USE_FOG\n varying float fogDepth; varying vec3 vFogView;\n#endif';
 THREE.ShaderChunk.fog_vertex='#ifdef USE_FOG\n fogDepth = - mvPosition.z; vFogView = mvPosition.xyz;\n#endif';
 THREE.ShaderChunk.fog_pars_fragment=[
  '#ifdef USE_FOG',' uniform vec3 fogColor; varying float fogDepth; varying vec3 vFogView;',
- ' uniform vec3 fogSunDir; uniform vec3 fogSunCol;',
+ ' uniform vec3 fogSunDir; uniform vec3 fogSunCol; uniform vec3 fogGlowCol;',
  ' #ifdef FOG_EXP2',' uniform float fogDensity;',' #else',' uniform float fogNear; uniform float fogFar;',' #endif','#endif'].join('\n');
 THREE.ShaderChunk.fog_fragment=[
  '#ifdef USE_FOG',
- ' #ifdef FOG_EXP2',' float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth );',
+ ' vec3 fogWDir = ( vec4( vFogView, 0.0 ) * viewMatrix ).xyz;',   // view -> world (rotation transpose), unnormalised
+ ' float fogLen = length( fogWDir ); fogWDir /= max( fogLen, 1e-4 );',
+ ' #ifdef FOG_EXP2',
+ // optical depth through an exponential layer: mean density along the ray relative to ground level
+ '  float fgK = 1.0 / 170.0, fgY = max( cameraPosition.y, 0.0 ) * fgK, fgD = fogWDir.y * fogLen * fgK;',
+ '  float fgH = exp( - fgY ) * ( abs( fgD ) > 1e-3 ? ( 1.0 - exp( - fgD ) ) / fgD : 1.0 );',
+ '  float fogFactor = 1.0 - exp( - fogDensity * fogDensity * fogDepth * fogDepth * clamp( fgH, 0.28, 1.6 ) );',
  ' #else',' float fogFactor = smoothstep( fogNear, fogFar, fogDepth );',' #endif',
- ' vec3 fogWDir = normalize( ( vec4( vFogView, 0.0 ) * viewMatrix ).xyz );',   // view -> world (rotation transpose)
- ' float fogSun = pow( max( dot( fogWDir, fogSunDir ), 0.0 ), 6.0 );',
- ' gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor + fogSunCol * fogSun, fogFactor );',
+ ' float fogAz = dot( normalize( fogWDir.xz + vec2( 1e-5 ) ), fogSunDir.xz );',
+ ' vec3 fogCol = fogColor + fogSunCol * pow( clamp( fogAz * 0.5 + 0.5, 0.0, 1.0 ), 2.5 ) + fogGlowCol * pow( max( fogAz, 0.0 ), 3.0 );',
+ ' gl_FragColor.rgb = mix( gl_FragColor.rgb, fogCol, fogFactor );',
  '#endif'].join('\n');
 // near raised from 0.1 and far cut from 4000 (biggest fixed scene radius is the sky sphere at 2000)
 // to compress the depth range and kill high-altitude z-fighting/shimmer; 0.5 still clears the closest
@@ -4861,9 +4870,12 @@ const blurMat=new THREE.ShaderMaterial({
     }`
 });
 const compositeMat=new THREE.ShaderMaterial({
-  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4},uTexel:{value:new THREE.Vector2(1/1280,1/720)}},
+  uniforms:{tScene:{value:null},tBloom:{value:null},tBloomWide:{value:null},bloomStrength:{value:0.6},bloomWideStrength:{value:0.4},uTexel:{value:new THREE.Vector2(1/1280,1/720)},
+    uGrain:{value:0.010},uSeed:{value:0}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position,1.0);}`,
-  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;uniform vec2 uTexel;varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tScene;uniform sampler2D tBloom;uniform sampler2D tBloomWide;uniform float bloomStrength;uniform float bloomWideStrength;uniform vec2 uTexel;
+    uniform float uGrain,uSeed;varying vec2 vUv;
+    float gh(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
     void main(){
       vec2 cc=vUv-0.5;
       float r2=dot(cc,cc);
@@ -4877,21 +4889,28 @@ const compositeMat=new THREE.ShaderMaterial({
       vec3 nb=texture2D(tScene,vUv+vec2(uTexel.x,0.0)).rgb+texture2D(tScene,vUv-vec2(uTexel.x,0.0)).rgb
              +texture2D(tScene,vUv+vec2(0.0,uTexel.y)).rgb+texture2D(tScene,vUv-vec2(0.0,uTexel.y)).rgb;
       s+=(s-nb*0.25)*0.55;
-      vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+texture2D(tBloomWide,vUv).rgb*bloomWideStrength;
-      vec3 c=s+bloom;
+      vec3 bw=texture2D(tBloomWide,vUv).rgb;
+      vec3 bloom=texture2D(tBloom,vUv).rgb*bloomStrength+bw*bloomWideStrength;
+      // HALATION, the 1989 colour-negative signature: light that goes through the emulsion bounces
+      // off the film base and comes back through the red-sensitive layer, so every hard light —
+      // sodium lamps, neon, headlights — wears a thin warm red-orange fringe beyond its bloom
+      vec3 c=s+bloom+vec3(1.0,0.30,0.10)*dot(bw,vec3(0.3,0.5,0.2))*0.24;
       float l=dot(c,vec3(0.299,0.587,0.114));
-      // near-neutral camera grade: a whisper of cool in the shadows and warm in the
-      // highlights, mild contrast, saturation left alone — realism lives in the light,
-      // not in a tint laid over it
-      vec3 shadowTint=vec3(-0.004,0.002,0.010);
-      vec3 highTint=vec3(0.012,0.004,-0.008);
-      c+=shadowTint*(1.0-smoothstep(0.0,0.45,l));
-      c+=highTint*smoothstep(0.5,1.0,l);
-      c=mix(c,c*c*(3.0-2.0*c),0.22);          // filmic S-curve: deeper blacks, punchier mids
-      c=mix(vec3(l),c,1.08);
+      // print grade in the Fuji/Kodak manner of the period: cool cyan-blue shadows, warm
+      // highlights, a gentle S — and blacks that sit on the print's base, never crushed
+      c+=vec3(-0.006,0.003,0.014)*(1.0-smoothstep(0.0,0.42,l));
+      c+=vec3(0.020,0.007,-0.012)*smoothstep(0.45,1.0,l);
+      vec3 k=clamp(c,0.0,1.0);
+      c=mix(c,k*k*(3.0-2.0*k),0.14);
+      c=mix(vec3(l),c,1.06);
+      c=c*0.976+vec3(0.013,0.015,0.021);
       // gentle vignette
       float vig=1.0-smoothstep(0.28,0.92,sqrt(r2));
-      c*=mix(0.82,1.0,vig);
+      c*=mix(0.84,1.0,vig);
+      // grain: per-pixel, per-frame luminance noise with a triangular spread, strongest in the
+      // mid-tones like real dye clouds — fine enough that the frame stays crisp
+      float gn=gh(gl_FragCoord.xy+uSeed*vec2(37.1,17.3))+gh(gl_FragCoord.xy*1.37+uSeed*vec2(11.7,53.9))-1.0;
+      c+=gn*uGrain*(0.3+2.4*l*(1.0-min(l,1.0)));
       gl_FragColor=vec4(clamp(c,0.0,1.0),1.0);
     }`
 });
@@ -4903,7 +4922,7 @@ function renderPost(){
   const _s=window.__RS||scene, _c=window.__RC||cam;
   const _inside=!!window.__RS;
   renderer.toneMappingExposure=_inside?1.2:(TOD.cur.exp||1.2);
-  if(_inside)FOG_U.fogSunCol.value.setRGB(0,0,0);   // rooms have their own fog; no sky glow in it
+  if(_inside){FOG_U.fogSunCol.value.setRGB(0,0,0);FOG_U.fogGlowCol.value.setRGB(0,0,0);}   // rooms have their own fog; no sky glow in it
   renderer.setRenderTarget(sceneRT);renderer.render(_s,_c);
   postQuad.material=brightMat;brightMat.uniforms.tDiffuse.value=sceneRT.texture;
   renderer.setRenderTarget(brightRT);renderer.render(postScene,postCam);
@@ -4933,87 +4952,140 @@ function renderPost(){
   postQuad.material=compositeMat;
   compositeMat.uniforms.tScene.value=sceneRT.texture;compositeMat.uniforms.uTexel.value.set(1/sceneRT.width,1/sceneRT.height);
   compositeMat.uniforms.tBloom.value=blurRT2.texture;
-  compositeMat.uniforms.tBloomWide.value=wideRT1.texture;
+  compositeMat.uniforms.tBloomWide.value=wideRT1.texture;compositeMat.uniforms.uSeed.value=(performance.now()*0.0137)%97.0;
   renderer.setRenderTarget(null);renderer.render(postScene,postCam);
 }
 
 // ============================================================================
 // TIME OF DAY + PHYSICAL SKY
-// One rig drives the sky, the sun/moon key light, ambient, aerial-perspective
-// haze, exposure, building window light, rain, the moon and the reflection
-// environment. TOD.t: 0 = golden dusk (sun a few degrees up), ~0.45 = blue
-// hour, 1 = full night. The campaign walks it from dusk to night across the
-// five shops (todForStage); key T steps through it by hand.
+// One rig drives the sky, the key light, ambient, aerial-perspective haze,
+// exposure, building window light, rain, the stars and the reflection
+// environment. TOD.t maps to the clock (todClock) and the clock to the REAL
+// sky over Tokyo on 24 November 1989: sunset 16:30 JST in the WSW (az 245°),
+// civil twilight over at 16:57, nautical 17:28, astronomical 17:59. The five
+// shops walk it from the sun on the horizon (16:26) to night (18:00);
+// key T steps through it by hand.
 //
 // What makes a city read as real at this scale is not facade detail, it is
-// light and air: a sky with a real sun in it, haze that eats distance toward
-// the horizon colour, and neutral materials lit warm on one side and cool in
-// shadow. The palette below is built around that, not around a "look".
+// light and air: a sky that behaves like twilight does (the glow sinking into
+// the WSW, the Earth's shadow rising in the east under a pink Belt of Venus,
+// then the sodium dome of the city taking over), haze that is thickest down
+// in the streets, and neutral materials lit by that sky.
 // ============================================================================
+// Ephemeris for the night (apparent RA h / Dec °, 16:30 JST; LST 21.033 h). The waning
+// crescent moon (14%) set at ~14:30 and is under the horizon all evening; Venus (-4.7) is
+// the brilliant evening star in the SSW with Saturn 8° to its right; Jupiter rises ENE ~19:00.
+const ASTRO={lat:35.68,lst0:21.0333,m0:16*60+30,
+  sun:[15.995,-20.57],moon:[12.913,-11.13],
+  planets:[[19.335,-25.51,-4.7,0xfff6e8],[18.824,-22.61,0.4,0xffe6b0],[6.705,22.89,-2.6,0xfff2dc]],
+  // the stars a Tokyo sky could still show: [RA h, Dec °, mag, colour]
+  stars:[[18.615,38.78,0.03,0xcfe0ff],[19.846,8.87,0.77,0xf0f2ff],[20.690,45.28,1.25,0xe8f0ff],[5.278,46.00,0.08,0xfff0cc],
+    [14.261,19.18,-0.05,0xffcf96],[22.961,-29.62,1.16,0xe8f0ff],[4.599,16.51,0.85,0xffbe8a],[2.530,89.26,1.98,0xfff4dc],
+    [0.140,29.09,2.06,0xe4ecff],[2.120,23.46,2.00,0xffd8a8],[1.162,35.62,2.05,0xffcc9a],[2.065,42.33,2.10,0xffd8b0],
+    [3.405,49.86,1.79,0xfff2dc],[3.136,40.96,2.10,0xdfe8ff],[21.736,9.88,2.40,0xffd8a8],[0.727,-17.99,2.02,0xfff0d8],
+    [5.919,7.41,0.50,0xffb070],[5.242,-8.20,0.13,0xd6e2ff],[6.752,-16.72,-1.46,0xe6eeff],[7.655,5.22,0.34,0xfff6e8],
+    [7.755,28.03,1.14,0xffdcb0],[7.577,31.89,1.58,0xeef2ff],[5.438,28.61,1.65,0xe0eaff],[5.419,6.35,1.64,0xdce6ff],
+    [5.603,-1.20,1.69,0xdce6ff],[0.675,56.54,2.24,0xffe0b8],[0.153,59.15,2.27,0xfff6e8],[20.370,40.26,2.23,0xfff4e4],
+    [17.582,12.56,2.08,0xf4f6ff],[3.791,24.11,2.87,0xd8e4ff]]};
+const SKY_N=ASTRO.stars.length+ASTRO.planets.length;
+// world frame: north = -z, east = +x
+function skyDir(ra,dec,min,out){
+  const D=Math.PI/180,lst=ASTRO.lst0+(min-ASTRO.m0)/60*1.0027379,H=(lst-ra)*15*D,ph=ASTRO.lat*D,de=dec*D;
+  const h=Math.asin(Math.sin(ph)*Math.sin(de)+Math.cos(ph)*Math.cos(de)*Math.cos(H));
+  const az=Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(ph)-Math.tan(de)*Math.cos(ph))+Math.PI;
+  return out.set(Math.sin(az)*Math.cos(h),Math.sin(h),-Math.cos(az)*Math.cos(h));
+}
+// TOD.t -> minutes after midnight JST: the first shop at 16:26 (sun on the horizon), the last at 18:00
+function todClock(t){ return 16*60+26+(t-TOD_START)/(TOD_STAGES[TOD_STAGES.length-1]-TOD_START)*94; }
+// keyed on SUN ELEVATION (°), not on t, so every colour belongs to a real moment of twilight.
+// Colours are display values (the sky is not tone mapped and the fog is mixed after it).
 const TOD_KEYS=[
-  // golden dusk — Belt of Venus over a blue-grey earth-shadow band, low warm sun
-  {t:0.00, sunEl:10.0,  sunCol:0xffb782, sunI:2.25, moonI:0.00,
-   hemiSky:0xa9b3cc, hemiGnd:0x7a6654, hemiI:0.85, cityI:0.00,
-   zen:0x55638a, belt:0xd3a394, hor:0xa3adbf, solar:0xffcf96, glow:0xffb070, glowI:1.00,
-   cloudLit:0xffd8bc, cloudDark:0x8f8796, cloudCov:0.42,
-   fog:0xa6adbd, fogD:0.00092, exp:0.92, win:0.06, rain:0.00, moon:0.00, sunDisc:1.0},
-  // late dusk — sun on the horizon, sky going rose and violet, first lights
-  {t:0.25, sunEl:2.5,  sunCol:0xff9a62, sunI:1.25, moonI:0.00,
-   hemiSky:0x7d86a8, hemiGnd:0x5a4a40, hemiI:0.78, cityI:0.05,
-   zen:0x37466e, belt:0xb98384, hor:0x7f87a0, solar:0xffa86a, glow:0xff8a50, glowI:0.85,
-   cloudLit:0xf2a68c, cloudDark:0x5f5a6e, cloudCov:0.46,
-   fog:0x838aa0, fogD:0.00105, exp:1.00, win:0.34, rain:0.00, moon:0.15, sunDisc:0.7},
-  // blue hour — sun gone, deep blue overhead, city lit, residual glow in the west
-  {t:0.50, sunEl:-5.0, sunCol:0xff8a5a, sunI:0.00, moonI:0.10,
-   hemiSky:0x4a5878, hemiGnd:0x3f352e, hemiI:0.72, cityI:0.14,
-   zen:0x15203e, belt:0x404a6a, hor:0x55607a, solar:0xb8735a, glow:0xa05a40, glowI:0.45,
-   cloudLit:0x6d6478, cloudDark:0x2a2c3c, cloudCov:0.55,
-   fog:0x4c5468, fogD:0.00128, exp:1.08, win:0.52, rain:0.00, moon:0.55, sunDisc:0.0},
-  // night — low overcast lit from below by sodium and LED, light rain
-  {t:1.00, sunEl:-25,  sunCol:0xff8a5a, sunI:0.00, moonI:0.12,
-   hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
-   zen:0x07080c, belt:0x121318, hor:0x3a2f29, solar:0x3a2f29, glow:0x000000, glowI:0.00,
-   cloudLit:0x4a3a30, cloudDark:0x101116, cloudCov:0.85,
-   fog:0x221f1f, fogD:0.00160, exp:1.18, win:0.46, rain:1.00, moon:0.00, sunDisc:0.0},
+  // mid-afternoon (debug only, t=0): low winter sun through the city haze
+  {el:15,  sunCol:0xffc890, sunI:2.0, keyCol:0xb0b8d0, keyI:0.00, hemiSky:0xa9b3cc, hemiGnd:0x7a6654, hemiI:0.85, cityI:0.00,
+   zen:0x5a78b4, belt:0xa8b0c8, beltI:0.0, horA:0xb2b9c8, horS:0xe0d4c0, glow:0xffd8a0, glowI:0.45, lp:0x000000,
+   cloudLit:0xfff0e0, cloudDark:0x98a0ae, cloudCov:0.40, cirrus:0xfff4ea, fogD:0.00085, exp:0.92, win:0.04, rain:0.00, starLim:-6, sunDisc:1.0},
+  // 16:26 — the sun sits on the horizon, deep orange through 30 km of Kanto haze
+  {el:0.5, sunCol:0xff6a2a, sunI:0.40, keyCol:0xc8a8b0, keyI:0.10, hemiSky:0x96a0bf, hemiGnd:0x6e5a4c, hemiI:0.80, cityI:0.03,
+   zen:0x4a68a6, belt:0xc6a2ac, beltI:0.45, horA:0x989aae, horS:0xe8a468, glow:0xff7a3a, glowI:1.00, lp:0x060402,
+   cloudLit:0xffbe96, cloudDark:0x7a7a90, cloudCov:0.30, cirrus:0xffd0a8, fogD:0.00090, exp:0.98, win:0.30, rain:0.00, starLim:-4.2, sunDisc:1.0},
+  // 16:49 — civil twilight: the glow is a low orange band, the Earth's shadow and the pink Belt of Venus stand in the east
+  {el:-4,  sunCol:0xff6a2a, sunI:0.00, keyCol:0x9ea2cc, keyI:0.34, hemiSky:0x6c7898, hemiGnd:0x54463c, hemiI:0.76, cityI:0.08,
+   zen:0x2f4a8a, belt:0xa47e96, beltI:0.75, horA:0x5c6286, horS:0xf0965a, glow:0xe8783e, glowI:0.80, lp:0x120c06,
+   cloudLit:0xd88a76, cloudDark:0x4a4c66, cloudCov:0.30, cirrus:0xff9a7a, fogD:0.00100, exp:1.04, win:0.42, rain:0.00, starLim:-1.0, sunDisc:0.0},
+  // 17:13 — blue hour: deep blue overhead, a red ember in the WSW, the city glow starting under the cloud
+  {el:-8,  sunCol:0xff6a2a, sunI:0.00, keyCol:0x7c88ba, keyI:0.22, hemiSky:0x4a5878, hemiGnd:0x45372c, hemiI:0.72, cityI:0.16,
+   zen:0x172a64, belt:0x4e5078, beltI:0.30, horA:0x384266, horS:0xb07448, glow:0xb05a30, glowI:0.50, lp:0x140c06,
+   cloudLit:0x4a4c66, cloudDark:0x1c2238, cloudCov:0.28, cirrus:0x6a6080, fogD:0.00112, exp:1.10, win:0.50, rain:0.00, starLim:0.9, sunDisc:0.0},
+  // 17:36 — end of nautical twilight: the west is a faint brown, the sodium dome now owns the horizon
+  {el:-12, sunCol:0xff6a2a, sunI:0.00, keyCol:0x8a8496, keyI:0.16, hemiSky:0x3c4458, hemiGnd:0x4c3a2c, hemiI:0.80, cityI:0.26,
+   zen:0x0f1936, belt:0x242a44, beltI:0.0, horA:0x262a3a, horS:0x48362e, glow:0x5a3420, glowI:0.22, lp:0x22160e,
+   cloudLit:0x463a38, cloudDark:0x161824, cloudCov:0.38, cirrus:0x4a3c40, fogD:0.00125, exp:1.14, win:0.52, rain:0.00, starLim:1.8, sunDisc:0.0},
+  // 18:00 — night: no twilight left; what lights the sky is Tokyo itself, sodium-orange on the cloud base
+  {el:-18, sunCol:0xff6a2a, sunI:0.00, keyCol:0xa08670, keyI:0.14, hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.92, cityI:0.32,
+   zen:0x0c1120, belt:0x161a26, beltI:0.0, horA:0x1e1c22, horS:0x201c20, glow:0x000000, glowI:0.00, lp:0x2c1e14,
+   cloudLit:0x40322c, cloudDark:0x111320, cloudCov:0.56, cirrus:0x3a2e2a, fogD:0.00135, exp:1.18, win:0.50, rain:0.00, starLim:2.6, sunDisc:0.0},
+  // late night (debug, t=1): the cloud lowers and it starts to rain
+  {el:-40, sunCol:0xff6a2a, sunI:0.00, keyCol:0xa08670, keyI:0.12, hemiSky:0x353b48, hemiGnd:0x55402e, hemiI:0.95, cityI:0.34,
+   zen:0x0a0c14, belt:0x14151e, beltI:0.0, horA:0x1c1a1e, horS:0x1c1a1e, glow:0x000000, glowI:0.00, lp:0x32201a,
+   cloudLit:0x42322a, cloudDark:0x101118, cloudCov:0.85, cirrus:0x32262a, fogD:0.00150, exp:1.18, win:0.48, rain:1.00, starLim:2.4, sunDisc:0.0},
 ];
-const TOD_COLORS=new Set(['sunCol','hemiSky','hemiGnd','zen','belt','hor','solar','glow','cloudLit','cloudDark','fog']);
-const SUN_AZ=new THREE.Vector3(-0.45,0,0.89).normalize();   // west-south-west: behind the opening view
-const MOON_DIR=new THREE.Vector3(0.35,0.82,-0.45).normalize();
+const TOD_COLORS=new Set(['sunCol','keyCol','hemiSky','hemiGnd','zen','belt','horA','horS','glow','lp','cloudLit','cloudDark','cirrus']);
 const TOD={t:0.30,target:0.30,pinned:null,env:-1,
-  cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3()};
-const _ca=new THREE.Color(),_cb=new THREE.Color();
-function todSample(t){
-  t=THREE.MathUtils.clamp(t,0,1);
-  let i=0; while(i<TOD_KEYS.length-2&&t>TOD_KEYS[i+1].t)i++;
-  const A=TOD_KEYS[i],B=TOD_KEYS[i+1],f=THREE.MathUtils.smoothstep(t,A.t,B.t);
-  const o={};
+  cur:{}, sunDir:new THREE.Vector3(), lightDir:new THREE.Vector3(), moonDir:new THREE.Vector3(), clock:0};
+const _ca=new THREE.Color(),_cb=new THREE.Color(),_va=new THREE.Vector3();
+// the live clock: the shop's time, creeping on with play in between (a minute per 6 s, held short
+// of the next shop's time) and never running backwards — so the light keeps falling as you fly
+function todClockNow(){
+  const base=Math.max(0,todClock(TOD.t));
+  if(TOD.pinned!==null||typeof runClock0==='undefined'){TOD.cLast=0;return base;}
+  if(TOD.r0!==runClock0){TOD.r0=runClock0;TOD.cLast=0;TOD.tg=TOD.target;}            // a new run
+  if(TOD.tg!==TOD.target){TOD.tg=TOD.target;TOD.r0=runClock0=performance.now();}    // next shop: creep starts over
+  return TOD.cLast=Math.max(TOD.cLast||0,base+Math.min(21,(performance.now()-runClock0)/6000));
+}
+function todSample(min){
+  skyDir(ASTRO.sun[0],ASTRO.sun[1],min,TOD.sunDir);
+  // refraction lifts the disc ~0.5° at the horizon (it is why the sun is still "up" at 16:26)
+  const el=Math.asin(TOD.sunDir.y)*180/Math.PI, elA=el+0.55*THREE.MathUtils.clamp(1-el/4,0,1)*(el>-2?1:0);
+  let i=0; while(i<TOD_KEYS.length-2&&elA<TOD_KEYS[i+1].el)i++;
+  const A=TOD_KEYS[i],B=TOD_KEYS[i+1],f=THREE.MathUtils.smoothstep(elA,B.el,A.el);   // 1 at A, 0 at B
+  const o={sunEl:elA,clock:min};
   for(const k in A){
-    if(k==='t')continue;
+    if(k==='el')continue;
     const a=A[k],b=B[k];
-    if(TOD_COLORS.has(k))o[k]=_ca.setHex(a).lerp(_cb.setHex(b),f).getHex();   // colours blend in RGB
-    else o[k]=a+(b-a)*f;
+    if(TOD_COLORS.has(k))o[k]=_ca.setHex(b).lerp(_cb.setHex(a),f).getHex();   // colours blend in RGB
+    else o[k]=b+(a-b)*f;
   }
   return o;
 }
 
-// ---- the sky: analytic gradient + Mie glow + sun disc + an fbm cloud deck ----
+// ---- the sky: twilight model + city light dome + real stars + cirrus and a cloud deck ----
 // Output is raw (no tone mapping) on purpose: scene fog is mixed in AFTER tone
 // mapping in three's material shaders, so the horizon colour here and the fog
 // colour live in the same space and distant geometry melts into the sky seam-free.
+// What it models, in order: the horizon brightening toward the set sun's AZIMUTH (twilight
+// is an arch on the horizon, not a disc around the sun); the Earth's shadow rising in the
+// anti-solar sky with the pink Belt of Venus just above it, both climbing as the sun sinks;
+// the sodium dome of the city, brightest at the horizon; stars and planets from the real
+// ephemeris, only as many as the glow lets through, twinkling low down; sun-lit cirrus that
+// turns to dim city-lit streaks; and the broken cloud deck lit orange from below at night.
 const skyMat=new THREE.ShaderMaterial({
   side:THREE.BackSide, depthWrite:false, fog:false,
   uniforms:{
-    uZen:{value:new THREE.Color()}, uBelt:{value:new THREE.Color()}, uHor:{value:new THREE.Color()},
-    uSolar:{value:new THREE.Color()}, uGlow:{value:new THREE.Color()}, uGlowI:{value:1},
+    uZen:{value:new THREE.Color()}, uBelt:{value:new THREE.Color()}, uBeltI:{value:0},
+    uHorA:{value:new THREE.Color()}, uHorS:{value:new THREE.Color()}, uLP:{value:new THREE.Color()},
+    uGlow:{value:new THREE.Color()}, uGlowI:{value:1},
     uSunDir:{value:new THREE.Vector3(0,0.1,1)}, uSunCol:{value:new THREE.Color()}, uSunDisc:{value:1},
-    uCloudLit:{value:new THREE.Color()}, uCloudDark:{value:new THREE.Color()}, uCloudCov:{value:0.4},
-    uTime:{value:0}
+    uCloudLit:{value:new THREE.Color()}, uCloudDark:{value:new THREE.Color()}, uCloudCov:{value:0.4}, uCirrus:{value:new THREE.Color()},
+    uStar:{value:Array.from({length:SKY_N},()=>new THREE.Vector4(0,-1,0,9))}, uStarC:{value:Array.from({length:SKY_N},()=>new THREE.Color())},
+    uStarLim:{value:-9}, uPx:{value:0.002}, uTime:{value:0}
   },
   vertexShader:`varying vec3 vDir;
     void main(){ vDir=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
   fragmentShader:`
-    uniform vec3 uZen,uBelt,uHor,uSolar,uGlow,uSunDir,uSunCol,uCloudLit,uCloudDark;
-    uniform float uGlowI,uSunDisc,uCloudCov,uTime;
+    #define SKY_N ${SKY_N}
+    uniform vec3 uZen,uBelt,uHorA,uHorS,uLP,uGlow,uSunDir,uSunCol,uCloudLit,uCloudDark,uCirrus;
+    uniform float uGlowI,uBeltI,uSunDisc,uCloudCov,uTime,uStarLim,uPx;
+    uniform vec4 uStar[SKY_N]; uniform vec3 uStarC[SKY_N];
     varying vec3 vDir;
     float hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -5022,30 +5094,54 @@ const skyMat=new THREE.ShaderMaterial({
     float fbm2(vec2 p){float s=0.0,a=0.5;for(int i=0;i<2;i++){s+=a*vn(p);p=p*2.03+vec2(1.7,9.2);a*=0.5;}return s+0.18;}
     void main(){
       vec3 d=normalize(vDir);
-      float y=d.y, mu=dot(d,uSunDir);
-      float side=pow(clamp(mu*0.5+0.5,0.0,1.0),3.0);        // 0 anti-solar .. 1 toward the sun
-      float yb=max(y,0.0);
-      // horizon: blue-grey earth shadow opposite the sun, bright gold toward it
-      vec3 hor=mix(uHor,uSolar,side);
-      vec3 c=mix(hor,uBelt,smoothstep(0.0,0.17,yb));       // Belt of Venus
-      c=mix(c,uZen,smoothstep(0.10,0.80,yb));              // up into the zenith
-      // forward (Mie) scattering around the sun
-      float m=max(mu,0.0);
-      c+=uGlow*uGlowI*(pow(m,6.0)*0.30+pow(m,48.0)*0.55);
+      float y=d.y, mu=dot(d,uSunDir), yb=max(y,0.0);
+      float azc=dot(normalize(d.xz+vec2(1e-5)),normalize(uSunDir.xz+vec2(1e-5)));   // horizontal alignment with the sun
+      float side=pow(clamp(azc*0.5+0.5,0.0,1.0),2.5);       // 0 anti-solar .. 1 under the sun
+      vec3 hor=mix(uHorA,uHorS,side);
+      float gz=1.0-exp(-yb*3.2);
+      vec3 c=mix(hor,uZen,gz);                                // bright band low, deepening to the zenith
+      c=mix(c,vec3(dot(c,vec3(0.3,0.59,0.11)))*vec3(0.96,1.0,1.04),gz*(1.0-gz)*1.0);   // real twilight passes through a pale band, never magenta
+      // Earth's shadow and the Belt of Venus: they rise in the east as the sun sinks in the west
+      float anti=pow(clamp(-azc*0.5+0.5,0.0,1.0),1.5), sh=max(-uSunDir.y,0.0)+0.012;
+      float inShadow=1.0-smoothstep(sh*0.8,sh*1.2+0.01,yb);
+      float belt=smoothstep(sh*0.9,sh*1.25+0.02,yb)*(1.0-smoothstep(sh+0.05,sh+0.24,yb));
+      c=mix(c,uHorA*0.92,inShadow*anti*0.45*uBeltI);
+      c=mix(c,uBelt,belt*anti*uBeltI);
+      // the twilight arch over the sun's azimuth (thins as it sinks) + forward scatter around the sun
+      float m=max(mu,0.0), arch=exp(-yb/(0.04+0.08*uGlowI))*pow(max(azc,0.0),3.0);
+      c+=uGlow*uGlowI*(arch*0.30+pow(m,8.0)*0.07+pow(m,64.0)*0.22);
+      // the city's sodium light dome, all the way round, brightest at the horizon
+      c+=uLP*(exp(-yb*4.0)*0.9+0.12);
       // the sun itself, slightly flattened near the horizon
-      c+=uSunCol*uSunDisc*3.0*smoothstep(0.99955,0.99985,mu);
-      // below the horizon: the haze itself
-      c=mix(c,hor*0.94,smoothstep(0.0,-0.06,y));
-      // cloud deck, projected onto a plane overhead; fades into the horizon haze
+      // 1.0 deg core with a soft rim to 1.3 deg: the real 0.53 deg, gently exaggerated (it was 2.0-3.4 deg)
+      c+=uSunCol*uSunDisc*3.0*smoothstep(0.999936,0.999962,mu);
+      // stars and planets: crisp ~1px points, only those brighter than the glow allows
+      if(y>0.0&&uStarLim>-5.0){
+        float ext=smoothstep(0.03,0.22,y);                   // the haze near the horizon swallows them
+        for(int i=0;i<SKY_N;i++){
+          vec4 s=uStar[i]; if(s.y<0.0)continue;
+          float vis=clamp((uStarLim-s.w)/1.2,0.0,1.0)*ext; if(vis<=0.0)continue;
+          vec3 dv=d-s.xyz; float r2=dot(dv,dv), sg=uPx*(0.75+0.22*max(-s.w,0.0));
+          float tw=1.0+0.35*(1.0-y)*sin(uTime*(11.0+float(i)*1.73)+float(i)*4.1);   // scintillation, worse low down
+          c+=uStarC[i]*clamp(0.55-0.16*s.w,0.12,1.6)*vis*tw*exp(-r2/(sg*sg));
+        }
+      }
       if(y>0.0){
+        // cirrus: long thin streaks high up, sun-lit pink after sunset, dim city-lit later
+        vec2 cu=d.xz/(y+0.04)*0.16; cu=vec2(cu.x*0.8+cu.y*0.6,-cu.x*0.6+cu.y*0.8)+vec2(uTime*0.0012,0.0);
+        float ci=smoothstep(0.52,0.80,fbm(vec2(cu.x*0.55,cu.y*5.0)))*smoothstep(0.02,0.25,y);
+        c=mix(c,uCirrus*(0.75+0.5*side*uGlowI)+uLP*0.3,ci*0.35);
+        // cloud deck, projected onto a plane overhead; fades into the horizon haze
         vec2 uv=d.xz/(y+0.10)*0.55+vec2(uTime*0.0035,uTime*0.0012);
         float n=fbm(uv*1.3);
         float cov=smoothstep(0.62-uCloudCov*0.36,0.86,n);
         float lit=fbm2(uv*1.3+uSunDir.xz*0.09);           // offset tap ~ cheap self-shadowing
-        float l=clamp((n-lit)*3.2+0.5+side*0.35,0.0,1.0);
-        vec3 cc=mix(uCloudDark,uCloudLit,l);
+        float l=clamp((n-lit)*3.2+0.5+side*0.35*uGlowI,0.0,1.0);
+        vec3 cc=mix(uCloudDark,uCloudLit,l)+uLP*(0.55+0.5*exp(-yb*3.0));   // the city lights the cloud base from below
         c=mix(c,cc,cov*smoothstep(0.0,0.20,y)*0.92);
       }
+      // below the horizon: the haze itself
+      c=mix(c,hor*0.94+uLP,smoothstep(0.0,0.06,-y));
       gl_FragColor=vec4(c,1.0);
     }`
 });
@@ -5053,25 +5149,37 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,32,24),skyMat);
 sky.renderOrder=-1;
 scene.add(sky);
 
-// moon: up for the blue hour, gone behind the cloud deck by full night
+// THE MOON OF 24 NOV 1989. Computed (Meeus, Astronomical Algorithms ch. 25/47/48, main periodic terms)
+// for Tokyo 35.69N 139.69E: a WANING CRESCENT, 14% lit, 3.9 days before the 28 Nov new moon, 0.49 deg
+// across. It set about 14:30 JST and rose again ~03:30 on the 25th, so through the whole evening
+// (sunset 16:30, game clock 18:35-20:10) it is 30-65 deg BELOW the horizon: there is no moon in this
+// sky. MOON_UP keeps it down; ?moon=1 shows the true crescent (for comparison) at 1.0 deg — the
+// real 0.5 deg doubled, the most a readable moon may be exaggerated. The night key light stays: it
+// is the overcast lit from below, not moonlight.
+const MOON_UP=new URLSearchParams(location.search).get('moon')==='1';
+const MOON_K=0.14;   // illuminated fraction
+// moon: placed from the ephemeris every frame (skyFollow). On 24 Nov 1989 it is a 14% waning
+// crescent that set at ~14:30, so it stays under the horizon all evening — as it really did.
 const moonTex=tex((g,w,h)=>{
-  const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(246,244,236,1)');gr.addColorStop(0.32,'rgba(232,230,222,.97)');
-  gr.addColorStop(0.6,'rgba(214,214,214,.5)');gr.addColorStop(0.82,'rgba(200,200,205,.12)');
-  gr.addColorStop(1,'rgba(200,200,205,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(150,150,160,.20)';
-  for(let i=0;i<6;i++){g.beginPath();g.arc(w*0.3+Math.random()*w*0.38,h*0.3+Math.random()*h*0.38,4+Math.random()*7,0,7);g.fill();}
+  const cx=w/2,cy=h/2,r=w*0.45;
+  g.fillStyle='rgba(120,128,150,.10)';g.beginPath();g.arc(cx,cy,r,0,7);g.fill();          // earthshine on the dark limb
+  g.save();g.beginPath();g.arc(cx,cy,r,-Math.PI/2,Math.PI/2,true);                         // lit limb (east: waning)
+  g.ellipse(cx,cy,r*(1-2*MOON_K),r,0,Math.PI/2,-Math.PI/2,false);g.closePath();g.clip();   // terminator
+  g.fillStyle='rgb(244,242,232)';g.fillRect(0,0,w,h);
+  g.fillStyle='rgba(150,150,160,.28)';
+  for(let i=0;i<5;i++){g.beginPath();g.arc(cx-r*(0.6+Math.random()*0.3),cy+(Math.random()-.5)*r*1.2,2+Math.random()*4,0,7);g.fill();}
+  g.restore();
 },128,128);
 const moonHaloTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
   gr.addColorStop(0,'rgba(220,222,230,.20)');gr.addColorStop(.4,'rgba(210,212,225,.08)');gr.addColorStop(1,'rgba(210,212,225,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },128,128);
+// sprites sit 1432 m from the camera: 1.0 deg = 25 m of disc = 27.8 m of sprite (disc fills 90%)
 const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:moonHaloTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
-moonHalo.scale.set(520,520,1);moonHalo.position.set(-600,500,-1200);scene.add(moonHalo);
+moonHalo.scale.set(150,150,1);moonHalo.position.set(-600,500,-1200);scene.add(moonHalo);   // ~6 deg of haze glow (was 20 deg)
 const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:moonTex,transparent:true,depthWrite:false,fog:false}));
-moonSprite.scale.set(110,110,1);moonSprite.position.set(-600,500,-1200);scene.add(moonSprite);
+moonSprite.scale.set(27.8,27.8,1);moonSprite.position.set(-600,500,-1200);scene.add(moonSprite);   // was 110 m = 4.4 deg
 
 // distant skyline: a silhouette band and a separate lights band, so at dusk it
 // reads as hazy far city and at night as a glittering one — both tinted per TOD
@@ -5089,12 +5197,15 @@ moonSprite.scale.set(110,110,1);moonSprite.position.set(-600,500,-1200);scene.ad
    if(Math.random()<.3){gl2.fillStyle='rgba(255,40,40,.95)';gl2.fillRect(x+bw/2,H2-bh-5,2,2);}  // aviation light
    x+=bw+Math.random()*12;
  }
- const geo=new THREE.CylinderGeometry(1400,1400,430,48,1,true);
- const silMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sil),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false});
+ // 286 m tall from 20 m below ground: the tallest far towers top out ~230 m (Sunshine 60 is 240 m)
+ const geo=new THREE.CylinderGeometry(1400,1400,286,48,1,true);
+ // the silhouettes take the same height fog as the city, so they sit IN the haze (they used to be
+ // flat pale cards that floated above it when seen from altitude)
+ const silMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(sil),transparent:true,side:THREE.BackSide,fog:true,depthWrite:false});
  const litMat=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(lit),transparent:true,side:THREE.BackSide,fog:false,depthWrite:false,blending:THREE.AdditiveBlending});
  const ring=new THREE.Group();
  const r1=new THREE.Mesh(geo,silMat),r2=new THREE.Mesh(geo,litMat);
- ring.add(r1,r2);ring.position.y=180;scene.add(ring);
+ ring.add(r1,r2);ring.position.y=123;scene.add(ring);
  ring.userData={silMat,litMat};
  window.__ring=ring;}
 
@@ -5164,21 +5275,22 @@ function buildEnv(s){
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;
   const g=cv.getContext('2d');
   const hex=n=>'#'+n.toString(16).padStart(6,'0');
-  const night=THREE.MathUtils.clamp((TOD.t-0.35)/0.65,0,1);
-  // sky half: zenith -> belt -> horizon
+  const night=THREE.MathUtils.clamp((-s.sunEl-2)/14,0,1);
+  // sky half: zenith -> belt -> horizon (+ the city's light dome low down)
+  _ca.setHex(s.horA).add(_cb.setHex(s.lp));
   const gr=g.createLinearGradient(0,0,0,h*0.5);
-  gr.addColorStop(0,hex(s.zen));gr.addColorStop(0.72,hex(s.belt));gr.addColorStop(1,hex(s.hor));
+  gr.addColorStop(0,hex(s.zen));gr.addColorStop(0.72,hex(s.belt));gr.addColorStop(1,'#'+_ca.getHexString());
   g.fillStyle=gr;g.fillRect(0,0,w,h*0.5);
   // ground half: the city seen from above — warm grey in daylight, near-black with sodium at night
   const gg=g.createLinearGradient(0,h*0.5,0,h);
-  _ca.setHex(s.hor).multiplyScalar(0.55);
+  _ca.setHex(s.horA).multiplyScalar(0.55);
   gg.addColorStop(0,'#'+_ca.getHexString());
   _ca.setHex(s.hemiGnd).multiplyScalar(0.6);
   gg.addColorStop(1,'#'+_ca.getHexString());
   g.fillStyle=gg;g.fillRect(0,h*0.5,w,h*0.5);
   // the sun's glow on the horizon at its azimuth (equirect: u=atan(z,x)/2pi+.5)
   if(s.glowI>0.01){
-    const su=(Math.atan2(SUN_AZ.z,SUN_AZ.x)/(Math.PI*2)+0.5)*w;
+    const su=(Math.atan2(TOD.sunDir.z,TOD.sunDir.x)/(Math.PI*2)+0.5)*w;
     const sv=h*0.5-THREE.MathUtils.clamp(s.sunEl,-4,30)/90*h*0.5;
     _ca.setHex(s.glow);
     const rg=g.createRadialGradient(su,sv,0,su,sv,w*0.22);
@@ -5209,57 +5321,76 @@ function buildEnv(s){
   _envRT=rt;
 }
 
-// campaign pacing: dusk at the first shop, full night for the last run home
-// EVENING, unmistakably: the sun is already on/under the horizon at the first shop, every
-// window and street lamp is on, and it sinks into blue hour by the last. Full night (t=1) was
-// tried and lost what makes the city read as real — the sky glow and the raking key light.
+// campaign pacing: the sun on the horizon at the first shop, full night for the last run home.
+// Each shop is ~23 minutes of real twilight later (todClock): 16:26 sunset, 16:49 civil
+// twilight, 17:13 blue hour, 17:36 last light, 18:00 night.
 const TOD_STAGES=[0.30,0.38,0.46,0.54,0.62];
 const TOD_START=TOD_STAGES[0];
 function todForStage(st){ return missionDone?TOD_STAGES[TOD_STAGES.length-1]:TOD_STAGES[Math.min(TOD_STAGES.length-1,Math.max(0,st))]; }
 // manual override: key T steps through the day, ?tod=0..1 pins it
-const TOD_PIN_STEPS=[0,0.25,0.5,1];
+const TOD_PIN_STEPS=[0,0.30,0.44,0.62,1];
 {const q=new URLSearchParams(location.search).get('tod'); if(q!==null&&!isNaN(+q))TOD.pinned=THREE.MathUtils.clamp(+q,0,1);}
 addEventListener('keydown',e=>{
   if(e.code!=='KeyT'||interiorMode)return;
   const cur=TOD.pinned===null?TOD.t:TOD.pinned;
   let i=TOD_PIN_STEPS.findIndex(v=>v>cur+0.01); if(i<0)i=0;
   TOD.pinned=TOD_PIN_STEPS[i];
-  if(typeof flashMsg==='function')flashMsg(['GOLDEN DUSK','SUNSET','BLUE HOUR','NIGHT'][i],UI.ui);
+  if(typeof flashMsg==='function')flashMsg(['AFTERNOON','SUNSET','BLUE HOUR','NIGHT','LATE NIGHT'][i],UI.ui);
 });
 
+// the sky, the moon and the skyline ring travel with whichever camera is rendering
+function skyFollow(){
+  const cp=(window.__RC&&!window.__RS?window.__RC:cam).position;
+  sky.position.copy(cp);
+  window.__ring.position.x=cp.x;window.__ring.position.z=cp.z;
+  moonSprite.position.copy(cp).addScaledVector(TOD.moonDir,1500);
+  moonHalo.position.copy(moonSprite.position);
+}
+const _starV=new THREE.Vector3();
 function updateTOD(dt,now){
   const goal=TOD.pinned!==null?TOD.pinned:TOD.target;
   TOD.t+=(goal-TOD.t)*Math.min(1,dt*0.12);              // night falls over ~10-20s, not in a cut
   if(Math.abs(goal-TOD.t)<0.0008)TOD.t=goal;
-  const s=todSample(TOD.t);TOD.cur=s;
-  // sun position from elevation; the key light hands over from sun to moon
-  const el=THREE.MathUtils.degToRad(s.sunEl);
-  TOD.sunDir.copy(SUN_AZ).multiplyScalar(Math.cos(el));TOD.sunDir.y=Math.sin(el);TOD.sunDir.normalize();
-  const mf=1-THREE.MathUtils.smoothstep(s.sunEl,-3.0,1.5);   // 0 = sun is the key, 1 = moon is
+  const s=todSample(todClockNow());TOD.cur=s;TOD.clock=s.clock;
+  // the sun where it really is at that minute (apparent elevation, refraction included)
+  const el=THREE.MathUtils.degToRad(s.sunEl),hz=Math.hypot(TOD.sunDir.x,TOD.sunDir.z)||1;
+  TOD.sunDir.set(TOD.sunDir.x/hz*Math.cos(el),Math.sin(el),TOD.sunDir.z/hz*Math.cos(el));
+  // key light: the sun while it is up; then the bright western twilight sky (soft, from the
+  // sun's azimuth ~20° up); by night the glow of the cloud base overhead. No moon tonight.
+  const sunUp=THREE.MathUtils.smoothstep(s.sunEl,-0.8,1.2), nightK=1-THREE.MathUtils.smoothstep(s.sunEl,-16,-6);
+  _va.set(TOD.sunDir.x/hz,0.36,TOD.sunDir.z/hz).normalize().lerp(_starV.set(0.22,1,0.12).normalize(),nightK).normalize();
   TOD.lightDir.copy(TOD.sunDir);if(TOD.lightDir.y<0.07)TOD.lightDir.y=0.07;TOD.lightDir.normalize();
-  TOD.lightDir.lerp(MOON_DIR,mf).normalize();
-  sun.color.setHex(s.sunCol).lerp(_ca.setHex(0x9aa8c4),mf);
-  sun.intensity=s.sunI+s.moonI;
+  TOD.lightDir.lerp(_va,1-sunUp).normalize();
+  sun.color.setHex(s.keyCol).lerp(_ca.setHex(s.sunCol),sunUp);
+  sun.intensity=s.sunI*sunUp+s.keyI;
   hemi.color.setHex(s.hemiSky);hemi.groundColor.setHex(s.hemiGnd);hemi.intensity=s.hemiI;
-  rim.color.setHex(0xff9a5c);rim.intensity=s.cityI;          // sodium/LED bounce off the low cloud
-  scene.fog.color.setHex(s.fog);scene.fog.density=s.fogD;
+  rim.color.setHex(0xff9a5c);rim.intensity=s.cityI;          // sodium bounce off the low cloud
+  // the haze is the sky's own horizon: same colours, same falloff toward the sun (fogHook)
+  scene.fog.color.setHex(s.horA).add(_ca.setHex(s.lp));scene.fog.density=s.fogD;
   renderer.toneMappingExposure=s.exp;
-  FOG_U.fogSunDir.value.copy(TOD.sunDir);
-  FOG_U.fogSunCol.value.setHex(s.glow).multiplyScalar(s.glowI*0.5);
+  FOG_U.fogSunDir.value.set(TOD.sunDir.x/hz,0,TOD.sunDir.z/hz);
+  FOG_U.fogSunCol.value.setHex(s.horS).sub(_ca.setHex(s.horA)).multiplyScalar(0.7);
+  FOG_U.fogGlowCol.value.setHex(s.glow).multiplyScalar(s.glowI*0.30);
   const u=skyMat.uniforms;
-  u.uZen.value.setHex(s.zen);u.uBelt.value.setHex(s.belt);u.uHor.value.setHex(s.hor);
-  u.uSolar.value.setHex(s.solar);u.uGlow.value.setHex(s.glow);u.uGlowI.value=s.glowI;
+  u.uZen.value.setHex(s.zen);u.uBelt.value.setHex(s.belt);u.uBeltI.value=s.beltI;
+  u.uHorA.value.setHex(s.horA);u.uHorS.value.setHex(s.horS);u.uLP.value.setHex(s.lp);
+  u.uGlow.value.setHex(s.glow);u.uGlowI.value=s.glowI;
   u.uSunDir.value.copy(TOD.sunDir);u.uSunCol.value.setHex(s.sunCol);u.uSunDisc.value=s.sunDisc;
-  u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;
+  u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;u.uCirrus.value.setHex(s.cirrus);
+  u.uStarLim.value=s.starLim;u.uPx.value=THREE.MathUtils.degToRad((window.__RC||cam).fov||58)/Math.max(200,RH());
   u.uTime.value=now*0.001;
-  moonSprite.material.opacity=moonHalo.material.opacity=s.moon;
-  moonSprite.visible=moonHalo.visible=s.moon>0.01;
+  {const st=ASTRO.stars,pl=ASTRO.planets;
+   for(let i=0;i<SKY_N;i++){const o=i<pl.length?pl[i]:st[i-pl.length];skyDir(o[0],o[1],s.clock,_starV);
+     u.uStar.value[i].set(_starV.x,_starV.y,_starV.z,o[2]);u.uStarC.value[i].setHex(o[3]);}}
+  skyDir(ASTRO.moon[0],ASTRO.moon[1],s.clock,TOD.moonDir);
+  moonSprite.visible=moonHalo.visible=MOON_UP||TOD.moonDir.y>-0.02;
   const R=window.__ring.userData;
-  R.silMat.color.setHex(s.fog).multiplyScalar(0.86-0.18*s.win);R.silMat.opacity=0.32+0.6*s.win;R.litMat.opacity=s.win;
-  groundHaze.forEach(gh=>gh.material.color.setHex(s.fog));
+  R.silMat.color.setHex(s.hemiGnd).multiplyScalar(0.3);R.silMat.opacity=0.95;
+  R.litMat.opacity=s.win*Math.max(0.35,Math.exp(-Math.pow(s.fogD*1400,2)*0.6));   // far lights dimmed by the same air
+  groundHaze.forEach(gh=>gh.material.color.copy(scene.fog.color));
   if(window.__bldgMats)window.__bldgMats.forEach(b=>{if(b.mat.emissiveMap)b.mat.emissiveIntensity=s.win*(b.winGain||1);});
   if(typeof rain!=='undefined'){rain.visible=s.rain>0.02;rain.material.opacity=0.14*s.rain;}
-  const step=Math.round(TOD.t*3);                       // dusk / sunset / blue hour / night
+  const step=Math.round(s.clock/8);                     // PMREM rebuild every ~8 min of twilight
   if(step!==TOD.env){TOD.env=step;buildEnv(s);}
 }
 
@@ -5539,7 +5670,12 @@ function sfxExplosion(big){
 }
 
 // ---------- TEXTURES ----------
-function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);if(aniso)t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;}
+// surface-only randomness (cladding picks, per-building wear seeds) has its own stream, so adding
+// texture variety never reshuffles the city layout that Math.random lays out
+const TEXR=(()=>{let s=0x2545F491;return()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296;};})();
+// every canvas texture is mipmapped (CanvasTexture default: trilinear) and at least 4x anisotropic,
+// so nothing smears at grazing angles or shimmers at a distance; the ones asked for get the maximum
+function tex(fn,w=256,h=256,aniso){const cv=document.createElement('canvas');cv.width=w;cv.height=h;fn(cv.getContext('2d'),w,h);const t=new THREE.CanvasTexture(cv);const mx=renderer.capabilities.getMaxAnisotropy();t.anisotropy=aniso?mx:Math.min(4,mx);return t;}
 // Build a tangent-space NORMAL MAP from a grayscale HEIGHT pattern (Sobel gradient). This is the
 // missing ingredient that made textures read "flat": with a normal map, the scene lights rake
 // across aggregate grain, crack grooves, tar-seam ridges and tire ruts so the pavement has real
@@ -5572,9 +5708,9 @@ function normalMapFromHeight(drawHeight,w,h,strength){
 // night. Window rectangles keep the exact grid the facade normal maps were
 // built for, so bevels still line up.
 // ============================================================================
-// what Tokyo actually burns at night: mostly cool office LED and warm homes
+// what Tokyo burned at night in 1989: cool-white fluorescent tubes in offices, warm incandescent homes
 const WIN_FAMS=[
-  {p:0.36,a:[236,244,255],b:[184,202,226],office:true},  // office LED, 5000K
+  {p:0.36,a:[234,246,244],b:[182,204,204],office:true},  // office fluorescent, cool white ~4200K
   {p:0.34,a:[255,224,172],b:[226,170,108]},              // residential tungsten-warm
   {p:0.12,a:[226,252,228],b:[158,204,170],office:true},  // old fluorescent, green cast
   {p:0.10,a:[255,204,138],b:[222,146,80]},               // amber / paper lamp
@@ -5640,7 +5776,7 @@ function facadeTexPair(base,opts){
       let run=Math.random()<0.5;
       for(let x=0;x<cols;x++){
         const px=x*cw+cw*0.16,py=y*ch+ch*0.22,ww=cw*0.68,wh=ch*0.56;
-        g.fillStyle='rgba(0,0,0,.45)';g.fillRect(px-2,py-2,ww+4,wh+4);   // frame / reveal
+        g.fillStyle='rgba(150,152,155,.75)';g.fillRect(px-2,py-2,ww+4,wh+4);   // aluminium sash frame (matches the near shader)
         _winGlass(g,px,py,ww,wh);
         if(Math.random()<0.25)run=!run;
         if(run&&Math.random()<occ*2.0)_winLit(gl,px,py,ww,wh,pickWinFam());
@@ -5658,23 +5794,26 @@ function facadeTexPair(base,opts){
 function facadeTex(base,opts){return facadeTexPair(base,opts).map;}   // albedo-only callers
 
 // curtain-wall glass towers: mullion grid, spandrel bands, a sky-gradient sheen
+// the curtain wall now TILES up the tower (one row = 1 m, see GLASS_POOL), so no full-face gradient
+// or sheen any more — each pane carries its own slight tilt-reflection instead (real float glass
+// panes are never perfectly coplanar, which is what breaks a glass tower into a grid of tones)
+const GLASS_ROWS=24;
 function glassTexPair(){
   return _pairTex(512,512,(g,gl,w,h)=>{
-    const gr=g.createLinearGradient(0,0,w*.25,h);
-    gr.addColorStop(0,'#7c8792');gr.addColorStop(.35,'#4a545e');gr.addColorStop(.7,'#2c333a');gr.addColorStop(1,'#1d2227');
-    g.fillStyle=gr;g.fillRect(0,0,w,h);
-    const C=12,R=22,cw=w/C,ch=h/R;
+    const C=12,R=GLASS_ROWS,cw=w/C,ch=h/R;
+    for(let y=0;y<R;y++)for(let x=0;x<C;x++){const v=44+TEXR()*22;g.fillStyle=`rgb(${v},${v+7},${v+13})`;g.fillRect(x*cw,y*ch,cw,ch);}
+    const mr=Math.random;
     for(let y=0;y<R;y++){
+      if(y>=22)Math.random=TEXR;                     // rows past the old 22 draw from the texture stream (layout RNG untouched)
       if(y%4===3){g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,y*ch+ch*0.55,w,ch*0.45);}  // slab spandrel
       const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
       for(let x=0;x<C;x++)if(Math.random()<occ*1.4)_winLit(gl,x*cw+2,y*ch+2,cw-4,ch-4,pickWinFam());
     }
+    Math.random=mr;
     g.strokeStyle='rgba(12,14,16,.75)';
     for(let x=0;x<=C;x++){g.lineWidth=x%3===0?2.5:1.2;g.beginPath();g.moveTo(x*cw,0);g.lineTo(x*cw,h);g.stroke();}
     for(let y=0;y<=R;y++){g.lineWidth=1.2;g.beginPath();g.moveTo(0,y*ch);g.lineTo(w,y*ch);g.stroke();}
     g.lineWidth=1;
-    g.fillStyle='rgba(255,255,255,.06)';
-    g.beginPath();g.moveTo(0,h);g.lineTo(w*.45,0);g.lineTo(w*.62,0);g.lineTo(w*.17,h);g.fill();
   });
 }
 function glassTex(){return glassTexPair().map;}
@@ -5812,7 +5951,7 @@ function pickLane(onX){
   const arr=onX?laneRoads.z:laneRoads.x;
   const r=arr[Math.floor(Math.random()*arr.length)];
   const dir=Math.random()<.5?1:-1;
-  const off=r.major?(Math.random()<.5?3.4:7.4):3.2;
+  const off=r.major?[1.65,4.9,8.15][Math.floor(Math.random()*3)]:3.2;   // majors: the centre of each painted 3.25 m lane
   return {lane:onX?r.p-dir*off:r.p+dir*off,dir,road:r};   // Japan drives on the LEFT, on both axes
 }
 
@@ -5878,6 +6017,13 @@ wetRoughTex.repeat.set(6,60);
 // ground is clipped to the LAND slab (ends at the coastline) so nothing sits under the bay
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(CITY*2,LAND_LEN),new THREE.MeshStandardMaterial({map:groundTex,roughness:0.92,metalness:0.0,envMapIntensity:0.35})); // matte asphalt: dropped wet roughnessMap so open ground reads dry, not slick
 ground.rotation.x=-Math.PI/2;ground.position.z=LAND_CZ;ground.receiveShadow=true;scene.add(ground);
+// the 38x tiled slab texture read as a carpet from the air: break it with world-space broad tone
+// (old and new pours, soot, damp) at 15-90 m scales — low frequency, so nothing to alias
+ground.material.onBeforeCompile=sh=>{fogHook(sh);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vGP;').replace('#include <begin_vertex>','#include <begin_vertex>\nvGP=(modelMatrix*vec4(transformed,1.0)).xz;');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 vGP;float gh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float gn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(gh(i),gh(i+vec2(1,0)),f.x),mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x),f.y);}')
+    .replace('#include <map_fragment>','#include <map_fragment>\n diffuseColor.rgb*=0.62+0.5*gn(vGP*0.011)+0.25*(gn(vGP*0.067+4.0)-0.5);');};
+ground.material.customProgramCacheKey=()=>'ground2';
 
 // ============ WET-STREET PLANAR REFLECTION ============================================
 // A real mirror. Env-map reflections can't paint neon onto flat road (they mirror the dark overhead
@@ -6079,32 +6225,37 @@ function makeRoadStripTex(){return tex((g,w,h)=>{
     gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.32)');gr.addColorStop(1,'rgba(10,10,12,0)');
     g.fillStyle=gr;g.fillRect(x-5,0,10,h);
   });
-  // worn centre-line dashes: some missing/chipped so the paint reads weathered, not freshly laid
-  for(let y=0;y<h;y+=16){
+  // worn centre-line dashes, 5 m paint / 5 m gap on a ~40 m tile (they were 0.6 m dots every 1.25 m);
+  // some missing/chipped so the paint reads weathered, not freshly laid
+  for(let y=0;y<h;y+=h/4){
     if(Math.random()<0.16)continue;
     const wear=0.26+Math.random()*0.42,dw=2.4*(0.55+Math.random()*0.55);
-    g.fillStyle=`rgba(210,196,116,${wear})`;g.fillRect(w/2-dw/2,y,dw,8);
+    g.fillStyle=`rgba(210,196,116,${wear})`;g.fillRect(w/2-dw/2,y,dw,h/8);
   }
   g.fillStyle='rgba(200,200,200,.3)';
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
 },256,512,true);}
-function makeMajorRoadTex(){return tex((g,w,h)=>{
+// LANES IN METRES: the 26 m avenues were painted as two 6.5 m lanes a side. Now 3.25 m lanes (Japanese
+// standard for a 60 km/h trunk road) — majors: three lanes + a kerbside stopping lane each way; the
+// curved 16-20 m avenues: two lanes + the kerb lane. `dash` = lane lines as fractions of the width out
+// from the centre, `edge` = the solid edge line, `per` = dash periods per tile (5 m paint / 5 m gap).
+function makeMajorRoadTex(dash,edge,per){dash=dash||[0.125,0.25];edge=edge||0.375;per=per||7;return tex((g,w,h)=>{
   asphaltBase(g,w,h,'#26272c');
-  [0.13,0.31,0.69,0.87].forEach(f=>{
+  const bnd=[0].concat(dash,[edge]),trk=[];for(let i=0;i<bnd.length-1;i++)trk.push(bnd[i]+(bnd[i+1]-bnd[i])*0.27,bnd[i]+(bnd[i+1]-bnd[i])*0.73);
+  trk.forEach(f=>[0.5-f,0.5+f].forEach(f=>{   // tyre-polished wheel tracks inside each lane
     const x=f*w;
     const gr=g.createLinearGradient(x-7,0,x+7,0);
     gr.addColorStop(0,'rgba(8,8,10,0)');gr.addColorStop(.5,'rgba(8,8,10,.36)');gr.addColorStop(1,'rgba(8,8,10,0)');
     g.fillStyle=gr;g.fillRect(x-7,0,14,h);
-  });
+  }));
   // worn lane dashes: patchy alpha + occasional dropped dash so the paint reads weathered
-  for(let y=0;y<h;y+=22){
-    if(Math.random()<0.12){continue;}
-    const wear=0.22+Math.random()*0.36;
-    g.fillStyle=`rgba(222,222,228,${wear})`;
-    g.fillRect(w*0.25-1.4,y,2.8,11);g.fillRect(w*0.75-1.4,y,2.8,11);
-  }
+  for(let y=0;y<h;y+=h/per)dash.forEach(f=>[0.5-f,0.5+f].forEach(fx=>{
+    if(Math.random()<0.12)return;
+    g.fillStyle=`rgba(222,222,228,${0.22+Math.random()*0.36})`;
+    g.fillRect(w*fx-1.4,y,2.8,h/per/2);
+  }));
   g.fillStyle='rgba(222,222,228,.42)';
-  g.fillRect(4,0,2.6,h);g.fillRect(w-6.6,0,2.6,h);
+  g.fillRect(w*(0.5-edge)-1.3,0,2.6,h);g.fillRect(w*(0.5+edge)-1.3,0,2.6,h);
   g.fillStyle='rgba(228,198,86,.5)';
   g.fillRect(w/2-4.2,0,2.4,h);g.fillRect(w/2+1.8,0,2.4,h);
 },512,1024,true);}
@@ -6126,7 +6277,7 @@ function makePlainAsphaltTex(){return tex((g,w,h)=>{
 // Fine detail fades with distance so it does not shimmer from the air.
 // ============================================================================
 const ASPHALT_GLSL=`
-varying vec3 vWP;uniform vec3 uRoad;
+varying vec3 vWP;uniform vec3 uRoad;float gAggK=1.0;
 float ah(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float an(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
   return mix(mix(ah(i),ah(i+vec2(1,0)),f.x),mix(ah(i+vec2(0,1)),ah(i+vec2(1,1)),f.x),f.y);}
@@ -6141,7 +6292,7 @@ struct AS{float h;float crack;float seal;float patchIn;float seam;float hole;flo
 AS asurf(vec2 p,float near,float dist){
   AS s;
   s.age=afbm(p*0.022+3.0);
-  s.agg=an(p*8.5)*0.6+an(p*21.0)*0.4;
+  s.agg=mix(0.5,an(p*38.0)*0.6+an(p*91.0)*0.4,gAggK);              // 1-3 cm stones in the bitumen
   s.track=0.0;s.oil=0.0;
   if(uRoad.z>0.5){
     float acr=(uRoad.x<0.5?p.x:p.y)-uRoad.y+uRoad.z*0.5, along=(uRoad.x<0.5?p.y:p.x);
@@ -6165,28 +6316,72 @@ AS asurf(vec2 p,float near,float dist){
   if(qh<0.03){vec2 c=(qi+0.25+0.5*vec2(ah(qi+2.2),ah(qi+4.4)))*7.0; float r=0.35+0.6*ah(qi+6.6);
     float dd=length(p-c)/r+0.35*(an((p-c)*3.0)-0.5);
     s.hole=1.0-smoothstep(0.82,1.0,dd); s.rim=(1.0-smoothstep(1.0,1.4,dd))*(1.0-s.hole);}
-  s.h=(s.agg-0.5)*0.35*near - s.crack*0.9 - s.seam*0.6 + s.seal*0.15 - s.hole*2.2 + s.rim*0.35*(an(p*6.0)) - s.track*0.15
+  s.h=(s.agg-0.5)*0.06*near - s.crack*0.9 - s.seam*0.6 + s.seal*0.15 - s.hole*2.2 + s.rim*0.35*(an(p*6.0)) - s.track*0.15
       + (s.patchIn>0.5?0.12:0.0);
   return s;
 }
 `;
+// ROAD PAINT, computed in the shader in metres (it was baked into tiling canvases whose dashes came
+// out 0.8 m long on a 1.5 m beat, and blurred to nothing past 60 m). Japanese 1989 practice:
+// lane lines are 15 cm white dashes 5 m on / 5 m off, the centre of an arterial is a yellow
+// no-overtaking line, every kerbed street has a white 外側線 edge line and a 50 cm precast concrete
+// L-gutter (L形側溝) along the kerb. Everything is anti-aliased against the pixel footprint, so a
+// line thinner than a pixel fades to its true coverage instead of flickering. Paint is worn
+// (chipped by tyres along the wheel tracks) and sits flat on the surface relief.
+// uMark = (mode: 0 none / 1 grid street / 2 avenue ribbon, width, class: 0 alley 1 street 2 arterial
+// 3 expressway, per-road seed)
+const ROAD_PAINT_GLSL=`
+uniform vec4 uMark;
+float pLine(float x,float c,float hw,float f){return 1.0-smoothstep(hw-f,hw+f,abs(x-c));}
+float pDash(float y,float on,float per,float f){float d=fract(y/per)*per;
+  float m=smoothstep(-f,f,d)-smoothstep(on-f,on+f,d)+smoothstep(per-f,per+f,d);
+  return mix(m,on/per,smoothstep(0.1,0.3,f/per));}
+// returns (white paint, yellow paint, L-gutter) coverage
+vec3 roadPaint(float acr,float along,vec2 p,float fA,float fL,float w){
+  float hw=w*0.5, k=uMark.z, sd=uMark.w, a=abs(acr), fa=fA*0.7+0.002, fl=fL*0.7+0.002;
+  float wht=0.0,yel=0.0,gut=0.0;
+  if(k<0.5){                                                            // alley: edge lines only
+    wht=pLine(a,hw-0.55,0.075,fa);
+  }else if(k<1.5){                                                      // two-lane street
+    wht=pLine(a,hw-1.25,0.075,fa);
+    float c=pLine(acr,0.0,0.075,fa);
+    wht=max(wht,fract(sd*7.0)<0.5?c:c*pDash(along,5.0,10.0,fl));
+    gut=step(hw-0.5,a);
+  }else if(k<2.5){                                                      // arterial: 2+2 lanes and a shoulder
+    float ln=hw>11.0?5.4:hw*0.5;
+    yel=pLine(a,0.15,0.075,fa);
+    wht=pLine(a,ln,0.075,fa)*pDash(along+sd*10.0,5.0,10.0,fl);
+    wht=max(wht,pLine(a,hw-1.6,0.1,fa));
+    gut=step(hw-0.5,a);
+  }else{                                                                // expressway deck
+    wht=max(pLine(a,hw-0.6,0.1,fa),pLine(acr,0.0,0.075,fa)*pDash(along,8.0,20.0,fl));
+  }
+  float wear=smoothstep(0.18,0.62,an(p*vec2(5.3,4.7)+sd*13.0)*0.7+an(p*19.0)*0.3);
+  wear=mix(wear,0.72,smoothstep(0.01,0.04,max(fA,fL)));                // far off: the average wear, not speckle
+  return vec3(wht*wear,yel*wear,gut);
+}
+`;
 function asphaltify(mat,road){
-  const u={uRoad:{value:new THREE.Vector3(road?(road.axis==='x'?0:1):0,road?road.p:0,road?road.w:0)}};
+  const mode=road?(road.avenue?2:1):0;
+  const u={uRoad:{value:new THREE.Vector3(road&&!road.avenue?(road.axis==='x'?0:1):0,road&&!road.avenue?road.p:0,road&&!road.avenue?road.w:0)},
+    uMark:{value:new THREE.Vector4(mode,road?road.w||0:0,road?(road.kind!==undefined?road.kind:(road.w>=20?2:road.w>10?1:0)):0,TEXR())}};
   mat.normalMap=null;                          // the stretched photo normal map was the "wrinkled leather"
   mat.roughnessMap=null;
   mat.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u);
-    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
-      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat aRough=0.0;vec3 aNrm=vec3(0.0,1.0,0.0);')
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;varying vec2 vRU;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;vRU=uv;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+ROAD_PAINT_GLSL+'\nvarying vec2 vRU;float aRough=0.0;vec3 aNrm=vec3(0.0,1.0,0.0);')
       .replace('#include <map_fragment>',`#include <map_fragment>
 { vec2 p=vWP.xz; float dist=length(vViewPosition);
   float near=1.0-smoothstep(14.0,55.0,dist);
+  vec2 fp=fwidth(p); float fpx=max(fp.x,fp.y);
+  gAggK=1.0-smoothstep(0.004,0.014,fpx);                                  // stone-scale grain only where a stone is a few pixels
   AS a=asurf(p,near,dist);
   vec3 col=mix(vec3(0.048,0.048,0.05),vec3(0.13,0.126,0.118),smoothstep(0.25,0.62,a.age));   // most city asphalt is weathered grey
   col*=0.86+0.28*an(p*0.55);
-  col*=mix(1.0,0.8+0.4*a.agg,near);
+  col*=0.85+0.3*a.agg;
   float rgh=0.68+0.2*an(p*0.13);
   col*=1.0-0.30*a.track; rgh-=0.18*a.track;
   col*=1.0-0.35*a.oil; rgh-=0.2*a.oil;
@@ -6197,19 +6392,33 @@ function asphaltify(mat,road){
   col=mix(col,vec3(0.12,0.115,0.105)*(0.8+0.4*a.agg),a.rim*0.8);
   col=mix(col,vec3(0.008,0.009,0.011),a.hole); rgh=mix(rgh,0.03,a.hole);
   // relief: finite-difference the same height field, only where it can be seen
+  float flatK=0.0;
+  if(uMark.x>0.5){
+    float acr,along,fA,fL,rw=uMark.y;
+    if(uMark.x<1.5){acr=(uRoad.x<0.5?p.x:p.y)-uRoad.y; along=(uRoad.x<0.5?p.y:p.x); fA=uRoad.x<0.5?fp.x:fp.y; fL=uRoad.x<0.5?fp.y:fp.x;}
+    else{rw=floor((vRU.x+50.0)/100.0); acr=vRU.x-rw*100.0; along=vRU.y; vec2 fr=fwidth(vRU); fA=fr.x; fL=fr.y;}   // avenue uv.x = width*100 + metres across
+    vec3 pt=roadPaint(acr,along,p,fA,fL,rw);
+    if(pt.z>0.5){                                                          // precast L-gutter: pale concrete, 2 m units
+      float j=pLine(fract(along/2.0)*2.0,0.0,0.006,fL*0.7+0.002)+pLine(fract(along/2.0)*2.0,2.0,0.006,fL*0.7+0.002);
+      col=vec3(0.2,0.195,0.185)*(0.75+0.35*an(p*2.3))*(1.0-0.5*j)*(1.0-0.45*smoothstep(0.2,0.5,an(p*0.4+7.0)));
+      rgh=0.85; flatK=1.0;
+    }
+    float pw=max(pt.x,pt.y);
+    col=mix(col,mix(vec3(0.6,0.6,0.58),vec3(0.62,0.48,0.12),step(pt.x,pt.y))*(0.85+0.15*a.agg),pw);
+    rgh=mix(rgh,0.55,pw); flatK=max(flatK,pw*0.7);
+  }
   if(near>0.02){
-    float e=0.03, k=near*1.6;
+    float e=0.012, k=near*1.6*(1.0-flatK);
     float hx=asurf(p+vec2(e,0.0),near,dist).h, hz=asurf(p+vec2(0.0,e),near,dist).h;
     aNrm=normalize(vec3(-(hx-a.h)/e*0.05*k,1.0,-(hz-a.h)/e*0.05*k));
   }
-  float paint=smoothstep(0.08,0.2,max(texelColor.r,texelColor.g));
-  diffuseColor.rgb=mix(col,diffuseColor.rgb*0.9,paint);
-  aRough=mix(rgh,0.7,paint);
+  diffuseColor.rgb=col;
+  aRough=rgh;
 }`)
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=aRough;')
       .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(aNrm,0.0)).xyz);');
   };
-  mat.customProgramCacheKey=()=>'asphalt2';
+  mat.customProgramCacheKey=()=>'asphalt3';
   mat.envMapIntensity=0.55;
   mat.needsUpdate=true;
   return mat;
@@ -6352,9 +6561,8 @@ const curbMat=curbFaceMat; // legacy alias
 //     a repeated variant tiles far less often and out of phase with any other road using it
 //  4. the recognisable baked shapes that made repeats obvious (manhole, pothole blobs) were removed
 //     from the tileable texture entirely — grain/oil/cracks read as continuous noise, not a pattern
-const ROAD_POOL_MAJOR=[0,1,2].map(()=>makeMajorRoadTex());
-const ROAD_POOL_STRIP=[0,1,2].map(()=>makeRoadStripTex());
-const ROAD_POOL_ALLEY=[0,1].map(()=>makeAlleyTex());
+const ROAD_BLANK=(()=>{const t=new THREE.DataTexture(new Uint8Array([12,12,13,255]),1,1);t.needsUpdate=true;return t;})();   // lane paint is drawn by the asphalt shader now
+const ROAD_POOL_MAJOR=[ROAD_BLANK],ROAD_POOL_STRIP=[ROAD_BLANK],ROAD_POOL_ALLEY=[ROAD_BLANK];
 const WETROUGH_POOL=[0,1,2,3].map(()=>makeWetRoughTex());
 function pickPool(pool){return pool[Math.floor(Math.random()*pool.length)];}
 function roadTexFor(r){
@@ -6437,9 +6645,9 @@ ROADS_Z.forEach(r=>addRoad('z',r));
   };
   const KL=9.6, LREF=CITY*2;                                      // kerb tile length, walk texture span
   SW_SEGS.forEach(({axis,c,a0,a1,kerb})=>{
-    const x0=c-SW/2,x1=c+SW/2,h=CURB_H;
+    const x0=c-SW/2,x1=c+SW/2,h=CURB_H, pt=10*[0,0,1,1,2][Math.abs(Math.round(c*7.31+a0*0.013))%5];   // paving type per walk
     quad(TP,TN,TU,[V(axis,x0,a0,h),V(axis,x1,a0,h),V(axis,x1,a1,h),V(axis,x0,a1,h)],
-      [[Math.abs(x0-kerb),a0],[Math.abs(x1-kerb),a0],[Math.abs(x1-kerb),a1],[Math.abs(x0-kerb),a1]],[0,1,0]);   // u = metres from the kerb
+      [[pt+Math.abs(x0-kerb),a0],[pt+Math.abs(x1-kerb),a0],[pt+Math.abs(x1-kerb),a1],[pt+Math.abs(x0-kerb),a1]],[0,1,0]);   // u = metres from the kerb (+10 x paving type)
     const nAc=s2=>axis==='x'?[s2,0,0]:[0,0,s2], nAl=s2=>axis==='x'?[0,0,s2]:[s2,0,0];
     const L=(a1-a0)/KL, Wd=SW/KL;
     [[x0,-1],[x1,1]].forEach(([xc,s2])=>quad(KP,KN,KU,[V(axis,xc,a0,0),V(axis,xc,a1,0),V(axis,xc,a1,h),V(axis,xc,a0,h)],
@@ -6458,42 +6666,55 @@ ROADS_Z.forEach(r=>addRoad('z',r));
   const pavMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85,metalness:0.0,envMapIntensity:0.35,
     map:new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1)});
   pavMat.map.needsUpdate=true;
+  // PAVEMENT shader, laid in the walk's own frame (u = metres from the kerb, v = metres along it, so it
+  // follows the curved avenues too). uv.x carries the paving type as +10/+20: (0) 30 cm grey concrete
+  // flags, (1) 1980s interlocking blocks, 10x20 cm, half-bond, grey with runs of terracotta, (2) older
+  // 45 cm slabs. A 30 cm yellow 線状 guide strip (four raised bars along the walk — the 1980s guide
+  // block; dots are for crossings) runs about a metre in. Joints are anti-aliased against the pixel
+  // footprint and fade to their real coverage, so a walk seen from 300 m is an even grey, not moiré.
   pavMat.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
       .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat pRough=0.85;vec3 pNrm=vec3(0,1,0);'+`
-float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
-  vec2 g=p/0.45, gi=floor(g), gf=fract(g);
-  float joint=1.0-smoothstep(0.0,0.035,min(min(gf.x,1.0-gf.x),min(gf.y,1.0-gf.y)));
-  float t=ah(gi);
-  col=mix(vec3(0.16,0.155,0.15),vec3(0.24,0.225,0.21),t)*(0.85+0.3*an(p*3.0));
-  col*=1.0-0.35*smoothstep(0.55,0.85,an(p*0.35+2.0));                 // grime and old stains
-  col=mix(col,vec3(0.05,0.045,0.04),step(0.993,ah(floor(p*6.0))));    // gum spots
-  rough=0.82-0.25*(1.0-smoothstep(0.0,0.6,u));                         // damp along the kerb
-  col*=1.0-0.25*(1.0-smoothstep(0.0,0.5,u));
-  float h=-joint*0.6+(t-0.5)*0.15;
-  if(u>0.45&&u<0.75){                                                  // tenji strip
-    vec2 tg=p/0.3, tf=fract(tg);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ASPHALT_GLSL+'\nfloat pRough=0.85;'+`
+float pJ(vec2 g,vec2 fw,float jw){vec2 f=fract(g),d=min(f,1.0-f),a=fw*0.7+1e-4;
+  vec2 m=1.0-smoothstep(jw-a,jw+a,d); m=mix(m,vec2(2.0*jw),smoothstep(0.2,0.45,fw)); return max(m.x,m.y);}
+float pavH(vec2 q,vec2 fq,float typ,vec2 p,out vec3 col,out float rough){
+  vec2 per=typ<0.5?vec2(0.3):typ<1.5?vec2(0.1,0.2):vec2(0.45);
+  vec2 g=q/per; if(typ>0.5&&typ<1.5)g.x+=0.5*mod(floor(g.y),2.0);
+  vec2 gi=floor(g), fw=fq/per; float fade=1.0-smoothstep(0.2,0.5,max(fw.x,fw.y));
+  float joint=pJ(g,fw,typ>0.5&&typ<1.5?0.05:0.035), t=(ah(gi)-0.5)*fade+0.5;
+  col=typ<0.5?vec3(0.25,0.245,0.235):typ<1.5?vec3(0.24,0.235,0.225):vec3(0.2,0.192,0.182);
+  if(typ>0.5&&typ<1.5)col=mix(col,vec3(0.27,0.16,0.12),step(0.86,ah(gi+3.3))*fade);   // mottled terracotta blocks
+  col*=(0.86+0.24*t)*(0.88+0.24*an(p*1.7));
+  col*=1.0-0.32*smoothstep(0.55,0.85,an(p*0.35+2.0));                  // grime and old stains
+  col=mix(col,vec3(0.05,0.045,0.04),step(0.993,ah(floor(p*6.0)))*(1.0-smoothstep(0.03,0.08,max(fq.x,fq.y))));   // gum
+  rough=0.82-0.25*(1.0-smoothstep(0.0,0.6,q.x));                      // damp along the kerb
+  col*=1.0-0.22*(1.0-smoothstep(0.0,0.5,q.x));
+  float h=-joint*0.004+(t-0.5)*0.002;
+  if(q.x>0.9&&q.x<1.2){                                                // yellow guide strip
+    vec2 tg=vec2(q.x-0.9,q.y)/0.3, tf=fract(tg), tw=fq/0.3;
     col=vec3(0.52,0.36,0.03)*(0.8+0.3*an(p*2.0));
-    float tj=1.0-smoothstep(0.0,0.03,min(min(tf.x,1.0-tf.x),min(tf.y,1.0-tf.y)));
-    vec2 dp=fract(tg*4.0)-0.5; float dome=1.0-smoothstep(0.18,0.32,length(dp));
-    h=dome*0.5-tj*0.5; col*=1.0-0.3*tj; rough=0.6;
+    float tj=pJ(tg,tw,0.02);
+    float ba=tw.x*2.8+1e-4, bar=(1.0-smoothstep(0.17-ba,0.17+ba,abs(fract(tf.x*4.0)-0.5)))*smoothstep(0.06,0.1,tf.y)*(1.0-smoothstep(0.9,0.94,tf.y));
+    bar*=1.0-smoothstep(0.004,0.012,fq.x);
+    h=bar*0.005-tj*0.003; col*=(1.0-0.3*tj)*(1.0+0.15*bar); rough=0.6;
   }
-  col=mix(col,col*0.35,joint);
-  return h*near;
+  col=mix(col,col*0.4,joint);
+  return h;
 }`)
       .replace('#include <map_fragment>',`#include <map_fragment>
-{ vec2 p=vWP.xz; float dist=length(vViewPosition), near=1.0-smoothstep(10.0,45.0,dist), u=vUv.x;
-  vec3 col; float r; float h=pavH(p,u,near,col,r);
-  if(near>0.02){ vec3 c2; float r2; float e=0.02;
-    float hx=pavH(p+vec2(e,0.0),u,near,c2,r2), hz=pavH(p+vec2(0.0,e),u,near,c2,r2);
-    pNrm=normalize(vec3(-(hx-h)/e*0.03,1.0,-(hz-h)/e*0.03)); }
-  diffuseColor.rgb=col; pRough=r; }`)
+{ vec2 p=vWP.xz; float typ=floor(vUv.x/10.0); vec2 q=vec2(vUv.x-typ*10.0,vUv.y), fq=fwidth(q);
+  vec3 col; float r; float h=pavH(q,fq,typ,p,col,r);
+  diffuseColor.rgb=col; pRough=r; pH=h; }`)
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=pRough;')
-      .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize((viewMatrix*vec4(pNrm,0.0)).xyz);');
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+{ vec3 pv=-vViewPosition, dpx=dFdx(pv), dpy=dFdy(pv), q1=cross(dpy,normal), q2=cross(normal,dpx);
+  float det=dot(dpx,q1); vec3 gr=sign(det)*(dFdx(pH)*q1+dFdy(pH)*q2);
+  normal=normalize(abs(det)*normal-gr*1.5); }`);
+    sh.fragmentShader=sh.fragmentShader.replace('float pRough=0.85;','float pRough=0.85;float pH=0.0;');
   };
-  pavMat.customProgramCacheKey=()=>'pavement';
+  pavMat.customProgramCacheKey=()=>'pavement2';
   mk(TP,TN,TU,pavMat);mk(KP,KN,KU,window.__kerbMat);window.__pavMat=pavMat;
   window.__swStats={segments:SW_SEGS.length};
 }
@@ -6511,7 +6732,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
       const a=pts[i],b=pts[i+1],na=nrm[i],nb=nrm[i+1],seg=Math.hypot(b[0]-a[0],b[1]-a[1]);
       const at=(p,nn,o,y)=>[p[0]+nn[0]*o,y,p[1]+nn[1]*o];
       // carriageway (lane paint from the strip texture; v in tiles of 40 m)
-      push(at(a,na,-hw,0.062),at(a,na,hw,0.062),at(b,nb,hw,0.062),at(b,nb,-hw,0.062),[[0,dist/40],[1,dist/40],[1,(dist+seg)/40],[0,(dist+seg)/40]],[0,1,0],P,N,U);
+      push(at(a,na,-hw,0.062),at(a,na,hw,0.062),at(b,nb,hw,0.062),at(b,nb,-hw,0.062),[[A.w*100-hw,dist],[A.w*100+hw,dist],[A.w*100+hw,dist+seg],[A.w*100-hw,dist+seg]],[0,1,0],P,N,U);
       // walks + kerbs both sides, gapped where a street or another avenue crosses
       [-1,1].forEach(sd=>{
         const mx=(a[0]+b[0])/2+(na[0]+nb[0])/2*sd*(hw+SW/2), mz=(a[1]+b[1])/2+(na[1]+nb[1])/2*sd*(hw+SW/2);
@@ -6519,7 +6740,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
         if(ARTERIALS.some((B,bi)=>bi!==ai&&polyDist(mx,mz,B.pts,false)<B.w/2+0.4))return;
         if(Math.abs(mx-riverCX(mz))<RIVER_HW+4)return;
         const i0=sd*hw,i1=sd*(hw+SW);
-        push(at(a,na,i0,CURB_H),at(a,na,i1,CURB_H),at(b,nb,i1,CURB_H),at(b,nb,i0,CURB_H),[[0,0],[SW,0],[SW,1],[0,1]],[0,1,0],SP,SN,SU);
+        push(at(a,na,i0,CURB_H),at(a,na,i1,CURB_H),at(b,nb,i1,CURB_H),at(b,nb,i0,CURB_H),[[10,dist],[10+SW,dist],[10+SW,dist+seg],[10,dist+seg]],[0,1,0],SP,SN,SU);   // avenue walks: interlocking blocks
         const kn=[na[0]*sd,0,na[1]*sd];
         push(at(a,na,i0,0),at(b,nb,i0,0),at(b,nb,i0,CURB_H),at(a,na,i0,CURB_H),[[0,0],[seg/9.6,0],[seg/9.6,1],[0,1]],[-kn[0],0,-kn[2]],KP,KN,KU);
         // lamps every ~42 m, trees between them
@@ -6533,8 +6754,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
   });
   const mkG=(PP,NN,UU)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(PP,3));
     g.setAttribute('normal',new THREE.Float32BufferAttribute(NN,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(UU,2));g.computeBoundingSphere();return g;};
-  const rt=pickPool(ROAD_POOL_MAJOR).clone();rt.needsUpdate=true;rt.wrapS=rt.wrapT=THREE.RepeatWrapping;rt.repeat.set(1,1);
-  const roadM=asphaltify(new THREE.MeshStandardMaterial({map:rt,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-9,polygonOffsetUnits:-9}),null);
+  const roadM=asphaltify(new THREE.MeshStandardMaterial({map:ROAD_BLANK,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-9,polygonOffsetUnits:-9}),{avenue:true,kind:2});
   const road=new THREE.Mesh(mkG(P,N,U),roadM);road.receiveShadow=true;road.frustumCulled=false;scene.add(road);
   const walk=new THREE.Mesh(mkG(SP,SN,SU),window.__pavMat);walk.receiveShadow=true;walk.frustumCulled=false;scene.add(walk);
   const kerb=new THREE.Mesh(mkG(KP,KN,KU),window.__kerbMat);kerb.frustumCulled=false;scene.add(kerb);
@@ -6544,12 +6764,13 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
     const pg=new THREE.CylinderGeometry(0.13,0.17,9.5,6);pg.translate(0,4.75,0);
     const hg=new THREE.BoxGeometry(0.5,0.18,1.1);hg.translate(0,9.5,-0.5);
     const pm=new THREE.InstancedMesh(pg,new THREE.MeshStandardMaterial({color:0x6c7076,roughness:0.5,metalness:0.6}),L.length);
-    const hm=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({color:0xffd9a0}),L.length);
+    const hm=new THREE.InstancedMesh(hg,new THREE.MeshBasicMaterial({color:0xffffff}),L.length),_lampHeadC=new THREE.Color();
     const d=new THREE.Object3D();
     L.forEach((l,i)=>{d.position.set(l.x,0,l.z);d.rotation.set(0,Math.atan2(-l.nx,-l.nz),0);d.updateMatrix();pm.setMatrixAt(i,d.matrix);hm.setMatrixAt(i,d.matrix);
       const px=l.x+l.nx*1.3,pz=l.z+l.nz*1.3;
-      (window.__artPools||(window.__artPools=[])).push({x:px,z:pz,s:7+Math.random()*3,c:l.warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
-      (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm:l.warm});});
+      (window.__artPools||(window.__artPools=[])).push({x:px,z:pz,s:7+Math.random()*3,c:l.warm?[1.0,0.6,0.26]:[0.55,0.85,0.78]});
+      (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm:l.warm});
+      hm.setColorAt(i,_lampHeadC.setHex(l.warm?0xffb860:0xd8fff0));});   // sodium gold / mercury blue-green
     pm.instanceMatrix.needsUpdate=true;hm.instanceMatrix.needsUpdate=true;scene.add(pm,hm);
   }
 }
@@ -6835,33 +7056,69 @@ ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
   scene.add(patch);
 });});
 
-// zebra crossings at avenue intersections — kept, but WORN: patchy alpha, chipped ends, occasional
-// faded stripe, grime specks, so it reads as old repainted road paint, not a crisp fresh decal
+// ---------- JUNCTION PAINT, as it was in 1989 ----------
+// Zebras sat only at avenue crossings, stretched to the road (bars 1-2 m wide) and UNLIT, so they
+// glowed white at night. Now every kerbed junction gets lit, worn paint at true size: 45 cm bars on a
+// 90 cm beat between the two side lines of the pre-1992 ladder crossing (はしご型), a 45 cm stop line
+// across the inbound half on the left, 止まれ elongated in the lane on alleys meeting a bigger road,
+// and the ◇ "crossing ahead" diamond 30 m before. Two merged meshes for the whole city.
+const XW_TILE=7.2;                                        // crossing texture: 8 bars across 7.2 m
 const zebraTex=tex((g,w,h)=>{
-  for(let x=6;x<w;x+=20){
-    const wear=0.4+Math.random()*0.38;
-    g.fillStyle=`rgba(228,226,220,${wear})`;
-    const chip=Math.random()*3;
-    g.fillRect(x,3+chip,10,h-6-chip*1.6);
-  }
-  for(let i=0;i<180;i++){g.fillStyle=`rgba(20,18,16,${Math.random()*0.12})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-},512,64,true);
-const zebraMat=new THREE.MeshBasicMaterial({map:zebraTex,transparent:true,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
-ROADS_X.forEach(rx=>{ROADS_Z.forEach(rz=>{
-  if(!(rx.major||rz.major))return;
-  if(Math.abs(rx.p)>500||Math.abs(rz.p)>500)return;
-  // crossings over the x-road (pedestrian walks along x): north+south approaches
-  [-1,1].forEach(sd=>{
-    const c1=new THREE.Mesh(new THREE.PlaneGeometry(rx.w-1,4),zebraMat);
-    c1.rotation.x=-Math.PI/2;
-    c1.position.set(rx.p,0.052,rz.p+sd*(rz.w/2+2.6));
-    scene.add(c1);
-    const c2=new THREE.Mesh(new THREE.PlaneGeometry(rz.w-1,4),zebraMat);
-    c2.rotation.set(-Math.PI/2,0,Math.PI/2);
-    c2.position.set(rx.p+sd*(rx.w/2+2.6),0.052,rz.p);
-    scene.add(c2);
-  });
-});});
+  const pm=w/XW_TILE, side=0.22*h/4;                         // v spans the 4 m crossing
+  for(let i=0;i<8;i++){const x=(i*0.9+0.225)*pm;g.fillStyle=`rgba(236,236,228,${0.82+TEXR()*0.14})`;g.fillRect(x,side,0.45*pm,h-2*side);}
+  g.fillStyle='rgba(236,236,228,.9)';g.fillRect(0,0,w,side*0.8);g.fillRect(0,h-side*0.8,w,side*0.8);   // ladder side lines
+  g.globalCompositeOperation='destination-out';             // wear: tyre tracks, chips, scuffs
+  [0.18,0.42,0.63,0.88].forEach(f=>{const gr=g.createLinearGradient(f*w-30,0,f*w+30,0);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(.5,`rgba(0,0,0,${0.35+TEXR()*0.3})`);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(f*w-30,0,60,h);});
+  for(let i=0;i<900;i++){g.fillStyle=`rgba(0,0,0,${0.2+TEXR()*0.6})`;const s=1+TEXR()*3;g.fillRect(TEXR()*w,TEXR()*h,s,s);}
+  g.globalCompositeOperation='source-over';
+},512,128,true);
+zebraTex.wrapS=THREE.RepeatWrapping;
+// paint atlas: 止まれ (top 60%), the diamond (next 25%), plain paint for stop lines (bottom strip)
+const markTex=tex((g,w,h)=>{
+  g.fillStyle='rgba(238,238,230,.95)';
+  g.font=`bold ${Math.round(w*0.86)}px "Hiragino Kaku Gothic ProN",sans-serif`;g.textAlign='center';g.textBaseline='middle';
+  ['止','ま','れ'].forEach((c,i)=>{g.save();g.translate(w/2,h*0.6*(i+0.5)/3);g.scale(1,1.12);g.fillText(c,0,0);g.restore();});
+  const y0=h*0.62,y1=h*0.85,cx=w/2;g.lineWidth=w*0.09;g.strokeStyle='rgba(238,238,230,.95)';
+  g.beginPath();g.moveTo(cx,y0+6);g.lineTo(w-14,(y0+y1)/2);g.lineTo(cx,y1-6);g.lineTo(14,(y0+y1)/2);g.closePath();g.stroke();
+  g.fillRect(0,h*0.9,w,h*0.1);
+  g.globalCompositeOperation='destination-out';
+  for(let i=0;i<1400;i++){g.fillStyle=`rgba(0,0,0,${0.2+TEXR()*0.6})`;const s=1+TEXR()*3;g.fillRect(TEXR()*w,TEXR()*h,s,s);}
+  g.globalCompositeOperation='source-over';
+},256,1024,true);
+const zebraMat=new THREE.MeshStandardMaterial({map:zebraTex,transparent:true,depthWrite:false,roughness:0.6,metalness:0,envMapIntensity:0.6,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
+const markMat=new THREE.MeshStandardMaterial({map:markTex,transparent:true,depthWrite:false,roughness:0.6,metalness:0,envMapIntensity:0.6,polygonOffset:true,polygonOffsetFactor:-8,polygonOffsetUnits:-8});
+{
+  const XP=[],XU=[],MP=[],MU=[];
+  // quad in an approach frame: J = junction centre, f = toward the junction, r = driver's right;
+  // l = metres right of the road centre, a = metres back from the junction centre
+  const quad=(P,U,J,f,l0,l1,a0,a1,u0,u1,v0,v1)=>{
+    const r=[-f[1],f[0]], at=(l,a)=>[J[0]-f[0]*a+r[0]*l,0.054,J[1]-f[1]*a+r[1]*l];
+    const c=[at(l0,a0),at(l1,a0),at(l1,a1),at(l0,a1)], t=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]];
+    const e1=[c[1][0]-c[0][0],c[1][2]-c[0][2]],e2=[c[2][0]-c[0][0],c[2][2]-c[0][2]],up=(e1[1]*e2[0]-e1[0]*e2[1])>0;
+    (up?[0,1,2,0,2,3]:[0,2,1,0,3,2]).forEach(k=>{P.push(...c[k]);U.push(...t[k]);});
+  };
+  const near=(list,p,skip)=>list.some(q=>q!==skip&&Math.abs(q.p-p)<40);
+  ROADS_X.forEach(rx=>ROADS_Z.forEach(rz=>{
+    if(rz.p>SEA_Z0-4||arterialAt(rx.p,rz.p,6))return;
+    const J=[rx.p,rz.p];
+    [[rx,rz,ROADS_Z,[0,1]],[rz,rx,ROADS_X,[1,0]]].forEach(([R,Q,crossList,ax])=>[-1,1].forEach(sd=>{
+      const f=[-sd*ax[0],-sd*ax[1]], hw=R.w/2, mouth=Q.w/2+0.4;
+      const xing=R.w>10&&Q.w>10, edge=R.w>=20?1.6:R.w>10?1.25:0.55;
+      let a=mouth;
+      if(xing){const o=TEXR()*XW_TILE;quad(XP,XU,J,f,-hw+0.5,hw-0.5,a+4,a,(o-hw+0.5)/XW_TILE,(o+hw-0.5)/XW_TILE,0,1);a+=4+1.0;}
+      if(xing||R.w<Q.w){quad(MP,MU,J,f,-(hw-edge),-0.15,a+0.45,a,0.1,0.9,0.005,0.095);a+=0.45;}       // stop line, inbound half
+      if(R.w<=7&&Q.w>7)quad(MP,MU,J,f,-hw*0.5-0.8,-hw*0.5+0.8,a+1.5+6,a+1.5,0,1,0.4,1.0);               // 止まれ
+      if(xing&&!near(crossList,Q.p+sd*(a+32),Q)){                                                     // ◇ crossing ahead
+        (R.w>=20?[3.4,7.4]:[hw*0.5]).forEach(l=>quad(MP,MU,J,f,-l-0.75,-l+0.75,a+30+5,a+30,0,1,0.15,0.38));
+      }
+    }));
+  }));
+  const mk=(P,U,mat)=>{if(!P.length)return;const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+    const N=new Float32Array(P.length);for(let i=1;i<N.length;i+=3)N[i]=1;g.setAttribute('normal',new THREE.BufferAttribute(N,3));
+    g.computeBoundingSphere();const m=new THREE.Mesh(g,mat);m.frustumCulled=false;m.receiveShadow=true;scene.add(m);};
+  mk(XP,XU,zebraMat);mk(MP,MU,markMat);
+}
 
 // ---------- RIVER (recessed, embankments, bridges) ----------
 const waterTex=tex((g,w,h)=>{
@@ -7221,8 +7478,10 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
     let sh,sw;
     if(nm.shape==='wide'){sh=Math.min(bh*0.3,2.6+Math.random()*3.2);sw=sh*(2.1+Math.random()*1.9);}
     else if(nm.shape==='square'){sh=Math.min(bh*0.32,4+Math.random()*5);sw=sh*(0.82+Math.random()*0.3);}
-    else if(nm.shape==='slim'){sh=Math.min(bh*0.62,13+Math.random()*15);sw=sh*(0.09+Math.random()*0.08);}
-    else{sh=Math.min(bh*0.55,9+Math.random()*17);sw=sh*(0.18+Math.random()*0.16);}
+    // vertical tategata signs are ~0.9-2.6 m wide in reality (these reached 8.8 m): pick a real width and
+    // derive the height from the same aspect range the sign faces were drawn for
+    else if(nm.shape==='slim'){sw=0.9+Math.random()*1.1;sh=Math.min(bh*0.62,sw/(0.09+Math.random()*0.08));sw=Math.min(sw,sh*0.17);}
+    else{sw=1.2+Math.random()*1.4;sh=Math.min(bh*0.55,sw/(0.18+Math.random()*0.16));sw=Math.min(sw,sh*0.34);}
     const sign=new THREE.Mesh(new THREE.BoxGeometry(0.5,sh,sw),nm.m); // single shared material -> the merge pass fuses all signs of each variant (was a 6-material array, which it had to skip)
     const side=Math.random()<.5?1:-1;
     // ~28% of signs project on an arm perpendicular to the wall (Tokyo blade/cantilever signs),
@@ -7287,11 +7546,13 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
 // (8, up from 3) keeps repetition across the city far less noticeable.
 function drawShopBay(g,x0,y0,sw,h){
   const shut=Math.random()<0.12; // closed shutter bay
-  const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.62;
+  const bx=x0+3,bw2=Math.max(1,sw-6),by=y0+h*0.16,bh2=h*0.74;   // glazing ~0.4-3.5 m on the 4.2 m strip (its sill sat at 1.3 m, chest high)
   if(shut){
-    g.fillStyle='#232227';g.fillRect(bx,by,bw2,bh2);
-    for(let sx=bx;sx<bx+bw2;sx+=6){g.fillStyle='rgba(0,0,0,.22)';g.fillRect(sx,by,1.4,bh2);}
-    g.fillStyle='rgba(255,255,255,.05)';g.fillRect(bx,by,bw2,2);
+    // galvanised roller shutter (シャッター): horizontal slats, a box housing on top, a dirty bottom rail
+    g.fillStyle='#4e5154';g.fillRect(bx,by,bw2,bh2);
+    for(let sy=by;sy<by+bh2;sy+=3){g.fillStyle='rgba(0,0,0,.28)';g.fillRect(bx,sy,bw2,1);g.fillStyle='rgba(255,255,255,.06)';g.fillRect(bx,sy+1,bw2,1);}
+    g.fillStyle='#3a3c3f';g.fillRect(bx-1,by-4,bw2+2,6);
+    g.fillStyle='rgba(20,18,14,.5)';g.fillRect(bx,by+bh2-5,bw2,5);
     g.fillStyle='#111';g.beginPath();g.arc(bx+bw2*0.5,by+bh2*0.5,2.4,0,7);g.fill();
     g.fillStyle='rgba(6,4,4,.9)';g.fillRect(x0,y0,3,h);
     return;
@@ -7321,10 +7582,20 @@ function drawShopBay(g,x0,y0,sw,h){
   }
   // counter across the bottom of the window
   g.fillStyle='rgba(20,14,10,.6)';g.fillRect(bx,by+bh2*0.8,bw2,bh2*0.2);
+  // noren: the split cloth curtain over an eating-house door, backlit by the room
+  if(TEXR()<0.28){
+    const nw=Math.min(bw2*0.6,bw2),nx=bx+(bw2-nw)*TEXR(),nh=bh2*0.42,np=3+Math.floor(TEXR()*2);
+    const nc=['#1c2747','#2a2a2e','#6b1a1a','#e9e4d8'][Math.floor(TEXR()*4)],light=nc==='#e9e4d8';
+    const ch=['そば','めし','酒','らーめん','ゆ','やきとり','おでん'][Math.floor(TEXR()*7)];
+    g.fillStyle='#1a120c';g.fillRect(nx-2,by,nw+4,3);                       // the rod
+    for(let i=0;i<np;i++){const pw=nw/np;g.fillStyle=nc;g.fillRect(nx+i*pw+0.8,by+3,pw-1.6,nh);}
+    g.fillStyle=light?'#1c1c1c':'#efeae0';g.font=`bold ${Math.round(Math.min(nh*0.55,nw/ch.length*0.9))}px "Hiragino Mincho ProN",serif`;
+    g.textAlign='center';g.textBaseline='middle';g.fillText(ch,nx+nw/2,by+3+nh*0.5);
+  }
   g.fillStyle='rgba(255,255,255,.1)';g.fillRect(bx,by+bh2*0.8,bw2,1.2);
   // mannequin silhouette (some bays)
   if(Math.random()<0.3){
-    const mx=bx+bw2*(0.2+Math.random()*0.6),mbase=by+bh2*0.82,mh=bh2*0.62,mw=Math.max(2,mh*0.24);
+    const mx=bx+bw2*(0.2+Math.random()*0.6),mbase=by+bh2*0.97,mh=bh2*0.55,mw=Math.max(2,mh*0.24);
     g.fillStyle='rgba(8,6,10,.68)';
     g.beginPath();g.arc(mx,mbase-mh*0.92,mw*0.34,0,7);g.fill();
     g.beginPath();g.moveTo(mx-mw*0.42,mbase);g.lineTo(mx-mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.5,mbase-mh*0.62);g.lineTo(mx+mw*0.42,mbase);g.closePath();g.fill();
@@ -7379,7 +7650,7 @@ const sfFrameXf=[],sfSignXf=[],sfAwningXf=[],_sfCol=new THREE.Color();
 const sfInnerXf=Array.from({length:STOREFRONT_VARIANT_COUNT},()=>[]);
 const parapetXf=[]; // PERF: every building's roof parapet, batched into one InstancedMesh
 const antXf=[],warnXf=[]; // PERF: rooftop antenna masts + red warning lights, batched + shared material
-const antGeo=new THREE.CylinderGeometry(.3,.5,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
+const antGeo=new THREE.CylinderGeometry(.18,.32,14,6), antMat=new THREE.MeshLambertMaterial({color:0x555});
 const warnGeo=new THREE.SphereGeometry(0.42,6,6), warnMat=new THREE.MeshBasicMaterial({color:0xff1a10});   // ICAO red, lamp-sized
 
 // ---- 1989 TOKYO ADVERTISING ------------------------------------------------------------------
@@ -7838,7 +8109,7 @@ const facadeBaseColors=['#c4c3bf','#9ea1a4','#d8d7d2','#7f8286','#b6b5b0','#5f62
 const facades=facadeBaseColors.map((base,i)=>{
   const preset=facadeGridPresets[i%facadeGridPresets.length];
   return {
-    preset,
+    preset,base,
     ...(()=>{const pr=facadeTexPair(base,preset);return {map:pr.map,lit:pr.lit};})(),
     normal:facadeNormalMaps[i%facadeGridPresets.length],
     roughness:0.74+Math.random()*0.22,
@@ -7848,41 +8119,66 @@ const facades=facadeBaseColors.map((base,i)=>{
 });
 const glassPair=glassTexPair(),glassT=glassPair.map;
 // ---- REAL ROOFTOP SURFACES ----
-// The old roof was flat gravel-noise on a Lambert material with no normal map, so from altitude every
-// roof read as generic vector-purple. This is tar-felt roofing with ALIGNED panel seams, patch
-// repairs, water-pooling stains and rust streaks, plus a matching normal map so raking light picks
-// out the seams and patches. A 3-map pool + per-building pick kills the identical-layout repeat.
-function drawRoofSeams(g,w,h,albedo){
-  const strip=h/8;
-  for(let s=1;s<8;s++){const y=s*strip;
-    if(albedo){g.fillStyle='rgba(0,0,0,.34)';g.fillRect(0,y-1.5,w,3);g.fillStyle='rgba(160,156,150,.10)';g.fillRect(0,y+1.5,w,1.5);}
-    else{g.fillStyle='#c8c8c8';g.fillRect(0,y-1.5,w,3);}
+// What a Tokyo flat roof actually is, seen from a helicopter: (0) 押えコンクリート — protective concrete
+// screed cut into ~3 m bays by black sealant expansion joints, (1) green urethane waterproofing, worn
+// paler along the walkways, (2) grey sheet membrane laid in 1 m strips with lapped seams. Drawn in
+// WORLD metres in the shader with anti-aliased joints (so the grid is crisp at 20 m and resolves
+// to an even tone at 500 m instead of moiré), plus ponding stains, soot and drain streaks.
+const ROOF_GLSL=`
+varying vec3 vWP;uniform float uRoofT;
+float rh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float rn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(rh(i),rh(i+vec2(1,0)),f.x),mix(rh(i+vec2(0,1)),rh(i+vec2(1,1)),f.x),f.y);}
+float rLine(float x,float per,float hw,float fp){float f=fract(x/per)*per,d=min(f,per-f),a=fp*0.7+1e-4;
+  return mix(1.0-smoothstep(hw-a,hw+a,d),2.0*hw/per,smoothstep(0.15,0.4,fp/per));}
+`;
+function roofify(m,type){
+  m.onBeforeCompile=sh=>{
+    if(typeof fogHook==='function')fogHook(sh);
+    sh.uniforms.uRoofT={value:type};
+    sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vWP;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWP=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+ROOF_GLSL+'float rRough=0.9;')
+      .replace('#include <map_fragment>',`#include <map_fragment>
+{ vec2 p=vWP.xz; vec2 fp=fwidth(p); float f=max(fp.x,fp.y);
+  vec3 col; float j=0.0;
+  float big=rn(p*0.11), mid=rn(p*0.9);
+  if(uRoofT<0.5){
+    vec2 o=vec2(rh(floor(p/40.0)),rh(floor(p/40.0)+3.1))*3.0;              // each roof's bays start where its builder chose
+    j=max(rLine(p.x+o.x,3.0,0.012,fp.x),rLine(p.y+o.y,3.0,0.012,fp.y));
+    float bay=rh(floor((p+o)/3.0));
+    col=vec3(0.40,0.395,0.375)*(0.88+0.18*bay*(1.0-smoothstep(0.3,1.0,f)))*(0.85+0.25*mid);
+    col=mix(col,vec3(0.035,0.035,0.04),j*0.9); rRough=0.92;
+  }else if(uRoofT<1.5){
+    col=mix(vec3(0.20,0.30,0.24),vec3(0.36,0.44,0.38),smoothstep(0.45,0.8,big))*(0.9+0.18*mid);
+    rRough=0.7;
+  }else{
+    float o=rh(floor(p/40.0))*1.0;
+    j=rLine(p.x+o,1.0,0.008,fp.x);
+    col=vec3(0.46,0.47,0.47)*(0.9+0.16*rn(vec2(floor(p.x+o),p.y*0.05)))*(0.88+0.2*mid);
+    col=mix(col,col*0.62,j); rRough=0.6;
   }
+  col*=1.0-0.38*smoothstep(0.58,0.82,rn(p*0.23+11.0));                     // ponding stains where water sits
+  col*=1.0-0.18*smoothstep(0.5,0.9,rn(vec2(p.x*2.7,p.y*0.35)+5.0));         // soot / drain streaks
+  diffuseColor.rgb=col*diffuse;
+}`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=rRough;');
+  };
+  m.customProgramCacheKey=()=>'roof3';
+  return m;
 }
-function makeRoofMap(){return tex((g,w,h)=>{
-  g.fillStyle='#57534e';g.fillRect(0,0,w,h);
-  for(let i=0;i<11000;i++){const v=Math.random()*34;g.fillStyle=`rgba(${74+v},${71+v},${66+v},.6)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-  const strip=h/8;
-  for(let s=0;s<8;s++){const v=Math.random()*26;g.fillStyle=`rgba(${30+v},${29+v},${27+v},.12)`;g.fillRect(0,s*strip,w,strip);}
-  drawRoofSeams(g,w,h,true);
-  for(let i=0;i<6;i++){const pw=26+Math.random()*80,ph=20+Math.random()*60,px=Math.random()*w,py=Math.random()*h;
-    g.fillStyle='rgba(14,13,12,.45)';g.fillRect(px,py,pw,ph);g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;g.strokeRect(px,py,pw,ph);}
-  for(let i=0;i<9;i++){const cx=Math.random()*w,cy=Math.random()*h,rr=16+Math.random()*44;
-    const gr=g.createRadialGradient(cx,cy,rr*0.15,cx,cy,rr);
-    gr.addColorStop(0,'rgba(64,60,78,.20)');gr.addColorStop(.75,'rgba(36,32,46,.10)');gr.addColorStop(1,'rgba(8,6,12,0)');
-    g.fillStyle=gr;g.beginPath();g.arc(cx,cy,rr,0,7);g.fill();}
-  for(let i=0;i<7;i++){g.strokeStyle=`rgba(${96+Math.random()*40},${52+Math.random()*18},28,.16)`;g.lineWidth=2+Math.random()*3;
-    const x=Math.random()*w,y=Math.random()*h;g.beginPath();g.moveTo(x,y);g.lineTo(x+(Math.random()-.5)*24,y+24+Math.random()*46);g.stroke();}
-},512,512,true);}
-const roofNrm=normalMapFromHeight((g,w,h)=>{
-  drawRoofSeams(g,w,h,false);
-  for(let i=0;i<3500;i++){const v=110+Math.random()*90;g.fillStyle=`rgb(${v},${v},${v})`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
-},512,512,1.9);
-const roofMats=[0,1,2].map(()=>new THREE.MeshStandardMaterial({map:makeRoofMap(),normalMap:roofNrm,normalScale:new THREE.Vector2(0.75,0.75),roughness:0.85,metalness:0.05}));
+const roofMats=[0,1,2].map(t=>roofify(new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.9,metalness:0.02,envMapIntensity:0.4}),t));
 const roofMat=roofMats[0]; // alias for any single-reference use
 function pickRoof(){return roofMats[Math.floor(Math.random()*roofMats.length)];}
-const parapetMat=new THREE.MeshLambertMaterial({color:0x3a3448});
-const woodMat=new THREE.MeshLambertMaterial({color:0x4e3a2e});
+const parapetMat=new THREE.MeshLambertMaterial({color:0xffffff});   // tinted per building (instance colour) to its own cladding
+// shared cooling-tower parts (one material each, so the merge pass fuses every tower in the city)
+const coolMat=new THREE.MeshStandardMaterial({roughness:0.6,metalness:0.05,map:tex((g,w,h)=>{
+  g.fillStyle='#93b4ac';g.fillRect(0,0,w,h);
+  for(let y=6;y<h-4;y+=4){g.fillStyle='rgba(20,40,36,.42)';g.fillRect(0,y,w,2);}          // air-inlet louvres
+  g.fillStyle='rgba(255,255,255,.25)';g.fillRect(0,0,w,3);g.fillStyle='rgba(0,0,0,.3)';g.fillRect(0,h-3,w,3);
+},64,64,true)});
+const coolTopMat=new THREE.MeshStandardMaterial({color:0x4a504e,roughness:0.6,metalness:0.4});
+const COOL_GEO=[new THREE.CylinderGeometry(1.45,1.7,2.6,18),new THREE.CylinderGeometry(0.95,1.05,0.7,14),new THREE.BoxGeometry(2.6,0.6,2.6)];
 // Showa enka / theatre bill: gold title band, vertical mincho kanji with cream outline, cast line.
 function vintagePosterTex(){return tex((g,w,h)=>{
   const rg=g.createLinearGradient(0,0,0,h);rg.addColorStop(0,'#b8281e');rg.addColorStop(1,'#6c1610');
@@ -7936,11 +8232,13 @@ const billboardFrameXf=[],billboardGlowXf=[];
 function mountBillboard(grp,bw,bd,bh,cx,cz,forcedSide){
   const roll=Math.random();
   let t,w2,h2;
-  if(roll<0.55){t=idolPosterTex();w2=bw*0.56;h2=w2*1.414;}   // 1989 wall posters, B-series proportion
-  else if(roll<0.4){t=vintagePosterTex();w2=bw*0.46;h2=bw*1.2;}
-  else if(roll<0.58){t=foodAdTex();w2=bw*0.48;h2=bw*1.2;}
-  else if(roll<0.76){t=noirPosterTex();w2=bw*0.46;h2=bw*1.2;}
-  else{t=null;w2=bw*0.95;h2=bw*0.48;}                               // trivision: three ads on turning prism slats
+  // sized like the real boards (wall posters up to ~10 m wide, trivisions ~12 x 6 m), not as a share of the
+  // building: a 60 m block used to carry a 27 x 35 m poster
+  if(roll<0.55){t=idolPosterTex();w2=Math.min(bw*0.56,6+Math.random()*4);h2=w2*1.414;}   // 1989 wall posters, B-series proportion
+  else if(roll<0.4){t=vintagePosterTex();w2=Math.min(bw*0.46,5);h2=w2*2.6;}
+  else if(roll<0.58){t=foodAdTex();w2=Math.min(bw*0.48,5);h2=w2*2.5;}
+  else if(roll<0.76){t=noirPosterTex();w2=Math.min(bw*0.46,5);h2=w2*2.6;}
+  else{t=null;w2=Math.min(bw*0.95,8+Math.random()*4);h2=w2*0.5;}       // trivision: three ads on turning prism slats
   // LED/backlit panels: a hair under full white, so poster content survives night exposure + bloom.
   // Materials are shared per texture, so boards showing the same design batch together.
   const mat=t?(t.__bbMat||(t.__bbMat=new THREE.MeshBasicMaterial({map:t,color:0xc8c8c8}))):trivisionMat(trivisionAtlas());
@@ -7993,7 +8291,7 @@ function resTexPair(base){
     }
   });
 }
-const resFacades=[resTexPair('#cac6be'),resTexPair('#a9a8a4'),resTexPair('#bdb9b0'),resTexPair('#d6d4ce')];   // white tile, grey, pale stone, white
+const RES_BASES=['#cac6be','#a9a8a4','#bdb9b0','#d6d4ce'],resFacades=RES_BASES.map(resTexPair);   // white tile, grey, pale stone, white
 const grassTex=tex((g,w,h)=>{
   g.fillStyle='#3a4630';g.fillRect(0,0,w,h);
   for(let i=0;i<2600;i++){g.fillStyle=`rgba(${45+Math.random()*30},${60+Math.random()*30},${35+Math.random()*20},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
@@ -8080,17 +8378,105 @@ const FACADE_ROOM_GLSL=`
 uniform vec2 uGrid;
 float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
 `;
-function facadeInteriors(m,preset){
-  const u={uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}};
+// ---- WALL MATERIAL + WEATHERING, shared by every facade shader -------------------------------
+// The wall between the windows was a flat fill. Tokyo 1989 is clad: 45 mm mosaic tile, 二丁掛
+// brick-format tile, board-marked concrete with tie holes, 吹付 spray coat, granite. Each pattern is
+// drawn in METRES from the face's own grid (uCell = bay width, storey height, shop-level height) and
+// every high-frequency term fades to its own average as its period approaches a pixel, so joints
+// are crisp at the kerb and never moiré from the air. On top: grime at the foot, a dirty coping and
+// drips under the roof edge, and the rain streaks that run from every sill. vBI (per vertex) =
+// the box's top height, a per-building seed, and whether this face is a windowless party wall.
+const WALL_VERT=sh=>{sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bInfo;varying vec3 vBI;varying vec3 vWP;')
+  .replace('#include <begin_vertex>','#include <begin_vertex>\nvBI=bInfo;vWP=(modelMatrix*vec4(transformed,1.0)).xyz;');};
+const WALL_GLSL=`
+uniform vec3 uCell;uniform vec4 uClad;uniform vec3 uWallC;varying vec3 vBI;varying vec3 vWP;
+float wh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float wn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(wh(i),wh(i+vec2(1,0)),f.x),mix(wh(i+vec2(0,1)),wh(i+vec2(1,1)),f.x),f.y);}
+// anti-aliased joint grid: 1 on the tile face, 0 in the joint; fades to the true coverage far off
+float wJoint(vec2 p,vec2 per,vec2 jw,vec2 fp){
+  vec2 f=fract(p/per)*per, d=min(f,per-f), a=fp*0.7+1e-4;
+  vec2 m=smoothstep(jw*0.5-a,jw*0.5+a,d), mean=1.0-jw/per;
+  vec2 k=smoothstep(vec2(0.18),vec2(0.45),fp/per);
+  m=mix(m,mean,k); return m.x*m.y;}
+// a tone that changes per tile, faded out where tiles are sub-pixel (no sparkle)
+float wTone(vec2 id,vec2 per,vec2 fp){return (wh(id)-0.5)*(1.0-smoothstep(0.2,0.5,max(fp.x/per.x,fp.y/per.y)));}
+vec3 wallMat(vec3 c,vec2 m,vec2 fp,inout float rough){
+  float t=uClad.x, sd=vBI.y*61.0;
+  float lo=0.94+0.12*wn(m*0.35+sd);                                         // broad patchiness
+  if(t<0.5){                                                                 // 45 mm mosaic tile
+    vec2 per=vec2(0.05);
+    c*=mix(0.62,1.0,wJoint(m,per,vec2(0.006),fp))*(1.0+0.07*wTone(floor(m/per)+sd,per,fp));
+    rough=0.55;
+  }else if(t<1.5){                                                           // 二丁掛 tile, running bond
+    vec2 per=vec2(0.237,0.07), q=m; q.x+=0.5*per.x*mod(floor(q.y/per.y),2.0);
+    c*=mix(0.6,1.0,wJoint(q,per,vec2(0.01),fp))*(1.0+0.12*wTone(floor(q/per)+sd,per,fp));
+    rough=0.6;
+  }else if(t<2.5){                                                           // board-marked concrete
+    vec2 per=vec2(0.9,1.8), id=floor(m/per);
+    c*=mix(0.86,1.0,wJoint(m,per,vec2(0.014),fp))*(1.0+0.16*wTone(id+sd,per,fp));
+    vec2 hf=fract(m/vec2(0.45,0.6))-0.5; float hk=1.0-smoothstep(0.02,0.06,max(fp.x,fp.y));
+    c*=1.0-0.55*hk*(1.0-smoothstep(0.022,0.032,length(hf*vec2(0.45,0.6))));   // tie-bolt holes
+    c*=0.9+0.2*mix(wn(m*3.1+sd),0.5,smoothstep(0.03,0.12,max(fp.x,fp.y)));
+    rough=0.92;
+  }else if(t<3.5){                                                           // 吹付 spray coat
+    c*=0.94+0.12*mix(wn(m*37.0+sd),0.5,smoothstep(0.006,0.02,max(fp.x,fp.y)));
+    rough=0.95;
+  }else{                                                                     // granite panels
+    vec2 per=vec2(1.2,0.6);
+    c*=mix(0.55,1.0,wJoint(m,per,vec2(0.007),fp))*(1.0+0.18*wTone(floor(m/per)+sd,per,fp));
+    c*=0.88+0.24*mix(wh(floor(m*90.0)),0.5,smoothstep(0.004,0.012,max(fp.x,fp.y)));
+    rough=0.38;
+  }
+  return c*lo;
+}
+// grime multiplier (1 = clean). cf/lo/hi locate the window in its cell so streaks hang off sills.
+float wallDirt(vec2 m,vec2 fp,vec2 cf,float hasWin,float sillY,float x0,float x1){
+  float y=vWP.y, top=vBI.x, sd=vBI.y*37.0, amt=(0.45+0.75*wh(vec2(sd,3.1)))*uClad.y;
+  float sk=1.0-smoothstep(0.03,0.1,fp.x);                                     // streak detail fades far off
+  float strk=mix(0.5,wn(vec2(m.x*9.0,sd))*wn(vec2(m.x*2.3,sd+5.0))*2.0,sk);
+  float d=0.0;
+  d+=0.42*(1.0-smoothstep(0.0,0.7+0.9*wn(vec2(m.x*0.7,sd)),y));              // splash-back at the foot
+  d+=0.12*(1.0-smoothstep(0.0,14.0,y));                                      // traffic soot on the low floors
+  float tr=top-y;
+  d+=0.35*(1.0-smoothstep(0.0,0.45,tr));                                      // dirty coping
+  d+=0.55*strk*exp(-tr/(1.2+7.0*wn(vec2(m.x*0.9,sd+2.0))))*step(0.0,tr);       // drips off the roof edge
+  float ds=sillY-cf.y*uCell.y;                                                 // metres below the sill
+  float inW=smoothstep(x0-0.05,x0+0.05,cf.x)*(1.0-smoothstep(x1-0.05,x1+0.05,cf.x));
+  d+=0.6*hasWin*inW*strk*step(0.0,ds)*exp(-ds/(0.35+0.9*wn(vec2(m.x*1.3,sd+9.0))));
+  d+=0.18*wn(vec2(m.x*0.5,m.y*0.08)+sd);                                      // long vertical weather marks
+  return 1.0-clamp(d*amt,0.0,0.75);
+}
+`;
+// per-material wall uniforms: grid cell in metres, cladding type/dirt/AC density, wall albedo
+function wallUniforms(W){return {uCell:{value:new THREE.Vector3(...W.cell)},uClad:{value:new THREE.Vector4(...W.clad)},uWallC:{value:new THREE.Color(W.col)}};}
+// shared prelude: where this pixel sits on the face, whether its cell is a real window (above the
+// shop level, below the parapet, not on a party wall), and the clad + weathered wall colour
+const WALL_PRELUDE=(lo,hi)=>`
+  vec2 mW=cell*uCell.xy, fpm=fw*uCell.xy;
+  float cBot=vWP.y-cf.y*uCell.y, cTop=cBot+uCell.y;
+  float hasWin=step(uCell.z-0.05,cBot)*step(cTop,vBI.x-0.55);
+  if(vBI.z>0.5)hasWin*=step(fh(vec2(ci.x*1.7,floor(vBI.y*977.0))),0.13)*(1.0-smoothstep(0.25,0.5,pxs));   // party wall: a stair window column at most
+  float wRough=0.8; vec3 wallC=wallMat(uWallC*diffuse,mW,fpm,wRough);
+  float dm=wallDirt(mW,fpm,cf,hasWin,${lo}.y*uCell.y,${lo}.x,${hi}.x);
+  wallC*=dm;
+  diffuseColor.rgb=mix(wallC,diffuseColor.rgb*dm,hasWin);
+  totalEmissiveRadiance*=hasWin;
+  roughnessFactor=mix(wRough,roughnessFactor,hasWin);
+  normal=normalize(mix(normalize(vNormal),normal,hasWin));`;
+function facadeInteriors(m,preset,W){
+  const u=Object.assign({uGrid:{value:new THREE.Vector2(preset.cols,preset.rows)}},wallUniforms(W));
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u,GLASS_U);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+GLASS_GLSL+FACADE_ROOM_GLSL)
+    WALL_VERT(sh);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\n'+GLASS_GLSL+FACADE_ROOM_GLSL+WALL_GLSL)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   float dist=length(vViewPosition);
   vec2 cell=vUv*uGrid, ci=floor(cell), cf=fract(cell);
   vec2 fw=fwidth(cell); float pxs=max(fw.x,fw.y);
+  ${WALL_PRELUDE('vec2(0.16,0.22)','vec2(0.84,0.78)')}
   if(pxs<0.14){                                                            // close enough to draw windows ourselves
     // the window, frame, mullion and sill are drawn here with anti-aliased edges — resolution
     // independent, so they stay sharp up close instead of a magnified 512px texture
@@ -8098,10 +8484,19 @@ function facadeInteriors(m,preset){
     vec2 aw=fw*0.75+1e-4;
     vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); float win=s1.x*s1.y;
     vec2 s2=smoothstep(lo-fr-aw,lo-fr+aw,cf)-smoothstep(hi+fr-aw,hi+fr+aw,cf); float frm=clamp(s2.x*s2.y-win,0.0,1.0);
-    float mull=win*(1.0-smoothstep(0.012-aw.x,0.012+aw.x,abs(cf.x-0.5)))*step(4.5,uGrid.y/uGrid.x*2.0+1.0);
+    win*=hasWin; frm*=hasWin;
+    float mull=win*(1.0-smoothstep(0.012-aw.x,0.012+aw.x,abs(cf.x-0.5)))*step(0.2,fh(ci.yx*0.37+floor(vBI.y*313.0)));   // aluminium sash: mostly two sliding leaves (引き違い)
     vec2 s3=smoothstep(vec2(lo.x-fr*1.6,lo.y-fr-0.035)-aw,vec2(lo.x-fr*1.6,lo.y-fr-0.035)+aw,cf)
-           -smoothstep(vec2(hi.x+fr*1.6,lo.y-fr)-aw,vec2(hi.x+fr*1.6,lo.y-fr)+aw,cf); float sill=clamp(s3.x*s3.y,0.0,1.0);
-    vec3 wallC=diffuseColor.rgb;
+           -smoothstep(vec2(hi.x+fr*1.6,lo.y-fr)-aw,vec2(hi.x+fr*1.6,lo.y-fr)+aw,cf); float sill=clamp(s3.x*s3.y,0.0,1.0)*hasWin;
+    // wall-hung air-conditioner outdoor unit under some windows: pale casing, dark fan disc, its shadow
+    float acu=0.0,acFan=0.0,acSh=0.0;
+    if(fh(ci*0.71+floor(vBI.y*131.0))<uClad.z*hasWin){
+      vec2 aq=(cf-vec2(0.3+0.4*fh(ci+2.0),0.02))*uCell.xy;                      // metres from the unit's corner
+      vec2 a2=aw*uCell.xy;
+      vec2 ab=smoothstep(vec2(-0.4,0.0)-a2,vec2(-0.4,0.0)+a2,aq)-smoothstep(vec2(0.4,0.56)-a2,vec2(0.4,0.56)+a2,aq);
+      acu=ab.x*ab.y; acFan=acu*(1.0-smoothstep(0.17-a2.x,0.17+a2.x,length(aq-vec2(-0.12,0.28))));
+      vec2 sb=smoothstep(vec2(-0.4,-0.18),vec2(-0.36,-0.12),aq)-smoothstep(vec2(0.4,0.0),vec2(0.44,0.02),aq); acSh=sb.x*sb.y;
+    }
     float fadeNear=1.0-smoothstep(0.08,0.14,pxs);
     // room behind the glass (interior mapping) — only where a room is big enough to read
     vec4 lc=texture2D(emissiveMap,(ci+0.5)/uGrid); lc.rgb=emissiveMapTexelToLinear(lc).rgb;
@@ -8144,14 +8539,15 @@ function facadeInteriors(m,preset){
     glassEm+=fogColor*(0.10+0.55*fres)*(1.0-hr.a*0.9);                       // the evening sky in the pane, stronger at grazing angles
     #endif
     glassEm=glassEm*(1.0-hr.a*0.55)+hr.rgb;                                   // the Apache going past in the glass
-    vec3 col=wallC;
-    col=mix(col,wallC*1.22+0.02,sill);                                     // sill catches the light
-    col=mix(col,vec3(0.05,0.052,0.055),frm);                               // window frame
+    vec3 col=wallC*(1.0-0.45*acSh);
+    col=mix(col,vec3(0.62,0.62,0.6)*dm,sill);                              // pressed aluminium sill
+    col=mix(col,vec3(0.42,0.43,0.44)*dm,frm);                              // anodised aluminium sash frame
     col=mix(col,vec3(0.012,0.014,0.016),win);                              // glass
-    col=mix(col,vec3(0.05,0.052,0.055),mull);
+    col=mix(col,vec3(0.36,0.37,0.38)*dm,mull);
+    col=mix(col,mix(vec3(0.66,0.64,0.58)*dm,vec3(0.03),acFan),acu);
     diffuseColor.rgb=mix(diffuseColor.rgb,col,fadeNear);
-    totalEmissiveRadiance=mix(totalEmissiveRadiance,glassEm*win*(1.0-mull),fadeNear);
-    roughnessFactor=mix(roughnessFactor,mix(roughnessFactor,0.05,win),fadeNear);
+    totalEmissiveRadiance=mix(totalEmissiveRadiance,glassEm*win*(1.0-mull)*(1.0-acu),fadeNear);
+    roughnessFactor=mix(roughnessFactor,mix(mix(wRough,0.35,max(frm,sill)),0.05,win),fadeNear);
     metalnessFactor=mix(metalnessFactor,mix(metalnessFactor,0.0,win),fadeNear);
   }
 }`);
@@ -8164,16 +8560,20 @@ function facadeInteriors(m,preset){
 // the texture only for wall colour and which windows are lit.
 //   mode 0 = curtain wall: full-height panes, mullion grid, opaque spandrel every 4th row
 //   mode 1 = apartments: sliding doors with a centre split, balcony slab and baluster rail
-function crispFacade(m,mode,cols,rows){
-  const u={uGridC:{value:new THREE.Vector2(cols,rows)}};
+function crispFacade(m,mode,cols,rows,W){
+  const u=Object.assign({uGridC:{value:new THREE.Vector2(cols,rows)}},wallUniforms(W));
   m.onBeforeCompile=sh=>{
     if(typeof fogHook==='function')fogHook(sh);
     Object.assign(sh.uniforms,u,GLASS_U);
-    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;\n'+GLASS_GLSL)
+    WALL_VERT(sh);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGridC;\n'+GLASS_GLSL+WALL_GLSL+`
+float fh(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+float wBox(vec2 q,vec2 a,vec2 b,vec2 e){vec2 s=smoothstep(a-e,a+e,q)-smoothstep(b-e,b+e,q);return clamp(s.x*s.y,0.0,1.0);}`)
       .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
 {
   vec2 cell=vUv*uGridC, ci=floor(cell), cf=fract(cell);
   vec2 fw=fwidth(cell); float pxs=max(fw.x,fw.y);
+  ${mode===0?WALL_PRELUDE('vec2(0.045,0.0)','vec2(0.955,1.0)'):WALL_PRELUDE('vec2(0.05,0.38)','vec2(0.95,0.84)')}
   if(pxs<0.16){
     vec2 aw=fw*0.75+1e-4;
     float fade=1.0-smoothstep(0.1,0.16,pxs);
@@ -8191,39 +8591,71 @@ function crispFacade(m,mode,cols,rows){
       float spnd=step(2.5,rowTop);                                         // spandrel row
       vec2 qa=vec2(0.045), qb=vec2(0.955);
       vec2 mq=smoothstep(qa-aw,qa+aw,cf)-smoothstep(qb-aw,qb+aw,cf);
-      win=mq.x*mq.y*(1.0-spnd);
+      win=mq.x*mq.y*(1.0-spnd)*hasWin;
       float hvy=1.0-step(0.5,mod(ci.x,3.0));                             // every third mullion is a structural fin
       vec3 mlc=vec3(0.035,0.04,0.045)*(1.0+hvy*0.4);
-      col=mix(mlc,vec3(0.03,0.035,0.04),spnd);
+      col=mix(wallC,mix(mlc,vec3(0.03,0.035,0.04),spnd),hasWin);
       col=mix(col,vec3(0.02,0.025,0.03),win);
       float depthG=0.55+0.45*cf.y;                                         // ceiling light falls off toward the floor
-      em=(light*max(emissive,vec3(0.35))*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres)*(1.0-hr.a*0.9)+hr.rgb)*win + sky*0.05*spnd;
+      em=(light*max(emissive,vec3(0.35))*0.75*depthG*step(0.05,on)+sky*(0.12+0.6*fres)*(1.0-hr.a*0.9)+hr.rgb)*win + sky*0.05*spnd*hasWin;
     }else{
-      vec2 lo=vec2(0.14,0.42), hi=vec2(0.86,0.84);
-      vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); win=s1.x*s1.y;
-      vec2 s2=smoothstep(lo-0.02-aw,lo-0.02+aw,cf)-smoothstep(hi+0.02-aw,hi+0.02+aw,cf); float frm=clamp(s2.x*s2.y-win,0.0,1.0);
+      vec2 lo=vec2(0.14,0.30), hi=vec2(0.86,0.88);
+      vec2 s1=smoothstep(lo-aw,lo+aw,cf)-smoothstep(hi-aw,hi+aw,cf); float w0=s1.x*s1.y; win=w0*hasWin;
+      vec2 s2=smoothstep(lo-0.02-aw,lo-0.02+aw,cf)-smoothstep(hi+0.02-aw,hi+0.02+aw,cf); float frm=clamp(s2.x*s2.y-w0,0.0,1.0)*hasWin;
       float split=win*(1.0-smoothstep(0.008-aw.x,0.008+aw.x,abs(cf.x-0.5)));
-      float slab=smoothstep(0.955-aw.y,0.955+aw.y,cf.y);                    // balcony slab edge
-      float railTop=1.0-smoothstep(0.012,0.012+aw.y*2.0,abs(cf.y-0.38));
+      float slab=smoothstep(0.955-aw.y,0.955+aw.y,cf.y)*hasWin;            // balcony slab edge
+      float railTop=(1.0-smoothstep(0.012,0.012+aw.y*2.0,abs(cf.y-0.38)))*hasWin;
       float balFine=(1.0-smoothstep(0.08-aw.x*3.0,0.08+aw.x*3.0,abs(fract(cf.x*14.0)-0.5)*2.0));
-      float bal=step(cf.y,0.38)*step(0.05,cf.y)*mix(0.35,balFine,1.0-smoothstep(0.025,0.05,fw.x));   // balusters resolve to a band far off (no moire)
-      col=mix(col,col*1.25+0.03,slab);
-      col=mix(col,vec3(0.05),frm);
+      float bal=step(cf.y,0.38)*step(0.05,cf.y)*mix(0.35,balFine,1.0-smoothstep(0.025,0.05,fw.x))*hasWin;   // balusters resolve to a band far off (no moire)
+      col=wallC;
+      col=mix(col,col*1.18+0.03,slab);
+      col=mix(col,vec3(0.40,0.41,0.42)*dm,frm);
       col=mix(col,vec3(0.02,0.022,0.025),win);
-      col=mix(col,vec3(0.06),split);
-      col=mix(col,vec3(0.10,0.10,0.11),max(railTop,bal*0.85));
+      col=mix(col,vec3(0.36),split);
+      // balcony life: the AC outdoor unit on the floor, washing on the pole, a futon over the rail
+      vec2 q=cf*uCell.xy, e=aw*uCell.xy; float sd=floor(vBI.y*211.0);
+      float ac=0.0,fan=0.0;
+      if(fh(ci*1.31+sd)<uClad.z){float ax=(0.22+0.56*fh(ci+5.0))*uCell.x;
+        ac=wBox(q,vec2(ax-0.4,0.16),vec2(ax+0.4,0.74),e)*hasWin; fan=ac*(1.0-smoothstep(0.18-e.x,0.18+e.x,length(q-vec2(ax-0.12,0.45))));}
+      col=mix(col,mix(vec3(0.68,0.67,0.62)*dm,vec3(0.035),fan),ac);
+      col=mix(col,vec3(0.24,0.245,0.25)*dm,max(railTop,bal*0.85));
+      float wash=0.0;
+      if(fh(ci*2.3+sd)<0.32&&hasWin>0.5){
+        float pole=wBox(q,vec2(0.1,0.86*uCell.y),vec2(uCell.x-0.1,0.86*uCell.y+0.03),e);
+        float id=floor(q.x/0.42), h2=fh(vec2(id,ci.y)+ci.x*7.0+sd);
+        float len=0.45+0.5*fh(vec2(id+3.0,ci.y)+sd), xl=fract(q.x/0.42)*0.42;
+        wash=wBox(vec2(xl,q.y),vec2(0.05,0.86*uCell.y-len),vec2(0.37,0.86*uCell.y),e)*step(0.35,h2)*(1.0-smoothstep(0.2,0.6,fw.x*uCell.x));
+        vec3 wc=h2<0.6?vec3(0.85,0.85,0.82):h2<0.75?vec3(0.32,0.42,0.62):h2<0.88?vec3(0.75,0.55,0.55):vec3(0.55,0.6,0.5);
+        col=mix(col,vec3(0.1),pole); col=mix(col,wc*dm,wash);
+      }
+      float fut=0.0;
+      if(fh(ci*3.7+sd)<0.1&&hasWin>0.5){float fx=(0.25+0.5*fh(ci+9.0))*uCell.x;
+        fut=wBox(q,vec2(fx-0.5,0.38*uCell.y-0.55),vec2(fx+0.5,0.38*uCell.y+0.06),e);
+        vec3 fc=fh(ci+11.0)<0.5?vec3(0.86,0.8,0.7):vec3(0.8,0.62,0.66);
+        col=mix(col,fc*dm,fut);}
       float tv=step(gh1(ci+3.3),0.05)*(0.5+0.5*sin(uT*7.0+gh1(ci)*20.0)*sin(uT*2.3));   // a television flickering
-      em=(light*max(emissive,vec3(0.35))*1.4*step(0.05,on)+vec3(0.25,0.4,0.9)*tv*0.5+sky*(0.08+0.5*fres)*(1.0-hr.a*0.9)+hr.rgb)*win*(1.0-split);
+      em=(light*max(emissive,vec3(0.35))*1.4*step(0.05,on)+vec3(0.25,0.4,0.9)*tv*0.5+sky*(0.08+0.5*fres)*(1.0-hr.a*0.9)+hr.rgb)*win*(1.0-split)
+         *(1.0-max(wash,fut))*(1.0-ac);
+      win*=1.0-max(max(wash,fut),ac);
     }
     diffuseColor.rgb=mix(diffuseColor.rgb,col,fade);
     totalEmissiveRadiance=mix(totalEmissiveRadiance,em,fade);
-    roughnessFactor=mix(roughnessFactor,mix(roughnessFactor,0.06,win),fade);
+    roughnessFactor=mix(roughnessFactor,mix(wRough,0.06,win),fade);
   }
 }`);
   };
   m.customProgramCacheKey=()=>'crisp'+mode;
   return m;
 }
+// one grid cell per structural bay x storey, by preset: big loft panes on wide bays down to the tight
+// small-office grid; a 1980s Tokyo floor is 3.1-3.6 m. Shop level (storefront + its sign) is 5.4 m.
+const FACADE_CELLS=[[4.2,3.6],[3.6,3.45],[3.2,3.3],[2.8,3.2],[2.4,3.1]], SHOP_H=5.4;
+// cladding: 0 mosaic tile, 1 二丁掛 tile, 2 board-marked concrete, 3 吹付 spray coat, 4 granite.
+// [type, dirt, wall-AC density]: concrete weathers worst, polished granite offices have central air
+const CLADS=[[0,0.8,0.14],[1,0.8,0.12],[2,1.25,0.08],[3,1.0,0.16],[4,0.45,0.0]];
+function pickClad(base){const v=new THREE.Color(base),l=(v.r+v.g+v.b)/3;
+  if(l<0.45)return TEXR()<0.6?CLADS[4]:CLADS[2];
+  const r=TEXR();return r<0.38?CLADS[0]:r<0.58?CLADS[1]:r<0.74?CLADS[2]:CLADS[3];}
 const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   const fac=facades[i%facades.length];
   if(fac.map){fac.map.wrapS=fac.map.wrapT=THREE.RepeatWrapping;fac.map.needsUpdate=true;}
@@ -8235,8 +8667,10 @@ const FACADE_POOL=(()=>{const a=[];for(let i=0;i<26;i++){
   // multiplier with a whisper of warm or cool, so the facade's own material shows through.
   const warm=Math.random()<0.3;
   m.color.setHSL((warm?36+Math.random()*10:205+Math.random()*15)/360,0.02+Math.random()*0.04,0.82+Math.random()*0.15);
-  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:fac.preset||facadeGridPresets[0],winGain:0.8+Math.random()*0.45,facade:true});
-  facadeInteriors(m,fac.preset||facadeGridPresets[0]);
+  const preset=fac.preset||facadeGridPresets[0],pi=Math.max(0,facadeGridPresets.indexOf(preset)),cl=pickClad(fac.base);
+  m.userData.cell={bay:FACADE_CELLS[pi][0],h:FACADE_CELLS[pi][1],rps:1,cols:preset.cols,rows:preset.rows};m.userData.wall=fac.base;
+  (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset,winGain:0.8+Math.random()*0.45,facade:true});
+  facadeInteriors(m,preset,{cell:[FACADE_CELLS[pi][0],FACADE_CELLS[pi][1],SHOP_H],clad:[cl[0],cl[1],cl[2],0],col:fac.base});
   a.push(m);} return a;})();
 glassT.wrapS=glassT.wrapT=THREE.RepeatWrapping;glassT.needsUpdate=true;
 glassPair.lit.wrapS=glassPair.lit.wrapT=THREE.RepeatWrapping;glassPair.lit.needsUpdate=true;
@@ -8244,40 +8678,49 @@ const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++){
   const m=new THREE.MeshPhysicalMaterial({map:glassT,roughness:0.10+Math.random()*0.08,metalness:0.25,envMapIntensity:1.5,clearcoat:0.5,clearcoatRoughness:0.15,
     emissive:0xffffff,emissiveMap:glassPair.lit,emissiveIntensity:0});
   m.color.setHSL((200+Math.random()*20)/360,0.06+Math.random()*0.06,0.78+Math.random()*0.15);   // faint blue-green float glass
+  // curtain wall: 1.6 m mullion bays, 1 m rows, a spandrel every 4th row = a 4 m office floor
+  m.userData.cell={bay:1.6,h:1.0,rps:4,cols:12,rows:GLASS_ROWS};m.userData.wall='#8d9094';
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.9});
-  crispFacade(m,0,12,22);
+  crispFacade(m,0,12,GLASS_ROWS,{cell:[1.6,1.0,SHOP_H],clad:[4,0.3,0,0],col:'#8d9094'});
   a.push(m);}return a;})();
-const RES_POOL=resFacades.map(pr=>{
+const RES_POOL=resFacades.map((pr,i)=>{
   [pr.map,pr.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;});
   const m=new THREE.MeshStandardMaterial({map:pr.map,emissive:0xffffff,emissiveMap:pr.lit,emissiveIntensity:0,roughness:0.85,metalness:0.0,envMapIntensity:0.35});
+  // mansion bay: one balcony with a pair of sliding doors, 3.4 m wide; residential floor 2.9 m
+  m.userData.cell={bay:3.4,h:2.9,rps:1,cols:5,rows:9};m.userData.wall=RES_BASES[i];
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.85});
-  crispFacade(m,1,5,9);
+  crispFacade(m,1,5,9,{cell:[3.4,2.9,SHOP_H],clad:[i%2?3:0,1.0,0.5,0],col:RES_BASES[i]});
   return m;});
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
-// Facade UVs are 0..1 per box face, so a tall tower stretched ONE window grid over its whole height —
-// which reads as a blank slab. Repeat the grid per ~`unit` metres instead, per face, so window rows
-// stay a constant size on a 12u shophouse and a 280u tower alike.
-function scaleFacadeUVs(geo,bw,bh,bd,unit){
-  const uv=geo.attributes.uv; if(!uv||uv.count<24)return;
-  const ux=Math.max(1,Math.round(bw/unit)), uz=Math.max(1,Math.round(bd/unit)), uy=Math.max(1,Math.round(bh/unit));
-  for(let i=0;i<24;i++){
-    let su,sv;
-    if(i<8){su=uz;sv=uy;}          // +X / -X faces
-    else if(i<16){su=ux;sv=uz;}    // +Y / -Y (roof / underside)
-    else{su=ux;sv=uy;}             // +Z / -Z faces
-    uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv);
+// Facade UVs IN METRES. They were 0..1 per box face, so one window grid was stretched over every face:
+// a 14 m shophouse showed 26 half-metre "floors" and a 170 m tower 7 m ones. Now one grid cell is one
+// bay x one storey of the material (userData.cell), columns rounded to whole bays per face so no
+// window is cut at a corner, rows counted up from the shop level so floors line up across the block,
+// and a per-building cell offset so neighbours sharing a material don't light the same windows.
+// bInfo carries (top of this box, building seed, party-wall flag) to the facade shaders.
+function facadeUVs(geo,bw,bh,bd,y0,mat,seed,street){
+  const C=mat.userData.cell, uv=geo.attributes.uv, pos=geo.attributes.position, n=uv.count;
+  if(!C||n<24)return;
+  const bi=new Float32Array(n*3), ox=Math.floor(seed*997)%C.cols, oy=Math.floor(seed*7919)%C.rows;
+  const bit=[1,2,0,0,4,8];                                 // box faces: +x,-x,+y,-y,+z,-z
+  for(let i=0;i<n;i++){
+    const f=Math.floor(i/4);
+    bi[i*3]=y0+bh;bi[i*3+1]=seed;bi[i*3+2]=(street!==undefined&&bit[f]&&!(street&bit[f]))?1:0;
+    if(f===2||f===3)continue;
+    const span=f<2?bd:bw, nb=Math.max(1,Math.round(span/C.bay)), y=pos.getY(i)+bh/2+y0;
+    uv.setXY(i,(uv.getX(i)*nb+ox)/C.cols,((y-SHOP_H)/C.h+oy*C.rps)/C.rows);
   }
-  uv.needsUpdate=true;
+  uv.needsUpdate=true;geo.setAttribute('bInfo',new THREE.BufferAttribute(bi,3));
 }
-function spawnBuilding(cx,cz,bw,bd,style){
+// roof caps: texture in world metres (one tile = 12 m) instead of one tile stretched per roof
+function roofUVs(geo,bw,bd){const uv=geo.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*bw/12,uv.getY(i)*bd/12);uv.needsUpdate=true;}
+function spawnBuilding(cx,cz,bw,bd,style,street){
   if(corridorHit(cx,cz,Math.hypot(bw,bd)/2))return;     // the avenues and the Yamanote line cut through the blocks
   const grp=new THREE.Group();
   const rm=pickRoof();
   let bh,mat;
   // TOKYO HEIGHT MIX: a 3-storey shophouse sits right against a 20-storey block. Each style spans a
   // wide range and occasionally throws a spike, so skylines are jagged instead of uniformly medium.
-  // Heights stay jagged but bounded: one window grid is stretched over each face, so beyond roughly
-  // 175u the window rows get visibly oversized. Spikes are capped just under that.
   if(style==='glass'){ bh=66+Math.random()*74; if(Math.random()<0.2)bh=145+Math.random()*30; mat=_pickPool(GLASS_POOL); }
   else if(style==='res'){
     const r=Math.random();
@@ -8289,20 +8732,22 @@ function spawnBuilding(cx,cz,bw,bd,style){
     else               bh = r<0.32 ? (14+Math.random()*16) : r<0.82 ? (34+Math.random()*38) : (78+Math.random()*52);
     mat=_pickPool(FACADE_POOL);
   }
-  // NOTE: do NOT tile the facade UVs. facadeTex paints a full-face composition — a diagonal glass
-  // sheen, edge-anchored sky/ground gradients — so repeating it bands the towers with diagonal
-  // parallelograms. One grid per face is correct; tall buildings are kept in range by the height caps.
+  const seed=TEXR(), pw=style==='glass'?undefined:street;   // towers stand free; block infill has party walls
   const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
+  facadeUVs(box.geometry,bw,bh,bd,0,mat,seed,pw);
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
+  roofUVs(cap.geometry,bw,bd);
   cap.position.y=bh+0.1;cap.receiveShadow=true;grp.add(cap);
-  parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7}); // batched after the loop
+  parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7,c:mat.__coping||(mat.__coping=new THREE.Color().copy(mat.color).multiply(new THREE.Color(mat.userData.wall||'#9a9a96')).multiplyScalar(0.72))}); // batched after the loop
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
     const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
     const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),mat);
+    facadeUVs(b2.geometry,w2,h2,d2,bh,mat,seed);
     b2.position.y=bh+h2/2;b2.castShadow=true;grp.add(b2);
     const cap2=new THREE.Mesh(new THREE.BoxGeometry(w2*1.004,0.35,d2*1.004),rm);
+    roofUVs(cap2.geometry,w2,d2);
     cap2.position.y=bh+h2+0.1;grp.add(cap2);
     topY=bh+h2;bh=topY;
   }
@@ -8319,13 +8764,13 @@ function spawnBuilding(cx,cz,bw,bd,style){
       const zc=o[0], ry=o[1], fs=zc>=0?1:-1, wz=cz+zc; // fs = outward normal; wz = world-z of the face
       // lit interior window recessed behind a dark frame (bulkhead+kickplate), an emissive sign band,
       // and protruding awning canopies — all collected as world-space transforms for later instancing.
-      sfInnerXf[sfi].push({x:cx,y:2.5,z:wz,yaw:ry,w:bw*0.98,h:4.2});
-      sfFrameXf.push({x:cx,y:4.9,z:wz+fs*0.12,yaw:ry,w:bw,h:1.0,d:0.5});
+      sfInnerXf[sfi].push({x:cx,y:2.1,z:wz,yaw:ry,w:bw*0.98,h:4.2});   // shop storey brought down to street level: glass from the floor, 3.5 m head
+      sfFrameXf.push({x:cx,y:4.5,z:wz+fs*0.12,yaw:ry,w:bw,h:1.0,d:0.5});
       sfFrameXf.push({x:cx,y:0.35,z:wz+fs*0.12,yaw:ry,w:bw,h:0.7,d:0.5});
-      sfSignXf.push({x:cx,y:4.75,z:wz+fs*0.42,yaw:ry,w:bw*0.9,h:0.42,d:0.12,c:sfSignCols[Math.floor(Math.random()*sfSignCols.length)]});
+      sfSignXf.push({x:cx,y:4.35,z:wz+fs*0.42,yaw:ry,w:bw*0.9,h:0.42,d:0.12,c:sfSignCols[Math.floor(Math.random()*sfSignCols.length)]});
       const segN=2, segW=bw/segN;
       for(let s2=0;s2<segN;s2++){
-        sfAwningXf.push({x:cx-bw/2+segW*(s2+0.5),y:4.05,z:wz+fs*0.75,yaw:ry,w:segW*0.92,h:0.14,d:1.3,c:sfAwningCols[Math.floor(Math.random()*sfAwningCols.length)]});
+        sfAwningXf.push({x:cx-bw/2+segW*(s2+0.5),y:3.65,z:wz+fs*0.75,yaw:ry,w:segW*0.92,h:0.14,d:1.3,c:sfAwningCols[Math.floor(Math.random()*sfAwningCols.length)]});
       }
       // warm shop-light spill onto the sidewalk below the storefront (instanced after the district loop)
       const push=o[0]>=0?2.0:-2.0;
@@ -8342,13 +8787,15 @@ function spawnBuilding(cx,cz,bw,bd,style){
     if(style==='neon'||style==='mixed')addBillboard(grp,bw,bd,bh,cx,cz);
     else if(Math.random()<0.35)addBillboard(grp,bw,bd,bh,cx,cz); // some ads on towers/apartments too
     if(Math.random()<(style==='neon'?0.3:0.15)){
-      const tank=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.6,3,8),woodMat);tank.position.y=bh+3.6;grp.add(tank);
-      const cone=new THREE.Mesh(new THREE.ConeGeometry(1.7,1.3,8),new THREE.MeshLambertMaterial({color:0x3d3a36}));cone.position.y=bh+5.8;grp.add(cone);
+      // round FRP cooling tower (丸型冷却塔) on its stand — this was a New York wooden water tank
+      const tw=new THREE.Mesh(COOL_GEO[0],coolMat);tw.position.y=bh+1.9;grp.add(tw);
+      const fan=new THREE.Mesh(COOL_GEO[1],coolTopMat);fan.position.y=bh+3.55;grp.add(fan);
+      const st=new THREE.Mesh(COOL_GEO[2],coolTopMat);st.position.y=bh+0.3;grp.add(st);
     }
     // extra wall-mounted animated video screen high on neon/mixed towers (idol or ad loop, throttled draw)
     if(bh>34&&Math.random()<0.16&&bigScreens.length<14){
       const bs=Math.random()<0.45?idolScreenTex():bigScreenTex();
-      const sc2w=bw*0.7,sc2h=sc2w*1.5;
+      const sc2w=Math.min(bw*0.7,7),sc2h=sc2w*1.5;   // a 1989 wall video screen tops out ~7 x 10 m
       const scr=new THREE.Mesh(new THREE.PlaneGeometry(sc2w,sc2h),new THREE.MeshBasicMaterial({map:bs.t}));
       const side2=Math.random()<0.5?1:-1;
       scr.position.set(side2*(bw/2+0.32),bh-sc2h*0.55-1,0);
@@ -8362,9 +8809,10 @@ function spawnBuilding(cx,cz,bw,bd,style){
   }
   if(style==='glass'&&Math.random()<0.5&&bigScreens.length<14){
     const bs=Math.random()<0.35?idolScreenTex():bigScreenTex();
-    const scr=new THREE.Mesh(new THREE.PlaneGeometry(bw*0.9,bw*0.56),new THREE.MeshBasicMaterial({map:bs.t}));
+    const sw3=Math.min(bw*0.9,14);   // Alta Vision-class screen, ~14 m at most (was up to 54 m)
+    const scr=new THREE.Mesh(new THREE.PlaneGeometry(sw3,sw3*0.62),new THREE.MeshBasicMaterial({map:bs.t}));
     scr.position.set(0,bh*0.62,bd/2+0.32);grp.add(scr);
-    const glow=new THREE.Mesh(new THREE.PlaneGeometry(bw*1.2,bw*0.76),
+    const glow=new THREE.Mesh(new THREE.PlaneGeometry(sw3*1.3,sw3*0.84),
       new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.12,blending:THREE.AdditiveBlending,depthWrite:false}));
     glow.position.set(0,bh*0.62,bd/2+0.22);grp.add(glow);
     bigScreens.push(bs);
@@ -8472,7 +8920,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     if(bw<3.6||bd2<3.6)continue;
     let style=d;
     if(d==='mixed')style=Math.random()<0.08?'glass':(Math.random()<0.5?'neon':'mixed');
-    spawnBuilding(lcx,lcz,bw,bd2,style==='cbd'?'mixed':style);
+    spawnBuilding(lcx,lcz,bw,bd2,style==='cbd'?'mixed':style,(a===nx-1?1:0)|(a===0?2:0)|(b===nz-1?4:0)|(b===0?8:0));
   }
 }
 
@@ -8544,9 +8992,12 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   sfBoxBatch(sfSignXf,sfSignInstMat,true);
   sfBoxBatch(sfAwningXf,sfAwningInstMat,true);
   if(parapetXf.length){
-    const m=new THREE.InstancedMesh(sfUnitBox,parapetMat,parapetXf.length);
-    parapetXf.forEach((t,i)=>{dummy.position.set(t.x,t.y,t.z);dummy.rotation.set(0,0,0);dummy.scale.set(t.w,t.h,t.d);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});
-    m.instanceMatrix.needsUpdate=true;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);
+    // a RING of four 30 cm walls, not a solid box: the solid box sat over the whole roof, so from the
+    // air every roof read as one flat navy lid and the roof surface underneath was never seen
+    const m=new THREE.InstancedMesh(sfUnitBox,parapetMat,parapetXf.length*4),T=0.3;let k=0;
+    parapetXf.forEach(t=>{[[0,t.d/2-T/2,t.w,T],[0,-t.d/2+T/2,t.w,T],[t.w/2-T/2,0,T,t.d-2*T],[-t.w/2+T/2,0,T,t.d-2*T]].forEach(([ox,oz,sx,sz])=>{
+      dummy.position.set(t.x+ox,t.y,t.z+oz);dummy.rotation.set(0,0,0);dummy.scale.set(sx,t.h,sz);dummy.updateMatrix();m.setMatrixAt(k,dummy.matrix);if(t.c)m.setColorAt(k,t.c);k++;});});
+    m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);
   }
   const posBatch=(arr,geo,mat)=>{ // batch fixed-size props that only vary in position
     if(!arr.length)return;
@@ -8574,18 +9025,38 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   // These were UNLIT boxes with a violet night baked in, so at dusk the far city sat there
   // as glowing night blocks. Now they take light like the near city, with their windows on
   // the emissive channel the time-of-day rig dials up as it gets dark.
-  const impPair=(base,step,pLit)=>_pairTex(48,128,(g,gl,w,h)=>{
+  // an exact 6-bay x 16-storey grid (8 px cells) that TILES: the vertex shader below sizes it to each
+  // instance's own scale, so a far block's floors are 3.4 m like the near city's (they were stretched
+  // over 18-168 m boxes, so far towers showed 10 m storeys)
+  const impPair=(base,pLit)=>_pairTex(48,128,(g,gl,w,h)=>{
     g.fillStyle=base;g.fillRect(0,0,w,h);
-    for(let y=6;y<h;y+=step+2){for(let x=4;x<w;x+=step){
-      g.fillStyle='rgba(40,46,52,.55)';g.fillRect(x,y,2,2.4);            // window
-      if(Math.random()<pLit){gl.fillStyle=Math.random()<0.55?'rgb(255,214,160)':'rgb(214,230,255)';gl.fillRect(x,y,2,2.4);}
+    for(let y=0;y<16;y++){g.fillStyle='rgba(0,0,0,.12)';g.fillRect(0,y*8,w,1);
+      for(let x=0;x<6;x++){
+      g.fillStyle='rgba(40,46,52,.6)';g.fillRect(x*8+2,y*8+2.5,4.5,3.8);            // window
+      if(TEXR()<pLit){gl.fillStyle=TEXR()<0.55?'rgb(255,214,160)':'rgb(214,230,255)';gl.fillRect(x*8+2,y*8+2.5,4.5,3.8);}
     }}
   });
-  const pA=impPair('#a39d93',7,0.30),pB=impPair('#8a8782',6,0.24);
+  const pA=impPair('#a39d93',0.30),pB=impPair('#8a8782',0.24);
+  [pA.map,pA.lit,pB.map,pB.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;});
   const geo=new THREE.BoxGeometry(1,1,1);
-  const matA=new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0});
-  const matB=new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0});
+  const impUV=m=>{m.onBeforeCompile=sh=>{fogHook(sh);sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+#ifdef USE_INSTANCING
+  vec3 isc=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
+  if(abs(normal.y)<0.5)vUv=vec2(max(1.0,floor((abs(normal.x)>0.5?isc.z:isc.x)/3.6+0.5))*uv.x/6.0,isc.y/3.4*uv.y/16.0);
+#endif`);};m.customProgramCacheKey=()=>'impostor';return m;};
+  const matA=impUV(new THREE.MeshLambertMaterial({map:pA.map,color:0x8a8a8a,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0}));
+  const matB=impUV(new THREE.MeshLambertMaterial({map:pB.map,color:0x8a8a8a,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0}));
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:matA,preset:null,winGain:1.2},{mat:matB,preset:null,winGain:1.2});
+  // one texture per face stretched a 18 m block's ~13 window rows over a 168 m one (1.3-13 m storeys):
+  // repeat the tile per instance size instead, so every far block keeps ~3.5 m storeys and ~3.4 m bays
+  [pA,pB].forEach(P=>[P.map,P.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;}));
+  [[matA,7],[matB,6]].forEach(([m,step])=>{const rows=Math.floor(122/(step+2)),cols=Math.floor(44/step);
+    m.onBeforeCompile=sh=>{fogHook(sh);sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+  #ifdef USE_INSTANCING
+  { vec3 isz=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
+    vUv*=vec2((abs(normal.x)>0.5?isz.z:isz.x)/${(cols*3.4).toFixed(1)},isz.y/${(rows*3.5).toFixed(1)}); }
+  #endif`);};
+    m.customProgramCacheKey=()=>'impTile'+step;});
   const mA=new THREE.InstancedMesh(geo,matA,Math.ceil(count/2));
   const mB=new THREE.InstancedMesh(geo,matB,Math.floor(count/2));
   mA.frustumCulled=false;mB.frustumCulled=false;
@@ -8852,9 +9323,13 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const sbeam=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,340,12,1,true),new THREE.MeshBasicMaterial({color:0x39e6ff,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false}));sbeam.position.set(padX,174,0);ship.add(sbeam);
   const beaconTop=new THREE.Mesh(new THREE.SphereGeometry(3.4,12,12),new THREE.MeshBasicMaterial({color:0x9ff2ff,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));beaconTop.position.set(padX,344,0);ship.add(beaconTop);window.__shipBeacon=beaconTop;
 
-  const SHIP_Z=680;
+  // modelled at ~121 x 13 m; an Aegis cruiser of 1989 (Ticonderoga class, the 7th Fleet's at Yokosuka)
+  // is 173 x 16.8 m, so the hull is scaled 1.4 about its waterline. The beacon column stays its own size.
+  const SHIP_Z=680, SK=1.4;
+  ship.scale.setScalar(SK);
+  [sbeam,beaconTop].forEach(o=>{o.scale.setScalar(1/SK);o.position.y/=SK;});
   ship.position.set(0,0,SHIP_Z);scene.add(ship);
-  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX,4.82,SHIP_Z), t:0};
+  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX*SK,4.82*SK,SHIP_Z), t:0};
 }
 
 // ---------- TOKYO TOWER-style landmark: international orange + white, warm-lit ----------
@@ -8862,25 +9337,27 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const tw=new THREE.Group();
   const redWire=new THREE.MeshBasicMaterial({color:0xff6a1e,wireframe:true});   // lattice in its floodlit orange
   const red=new THREE.MeshLambertMaterial({color:0xd8481c});                     // aviation (international) orange
-  const lower=new THREE.Mesh(new THREE.ConeGeometry(30,80,8,6,true),redWire);
-  lower.position.y=40;tw.add(lower);
-  const lowerS=new THREE.Mesh(new THREE.ConeGeometry(29,80,8,1,true),new THREE.MeshLambertMaterial({color:0xd8481c,transparent:true,opacity:.22,side:THREE.DoubleSide}));
-  lowerS.position.y=40;tw.add(lowerS);
-  const deck1=new THREE.Mesh(new THREE.CylinderGeometry(12,13,6,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
-  deck1.position.y=82;tw.add(deck1);
-  const upper=new THREE.Mesh(new THREE.ConeGeometry(11,50,8,4,true),redWire);
-  upper.position.y=110;tw.add(upper);
-  const deck2=new THREE.Mesh(new THREE.CylinderGeometry(5.5,6,4,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
-  deck2.position.y=134;tw.add(deck2);
-  const mastT=new THREE.Mesh(new THREE.CylinderGeometry(.8,1.6,36,8),red);
-  mastT.position.y=152;tw.add(mastT);
+  // TRUE HEIGHT: 333 m to the antenna tip (it stood 173 m — barely a 40-storey block). Main Deck at
+  // 145-150 m, Special Observatory at 250 m, legs spread ~80 m; lattice drawn as tapered frusta.
+  const lower=new THREE.Mesh(new THREE.CylinderGeometry(11,44,145,8,10,true),redWire);
+  lower.position.y=72.5;tw.add(lower);
+  const lowerS=new THREE.Mesh(new THREE.CylinderGeometry(10.5,43,145,8,1,true),new THREE.MeshLambertMaterial({color:0xd8481c,transparent:true,opacity:.22,side:THREE.DoubleSide}));
+  lowerS.position.y=72.5;tw.add(lowerS);
+  const deck1=new THREE.Mesh(new THREE.CylinderGeometry(15,15,10,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
+  deck1.position.y=150;tw.add(deck1);
+  const upper=new THREE.Mesh(new THREE.CylinderGeometry(4,9.5,93,8,6,true),redWire);
+  upper.position.y=201.5;tw.add(upper);
+  const deck2=new THREE.Mesh(new THREE.CylinderGeometry(6,6,5,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
+  deck2.position.y=250;tw.add(deck2);
+  const mastT=new THREE.Mesh(new THREE.CylinderGeometry(0.6,2.6,79,8),red);
+  mastT.position.y=292;tw.add(mastT);
   const beacon=new THREE.Mesh(new THREE.SphereGeometry(1.6,8,8),new THREE.MeshBasicMaterial({color:0xff2266}));
-  beacon.position.y=171;tw.add(beacon);
+  beacon.position.y=332;tw.add(beacon);
   window.__beacon=beacon;
-  const gl=new THREE.PointLight(0xff4fa0,1.8,150);gl.position.y=60;tw.add(gl);
+  const gl=new THREE.PointLight(0xff4fa0,1.8,240);gl.position.y=110;tw.add(gl);
   tw.position.set(TOWER.x,0,TOWER.z);
   scene.add(tw);
-  buildings.push({m:tw,w:44,d:44,h:170});
+  buildings.push({m:tw,w:80,d:80,h:333,landmark:true});   // landmark: no roof clutter on the antenna tip
 }
 
 // ---------- TOKYO: shrines · vermilion torii · stone lanterns · gardens ----------
@@ -8928,7 +9405,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const g=new THREE.Group();
     const plaza=new THREE.Mesh(new THREE.BoxGeometry(72,0.3,72),new THREE.MeshLambertMaterial({color:0x59554c}));plaza.position.y=0.16;plaza.receiveShadow=true;g.add(plaza);
     const path=new THREE.Mesh(new THREE.BoxGeometry(7,0.34,52),new THREE.MeshLambertMaterial({color:0x7c7669}));path.position.set(0,0.19,5);g.add(path);
-    const t=makeTorii(20);t.position.set(0,0,28);g.add(t);
+    const t=makeTorii(11);t.position.set(0,0,28);g.add(t);   // ~10 m: a big city-shrine torii (was 18 m)
     const sh=makeShrine();sh.position.set(0,0,-22);g.add(sh);
     g.position.set(cx,0,cz);scene.add(g);
     for(let z2=20;z2>=-12;z2-=11){[-5,5].forEach(x2=>addLantern(cx+x2,cz+z2));}
@@ -8942,7 +9419,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const toriiSpots=[[-60,-360],[150,300],[-380,-40],[380,170],[-150,70],[240,-250],[70,430],[-260,-300],[420,-150],[-40,250],[190,-430],[-430,330]];
   toriiSpots.forEach(([x,z])=>{ if(x>440&&x<560)return; if(z>560)return; if(Math.abs(z-192)<12||Math.abs(z+288)<12)return;
     if(roadAt(x,z,7)||corridorHit(x,z,8))return;   // a torii in the middle of a junction reads as a placement bug
-    clearAround(x,z,15); const t=makeTorii(11+Math.random()*4);t.position.set(x,0,z);t.rotation.y=Math.random()<.5?0:Math.PI/2;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
+    clearAround(x,z,15); const t=makeTorii(6.5+Math.random()*3);t.position.set(x,0,z);t.rotation.y=Math.random()<.5?0:Math.PI/2;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
 
   let placed=0,tries=0;
   while(placed<18&&tries<220){tries++; const x=(Math.random()-0.5)*1000,z=(Math.random()-0.5)*1000;
@@ -8952,7 +9429,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 
   // ---- build instanced trees ----
   if(treeItems.length){
-    const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,5,6);trunkGeo.translate(0,2.5,0);
+    const trunkGeo=new THREE.CylinderGeometry(0.2,0.34,5,6);trunkGeo.translate(0,2.5,0);   // 0.55-1.1 m at the foot (was 1.3-2.8 m)
     // canopies are lumpy blob clusters (merged once, instanced), not stacked cones
     const _cluster=(n,spread,lift)=>{const blob=new THREE.IcosahedronGeometry(1,1),gs=[],ms=[];
       for(let i=0;i<n;i++){const a=Math.random()*6.283,r=i?spread*(0.5+Math.random()*0.5):0;
@@ -8978,7 +9455,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const postGeo=new THREE.CylinderGeometry(0.26,0.3,2.2,6);postGeo.translate(0,1.55,0);
     const glowGeo=new THREE.BoxGeometry(0.85,0.95,0.85);glowGeo.translate(0,3.25,0);
     const capGeo=new THREE.ConeGeometry(0.95,0.65,6);capGeo.translate(0,3.95,0);
-    const mk=(geo,mat)=>{const im=new THREE.InstancedMesh(geo,mat,lantItems.length);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),one=new THREE.Vector3(1,1,1);
+    const mk=(geo,mat)=>{const im=new THREE.InstancedMesh(geo,mat,lantItems.length);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),one=new THREE.Vector3(0.58,0.58,0.58);   // a kasuga-doro stands ~2.5 m (modelled 4.3)
       lantItems.forEach((it,i)=>{e.set(0,it.ry,0);q.setFromEuler(e);p.set(it.x,0,it.z);m.compose(p,q,one);im.setMatrixAt(i,m);});
       im.instanceMatrix.needsUpdate=true;im.castShadow=false;scene.add(im);};
     mk(baseGeo,darkStone);mk(postGeo,stoneMat);mk(glowGeo,glowMat);mk(capGeo,darkStone);
@@ -8995,7 +9472,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   for(let i=0;i<11;i++){
     const s=pool[Math.floor(Math.random()*pool.length)];
     const c=(Math.random()-0.5)*720, from=c-70, to=c+70;
-    const off=(Math.random()<0.5?-1:1)*(6+Math.random()*3), y=8+Math.random()*2.5;
+    const off=(Math.random()<0.5?-1:1)*(6+Math.random()*3), y=5+Math.random()*1.6;   // strung at first-floor eave height
     for(let t=from;t<=to;t+=5){
       let x,z; if(s.axis==='z'){x=s.p+off;z=t;}else{x=t;z=s.p+off;}
       if(x>440&&x<560)continue; if(z>560)continue; // skip river/bay
@@ -9004,7 +9481,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     }
   }
   if(items.length){
-    const geo=new THREE.SphereGeometry(0.5,7,6); geo.scale(1,1.5,1); // chochin: taller than wide
+    const geo=new THREE.SphereGeometry(0.22,7,6); geo.scale(1,1.45,1); // chochin: 0.44 x 0.64 m, taller than wide (was 1.0 x 1.5)
     const im=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({color:0xffffff}),items.length);
     const m=new THREE.Matrix4(),q=new THREE.Quaternion(),pos=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),col=new THREE.Color();
     items.forEach((it,i)=>{pos.set(it.x,it.y,it.z);m.compose(pos,q,one);im.setMatrixAt(i,m);im.setColorAt(i,col.setHex(it.c));});
@@ -9047,15 +9524,15 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   }
   const platMat=new THREE.MeshLambertMaterial({color:0x6a6672});
   [-1,1].forEach(sd=>{
-    const plat=new THREE.Mesh(new THREE.BoxGeometry(84,1.0,3.2),platMat);
-    plat.position.set(-30,RY+0.5,RAIL_Z+sd*6.05);scene.add(plat);
-    const canopy=new THREE.Mesh(new THREE.BoxGeometry(84,0.22,3.8),new THREE.MeshLambertMaterial({color:0x3a3f4a}));
+    const plat=new THREE.Mesh(new THREE.BoxGeometry(164,1.1,3.2),platMat);   // long enough for the 8-car train (160 m)
+    plat.position.set(-30,RY+0.55,RAIL_Z+sd*6.05);scene.add(plat);
+    const canopy=new THREE.Mesh(new THREE.BoxGeometry(164,0.22,3.8),new THREE.MeshLambertMaterial({color:0x3a3f4a}));
     canopy.position.set(-30,RY+4.4,RAIL_Z+sd*6.05);canopy.castShadow=true;scene.add(canopy);
-    for(let px=-68;px<=8;px+=12){
+    for(let px=-104;px<=44;px+=12){
       const post=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,3.4,6),platMat);
       post.position.set(px,RY+2.6,RAIL_Z+sd*6.05);scene.add(post);
     }
-    const strip=new THREE.Mesh(new THREE.BoxGeometry(84,0.1,0.5),new THREE.MeshBasicMaterial({color:0xd8f2e8}));
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(164,0.1,0.5),new THREE.MeshBasicMaterial({color:0xd8f2e8}));
     strip.position.set(-30,RY+4.28,RAIL_Z+sd*6.05);scene.add(strip);
   });
   const signTex=tex((g,w,h)=>{
@@ -9082,11 +9559,11 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const trainEnd=new THREE.MeshLambertMaterial({color:0x30343c});
   const cars=[];
   for(let k=0;k<8;k++){
-    const car=new THREE.Mesh(new THREE.BoxGeometry(18.6,3.1,2.9),[trainEnd,trainEnd,trainEnd,trainEnd,trainMat,trainMat]);
-    car.position.set(0,RY+1.85,RAIL_Z-2.1);
+    const car=new THREE.Mesh(new THREE.BoxGeometry(19.5,3.6,2.9),[trainEnd,trainEnd,trainEnd,trainEnd,trainMat,trainMat]);   // a 20 m JNR commuter car, 3.6 m to the roof
+    car.position.set(0,RY+2.15,RAIL_Z-2.1);
     car.castShadow=true;scene.add(car);cars.push(car);
   }
-  window.__train={cars,spacing:19.4,speed:64};
+  window.__train={cars,spacing:20,speed:24};   // ~85 km/h (was 64 m/s = 230 km/h)
 }
 
 // ---------- JR YAMANOTE LINE: the elevated loop, its stations, and the trains going round ----------
@@ -9133,10 +9610,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const p=pts[bi],q=nrm[bi],yaw=Math.atan2(q[0],q[1]);
     const g=new THREE.Group();g.position.set(p[0],0,p[1]);g.rotation.y=yaw;scene.add(g);
     const sy=ryA[bi]-RY;
-    const roof=new THREE.MeshStandardMaterial({color:0x3c4048,roughness:0.6,metalness:0.4});
-    [-1,1].forEach(sd=>{const pl=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.0,70),mats.side);pl.position.set(sd*6.6,RY+sy+0.5,0);g.add(pl);
-      const cn=new THREE.Mesh(new THREE.BoxGeometry(4.2,0.25,64),roof);cn.position.set(sd*6.6,RY+sy+4.4,0);cn.castShadow=true;g.add(cn);
-      const lt=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,62),new THREE.MeshBasicMaterial({color:0xe6fff0}));lt.position.set(sd*6.6,RY+sy+4.25,0);g.add(lt);});
+    S.__s=cum[bi];   // platforms are laid along the curve once the track sampler exists (below)
     const house=new THREE.Mesh(new THREE.BoxGeometry(18,12,46),new THREE.MeshStandardMaterial({color:0x7e796f,roughness:0.9}));house.position.set(-17,6,0);house.castShadow=true;g.add(house);
     const glass=new THREE.Mesh(new THREE.BoxGeometry(18.2,4,40),new THREE.MeshStandardMaterial({color:0x182028,roughness:0.1,metalness:0.4,emissive:0xffe6b8,emissiveIntensity:0.35}));glass.position.set(-17,3.4,0);g.add(glass);
     const sign=tex((c,w,h)=>{c.fillStyle='#ffffff';c.fillRect(0,0,w,h);c.fillStyle='#78b83a';c.fillRect(0,h*0.78,w,h*0.22);   // JR green band
@@ -9154,8 +9628,9 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     for(let x=10;x<w-10;x+=36){c.fillRect(x,h*0.22,24,h*0.3);}
     c.fillStyle='rgba(255,236,190,.95)';for(let x=12;x<w-10;x+=36){c.fillRect(x+2,h*0.25,20,h*0.22);}
     for(let x=60;x<w;x+=170){c.fillStyle='#55595e';c.fillRect(x,h*0.18,16,h*0.62);}},512,128);
-  const carG=new THREE.BoxGeometry(2.95,3.6,19.4);carG.translate(0,RY+0.35+1.8,0);
-  const CARS=6,TR=[{off:2.1,dir:1,s:0},{off:-2.1,dir:-1,s:TOTAL*0.5}];
+  // 205-series: 19.5 m body on a 20 m pitch, 2.8 m wide, roof 3.67 m over the rail; ten cars in 1989
+  const carG=new THREE.BoxGeometry(2.8,3.32,19.5);carG.translate(0,RY+0.35+1.66,0);
+  const CARS=10,TR=[{off:2.1,dir:1,s:0},{off:-2.1,dir:-1,s:TOTAL*0.5}];
   const tm=new THREE.InstancedMesh(carG,new THREE.MeshStandardMaterial({map:tt,roughness:0.35,metalness:0.6,emissive:0xffffff,emissiveMap:tt,emissiveIntensity:0.18}),CARS*TR.length);
   tm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);tm.frustumCulled=false;tm.castShadow=true;scene.add(tm);
   const sample=d=>{d=((d%TOTAL)+TOTAL)%TOTAL;let lo=0,hi=n;while(lo<hi-1){const m=(lo+hi)>>1;if(cum[m]<=d)lo=m;else hi=m;}
@@ -9165,11 +9640,18 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     for(let k=0;k<CARS;k++){const S2=sample(T.s-T.dir*k*20);o.position.set(S2.x+S2.q[0]*T.off,S2.y,S2.z+S2.q[1]*T.off);o.rotation.set(0,S2.yaw,0);o.updateMatrix();tm.setMatrixAt(ti*CARS+k,o.matrix);}});
     tm.instanceMatrix.needsUpdate=true;};
   window.__yamanoteTick(0);
+  // 200 m island-side platforms that FOLLOW the curve (one straight 70 m slab was a third of a ten-car
+  // train and stood off the viaduct on the bends): 20 m segments, merged with the statics later
+  {const roof=new THREE.MeshStandardMaterial({color:0x3c4048,roughness:0.6,metalness:0.4}),ltM=new THREE.MeshBasicMaterial({color:0xe6fff0});
+   const plG=new THREE.BoxGeometry(3.2,1.1,20.4),cnG=new THREE.BoxGeometry(4.2,0.25,20.4),ltG=new THREE.BoxGeometry(0.4,0.08,19.6);
+   YAMANOTE_ST.forEach(S=>{for(let d=-90;d<=90;d+=20){const P=sample(S.__s+d);
+     [-1,1].forEach(sd=>{const ox=P.q[0]*sd*5.3,oz=P.q[1]*sd*5.3;   // platform edge ~0.2 m off the car side
+       [[plG,mats.side,0.55],[cnG,roof,4.4],[ltG,ltM,4.25]].forEach(([geo,mat,y])=>{const m=new THREE.Mesh(geo,mat);m.position.set(P.x+ox,RY+P.y+y,P.z+oz);m.rotation.y=P.yaw;if(mat===roof)m.castShadow=true;scene.add(m);});});}});}
   // Shibuya scramble: the famous all-way crossing at the junction in front of the station
   {const S=YAMANOTE_ST.find(x=>x.n==='SHIBUYA');let best=null,bd=1e9;
    ROADS_X.filter(r=>r.w>10).forEach(rx=>ROADS_Z.filter(r=>r.w>10).forEach(rz=>{const d=Math.hypot(rx.p-S.p[0],rz.p-S.p[1]);if(d>44&&d<bd&&!arterialAt(rx.p,rz.p,0)){bd=d;best=[rx,rz];}}));
    if(best){const [rx,rz]=best,diag=Math.hypot(rx.w,rz.w)*0.95;
-     [Math.PI/4,-Math.PI/4].forEach(a=>{const z=new THREE.Mesh(new THREE.PlaneGeometry(diag,4.2),zebraMat);z.rotation.set(-Math.PI/2,0,a);z.position.set(rx.p,0.07,rz.p);scene.add(z);});
+     [Math.PI/4,-Math.PI/4].forEach(a=>{const zg=new THREE.PlaneGeometry(diag,4.2),zu=zg.attributes.uv;for(let i=0;i<zu.count;i++)zu.setX(i,zu.getX(i)*diag/XW_TILE);const z=new THREE.Mesh(zg,zebraMat);z.rotation.set(-Math.PI/2,0,a);z.position.set(rx.p,0.07,rz.p);scene.add(z);});
      window.__scramble={x:rx.p,z:rz.p};}}
 }
 
@@ -9182,9 +9664,8 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const concDarkM=new THREE.MeshStandardMaterial({color:0x5e5c58,roughness:0.95,metalness:0.0});
   const deck=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.6,hw),concDarkM);
   deck.position.set(0,hy,HWY_Z);deck.castShadow=true;deck.receiveShadow=true;scene.add(deck);
-  const deckT=makeRoadStripTex();deckT.wrapS=deckT.wrapT=THREE.RepeatWrapping;deckT.repeat.set(1,CITY*2/40);
   const top=new THREE.Mesh(new THREE.PlaneGeometry(hw-1.2,CITY*2),
-    asphaltify(new THREE.MeshStandardMaterial({map:deckT,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{axis:'z',p:HWY_Z,w:hw-1.2}));
+    asphaltify(new THREE.MeshStandardMaterial({map:ROAD_BLANK,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{axis:'z',p:HWY_Z,w:hw-1.2,kind:3}));
   top.rotation.set(-Math.PI/2,0,Math.PI/2);top.position.set(0,hy+0.81,HWY_Z);top.receiveShadow=true;scene.add(top);
   [-1,1].forEach(sd=>{
     const par=new THREE.Mesh(new THREE.BoxGeometry(CITY*2,1.1,0.45),concM);par.position.set(0,hy+1.35,HWY_Z+sd*(hw/2-0.22));par.castShadow=true;scene.add(par);
@@ -9198,9 +9679,9 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     cap.position.set(x,hy-1.4,HWY_Z);scene.add(cap);
   }
   const poleM=new THREE.MeshStandardMaterial({color:0x6c7076,roughness:0.5,metalness:0.6});
-  const headM=new THREE.MeshBasicMaterial({color:0xffc27a});
+  const headM=new THREE.MeshBasicMaterial({color:0xff9a30});   // low-pressure sodium: near-monochrome 589 nm orange
   const hwyGlowTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
-    gr.addColorStop(0,'rgba(255,214,150,.55)');gr.addColorStop(.4,'rgba(255,176,96,.16)');gr.addColorStop(1,'rgba(255,160,80,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
+    gr.addColorStop(0,'rgba(255,186,80,.6)');gr.addColorStop(.4,'rgba(255,140,36,.18)');gr.addColorStop(1,'rgba(255,130,30,0)');g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
   for(let x=-CITY+30,k=0;x<=CITY;x+=60,k++){
     const sd=k%2?1:-1, z=HWY_Z+sd*(hw/2-0.2);
     const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,9,8),poleM);pole.position.set(x,hy+1.8+4.5,z);scene.add(pole);
@@ -9226,16 +9707,17 @@ const signals=[];
     pole.position.y=2.8;g.add(pole);
     const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,4.4,6),poleMat2);
     arm.rotation.z=Math.PI/2;arm.position.set(-2.2,5.35,0);g.add(arm);
-    const head=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.6,0.32),houseMat);
+    // Japanese horizontal 3-lamp head, 300 mm lenses: ~1.25 x 0.45 m housing (was 1.9 x 0.6 with 420 mm lenses)
+    const head=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.45,0.3),houseMat);
     head.position.set(-3.4,5.05,0);g.add(head);
     const mk=(ox,mat)=>{
-      const dOff=new THREE.Mesh(new THREE.CircleGeometry(0.21,10),offMat);
-      dOff.position.set(-3.4+ox,5.05,0.18);g.add(dOff);
-      const d2=new THREE.Mesh(new THREE.CircleGeometry(0.21,10),mat);
-      d2.position.set(-3.4+ox,5.05,0.19);g.add(d2);
+      const dOff=new THREE.Mesh(new THREE.CircleGeometry(0.15,10),offMat);
+      dOff.position.set(-3.4+ox,5.05,0.17);g.add(dOff);
+      const d2=new THREE.Mesh(new THREE.CircleGeometry(0.15,10),mat);
+      d2.position.set(-3.4+ox,5.05,0.18);g.add(d2);
       return d2;
     };
-    const r=mk(-0.55,redOn),y2=mk(0,yelOn),gr2=mk(0.55,grnOn);
+    const r=mk(-0.4,redOn),y2=mk(0,yelOn),gr2=mk(0.4,grnOn);
     g.position.set(x,0,z);g.rotation.y=rotY;
     scene.add(g);
     signals.push({r,y:y2,g:gr2,axis});
@@ -9253,7 +9735,7 @@ const signals=[];
 // ---------- STREET FURNITURE ----------
 const coolGlowTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,2,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(230,245,255,.5)');gr.addColorStop(.4,'rgba(190,225,255,.14)');gr.addColorStop(1,'rgba(190,225,255,0)');
+  gr.addColorStop(0,'rgba(226,255,242,.5)');gr.addColorStop(.4,'rgba(170,232,214,.14)');gr.addColorStop(1,'rgba(170,232,214,0)');   // mercury vapour: blue-green
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },64,64);
 const lampMat=new THREE.MeshLambertMaterial({color:0x2c2838});
@@ -9272,16 +9754,16 @@ function lampRow(axis,r){
       if(axis==='x'?(z>SEA_Z0-2||ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+SW+1.5))
                    :(ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+SW+1.5)||Math.abs(x-riverCX(z))<RIVER_HW+10))return;   // no poles in a junction
       if(arterialAt(x,z,1))return;                                                                                 // nor in an avenue
-      const warm=Math.random()<0.5; // alternate warm-sodium / cool-mercury lamps for colour variance
+      const warm=Math.random()<0.5; // 1989 mix: new high-pressure sodium (gold) beside old mercury vapour (blue-green)
       const pole=new THREE.Mesh(new THREE.CylinderGeometry(.13,.17,9.5,6),lampMat);
       pole.position.set(x,4.75,z);scene.add(pole);
-      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:warm?0xffc070:0xf4f8ff}));
+      const head=new THREE.Mesh(new THREE.SphereGeometry(.32,6,6),new THREE.MeshBasicMaterial({color:warm?0xffb860:0xd8fff0}));
       head.position.set(x,9.6,z);scene.add(head);
       const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:warm?warmLampGlowTex:coolGlowTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
       spr.scale.set(4.5,4.5,1);spr.position.set(x,9.8,z);scene.add(spr);
       // the pool of light this lamp actually casts on the road below (warm sodium or cool mercury)
       const px=x+(axis==='x'?-sd*1.2:0),pz=z+(axis==='x'?0:-sd*1.2);
-      groundPoolXf.push({x:px,z:pz,s:7+Math.random()*3,c:warm?[1.0,0.6,0.26]:[0.6,0.78,1.0]});
+      groundPoolXf.push({x:px,z:pz,s:7+Math.random()*3,c:warm?[1.0,0.6,0.26]:[0.55,0.85,0.78]});
       // record the lamp so a bounded set of REAL lights can snap to the nearest ones and actually
       // illuminate the textured road (the sprite above only adds glow; it can't reveal the grain).
       (window.__lampPts||(window.__lampPts=[])).push({x:px,z:pz,warm});
@@ -9316,9 +9798,9 @@ function updateRevealLights(){
     const L=revealLights[i],c=__revealCand[i];
     if(!c){L.intensity=0;continue;}
     if(c.fire){L.position.set(c.x,2.2,c.z);L.color.setRGB(1.0,0.5,0.16);L.intensity=3.2+Math.random()*1.4;L.distance=26;}
-    else if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.95,0.86);L.intensity=2.4;L.distance=24;}
+    else if(c.car){L.position.set(c.x,1.5,c.z);L.color.setRGB(1.0,0.86,0.68);L.intensity=2.4;L.distance=24;}
     else if(c.warm){L.position.set(c.x,7.5,c.z);L.color.setRGB(1.0,0.72,0.4);L.intensity=4.2;L.distance=34;}
-    else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.66,0.8,1.0);L.intensity=3.8;L.distance=34;}
+    else{L.position.set(c.x,7.5,c.z);L.color.setRGB(0.6,0.88,0.8);L.intensity=3.8;L.distance=34;}
   }
   // raised + softened: a bright point light close to the wet road shatters into a specular glint
   // burst directly under the aircraft (the last near-field "static"). Lifting it and cutting intensity
@@ -9406,7 +9888,7 @@ void reflStreaks;
   const flameTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h*0.62,2,w/2,h*0.55,w*0.48);
     gr.addColorStop(0,'rgba(255,240,190,1)');gr.addColorStop(.25,'rgba(255,170,60,.9)');gr.addColorStop(.6,'rgba(220,70,10,.35)');gr.addColorStop(1,'rgba(120,20,0,0)');
     g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
-  const barrelG=new THREE.CylinderGeometry(0.45,0.42,1.1,12,1,true);
+  const barrelG=new THREE.CylinderGeometry(0.29,0.285,0.88,12,1,true);   // a 200-litre drum: 0.58 m across, 0.88 m tall (was 0.9 x 1.1)
   const barrelM=new THREE.MeshStandardMaterial({color:0x4a2a18,roughness:0.8,metalness:0.4,side:THREE.DoubleSide,emissive:0x2a0800});
   window.__fires=[];
   const corners=[];
@@ -9416,10 +9898,10 @@ void reflStreaks;
     corners.push([rx.p+(Math.random()<.5?-1:1)*(rx.w/2+SW*0.6),rz.p+(Math.random()<.5?-1:1)*(rz.w/2+SW*0.6)]);
   }));
   corners.filter(([x,z])=>!arterialAt(x,z,1)).sort(()=>Math.random()-0.5).slice(0,22).forEach(([x,z])=>{
-    const b=new THREE.Mesh(barrelG,barrelM);b.position.set(x,CURB_H+0.55,z);scene.add(b);
+    const b=new THREE.Mesh(barrelG,barrelM);b.position.set(x,CURB_H+0.44,z);scene.add(b);
     const f=new THREE.Sprite(new THREE.SpriteMaterial({map:flameTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
-    f.position.set(x,CURB_H+1.55,z);f.scale.set(1.6,2.2,1);scene.add(f);
-    const f2=f.clone();f2.material=f.material.clone();f2.scale.set(5,4,1);f2.material.opacity=0.35;f2.position.y+=0.3;scene.add(f2);
+    f.position.set(x,CURB_H+1.22,z);f.scale.set(1.15,1.65,1);scene.add(f);
+    const f2=f.clone();f2.material=f.material.clone();f2.scale.set(3.8,3,1);f2.material.opacity=0.35;f2.position.y+=0.25;scene.add(f2);
     groundPoolXf.push({x,z,s:6+Math.random()*2,st:1.1,c:[1.0,0.42,0.1]});
     window.__fires.push({f,f2,x,z,ph:Math.random()*9});
     (window.__lampPts||(window.__lampPts=[])).push({x,z,fire:true});
@@ -9436,7 +9918,7 @@ void reflStreaks;
       if(Math.abs(x)>620||z<-620||z>SEA_Z0-20)continue;if(Math.abs(x-riverCX(z))<RIVER_HW+10)continue;
       bank(x,z,useX,4+Math.floor(Math.random()*4));k++;}
     for(let k=0;k<9;k++){const z=-560+k*130+Math.random()*40;bank(riverCX(z),z,true,5);}            // river mist
-    window.__fires.forEach(F=>{for(let i=0;i<7;i++)PUFF.push([F.x,CURB_H+2,F.z,3,i/7,1]);});
+    window.__fires.forEach(F=>{for(let i=0;i<7;i++)PUFF.push([F.x,CURB_H+1.6,F.z,3,i/7,1]);});
     const geo=new THREE.PlaneGeometry(1,1),seed=new Float32Array(PUFF.length*2);
     const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,
       uniforms:{uT:{value:0},uCol:{value:new THREE.Color(0xa6adbd)},uLit:{value:new THREE.Color(0xffa060)}},
@@ -9476,16 +9958,17 @@ void reflStreaks;
     if(z>SEA_Z0-10||Math.abs(x-riverCX(z))<RIVER_HW+12||arterialAt(x,z,3))continue;
     if(onX?ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+6):ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+6))continue;
     const g=new THREE.Group();
-    const lower=new THREE.Mesh(new THREE.BoxGeometry(1.75,0.7,4.6),pcBlack);lower.position.y=0.55;g.add(lower);
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(1.74,0.32,4.62),pcBody);upper.position.y=1.06;g.add(upper);
-    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.55,2.3),pcGlass);cab.position.set(0,1.48,-0.2);g.add(cab);
-    const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,1.1),pcBody);door.position.set(1.15,0.95,-0.1);door.rotation.y=-0.9;g.add(door);
-    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.3),pcBlack);bar.position.set(0,1.82,-0.2);g.add(bar);
-    const lr=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),redM);lr.position.set(-0.32,1.86,-0.2);g.add(lr);
-    const lb=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),bluM);lb.position.set(0.32,1.86,-0.2);g.add(lb);
-    const sr=new THREE.Sprite(glowR.clone());sr.position.set(-0.4,1.9,-0.2);sr.scale.set(5,5,1);g.add(sr);
-    const sb=new THREE.Sprite(glowB.clone());sb.position.set(0.4,1.9,-0.2);sb.scale.set(5,5,1);g.add(sb);
-    [[-0.8,1.5],[0.8,1.5],[-0.8,-1.5],[0.8,-1.5]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.24,10),pcBlack);w.rotation.z=Math.PI/2;w.position.set(wx,0.34,wz);g.add(w);});
+    // a Crown patrol car: 4.69 x 1.69 x 1.44 m to the roof, the light bar on top (was 1.76 m roof, 1.94 m bar)
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(1.69,0.56,4.62),pcBlack);lower.position.y=0.5;g.add(lower);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(1.68,0.22,4.64),pcBody);upper.position.y=0.89;g.add(upper);
+    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.44,2.3),pcGlass);cab.position.set(0,1.22,-0.2);g.add(cab);
+    const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.78,1.1),pcBody);door.position.set(1.12,0.72,-0.1);door.rotation.y=-0.9;g.add(door);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.12,0.3),pcBlack);bar.position.set(0,1.5,-0.2);g.add(bar);
+    const lr=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.14,0.28),redM);lr.position.set(-0.32,1.53,-0.2);g.add(lr);
+    const lb=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.14,0.28),bluM);lb.position.set(0.32,1.53,-0.2);g.add(lb);
+    const sr=new THREE.Sprite(glowR.clone());sr.position.set(-0.4,1.58,-0.2);sr.scale.set(5,5,1);g.add(sr);
+    const sb=new THREE.Sprite(glowB.clone());sb.position.set(0.4,1.58,-0.2);sb.scale.set(5,5,1);g.add(sb);
+    [[-0.76,1.4],[0.76,1.4],[-0.76,-1.4],[0.76,-1.4]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.22,10),pcBlack);w.rotation.z=Math.PI/2;w.position.set(wx,0.32,wz);g.add(w);});
     g.position.set(x,0,z);g.rotation.y=(onX?Math.PI/2:0)+(Math.random()-.5)*0.9;scene.add(g);
     window.__beacons.push({sr,sb,lr,lb,ph:Math.random()*6});
     i++;
@@ -9574,8 +10057,8 @@ for(let i=0;i<44;i++){
   const sd=Math.random()<.5?-1:1;
   const off=r.w/2+SW+0.7;
   if(onX?ROADS_X.some(q=>Math.abs(a-q.p)<q.w/2+SW+2):ROADS_Z.some(q=>Math.abs(a-q.p)<q.w/2+SW+2))continue;   // not in a junction
-  const vm=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.2,1),vendMats[Math.floor(Math.random()*3)]);
-  if(onX)vm.position.set(a,1.1,r.p+sd*off);else vm.position.set(r.p+sd*off,1.1,a);
+  const vm=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.83,0.75),vendMats[Math.floor(Math.random()*3)]);   // a drinks machine: 1.0 x 1.83 x 0.75 m (was 1.3 x 2.2 x 1.0)
+  if(onX)vm.position.set(a,0.915,r.p+sd*off);else vm.position.set(r.p+sd*off,0.915,a);
   vm.rotation.y=onX?(sd>0?Math.PI:0):(sd>0?-Math.PI/2:Math.PI/2);
   scene.add(vm);
 }
@@ -9656,21 +10139,23 @@ const CAR_SPECS={
   sedan:{L:4.75,W:1.78,c:0.18,R:0.33,wf:1.45,wr:-1.4,hl:0.66,tl:0.76,mirror:0.98,
     body:[[2.38,0.5],[2.33,0.74],[1.9,0.84],[1.0,0.9],[-1.45,0.92],[-2.2,0.88],[-2.37,0.74],[-2.38,0.5]],
     cabin:[[1.0,0.9],[0.2,1.38],[-0.9,1.4],[-1.65,0.92]]},
-  kei:{L:3.4,W:1.48,c:0.17,R:0.28,wf:1.12,wr:-1.08,hl:0.68,tl:0.8,mirror:1.0,
-    body:[[1.7,0.48],[1.67,0.74],[1.35,0.84],[0.9,0.9],[-1.62,0.92],[-1.7,0.8],[-1.7,0.48]],
-    cabin:[[0.92,0.9],[0.42,1.6],[-1.55,1.63],[-1.63,0.92]]},
-  keitruck:{L:3.4,W:1.48,c:0.2,R:0.27,wf:1.05,wr:-1.0,hl:0.72,tl:0.6,mirror:1.05,bPillar:false,
-    body:[[1.7,0.55],[1.7,0.92],[0.62,0.92],[0.58,0.74],[-1.7,0.74],[-1.7,0.48]],
-    cabin:[[1.64,0.92],[1.48,1.74],[0.66,1.76],[0.62,0.92]],
-    extra:p=>{p.push(_box(1.42,0.28,0.05,0,0.88,1.68,CP.PAINT),_box(1.42,0.28,0.05,0,0.88,-0.56,CP.PAINT));
-      [-1,1].forEach(sd=>p.push(_box(0.05,0.28,2.26,sd*0.71,0.88,0.56,CP.PAINT)));}},
+  // kei class is a legal box: 1976-1990 rules cap it at 3.20 x 1.40 m (Alto / Mira ~1.40-1.47 m tall)
+  kei:{L:3.19,W:1.39,c:0.16,R:0.27,wf:1.05,wr:-1.01,hl:0.66,tl:0.78,mirror:0.94,
+    body:[[1.595,0.47],[1.565,0.72],[1.27,0.82],[0.84,0.87],[-1.52,0.89],[-1.595,0.78],[-1.595,0.47]],
+    cabin:[[0.86,0.87],[0.4,1.44],[-1.45,1.46],[-1.53,0.89]]},
+  keitruck:{L:3.19,W:1.39,c:0.2,R:0.26,wf:0.99,wr:-0.94,hl:0.72,tl:0.6,mirror:1.05,bPillar:false,   // Carry / Hijet: 3.19 x 1.39 x 1.8
+    body:[[1.595,0.55],[1.595,0.92],[0.58,0.92],[0.54,0.74],[-1.595,0.74],[-1.595,0.48]],
+    cabin:[[1.535,0.92],[1.39,1.74],[0.62,1.76],[0.58,0.92]],
+    extra:p=>{p.push(_box(1.33,0.28,0.05,0,0.88,1.57,CP.PAINT),_box(1.33,0.28,0.05,0,0.88,-0.52,CP.PAINT));
+      [-1,1].forEach(sd=>p.push(_box(0.05,0.28,2.1,sd*0.665,0.88,0.525,CP.PAINT)));}},
   minivan:{L:4.75,W:1.82,c:0.19,R:0.33,wf:1.5,wr:-1.42,hl:0.82,tl:0.95,mirror:1.08,
     body:[[2.38,0.6],[2.34,0.86],[1.95,0.98],[1.62,1.02],[-2.3,1.02],[-2.37,0.84],[-2.38,0.6]],
     cabin:[[1.62,1.02],[0.92,1.84],[-2.2,1.88],[-2.3,1.02]]},
-  boxtruck:{L:5.8,W:2.0,c:0.26,R:0.4,wf:1.95,wr:-1.35,hl:0.78,tl:0.8,mirror:1.5,bPillar:false,
-    body:[[2.9,0.62],[2.88,1.16],[1.45,1.16],[1.4,0.92],[-2.9,0.92],[-2.9,0.62]],
-    cabin:[[2.85,1.16],[2.72,2.12],[1.52,2.16],[1.45,1.16]],
-    extra:p=>{p.push(_box(2.1,2.15,4.25,0,2.0,0.75,CP.PAINT),_box(2.12,0.28,4.27,0,1.55,0.75,CP.TRIM));}},
+  // light delivery box truck (Dyna / Elf / Titan class, small-vehicle plates): 4.69 x 1.69, box top ~2.45 m
+  boxtruck:{L:4.69,W:1.69,c:0.24,R:0.34,wf:1.6,wr:-0.95,hl:0.74,tl:0.74,mirror:1.4,bPillar:false,
+    body:[[2.345,0.6],[2.325,1.08],[1.2,1.08],[1.15,0.86],[-2.345,0.86],[-2.345,0.6]],
+    cabin:[[2.3,1.08],[2.19,1.96],[1.25,1.98],[1.2,1.08]],
+    extra:p=>{p.push(_box(1.69,1.52,3.46,0,1.69,0.6,CP.PAINT),_box(1.71,0.22,3.48,0,1.0,0.6,CP.TRIM));}},
 };
 const CAR_GEOS={};for(const k in CAR_SPECS)CAR_GEOS[k]=buildCarModel(CAR_SPECS[k]);
 const carMat=new THREE.MeshStandardMaterial({color:0xffffff,metalness:0.45,roughness:0.32,envMapIntensity:1.1});
@@ -9687,7 +10172,7 @@ carMat.onBeforeCompile=sh=>{
     .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
   if(vPart>0.5&&vPart<1.5)roughnessFactor=0.04; else if(vPart>1.5&&vPart<2.5)roughnessFactor=0.85; else if(vPart>4.5&&vPart<5.5)roughnessFactor=0.25; else if(vPart>2.5)roughnessFactor=0.4;`)
     .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-  if(vPart>2.5&&vPart<3.5)totalEmissiveRadiance+=vec3(2.2,2.1,1.7);
+  if(vPart>2.5&&vPart<3.5)totalEmissiveRadiance+=vec3(2.3,1.95,1.4);   // halogen, ~3200K
   else if(vPart>3.5&&vPart<4.5)totalEmissiveRadiance+=vec3(1.6,0.06,0.04);
   else if(vPart>5.5&&vPart<6.5)totalEmissiveRadiance+=vec3(1.3,1.1,0.6);`);
 };
@@ -9772,6 +10257,10 @@ const pedBodyGeo=(()=>{
 })();
 const pedHeadGeo=new THREE.BufferGeometry();pedHeadGeo.setAttribute('position',new THREE.Float32BufferAttribute([],3));   // head is part of the body now
 const PED_HEAD_Y=1.63;
+// the figure is modelled 1.765 m to the crown; each person is scaled to a real 1989 Japanese adult
+// (men ~1.70 m, women ~1.57 m, MHLW national survey) so the crowd isn't a row of 1.77 m clones
+const PED_GEO_H=(pedBodyGeo.computeBoundingBox(),pedBodyGeo.boundingBox.max.y);
+function pedStature(){const g=(Math.random()+Math.random()+Math.random()-1.5)*0.7;return Math.random()<0.5?1.70+g*0.058:1.575+g*0.052;}
 const PED_TIME={value:0};
 const pedBodyMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85,metalness:0.0});
 pedBodyMat.onBeforeCompile=sh=>{
@@ -9824,11 +10313,12 @@ const peds=[];
     if(!p)p={axis:'x',fixed:0,min:-540,max:540,wrap:true};
     p.pos=p.min+Math.random()*(p.max-p.min);
     p.dir=Math.random()<0.5?1:-1;
-    p.spd=1.0+Math.random()*1.1;
+    p.sc=pedStature()/PED_GEO_H;
+    p.spd=(1.15+Math.random()*0.45)*Math.sqrt(p.sc);   // 1.1-1.6 m/s: the shader's ~2 steps/s gait then plants ~0.7 m strides
     p.phase=Math.random()*10;
     peds.push(p);
     const wx=p.axis==='x'?p.pos:p.fixed, wz=p.axis==='x'?p.fixed:p.pos;
-    dummy.position.set(wx,0,wz);dummy.rotation.set(0,0,0);dummy.updateMatrix();
+    dummy.position.set(wx,0,wz);dummy.rotation.set(0,0,0);dummy.scale.setScalar(p.sc);dummy.updateMatrix();
     pedBodyMesh.setMatrixAt(i,dummy.matrix);
     dummy.position.y=PED_HEAD_Y;dummy.updateMatrix();
     pedHeadMesh.setMatrixAt(i,dummy.matrix);
@@ -9854,7 +10344,7 @@ const peds=[];
 const dummy=new THREE.Object3D();
 const HOUS=[],TANK=[],TLEG=[],ACU=[],MAST=[],MLED=[];
 buildings.forEach(b=>{
-  if(b.lz)return;                       // keep LZ roofs clear
+  if(b.lz||b.landmark)return;           // keep LZ roofs (and the tower's antenna) clear
   const bx=b.m.position.x,bz=b.m.position.z,by=b.h,bw=b.w,bd=b.d;
   const tall=by>24;
   // stair/elevator penthouse housing — the strongest silhouette break; taller on taller buildings
@@ -9900,7 +10390,7 @@ function instAdd(geo,mat,arr,shadow){
 // Ribbed rusty metal (tanks), louvered vented panels (AC), formed concrete with a door (housing).
 const tankMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#4c4740';g.fillRect(0,0,w,h);
+    g.fillStyle='#c4bfae';g.fillRect(0,0,w,h);                        // ivory FRP water tank, ribbed
     for(let x=0;x<w;x+=w/12){g.fillStyle='rgba(255,255,255,.06)';g.fillRect(x,0,2,h);g.fillStyle='rgba(0,0,0,.24)';g.fillRect(x+w/24,0,2,h);}
     g.fillStyle='rgba(0,0,0,.3)';g.fillRect(0,4,w,3);g.fillRect(0,h-8,w,3);
     for(let i=0;i<26;i++){g.strokeStyle=`rgba(${110+Math.random()*50},${58+Math.random()*24},30,${.1+Math.random()*.2})`;g.lineWidth=1+Math.random()*3;
@@ -9911,7 +10401,7 @@ const tankMat=(()=>{
 })();
 const acMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#6a6674';g.fillRect(0,0,w,h);
+    g.fillStyle='#b6b4aa';g.fillRect(0,0,w,h);                        // ivory condenser casing
     for(let y=h*0.16;y<h*0.84;y+=6){g.fillStyle='rgba(0,0,0,.36)';g.fillRect(6,y,w-12,3);g.fillStyle='rgba(255,255,255,.08)';g.fillRect(6,y+3,w-12,1);}
     g.strokeStyle='rgba(0,0,0,.42)';g.lineWidth=3;g.strokeRect(3,3,w-6,h-6);
     for(const[bx,by]of[[10,10],[w-10,10],[10,h-10],[w-10,h-10]]){g.fillStyle='#2a2a30';g.beginPath();g.arc(bx,by,2.5,0,7);g.fill();}
@@ -9921,8 +10411,8 @@ const acMat=(()=>{
 })();
 const housMat=(()=>{
   const map=tex((g,w,h)=>{
-    g.fillStyle='#38333f';g.fillRect(0,0,w,h);
-    for(let i=0;i<2600;i++){const v=Math.random()*26;g.fillStyle=`rgba(${52+v},${48+v},${60+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
+    g.fillStyle='#8c8a85';g.fillRect(0,0,w,h);                        // board-marked concrete stair/lift penthouse
+    for(let i=0;i<2600;i++){const v=Math.random()*26;g.fillStyle=`rgba(${118+v},${116+v},${110+v},.5)`;g.fillRect(Math.random()*w,Math.random()*h,2,2);}
     for(let x=0;x<=w;x+=w/3){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(x-1,0,2,h);}
     for(let y=0;y<=h;y+=h/2){g.fillStyle='rgba(0,0,0,.26)';g.fillRect(0,y-1,w,2);}
     g.fillStyle='#20222a';g.fillRect(w*0.4,h*0.5,w*0.2,h*0.5);
@@ -9938,16 +10428,16 @@ const housMat=(()=>{
 })();
 instAdd(new THREE.BoxGeometry(1,1,1),housMat,HOUS,true);
 instAdd(new THREE.CylinderGeometry(1,1,1,14),tankMat,TANK,true);
-instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x2c2830,roughness:0.8,metalness:0.3}),TLEG,false);
+instAdd(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x56605a,roughness:0.75,metalness:0.4}),TLEG,false);   // galvanised steel stand
 instAdd(new THREE.BoxGeometry(1,1,1),acMat,ACU,false);
 instAdd(new THREE.CylinderGeometry(0.16,0.3,1,6),new THREE.MeshStandardMaterial({color:0x50505a,roughness:0.6,metalness:0.5}),MAST,false);
-instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);
+instAdd(new THREE.SphereGeometry(0.28,6,6),new THREE.MeshBasicMaterial({color:0xff2a44}),MLED,false);   // obstruction lamp ~0.5 m (was a 1 m ball)
 
 // trees: parks + ginkgo rows on the avenues
 // Street trees (zelkova / ginkgo): a canopy is a CLUSTER of lumpy blobs, not one sphere —
 // that silhouette is most of what reads as "tree" from a helicopter. Six merged canopy
 // variants are built once and shared, so each tree is still just trunk + canopy.
-const trunkG=new THREE.CylinderGeometry(.22,.38,4.4,6);
+const trunkG=new THREE.CylinderGeometry(.13,.22,4.4,6);   // 0.35-0.5 m trunks (were 0.76 m at full size)
 const trunkM=new THREE.MeshLambertMaterial({color:0x3a2f26});
 const LEAF_MATS=[0x2f4428,0x3a4a2a,0x2a3d2c,0x44532f].map(c=>new THREE.MeshLambertMaterial({color:c,flatShading:true}));
 const CANOPY_GEOS=Array.from({length:6},()=>{
@@ -9983,11 +10473,11 @@ ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z&&r.p<SEA_Z0).forEach(r=>{
       if(Math.abs(x-riverCX(z))<RIVER_HW+14)return;
       if(arterialAt(x,z,1)||corridorHit(x,z,2))return;
       if(Math.random()<0.18)return;
-      plantTree(x,z,0.62);
+      plantTree(x,z,0.9);   // ginkgo / zelkova avenue trees stand 7-10 m (they were 4-6 m)
     });
   }
 });
-(window.__artTrees||[]).forEach(([x,z])=>{if(Math.random()<0.85&&!ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+2)&&!ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+2)&&polyDist(x,z,YAMANOTE,true)>8&&!YAMANOTE_ST.some(S=>Math.hypot(x-S.p[0],z-S.p[1])<34))plantTree(x,z,0.6);});
+(window.__artTrees||[]).forEach(([x,z])=>{if(Math.random()<0.85&&!ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+2)&&!ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+2)&&polyDist(x,z,YAMANOTE,true)>8&&!YAMANOTE_ST.some(S=>Math.hypot(x-S.p[0],z-S.p[1])<34))plantTree(x,z,0.88);});
 
 // neon reflections smeared across the wet avenues
 for(let i=0;i<60;i++){
@@ -10809,7 +11299,7 @@ let humanoidAnimClips=null;    // THREE.AnimationClip[]  -> Idle, Run, TPose, Wa
 let zombieWalkClip=null;       // "Walk", slowed for zombies
 let survivorIdleClip=null;     // "Idle", for the survivor
 let humanoidNaturalHeight=1;   // Box3-measured height of the raw template, for scaling
-const HUMANOID_TARGET_HEIGHT=3.5; // world units — enlarged so figures read from flight altitude
+const HUMANOID_TARGET_HEIGHT=1.68; // metres: a real adult (was 3.5 — twice life size next to cars, doors and the street crowd)
 const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-direction math (verified by render: at yaw=0 the model faces -Z i.e. backward, so +PI flips it to face the group's forward/travel direction)
 // Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
 // used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
@@ -10942,7 +11432,7 @@ function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.Textu
     // shared window-bump normal, so no per-building normal clones — that was the main perf cost). ---
     if(window.__WALL_DIFF){
       window.WALL_IMG=await loadImg(window.__WALL_DIFF);
-      const cPool=facadeGridPresets.map(p=>facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true}));
+      const cPool=facadeGridPresets.map(p=>{const t=facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true});t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;});   // the grid repeats at storey height
       (window.__bldgMats||[]).forEach(bm=>{
         if(!bm.facade||Math.random()>0.34)return; // facades only (glass/apartments/far city share this list), ~1/3 of them
         const idx=Math.max(0,facadeGridPresets.indexOf(bm.preset));
@@ -11036,7 +11526,7 @@ function spawnZombie(big){
     });
     const r=Math.random();
     kind=big?'brute':r<0.55?'shambler':r<0.85?'stalker':'runner';
-    const hs=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?2:(0.86+Math.random()*0.24));
+    const hs=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?1.2:(0.92+Math.random()*0.14));   // 1.55-1.79 m; the brute is a 2 m giant, not 7 m
     const girth=big?1.25:(0.9+Math.random()*0.3);
     model.scale.set(hs*girth,hs,hs*(0.95+(girth-1)*0.7));
     model.rotation.y=HUMANOID_BASE_YAW;
@@ -11055,11 +11545,14 @@ function spawnZombie(big){
       mixer=new THREE.AnimationMixer(model);
       walkAction=mixer.clipAction(clip);
       walkAction.setLoop(THREE.LoopRepeat,Infinity);
-      walkAction.timeScale=kind==='runner'?0.75+Math.random()*0.2:kind==='stalker'?0.7+Math.random()*0.2:kind==='brute'?0.38:0.32+Math.random()*0.2;
       walkAction.time=Math.random()*clip.duration;
       walkAction.play();
     }
-    spd=kind==='runner'?11+Math.random()*3:kind==='stalker'?6+Math.random()*2:kind==='brute'?4:2.6+Math.random()*2;
+    // human speeds for human-sized bodies (they ran 11-14 m/s at 3.5 m tall): a lurching walk, a hard
+    // stride, a sprint. The clip rate follows the speed so the feet stay planted (~1.3 m/s walk, ~3.8 m/s
+    // run at timeScale 1 for a 1.7 m body).
+    spd=kind==='runner'?6+Math.random()*1.5:kind==='stalker'?2.4+Math.random()*0.6:kind==='brute'?1.9:1.3+Math.random()*0.7;
+    if(walkAction)walkAction.timeScale=kind==='runner'?spd/3.8/(hs/(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)):(kind==='shambler'?0.8:1)*spd/1.3/(hs/(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight));
   }else{
     // fallback: old box-primitive zombie (used if the model hasn't finished loading yet)
     const b=new THREE.Mesh(zBodyG,zMat);b.position.y=1.5;b.castShadow=true;g.add(b);
@@ -11801,10 +12294,11 @@ function tape(cx,cy,h,val,step,unit,side,warnLow){
 }
 
 // --- heading tape (top centre) ---
-// local time: 22:10 at the first shop, past 02:00 by the last; also creeps with real play time
+// local time: the sky's own clock (todClock) — 16:26 at the first shop as the sun touches the
+// horizon, 18:00 and full night by the last, creeping on with play in between (todClockNow)
 let runClock0=performance.now();
 function clockText(){
-  const m=(18*60+35)+Math.max(0,(TOD.t-TOD_START)/(TOD_STAGES[4]-TOD_START))*85+(performance.now()-runClock0)/1000/4;
+  const m=TOD.clock||todClock(TOD.t);
   const mm=Math.floor(m)%(24*60);return String(Math.floor(mm/60)).padStart(2,'0')+':'+String(mm%60).padStart(2,'0');
 }
 function headingTape(cx,y,w,hdg){
@@ -12229,7 +12723,7 @@ function makeEnemyHeli(){
   [[0,0.95,6.95,0.12],[-1.85,-0.12,0.3,0.1],[1.85,-0.12,0.3,0.1],[0,-0.55,-3.5,0.11]].forEach(([x,y,z,r])=>{
     const l=new THREE.Mesh(new THREE.SphereGeometry(r,6,6),EN_LIGHT);l.position.set(x,y,z);g.add(l);
   });
-  g.scale.setScalar(1.5);
+  g.scale.setScalar(1.1);   // AH-1S Cobra class (the JSDF's gunship): 13.6 m fuselage, 13.4 m rotor (x1.5 made it 18 m / 19 m, bigger than the Apache)
   return {g,rotor,trotor};
 }
 function makeBossBoat(){
@@ -12832,7 +13326,7 @@ function inShopkeeper(kind,x,z,ry){
 }
 // a simple standing person (shopkeeper) — readable at interior scale
 // a proper figure (same proportioned body as the street crowd), coloured per part by vertex colour
-function inPerson(colTop,colBottom,x,z,ry){
+function inPerson(colTop,colBottom,x,z,ry,stature){
   const src=pedBodyGeo, pa=src.attributes.aPart, n=pa.count;
   const g2=new THREE.BufferGeometry();
   g2.setAttribute('position',src.attributes.position);g2.setAttribute('normal',src.attributes.normal);
@@ -12841,7 +13335,7 @@ function inPerson(colTop,colBottom,x,z,ry){
   for(let i=0;i<n;i++){const p2=pa.getX(i),c=p2<0.5?ct:p2<1.5?cb:p2<2.5?sk:p2<3.5?hr:sh;col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;}
   g2.setAttribute('color',new THREE.BufferAttribute(col,3));
   const m=new THREE.Mesh(g2,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.85}));
-  m.scale.setScalar(1.1);m.castShadow=true;
+  m.scale.setScalar((stature||1.68)/PED_GEO_H);m.castShadow=true;   // a real person's height (was x1.1 = 1.94 m)
   const g=new THREE.Group();g.add(m);g.position.set(x,0,z);g.rotation.y=ry||0;
   return g;
 }
@@ -13509,7 +14003,7 @@ function revealCrew(id){
   const ring=new THREE.Mesh(new THREE.RingGeometry(3.4,4.6,26),crewBeaconMat);ring.rotation.x=-Math.PI/2;ring.position.y=0.14;g.add(ring);
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,34,10,1,true),new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.13,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
   beam.position.y=17;g.add(beam);
-  const fig=inPerson(0x2f5a3a,0x22252a,0,0,0);fig.scale.setScalar(1.15);g.add(fig);
+  const fig=inPerson(0x2f5a3a,0x22252a,0,0,0,1.76);g.add(fig);   // a US Army aviator, 1.76 m (was 2.23 m)
   // (no point light here: adding one mid-game changes the light count and recompiles every shader)
   c.marker=g;scene.add(g);
 }
@@ -14031,7 +14525,7 @@ ov.innerHTML=`
     <div class="bf-memo">MEMORANDUM FOR Pilot in Command, AH-64A, Co B, 1-101st Aviation</div>
     <div class="bf-memo">SUBJECT: Personnel Recovery, Downed Aircraft RAVEN 2-1</div>
     <div class="bf-titlerow"><div class="bf-title"><small>OPERATION 黒龍 &middot; BLACK DRAGON</small>ONE NIGHT IN TOKYO</div><div class="bf-hanko">東京<br>一夜</div></div>
-    <div class="bf-p"><b>1. SITUATION.</b> AH-64A RAVEN 2-1 went down over central Tokyo at 1750 hours. Five crewmembers are unaccounted for. 黒龍会 syndicate gunships are airborne over the city. No one is ordering you in. You are going anyway. <b class="r">Leave no one behind.</b></div>
+    <div class="bf-p"><b>1. SITUATION.</b> AH-64A RAVEN 2-1 went down over central Tokyo at 1550 hours. Five crewmembers are unaccounted for. 黒龍会 syndicate gunships are airborne over the city. No one is ordering you in. You are going anyway. <b class="r">Leave no one behind.</b></div>
     <div class="bf-p"><b>2. EXECUTION.</b>
       <div class="bf-steps">
         <div class="bf-step"><i>a.</i> Fly to the marked shop. Follow the cyan beam; five shops, one at a time.</div>
@@ -14212,14 +14706,16 @@ loadMeta();
     let mergedMeshes=0,removed=0;
     byMat.forEach(({mat,list})=>{
       if(list.length<2)return;
-      const P=[],N=[],U=[],I=[]; let voff=0;
+      const P=[],N=[],U=[],I=[],BI=[]; let voff=0;
+      const hasBI=list.every(o=>o.geometry.getAttribute('bInfo'));   // facade boxes: top/seed/party-wall per vertex
       for(const o of list){
-        const g=o.geometry,pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index;
+        const g=o.geometry,pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),idx=g.index,bi=g.getAttribute('bInfo');
         mNorm.getNormalMatrix(o.matrixWorld);
         for(let i=0;i<pos.count;i++){
           v.fromBufferAttribute(pos,i).applyMatrix4(o.matrixWorld); P.push(v.x,v.y,v.z);
           n.fromBufferAttribute(nor,i).applyNormalMatrix(mNorm).normalize(); N.push(n.x,n.y,n.z);
           U.push(uv.getX(i),uv.getY(i));
+          if(hasBI)BI.push(bi.getX(i),bi.getY(i),bi.getZ(i));
         }
         for(let i=0;i<idx.count;i++) I.push(idx.getX(i)+voff);
         voff+=pos.count;
@@ -14228,6 +14724,7 @@ loadMeta();
       geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
       geo.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));
       geo.setAttribute('uv',new THREE.Float32BufferAttribute(U,2));
+      if(hasBI)geo.setAttribute('bInfo',new THREE.Float32BufferAttribute(BI,3));
       geo.setIndex(new THREE.Uint32BufferAttribute(I,1));
       const mesh=new THREE.Mesh(geo,mat);
       mesh.castShadow=list.some(o=>o.castShadow);
@@ -14373,7 +14870,7 @@ function loop(now){
       if(hit||b.t<=0){
         if(b.type===0){
           // damage every zombie/enemy whose hull is within the tracer's travel segment (+splash)
-          zombies.forEach(z=>{if(z.hp<=0)return;const zc=z.m.position.clone().setY(z.m.position.y+(z.big?3.2:2.0));if(distToSeg(zc,prev,b.m.position)<b.r+(z.big?2.6:0.8)){z.hp-=b.dmg;blood(zc);}});
+          zombies.forEach(z=>{if(z.hp<=0)return;const zc=z.m.position.clone().setY(z.m.position.y+(z.big?1.2:1.0));if(distToSeg(zc,prev,b.m.position)<b.r+(z.big?1.1:0.75)){z.hp-=b.dmg;blood(zc);}});
           enemies.forEach(e=>{if(e.hp<=0)return;const ec=e.m.position.clone().setY(e.m.position.y+(e.kind==='boat'?6:1));if(distToSeg(ec,prev,b.m.position)<b.r+(e.kind==='boat'?10:2.6)){e.hp-=b.dmg;}});
         }else explode(b.m.position,b.r,b.dmg,b.type===3);
         scene.remove(b.m);bullets.splice(i,1);
@@ -14490,7 +14987,7 @@ function loop(now){
     }
     shake=Math.max(0,shake-2.5*dt);
     if(window.__fires)for(const F of window.__fires){F.ph+=dt*(9+Math.random()*6);
-      const k=0.8+0.2*Math.sin(F.ph)+Math.random()*0.12;F.f.scale.set(1.5*k,2.2*k,1);F.f.material.opacity=0.85*k;F.f2.material.opacity=0.28*k;}
+      const k=0.8+0.2*Math.sin(F.ph)+Math.random()*0.12;F.f.scale.set(1.1*k,1.65*k,1);F.f.material.opacity=0.85*k;F.f2.material.opacity=0.28*k;}
     if(window.__beacons){const tt=now*0.001;for(const B of window.__beacons){const on=Math.floor((tt+B.ph)*3.2)%2;
       B.sr.material.opacity=on?0.9:0.05;B.sb.material.opacity=on?0.05:0.9;B.lr.visible=!!on;B.lb.visible=!on;}}
     pulseSigns.forEach(s=>{
@@ -14567,7 +15064,7 @@ function loop(now){
       // kei cars and taxis, then sedans, minivans, kei trucks and the odd delivery truck
       const KIT=window.__carKit, kinds=['kei','kei','kei','taxi','taxi','sedan','sedan','minivan','minivan','keitruck','boxtruck'];
       const kindList=Object.keys(KIT.CAR_GEOS), geoCount={}, _mcc=new THREE.Color();
-      const MC=window.__movingCars, MC_N=200;
+      const MC=window.__movingCars, MC_N=200;   // speeds: 30-50 km/h in the streets, 40-60 on the avenues, 60-80 on the Shutoko (they ran up to 100 km/h)
       for(let i=0;i<MC_N;i++){
         const kind=kinds[Math.floor(Math.random()*kinds.length)];
         const onX=Math.random()<0.5, pl=pickLane(onX);
@@ -14575,7 +15072,7 @@ function loop(now){
         const color=kind==='taxi'?[0x14161a,0x1d3a2a,0xd8b23a,0x2a4a7a][Math.floor(Math.random()*4)]
                    :(kind==='boxtruck'||kind==='keitruck')?0xeceeef:mcCols[i%mcCols.length];
         geoCount[kind]=geoCount[kind]||0;
-        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:(kind==='boxtruck'?12:16)+Math.random()*12,yaw,kind,color,slot:geoCount[kind]++,taxi:kind==='taxi'});
+        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:(kind==='boxtruck'?8:9.5)+Math.random()*5,yaw,kind,color,slot:geoCount[kind]++,taxi:kind==='taxi'});
       }
       const bodyMeshes={};
       kindList.forEach(k=>{if(!geoCount[k])return;const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,geoCount[k]);
@@ -14590,7 +15087,7 @@ function loop(now){
         const nCars=Math.round(A.len/26);
         for(let i=0;i<nCars;i++){const kind=kinds[Math.floor(Math.random()*kinds.length)];acnt[kind]=acnt[kind]||0;
           const dir=Math.random()<.5?1:-1;
-          AC.push({A,kind,slot:acnt[kind]++,s:Math.random()*A.len,dir,lane:(A.w>=20?(Math.random()<.5?3.2:6.6):3.4),spd:13+Math.random()*9,
+          AC.push({A,kind,slot:acnt[kind]++,s:Math.random()*A.len,dir,lane:A.w*(Math.random()<.5?0.0825:0.2475),spd:11+Math.random()*6,
             color:kind==='taxi'?0x14161a:(kind==='boxtruck'||kind==='keitruck')?0xeceeef:mcCols[Math.floor(Math.random()*mcCols.length)]});}});
       window.__artInst={};
       for(const k in acnt){const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,acnt[k]);m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.frustumCulled=false;scene.add(m);window.__artInst[k]=m;}
@@ -14621,7 +15118,7 @@ function loop(now){
     }
     updateRevealLights(); // snap the reveal-light pool to the nearest lamps/car headlights this frame
     for(let wi=0;wi<__oceanMats.length;wi++)__oceanMats[wi].uTime.value+=dt;
-    if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar(0.8+b*0.4);}}
+    if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar((0.8+b*0.4)/S.g.scale.x);}}
     if(window.__lighthouse){const H=window.__lighthouse;H.t+=dt;H.pivot.rotation.y+=dt*0.6;const pulse=0.8+0.2*Math.sin(H.t*3.0);H.lamp.material.emissiveIntensity=2.6*pulse;H.lampLight.intensity=3.0*pulse;if(window.__lhHalo)window.__lhHalo.material.opacity=0.4+0.35*pulse;}
     if(!window.__hwyCars){
       // expressway traffic from the same car kit (it was boxes): one instanced mesh per model
@@ -14631,7 +15128,7 @@ function loop(now){
       for(let i=0;i<34;i++){
         const kind=kinds[Math.floor(Math.random()*kinds.length)], lane=[-5.2,-1.9,1.9,5.2][Math.floor(Math.random()*4)];
         cnt[kind]=cnt[kind]||0;
-        HC.push({kind,slot:cnt[kind]++,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind==='boxtruck'?15:21)+Math.random()*8,dir:lane<0?1:-1,   // keep left
+        HC.push({kind,slot:cnt[kind]++,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind==='boxtruck'?15:17)+Math.random()*6,dir:lane<0?1:-1,   // keep left
           col:kind==='taxi'?0x14161a:kind==='boxtruck'?0xeceeef:hcCols[Math.floor(Math.random()*hcCols.length)]});
       }
       window.__hwyInst={};
@@ -14671,9 +15168,9 @@ function loop(now){
         const wx=p.axis==='x'?p.pos:p.fixed, wz=p.axis==='x'?p.fixed:p.pos;
         const bob=Math.abs(Math.sin(p.phase))*0.025;
         const yawP=p.axis==='x'?(p.dir>0?Math.PI/2:-Math.PI/2):(p.dir>0?0:Math.PI);   // figure faces +Z
-        pdum.position.set(wx,bob,wz);pdum.rotation.set(0,yawP,0);pdum.updateMatrix();
+        pdum.position.set(wx,bob,wz);pdum.rotation.set(0,yawP,0);pdum.scale.setScalar(p.sc||1);pdum.updateMatrix();
         pedBodyMesh.setMatrixAt(i,pdum.matrix);
-        pdum.position.y=PED_HEAD_Y+bob;pdum.updateMatrix();
+        pdum.position.y=PED_HEAD_Y*(p.sc||1)+bob;pdum.updateMatrix();
         pedHeadMesh.setMatrixAt(i,pdum.matrix);
       }
       pedBodyMesh.instanceMatrix.needsUpdate=true;pedHeadMesh.instanceMatrix.needsUpdate=true;
@@ -14698,11 +15195,7 @@ function loop(now){
       const thr=window.__throttle!==undefined?window.__throttle:1, fv=(cockpitMode?66:58)+thr*6;
       if(Math.abs(cam.fov-fv)>0.05){cam.fov+=(fv-cam.fov)*Math.min(1,dt*2.5);cam.updateProjectionMatrix();} }
     if(shake>0){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake;}
-    sky.position.copy(cam.position);
-    updateTOD(dt,now);
-    window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
-    moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
-    moonHalo.position.copy(moonSprite.position);
+    updateTOD(dt,now);skyFollow();
     // (live reflection probe removed: `Math.floor(now/200)%5===0` was true for a whole 200ms
     //  window every second, so ~12 consecutive frames re-rendered the entire city 6 extra times —
     //  a hitch every second. The airframe is matte now and reads the sky environment instead.)
@@ -14769,11 +15262,7 @@ function loop(now){
       const side=new THREE.Vector3().subVectors(ctr,cam.position).cross(new THREE.Vector3(0,1,0)).normalize();
       cam.lookAt(ctr.clone().addScaledVector(side,-5.5));
     }
-    sky.position.copy(cam.position);
-    updateTOD(dt,now);
-    window.__ring.position.x=cam.position.x;window.__ring.position.z=cam.position.z;
-    moonSprite.position.set(cam.position.x-600,500,cam.position.z-1200);
-    moonHalo.position.copy(moonSprite.position);
+    updateTOD(dt,now);skyFollow();
     clouds.forEach(cl=>cl.lookAt(cam.position));
     groundHaze.forEach(gh=>gh.lookAt(cam.position));
     pulseSigns.forEach(s=>{
