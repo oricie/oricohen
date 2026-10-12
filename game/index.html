@@ -690,7 +690,8 @@ const skyMat=new THREE.ShaderMaterial({
       float m=max(mu,0.0);
       c+=uGlow*uGlowI*(pow(m,6.0)*0.30+pow(m,48.0)*0.55);
       // the sun itself, slightly flattened near the horizon
-      c+=uSunCol*uSunDisc*3.0*smoothstep(0.99955,0.99985,mu);
+      // 1.0 deg core with a soft rim to 1.3 deg: the real 0.53 deg, gently exaggerated (it was 2.0-3.4 deg)
+      c+=uSunCol*uSunDisc*3.0*smoothstep(0.999936,0.999962,mu);
       // below the horizon: the haze itself
       c=mix(c,hor*0.94,smoothstep(0.0,-0.06,y));
       // cloud deck, projected onto a plane overhead; fades into the horizon haze
@@ -710,25 +711,35 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(2000,32,24),skyMat);
 sky.renderOrder=-1;
 scene.add(sky);
 
-// moon: up for the blue hour, gone behind the cloud deck by full night
+// THE MOON OF 24 NOV 1989. Computed (Meeus, Astronomical Algorithms ch. 25/47/48, main periodic terms)
+// for Tokyo 35.69N 139.69E: a WANING CRESCENT, 14% lit, 3.9 days before the 28 Nov new moon, 0.49 deg
+// across. It set about 14:30 JST and rose again ~03:30 on the 25th, so through the whole evening
+// (sunset 16:30, game clock 18:35-20:10) it is 30-65 deg BELOW the horizon: there is no moon in this
+// sky. MOON_UP keeps it down; ?moon=1 shows the true crescent (for comparison) at 1.0 deg — the
+// real 0.5 deg doubled, the most a readable moon may be exaggerated. The night key light stays: it
+// is the overcast lit from below, not moonlight.
+const MOON_UP=new URLSearchParams(location.search).get('moon')==='1';
+const MOON_K=0.14;   // illuminated fraction
 const moonTex=tex((g,w,h)=>{
-  const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
-  gr.addColorStop(0,'rgba(246,244,236,1)');gr.addColorStop(0.32,'rgba(232,230,222,.97)');
-  gr.addColorStop(0.6,'rgba(214,214,214,.5)');gr.addColorStop(0.82,'rgba(200,200,205,.12)');
-  gr.addColorStop(1,'rgba(200,200,205,0)');
-  g.fillStyle=gr;g.fillRect(0,0,w,h);
-  g.fillStyle='rgba(150,150,160,.20)';
-  for(let i=0;i<6;i++){g.beginPath();g.arc(w*0.3+Math.random()*w*0.38,h*0.3+Math.random()*h*0.38,4+Math.random()*7,0,7);g.fill();}
+  const cx=w/2,cy=h/2,r=w*0.45;
+  g.fillStyle='rgba(120,128,150,.10)';g.beginPath();g.arc(cx,cy,r,0,7);g.fill();          // earthshine on the dark limb
+  g.save();g.beginPath();g.arc(cx,cy,r,-Math.PI/2,Math.PI/2,true);                         // lit limb (east: waning)
+  g.ellipse(cx,cy,r*(1-2*MOON_K),r,0,Math.PI/2,-Math.PI/2,false);g.closePath();g.clip();   // terminator
+  g.fillStyle='rgb(244,242,232)';g.fillRect(0,0,w,h);
+  g.fillStyle='rgba(150,150,160,.28)';
+  for(let i=0;i<5;i++){g.beginPath();g.arc(cx-r*(0.6+Math.random()*0.3),cy+(Math.random()-.5)*r*1.2,2+Math.random()*4,0,7);g.fill();}
+  g.restore();
 },128,128);
 const moonHaloTex=tex((g,w,h)=>{
   const gr=g.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);
   gr.addColorStop(0,'rgba(220,222,230,.20)');gr.addColorStop(.4,'rgba(210,212,225,.08)');gr.addColorStop(1,'rgba(210,212,225,0)');
   g.fillStyle=gr;g.fillRect(0,0,w,h);
 },128,128);
+// sprites sit 1432 m from the camera: 1.0 deg = 25 m of disc = 27.8 m of sprite (disc fills 90%)
 const moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:moonHaloTex,transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
-moonHalo.scale.set(520,520,1);moonHalo.position.set(-600,500,-1200);scene.add(moonHalo);
+moonHalo.scale.set(150,150,1);moonHalo.position.set(-600,500,-1200);scene.add(moonHalo);   // ~6 deg of haze glow (was 20 deg)
 const moonSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:moonTex,transparent:true,depthWrite:false,fog:false}));
-moonSprite.scale.set(110,110,1);moonSprite.position.set(-600,500,-1200);scene.add(moonSprite);
+moonSprite.scale.set(27.8,27.8,1);moonSprite.position.set(-600,500,-1200);scene.add(moonSprite);   // was 110 m = 4.4 deg
 
 // distant skyline: a silhouette band and a separate lights band, so at dusk it
 // reads as hazy far city and at night as a glittering one — both tinted per TOD
@@ -910,7 +921,7 @@ function updateTOD(dt,now){
   u.uCloudLit.value.setHex(s.cloudLit);u.uCloudDark.value.setHex(s.cloudDark);u.uCloudCov.value=s.cloudCov;
   u.uTime.value=now*0.001;
   moonSprite.material.opacity=moonHalo.material.opacity=s.moon;
-  moonSprite.visible=moonHalo.visible=s.moon>0.01;
+  moonSprite.visible=moonHalo.visible=MOON_UP&&s.moon>0.01;
   const R=window.__ring.userData;
   R.silMat.color.setHex(s.fog).multiplyScalar(0.86-0.18*s.win);R.silMat.opacity=0.32+0.6*s.win;R.litMat.opacity=s.win;
   groundHaze.forEach(gh=>gh.material.color.setHex(s.fog));
@@ -1315,23 +1326,25 @@ function facadeTexPair(base,opts){
 function facadeTex(base,opts){return facadeTexPair(base,opts).map;}   // albedo-only callers
 
 // curtain-wall glass towers: mullion grid, spandrel bands, a sky-gradient sheen
+// ONE TILE = 6 storeys x 12 mullion bays (4 rows a storey: a spandrel at the slab + 3 rows of vision
+// glass), repeated up the tower at true storey height — so the albedo is tile-safe: no full-face
+// gradient or diagonal sheen, which banded every tile once the grid repeated.
+const GLASS_ROWS=24; window.__glassRows=GLASS_ROWS;
 function glassTexPair(){
   return _pairTex(512,512,(g,gl,w,h)=>{
-    const gr=g.createLinearGradient(0,0,w*.25,h);
-    gr.addColorStop(0,'#7c8792');gr.addColorStop(.35,'#4a545e');gr.addColorStop(.7,'#2c333a');gr.addColorStop(1,'#1d2227');
-    g.fillStyle=gr;g.fillRect(0,0,w,h);
-    const C=12,R=22,cw=w/C,ch=h/R;
-    for(let y=0;y<R;y++){
-      if(y%4===3){g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,y*ch+ch*0.55,w,ch*0.45);}  // slab spandrel
+    g.fillStyle='#3e474f';g.fillRect(0,0,w,h);
+    const C=12,R=GLASS_ROWS,cw=w/C,ch=h/R;
+    for(let y=0;y<R;y++)for(let x=0;x<C;x++){const v=Math.random()*0.16-0.08;    // pane-to-pane tint variation of float glass
+      g.fillStyle=v>0?`rgba(170,185,200,${v})`:`rgba(0,0,0,${-v*1.5})`;g.fillRect(x*cw,y*ch,cw,ch);}
+    for(let st=0;st<R/4;st++){
+      const y0=st*4;g.fillStyle='rgba(40,46,52,.45)';g.fillRect(0,(y0+3)*ch,w,ch);      // slab spandrel
       const occ=FLOOR_TIERS[Math.floor(Math.random()*FLOOR_TIERS.length)];
-      for(let x=0;x<C;x++)if(Math.random()<occ*1.4)_winLit(gl,x*cw+2,y*ch+2,cw-4,ch-4,pickWinFam());
+      for(let x=0;x<C;x++)if(Math.random()<occ*1.4){const fam=pickWinFam();for(let k=0;k<3;k++)_winLit(gl,x*cw+2,(y0+k)*ch+1,cw-4,ch-2,fam);}
     }
     g.strokeStyle='rgba(12,14,16,.75)';
     for(let x=0;x<=C;x++){g.lineWidth=x%3===0?2.5:1.2;g.beginPath();g.moveTo(x*cw,0);g.lineTo(x*cw,h);g.stroke();}
     for(let y=0;y<=R;y++){g.lineWidth=1.2;g.beginPath();g.moveTo(0,y*ch);g.lineTo(w,y*ch);g.stroke();}
     g.lineWidth=1;
-    g.fillStyle='rgba(255,255,255,.06)';
-    g.beginPath();g.moveTo(0,h);g.lineTo(w*.45,0);g.lineTo(w*.62,0);g.lineTo(w*.17,h);g.fill();
   });
 }
 function glassTex(){return glassTexPair().map;}
@@ -1469,7 +1482,7 @@ function pickLane(onX){
   const arr=onX?laneRoads.z:laneRoads.x;
   const r=arr[Math.floor(Math.random()*arr.length)];
   const dir=Math.random()<.5?1:-1;
-  const off=r.major?(Math.random()<.5?3.4:7.4):3.2;
+  const off=r.major?[1.65,4.9,8.15][Math.floor(Math.random()*3)]:3.2;   // majors: the centre of each painted 3.25 m lane
   return {lane:onX?r.p-dir*off:r.p+dir*off,dir,road:r};   // Japan drives on the LEFT, on both axes
 }
 
@@ -1736,32 +1749,37 @@ function makeRoadStripTex(){return tex((g,w,h)=>{
     gr.addColorStop(0,'rgba(10,10,12,0)');gr.addColorStop(.5,'rgba(10,10,12,.32)');gr.addColorStop(1,'rgba(10,10,12,0)');
     g.fillStyle=gr;g.fillRect(x-5,0,10,h);
   });
-  // worn centre-line dashes: some missing/chipped so the paint reads weathered, not freshly laid
-  for(let y=0;y<h;y+=16){
+  // worn centre-line dashes, 5 m paint / 5 m gap on a ~40 m tile (they were 0.6 m dots every 1.25 m);
+  // some missing/chipped so the paint reads weathered, not freshly laid
+  for(let y=0;y<h;y+=h/4){
     if(Math.random()<0.16)continue;
     const wear=0.26+Math.random()*0.42,dw=2.4*(0.55+Math.random()*0.55);
-    g.fillStyle=`rgba(210,196,116,${wear})`;g.fillRect(w/2-dw/2,y,dw,8);
+    g.fillStyle=`rgba(210,196,116,${wear})`;g.fillRect(w/2-dw/2,y,dw,h/8);
   }
   g.fillStyle='rgba(200,200,200,.3)';
   g.fillRect(2,0,1.6,h);g.fillRect(w-3.6,0,1.6,h);
 },256,512,true);}
-function makeMajorRoadTex(){return tex((g,w,h)=>{
+// LANES IN METRES: the 26 m avenues were painted as two 6.5 m lanes a side. Now 3.25 m lanes (Japanese
+// standard for a 60 km/h trunk road) — majors: three lanes + a kerbside stopping lane each way; the
+// curved 16-20 m avenues: two lanes + the kerb lane. `dash` = lane lines as fractions of the width out
+// from the centre, `edge` = the solid edge line, `per` = dash periods per tile (5 m paint / 5 m gap).
+function makeMajorRoadTex(dash,edge,per){dash=dash||[0.125,0.25];edge=edge||0.375;per=per||7;return tex((g,w,h)=>{
   asphaltBase(g,w,h,'#26272c');
-  [0.13,0.31,0.69,0.87].forEach(f=>{
+  const bnd=[0].concat(dash,[edge]),trk=[];for(let i=0;i<bnd.length-1;i++)trk.push(bnd[i]+(bnd[i+1]-bnd[i])*0.27,bnd[i]+(bnd[i+1]-bnd[i])*0.73);
+  trk.forEach(f=>[0.5-f,0.5+f].forEach(f=>{   // tyre-polished wheel tracks inside each lane
     const x=f*w;
     const gr=g.createLinearGradient(x-7,0,x+7,0);
     gr.addColorStop(0,'rgba(8,8,10,0)');gr.addColorStop(.5,'rgba(8,8,10,.36)');gr.addColorStop(1,'rgba(8,8,10,0)');
     g.fillStyle=gr;g.fillRect(x-7,0,14,h);
-  });
+  }));
   // worn lane dashes: patchy alpha + occasional dropped dash so the paint reads weathered
-  for(let y=0;y<h;y+=22){
-    if(Math.random()<0.12){continue;}
-    const wear=0.22+Math.random()*0.36;
-    g.fillStyle=`rgba(222,222,228,${wear})`;
-    g.fillRect(w*0.25-1.4,y,2.8,11);g.fillRect(w*0.75-1.4,y,2.8,11);
-  }
+  for(let y=0;y<h;y+=h/per)dash.forEach(f=>[0.5-f,0.5+f].forEach(fx=>{
+    if(Math.random()<0.12)return;
+    g.fillStyle=`rgba(222,222,228,${0.22+Math.random()*0.36})`;
+    g.fillRect(w*fx-1.4,y,2.8,h/per/2);
+  }));
   g.fillStyle='rgba(222,222,228,.42)';
-  g.fillRect(4,0,2.6,h);g.fillRect(w-6.6,0,2.6,h);
+  g.fillRect(w*(0.5-edge)-1.3,0,2.6,h);g.fillRect(w*(0.5+edge)-1.3,0,2.6,h);
   g.fillStyle='rgba(228,198,86,.5)';
   g.fillRect(w/2-4.2,0,2.4,h);g.fillRect(w/2+1.8,0,2.4,h);
 },512,1024,true);}
@@ -2190,7 +2208,7 @@ float pavH(vec2 p,float u,float near,out vec3 col,out float rough){
   });
   const mkG=(PP,NN,UU)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(PP,3));
     g.setAttribute('normal',new THREE.Float32BufferAttribute(NN,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(UU,2));g.computeBoundingSphere();return g;};
-  const rt=pickPool(ROAD_POOL_MAJOR).clone();rt.needsUpdate=true;rt.wrapS=rt.wrapT=THREE.RepeatWrapping;rt.repeat.set(1,1);
+  const rt=makeMajorRoadTex([0.165,0.33],0.45,4);rt.wrapS=rt.wrapT=THREE.RepeatWrapping;rt.repeat.set(1,1);   // 20 m: 3.3 m lanes on a 40 m tile
   const roadM=asphaltify(new THREE.MeshStandardMaterial({map:rt,roughness:0.7,metalness:0.0,polygonOffset:true,polygonOffsetFactor:-9,polygonOffsetUnits:-9}),null);
   const road=new THREE.Mesh(mkG(P,N,U),roadM);road.receiveShadow=true;road.frustumCulled=false;scene.add(road);
   const walk=new THREE.Mesh(mkG(SP,SN,SU),window.__pavMat);walk.receiveShadow=true;walk.frustumCulled=false;scene.add(walk);
@@ -2878,8 +2896,10 @@ function addNeonSigns(grp,bw,bd,bh,cx,cz){
     let sh,sw;
     if(nm.shape==='wide'){sh=Math.min(bh*0.3,2.6+Math.random()*3.2);sw=sh*(2.1+Math.random()*1.9);}
     else if(nm.shape==='square'){sh=Math.min(bh*0.32,4+Math.random()*5);sw=sh*(0.82+Math.random()*0.3);}
-    else if(nm.shape==='slim'){sh=Math.min(bh*0.62,13+Math.random()*15);sw=sh*(0.09+Math.random()*0.08);}
-    else{sh=Math.min(bh*0.55,9+Math.random()*17);sw=sh*(0.18+Math.random()*0.16);}
+    // vertical tategata signs are ~0.9-2.6 m wide in reality (these reached 8.8 m): pick a real width and
+    // derive the height from the same aspect range the sign faces were drawn for
+    else if(nm.shape==='slim'){sw=0.9+Math.random()*1.1;sh=Math.min(bh*0.62,sw/(0.09+Math.random()*0.08));sw=Math.min(sw,sh*0.17);}
+    else{sw=1.2+Math.random()*1.4;sh=Math.min(bh*0.55,sw/(0.18+Math.random()*0.16));sw=Math.min(sw,sh*0.34);}
     const sign=new THREE.Mesh(new THREE.BoxGeometry(0.5,sh,sw),nm.m); // single shared material -> the merge pass fuses all signs of each variant (was a 6-material array, which it had to skip)
     const side=Math.random()<.5?1:-1;
     // ~28% of signs project on an arm perpendicular to the wall (Tokyo blade/cantilever signs),
@@ -3593,11 +3613,13 @@ const billboardFrameXf=[],billboardGlowXf=[];
 function mountBillboard(grp,bw,bd,bh,cx,cz,forcedSide){
   const roll=Math.random();
   let t,w2,h2;
-  if(roll<0.55){t=idolPosterTex();w2=bw*0.56;h2=w2*1.414;}   // 1989 wall posters, B-series proportion
-  else if(roll<0.4){t=vintagePosterTex();w2=bw*0.46;h2=bw*1.2;}
-  else if(roll<0.58){t=foodAdTex();w2=bw*0.48;h2=bw*1.2;}
-  else if(roll<0.76){t=noirPosterTex();w2=bw*0.46;h2=bw*1.2;}
-  else{t=null;w2=bw*0.95;h2=bw*0.48;}                               // trivision: three ads on turning prism slats
+  // sized like the real boards (wall posters up to ~10 m wide, trivisions ~12 x 6 m), not as a share of the
+  // building: a 60 m block used to carry a 27 x 35 m poster
+  if(roll<0.55){t=idolPosterTex();w2=Math.min(bw*0.56,6+Math.random()*4);h2=w2*1.414;}   // 1989 wall posters, B-series proportion
+  else if(roll<0.4){t=vintagePosterTex();w2=Math.min(bw*0.46,5);h2=w2*2.6;}
+  else if(roll<0.58){t=foodAdTex();w2=Math.min(bw*0.48,5);h2=w2*2.5;}
+  else if(roll<0.76){t=noirPosterTex();w2=Math.min(bw*0.46,5);h2=w2*2.6;}
+  else{t=null;w2=Math.min(bw*0.95,8+Math.random()*4);h2=w2*0.5;}       // trivision: three ads on turning prism slats
   // LED/backlit panels: a hair under full white, so poster content survives night exposure + bloom.
   // Materials are shared per texture, so boards showing the same design batch together.
   const mat=t?(t.__bbMat||(t.__bbMat=new THREE.MeshBasicMaterial({map:t,color:0xc8c8c8}))):trivisionMat(trivisionAtlas());
@@ -3902,7 +3924,7 @@ const GLASS_POOL=(()=>{const a=[];for(let i=0;i<6;i++){
     emissive:0xffffff,emissiveMap:glassPair.lit,emissiveIntensity:0});
   m.color.setHSL((200+Math.random()*20)/360,0.06+Math.random()*0.06,0.78+Math.random()*0.15);   // faint blue-green float glass
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:m,preset:facadeGridPresets[0],winGain:0.9});
-  crispFacade(m,0,12,22);
+  crispFacade(m,0,12,GLASS_ROWS);
   a.push(m);}return a;})();
 const RES_POOL=resFacades.map(pr=>{
   [pr.map,pr.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;});
@@ -3911,6 +3933,20 @@ const RES_POOL=resFacades.map(pr=>{
   crispFacade(m,1,5,9);
   return m;});
 const _pickPool=a=>a[Math.floor(Math.random()*a.length)];
+// texture tile -> metres, per material: rows/cols of one tile, floor-to-floor range, window-bay width.
+// The bay follows the preset (loft panes ~4.2 m .. a tight high-rise grid ~2 m) so window SIZE still varies.
+const SHOP_Y0=5.4;   // ground-floor shop storey: shopfront + sign band + frame top
+const FACADE_GRID=new Map();
+(window.__bldgMats||[]).forEach(e=>{if(e.facade)FACADE_GRID.set(e.mat,{rows:e.preset.rows,cols:e.preset.cols,storey:[3.3,3.8],bay:{5:4.2,7:3.6,10:3.0,13:2.5,16:2.0}[e.preset.cols]||3.2});});
+GLASS_POOL.forEach(m=>FACADE_GRID.set(m,{rows:GLASS_ROWS,cols:12,storey:[3.85,4.0],bay:1.5,rowsPerStorey:4}));
+RES_POOL.forEach(m=>FACADE_GRID.set(m,{rows:9,cols:5,storey:[2.8,2.95],bay:5.6}));
+function storeyUVs(geo,bw,bh,bd,y0,storey,G){
+  const uv=geo.attributes.uv,rs=G.rowsPerStorey||1;
+  for(let i=0;i<24;i++){if(i>=8&&i<16)continue;                     // roof / underside keep 0..1
+    const nb=Math.max(1,Math.round((i<8?bd:bw)/G.bay));               // whole bays across this face
+    uv.setXY(i,uv.getX(i)*nb/G.cols,(uv.getY(i)*bh-y0)*rs/(storey*G.rows));}
+  uv.needsUpdate=true;return geo;
+}
 // Facade UVs are 0..1 per box face, so a tall tower stretched ONE window grid over its whole height —
 // which reads as a blank slab. Repeat the grid per ~`unit` metres instead, per face, so window rows
 // stay a constant size on a 12u shophouse and a 280u tower alike.
@@ -3946,18 +3982,25 @@ function spawnBuilding(cx,cz,bw,bd,style){
     else               bh = r<0.32 ? (14+Math.random()*16) : r<0.82 ? (34+Math.random()*38) : (78+Math.random()*52);
     mat=_pickPool(FACADE_POOL);
   }
+  // REAL STOREYS: the window grid used to be one texture tile per face, so a storey was simply the
+  // building's height / the tile's rows (7-26): 0.5 m on a low block, 18 m on a tall one. Now every
+  // face repeats the tile at a true floor-to-floor height above a 5.4 m shop storey (offices 3.3-3.8 m,
+  // apartments 2.8-2.95 m, curtain-wall towers 3.9 m = 4 rows), with whole window bays across each face,
+  // and the roof lands on a floor line.
+  const FG=FACADE_GRID.get(mat), storey=FG.storey[0]+Math.random()*(FG.storey[1]-FG.storey[0]);
+  bh=SHOP_Y0+Math.max(1,Math.round((bh-SHOP_Y0)/storey))*storey+0.3;
   // NOTE: do NOT tile the facade UVs. facadeTex paints a full-face composition — a diagonal glass
   // sheen, edge-anchored sky/ground gradients — so repeating it bands the towers with diagonal
   // parallelograms. One grid per face is correct; tall buildings are kept in range by the height caps.
-  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat); // single material -> mergeable
+  const box=new THREE.Mesh(storeyUVs(new THREE.BoxGeometry(bw,bh,bd),bw,bh,bd,SHOP_Y0,storey,FG),mat); // single material -> mergeable
   box.position.y=bh/2;box.castShadow=true;box.receiveShadow=true;grp.add(box);
   const cap=new THREE.Mesh(new THREE.BoxGeometry(bw*1.004,0.35,bd*1.004),rm); // roof surface as its own mergeable mesh
   cap.position.y=bh+0.1;cap.receiveShadow=true;grp.add(cap);
   parapetXf.push({x:cx,y:bh+0.28,z:cz,w:bw+0.7,h:style==='res'?0.7:1.1,d:bd+0.7}); // batched after the loop
   let topY=bh;
   if(style==='glass'&&Math.random()<0.5){
-    const h2=bh*0.35,w2=bw*0.62,d2=bd*0.62;
-    const b2=new THREE.Mesh(new THREE.BoxGeometry(w2,h2,d2),mat);
+    const h2=Math.max(2,Math.round(bh*0.35/storey))*storey,w2=bw*0.62,d2=bd*0.62;
+    const b2=new THREE.Mesh(storeyUVs(new THREE.BoxGeometry(w2,h2,d2),w2,h2,d2,0,storey,FG),mat);
     b2.position.y=bh+h2/2;b2.castShadow=true;grp.add(b2);
     const cap2=new THREE.Mesh(new THREE.BoxGeometry(w2*1.004,0.35,d2*1.004),rm);
     cap2.position.y=bh+h2+0.1;grp.add(cap2);
@@ -4005,7 +4048,7 @@ function spawnBuilding(cx,cz,bw,bd,style){
     // extra wall-mounted animated video screen high on neon/mixed towers (idol or ad loop, throttled draw)
     if(bh>34&&Math.random()<0.16&&bigScreens.length<14){
       const bs=Math.random()<0.45?idolScreenTex():bigScreenTex();
-      const sc2w=bw*0.7,sc2h=sc2w*1.5;
+      const sc2w=Math.min(bw*0.7,7),sc2h=sc2w*1.5;   // a 1989 wall video screen tops out ~7 x 10 m
       const scr=new THREE.Mesh(new THREE.PlaneGeometry(sc2w,sc2h),new THREE.MeshBasicMaterial({map:bs.t}));
       const side2=Math.random()<0.5?1:-1;
       scr.position.set(side2*(bw/2+0.32),bh-sc2h*0.55-1,0);
@@ -4019,9 +4062,10 @@ function spawnBuilding(cx,cz,bw,bd,style){
   }
   if(style==='glass'&&Math.random()<0.5&&bigScreens.length<14){
     const bs=Math.random()<0.35?idolScreenTex():bigScreenTex();
-    const scr=new THREE.Mesh(new THREE.PlaneGeometry(bw*0.9,bw*0.56),new THREE.MeshBasicMaterial({map:bs.t}));
+    const sw3=Math.min(bw*0.9,14);   // Alta Vision-class screen, ~14 m at most (was up to 54 m)
+    const scr=new THREE.Mesh(new THREE.PlaneGeometry(sw3,sw3*0.62),new THREE.MeshBasicMaterial({map:bs.t}));
     scr.position.set(0,bh*0.62,bd/2+0.32);grp.add(scr);
-    const glow=new THREE.Mesh(new THREE.PlaneGeometry(bw*1.2,bw*0.76),
+    const glow=new THREE.Mesh(new THREE.PlaneGeometry(sw3*1.3,sw3*0.84),
       new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.12,blending:THREE.AdditiveBlending,depthWrite:false}));
     glow.position.set(0,bh*0.62,bd/2+0.22);grp.add(glow);
     bigScreens.push(bs);
@@ -4243,6 +4287,16 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const matA=new THREE.MeshLambertMaterial({map:pA.map,emissive:0xffffff,emissiveMap:pA.lit,emissiveIntensity:0});
   const matB=new THREE.MeshLambertMaterial({map:pB.map,emissive:0xffffff,emissiveMap:pB.lit,emissiveIntensity:0});
   (window.__bldgMats||(window.__bldgMats=[])).push({mat:matA,preset:null,winGain:1.2},{mat:matB,preset:null,winGain:1.2});
+  // one texture per face stretched a 18 m block's ~13 window rows over a 168 m one (1.3-13 m storeys):
+  // repeat the tile per instance size instead, so every far block keeps ~3.5 m storeys and ~3.4 m bays
+  [pA,pB].forEach(P=>[P.map,P.lit].forEach(t=>{t.wrapS=t.wrapT=THREE.RepeatWrapping;}));
+  [[matA,7],[matB,6]].forEach(([m,step])=>{const rows=Math.floor(122/(step+2)),cols=Math.floor(44/step);
+    m.onBeforeCompile=sh=>{fogHook(sh);sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',`#include <uv_vertex>
+  #ifdef USE_INSTANCING
+  { vec3 isz=vec3(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz),length(instanceMatrix[2].xyz));
+    vUv*=vec2((abs(normal.x)>0.5?isz.z:isz.x)/${(cols*3.4).toFixed(1)},isz.y/${(rows*3.5).toFixed(1)}); }
+  #endif`);};
+    m.customProgramCacheKey=()=>'impTile'+step;});
   const mA=new THREE.InstancedMesh(geo,matA,Math.ceil(count/2));
   const mB=new THREE.InstancedMesh(geo,matB,Math.floor(count/2));
   mA.frustumCulled=false;mB.frustumCulled=false;
@@ -4509,9 +4563,13 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const sbeam=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,340,12,1,true),new THREE.MeshBasicMaterial({color:0x39e6ff,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false}));sbeam.position.set(padX,174,0);ship.add(sbeam);
   const beaconTop=new THREE.Mesh(new THREE.SphereGeometry(3.4,12,12),new THREE.MeshBasicMaterial({color:0x9ff2ff,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));beaconTop.position.set(padX,344,0);ship.add(beaconTop);window.__shipBeacon=beaconTop;
 
-  const SHIP_Z=680;
+  // modelled at ~121 x 13 m; an Aegis cruiser of 1989 (Ticonderoga class, the 7th Fleet's at Yokosuka)
+  // is 173 x 16.8 m, so the hull is scaled 1.4 about its waterline. The beacon column stays its own size.
+  const SHIP_Z=680, SK=1.4;
+  ship.scale.setScalar(SK);
+  [sbeam,beaconTop].forEach(o=>{o.scale.setScalar(1/SK);o.position.y/=SK;});
   ship.position.set(0,0,SHIP_Z);scene.add(ship);
-  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX,4.82,SHIP_Z), t:0};
+  window.__navyShip={g:ship, padPos:new THREE.Vector3(padX*SK,4.82*SK,SHIP_Z), t:0};
 }
 
 // ---------- TOKYO TOWER-style landmark: international orange + white, warm-lit ----------
@@ -4519,25 +4577,27 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const tw=new THREE.Group();
   const redWire=new THREE.MeshBasicMaterial({color:0xff6a1e,wireframe:true});   // lattice in its floodlit orange
   const red=new THREE.MeshLambertMaterial({color:0xd8481c});                     // aviation (international) orange
-  const lower=new THREE.Mesh(new THREE.ConeGeometry(30,80,8,6,true),redWire);
-  lower.position.y=40;tw.add(lower);
-  const lowerS=new THREE.Mesh(new THREE.ConeGeometry(29,80,8,1,true),new THREE.MeshLambertMaterial({color:0xd8481c,transparent:true,opacity:.22,side:THREE.DoubleSide}));
-  lowerS.position.y=40;tw.add(lowerS);
-  const deck1=new THREE.Mesh(new THREE.CylinderGeometry(12,13,6,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
-  deck1.position.y=82;tw.add(deck1);
-  const upper=new THREE.Mesh(new THREE.ConeGeometry(11,50,8,4,true),redWire);
-  upper.position.y=110;tw.add(upper);
-  const deck2=new THREE.Mesh(new THREE.CylinderGeometry(5.5,6,4,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
-  deck2.position.y=134;tw.add(deck2);
-  const mastT=new THREE.Mesh(new THREE.CylinderGeometry(.8,1.6,36,8),red);
-  mastT.position.y=152;tw.add(mastT);
+  // TRUE HEIGHT: 333 m to the antenna tip (it stood 173 m — barely a 40-storey block). Main Deck at
+  // 145-150 m, Special Observatory at 250 m, legs spread ~80 m; lattice drawn as tapered frusta.
+  const lower=new THREE.Mesh(new THREE.CylinderGeometry(11,44,145,8,10,true),redWire);
+  lower.position.y=72.5;tw.add(lower);
+  const lowerS=new THREE.Mesh(new THREE.CylinderGeometry(10.5,43,145,8,1,true),new THREE.MeshLambertMaterial({color:0xd8481c,transparent:true,opacity:.22,side:THREE.DoubleSide}));
+  lowerS.position.y=72.5;tw.add(lowerS);
+  const deck1=new THREE.Mesh(new THREE.CylinderGeometry(15,15,10,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
+  deck1.position.y=150;tw.add(deck1);
+  const upper=new THREE.Mesh(new THREE.CylinderGeometry(4,9.5,93,8,6,true),redWire);
+  upper.position.y=201.5;tw.add(upper);
+  const deck2=new THREE.Mesh(new THREE.CylinderGeometry(6,6,5,10),new THREE.MeshLambertMaterial({color:0xece6f0}));
+  deck2.position.y=250;tw.add(deck2);
+  const mastT=new THREE.Mesh(new THREE.CylinderGeometry(0.6,2.6,79,8),red);
+  mastT.position.y=292;tw.add(mastT);
   const beacon=new THREE.Mesh(new THREE.SphereGeometry(1.6,8,8),new THREE.MeshBasicMaterial({color:0xff2266}));
-  beacon.position.y=171;tw.add(beacon);
+  beacon.position.y=332;tw.add(beacon);
   window.__beacon=beacon;
-  const gl=new THREE.PointLight(0xff4fa0,1.8,150);gl.position.y=60;tw.add(gl);
+  const gl=new THREE.PointLight(0xff4fa0,1.8,240);gl.position.y=110;tw.add(gl);
   tw.position.set(TOWER.x,0,TOWER.z);
   scene.add(tw);
-  buildings.push({m:tw,w:44,d:44,h:170});
+  buildings.push({m:tw,w:80,d:80,h:333,landmark:true});   // landmark: no roof clutter on the antenna tip
 }
 
 // ---------- TOKYO: shrines · vermilion torii · stone lanterns · gardens ----------
@@ -4585,7 +4645,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const g=new THREE.Group();
     const plaza=new THREE.Mesh(new THREE.BoxGeometry(72,0.3,72),new THREE.MeshLambertMaterial({color:0x59554c}));plaza.position.y=0.16;plaza.receiveShadow=true;g.add(plaza);
     const path=new THREE.Mesh(new THREE.BoxGeometry(7,0.34,52),new THREE.MeshLambertMaterial({color:0x7c7669}));path.position.set(0,0.19,5);g.add(path);
-    const t=makeTorii(20);t.position.set(0,0,28);g.add(t);
+    const t=makeTorii(11);t.position.set(0,0,28);g.add(t);   // ~10 m: a big city-shrine torii (was 18 m)
     const sh=makeShrine();sh.position.set(0,0,-22);g.add(sh);
     g.position.set(cx,0,cz);scene.add(g);
     for(let z2=20;z2>=-12;z2-=11){[-5,5].forEach(x2=>addLantern(cx+x2,cz+z2));}
@@ -4599,7 +4659,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const toriiSpots=[[-60,-360],[150,300],[-380,-40],[380,170],[-150,70],[240,-250],[70,430],[-260,-300],[420,-150],[-40,250],[190,-430],[-430,330]];
   toriiSpots.forEach(([x,z])=>{ if(x>440&&x<560)return; if(z>560)return; if(Math.abs(z-192)<12||Math.abs(z+288)<12)return;
     if(roadAt(x,z,7)||corridorHit(x,z,8))return;   // a torii in the middle of a junction reads as a placement bug
-    clearAround(x,z,15); const t=makeTorii(11+Math.random()*4);t.position.set(x,0,z);t.rotation.y=Math.random()<.5?0:Math.PI/2;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
+    clearAround(x,z,15); const t=makeTorii(6.5+Math.random()*3);t.position.set(x,0,z);t.rotation.y=Math.random()<.5?0:Math.PI/2;scene.add(t); addLantern(x+(Math.random()<.5?-4:4),z+3); });
 
   let placed=0,tries=0;
   while(placed<18&&tries<220){tries++; const x=(Math.random()-0.5)*1000,z=(Math.random()-0.5)*1000;
@@ -4609,7 +4669,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
 
   // ---- build instanced trees ----
   if(treeItems.length){
-    const trunkGeo=new THREE.CylinderGeometry(0.5,0.85,5,6);trunkGeo.translate(0,2.5,0);
+    const trunkGeo=new THREE.CylinderGeometry(0.2,0.34,5,6);trunkGeo.translate(0,2.5,0);   // 0.55-1.1 m at the foot (was 1.3-2.8 m)
     // canopies are lumpy blob clusters (merged once, instanced), not stacked cones
     const _cluster=(n,spread,lift)=>{const blob=new THREE.IcosahedronGeometry(1,1),gs=[],ms=[];
       for(let i=0;i<n;i++){const a=Math.random()*6.283,r=i?spread*(0.5+Math.random()*0.5):0;
@@ -4635,7 +4695,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const postGeo=new THREE.CylinderGeometry(0.26,0.3,2.2,6);postGeo.translate(0,1.55,0);
     const glowGeo=new THREE.BoxGeometry(0.85,0.95,0.85);glowGeo.translate(0,3.25,0);
     const capGeo=new THREE.ConeGeometry(0.95,0.65,6);capGeo.translate(0,3.95,0);
-    const mk=(geo,mat)=>{const im=new THREE.InstancedMesh(geo,mat,lantItems.length);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),one=new THREE.Vector3(1,1,1);
+    const mk=(geo,mat)=>{const im=new THREE.InstancedMesh(geo,mat,lantItems.length);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),one=new THREE.Vector3(0.58,0.58,0.58);   // a kasuga-doro stands ~2.5 m (modelled 4.3)
       lantItems.forEach((it,i)=>{e.set(0,it.ry,0);q.setFromEuler(e);p.set(it.x,0,it.z);m.compose(p,q,one);im.setMatrixAt(i,m);});
       im.instanceMatrix.needsUpdate=true;im.castShadow=false;scene.add(im);};
     mk(baseGeo,darkStone);mk(postGeo,stoneMat);mk(glowGeo,glowMat);mk(capGeo,darkStone);
@@ -4652,7 +4712,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   for(let i=0;i<11;i++){
     const s=pool[Math.floor(Math.random()*pool.length)];
     const c=(Math.random()-0.5)*720, from=c-70, to=c+70;
-    const off=(Math.random()<0.5?-1:1)*(6+Math.random()*3), y=8+Math.random()*2.5;
+    const off=(Math.random()<0.5?-1:1)*(6+Math.random()*3), y=5+Math.random()*1.6;   // strung at first-floor eave height
     for(let t=from;t<=to;t+=5){
       let x,z; if(s.axis==='z'){x=s.p+off;z=t;}else{x=t;z=s.p+off;}
       if(x>440&&x<560)continue; if(z>560)continue; // skip river/bay
@@ -4661,7 +4721,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     }
   }
   if(items.length){
-    const geo=new THREE.SphereGeometry(0.5,7,6); geo.scale(1,1.5,1); // chochin: taller than wide
+    const geo=new THREE.SphereGeometry(0.22,7,6); geo.scale(1,1.45,1); // chochin: 0.44 x 0.64 m, taller than wide (was 1.0 x 1.5)
     const im=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({color:0xffffff}),items.length);
     const m=new THREE.Matrix4(),q=new THREE.Quaternion(),pos=new THREE.Vector3(),one=new THREE.Vector3(1,1,1),col=new THREE.Color();
     items.forEach((it,i)=>{pos.set(it.x,it.y,it.z);m.compose(pos,q,one);im.setMatrixAt(i,m);im.setColorAt(i,col.setHex(it.c));});
@@ -4704,15 +4764,15 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   }
   const platMat=new THREE.MeshLambertMaterial({color:0x6a6672});
   [-1,1].forEach(sd=>{
-    const plat=new THREE.Mesh(new THREE.BoxGeometry(84,1.0,3.2),platMat);
-    plat.position.set(-30,RY+0.5,RAIL_Z+sd*6.05);scene.add(plat);
-    const canopy=new THREE.Mesh(new THREE.BoxGeometry(84,0.22,3.8),new THREE.MeshLambertMaterial({color:0x3a3f4a}));
+    const plat=new THREE.Mesh(new THREE.BoxGeometry(164,1.1,3.2),platMat);   // long enough for the 8-car train (160 m)
+    plat.position.set(-30,RY+0.55,RAIL_Z+sd*6.05);scene.add(plat);
+    const canopy=new THREE.Mesh(new THREE.BoxGeometry(164,0.22,3.8),new THREE.MeshLambertMaterial({color:0x3a3f4a}));
     canopy.position.set(-30,RY+4.4,RAIL_Z+sd*6.05);canopy.castShadow=true;scene.add(canopy);
-    for(let px=-68;px<=8;px+=12){
+    for(let px=-104;px<=44;px+=12){
       const post=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,3.4,6),platMat);
       post.position.set(px,RY+2.6,RAIL_Z+sd*6.05);scene.add(post);
     }
-    const strip=new THREE.Mesh(new THREE.BoxGeometry(84,0.1,0.5),new THREE.MeshBasicMaterial({color:0xd8f2e8}));
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(164,0.1,0.5),new THREE.MeshBasicMaterial({color:0xd8f2e8}));
     strip.position.set(-30,RY+4.28,RAIL_Z+sd*6.05);scene.add(strip);
   });
   const signTex=tex((g,w,h)=>{
@@ -4739,11 +4799,11 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
   const trainEnd=new THREE.MeshLambertMaterial({color:0x30343c});
   const cars=[];
   for(let k=0;k<8;k++){
-    const car=new THREE.Mesh(new THREE.BoxGeometry(18.6,3.1,2.9),[trainEnd,trainEnd,trainEnd,trainEnd,trainMat,trainMat]);
-    car.position.set(0,RY+1.85,RAIL_Z-2.1);
+    const car=new THREE.Mesh(new THREE.BoxGeometry(19.5,3.6,2.9),[trainEnd,trainEnd,trainEnd,trainEnd,trainMat,trainMat]);   // a 20 m JNR commuter car, 3.6 m to the roof
+    car.position.set(0,RY+2.15,RAIL_Z-2.1);
     car.castShadow=true;scene.add(car);cars.push(car);
   }
-  window.__train={cars,spacing:19.4,speed:64};
+  window.__train={cars,spacing:20,speed:24};   // ~85 km/h (was 64 m/s = 230 km/h)
 }
 
 // ---------- JR YAMANOTE LINE: the elevated loop, its stations, and the trains going round ----------
@@ -4790,10 +4850,7 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     const p=pts[bi],q=nrm[bi],yaw=Math.atan2(q[0],q[1]);
     const g=new THREE.Group();g.position.set(p[0],0,p[1]);g.rotation.y=yaw;scene.add(g);
     const sy=ryA[bi]-RY;
-    const roof=new THREE.MeshStandardMaterial({color:0x3c4048,roughness:0.6,metalness:0.4});
-    [-1,1].forEach(sd=>{const pl=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.0,70),mats.side);pl.position.set(sd*6.6,RY+sy+0.5,0);g.add(pl);
-      const cn=new THREE.Mesh(new THREE.BoxGeometry(4.2,0.25,64),roof);cn.position.set(sd*6.6,RY+sy+4.4,0);cn.castShadow=true;g.add(cn);
-      const lt=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,62),new THREE.MeshBasicMaterial({color:0xe6fff0}));lt.position.set(sd*6.6,RY+sy+4.25,0);g.add(lt);});
+    S.__s=cum[bi];   // platforms are laid along the curve once the track sampler exists (below)
     const house=new THREE.Mesh(new THREE.BoxGeometry(18,12,46),new THREE.MeshStandardMaterial({color:0x7e796f,roughness:0.9}));house.position.set(-17,6,0);house.castShadow=true;g.add(house);
     const glass=new THREE.Mesh(new THREE.BoxGeometry(18.2,4,40),new THREE.MeshStandardMaterial({color:0x182028,roughness:0.1,metalness:0.4,emissive:0xffe6b8,emissiveIntensity:0.35}));glass.position.set(-17,3.4,0);g.add(glass);
     const sign=tex((c,w,h)=>{c.fillStyle='#ffffff';c.fillRect(0,0,w,h);c.fillStyle='#78b83a';c.fillRect(0,h*0.78,w,h*0.22);   // JR green band
@@ -4811,8 +4868,9 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     for(let x=10;x<w-10;x+=36){c.fillRect(x,h*0.22,24,h*0.3);}
     c.fillStyle='rgba(255,236,190,.95)';for(let x=12;x<w-10;x+=36){c.fillRect(x+2,h*0.25,20,h*0.22);}
     for(let x=60;x<w;x+=170){c.fillStyle='#55595e';c.fillRect(x,h*0.18,16,h*0.62);}},512,128);
-  const carG=new THREE.BoxGeometry(2.95,3.6,19.4);carG.translate(0,RY+0.35+1.8,0);
-  const CARS=6,TR=[{off:2.1,dir:1,s:0},{off:-2.1,dir:-1,s:TOTAL*0.5}];
+  // 205-series: 19.5 m body on a 20 m pitch, 2.8 m wide, roof 3.67 m over the rail; ten cars in 1989
+  const carG=new THREE.BoxGeometry(2.8,3.32,19.5);carG.translate(0,RY+0.35+1.66,0);
+  const CARS=10,TR=[{off:2.1,dir:1,s:0},{off:-2.1,dir:-1,s:TOTAL*0.5}];
   const tm=new THREE.InstancedMesh(carG,new THREE.MeshStandardMaterial({map:tt,roughness:0.35,metalness:0.6,emissive:0xffffff,emissiveMap:tt,emissiveIntensity:0.18}),CARS*TR.length);
   tm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);tm.frustumCulled=false;tm.castShadow=true;scene.add(tm);
   const sample=d=>{d=((d%TOTAL)+TOTAL)%TOTAL;let lo=0,hi=n;while(lo<hi-1){const m=(lo+hi)>>1;if(cum[m]<=d)lo=m;else hi=m;}
@@ -4822,6 +4880,13 @@ for(let i=0;i<ROADS_X.length-1;i++)for(let j2=0;j2<ROADS_Z.length-1;j2++){
     for(let k=0;k<CARS;k++){const S2=sample(T.s-T.dir*k*20);o.position.set(S2.x+S2.q[0]*T.off,S2.y,S2.z+S2.q[1]*T.off);o.rotation.set(0,S2.yaw,0);o.updateMatrix();tm.setMatrixAt(ti*CARS+k,o.matrix);}});
     tm.instanceMatrix.needsUpdate=true;};
   window.__yamanoteTick(0);
+  // 200 m island-side platforms that FOLLOW the curve (one straight 70 m slab was a third of a ten-car
+  // train and stood off the viaduct on the bends): 20 m segments, merged with the statics later
+  {const roof=new THREE.MeshStandardMaterial({color:0x3c4048,roughness:0.6,metalness:0.4}),ltM=new THREE.MeshBasicMaterial({color:0xe6fff0});
+   const plG=new THREE.BoxGeometry(3.2,1.1,20.4),cnG=new THREE.BoxGeometry(4.2,0.25,20.4),ltG=new THREE.BoxGeometry(0.4,0.08,19.6);
+   YAMANOTE_ST.forEach(S=>{for(let d=-90;d<=90;d+=20){const P=sample(S.__s+d);
+     [-1,1].forEach(sd=>{const ox=P.q[0]*sd*5.3,oz=P.q[1]*sd*5.3;   // platform edge ~0.2 m off the car side
+       [[plG,mats.side,0.55],[cnG,roof,4.4],[ltG,ltM,4.25]].forEach(([geo,mat,y])=>{const m=new THREE.Mesh(geo,mat);m.position.set(P.x+ox,RY+P.y+y,P.z+oz);m.rotation.y=P.yaw;if(mat===roof)m.castShadow=true;scene.add(m);});});}});}
   // Shibuya scramble: the famous all-way crossing at the junction in front of the station
   {const S=YAMANOTE_ST.find(x=>x.n==='SHIBUYA');let best=null,bd=1e9;
    ROADS_X.filter(r=>r.w>10).forEach(rx=>ROADS_Z.filter(r=>r.w>10).forEach(rz=>{const d=Math.hypot(rx.p-S.p[0],rz.p-S.p[1]);if(d>44&&d<bd&&!arterialAt(rx.p,rz.p,0)){bd=d;best=[rx,rz];}}));
@@ -4883,16 +4948,17 @@ const signals=[];
     pole.position.y=2.8;g.add(pole);
     const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,4.4,6),poleMat2);
     arm.rotation.z=Math.PI/2;arm.position.set(-2.2,5.35,0);g.add(arm);
-    const head=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.6,0.32),houseMat);
+    // Japanese horizontal 3-lamp head, 300 mm lenses: ~1.25 x 0.45 m housing (was 1.9 x 0.6 with 420 mm lenses)
+    const head=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.45,0.3),houseMat);
     head.position.set(-3.4,5.05,0);g.add(head);
     const mk=(ox,mat)=>{
-      const dOff=new THREE.Mesh(new THREE.CircleGeometry(0.21,10),offMat);
-      dOff.position.set(-3.4+ox,5.05,0.18);g.add(dOff);
-      const d2=new THREE.Mesh(new THREE.CircleGeometry(0.21,10),mat);
-      d2.position.set(-3.4+ox,5.05,0.19);g.add(d2);
+      const dOff=new THREE.Mesh(new THREE.CircleGeometry(0.15,10),offMat);
+      dOff.position.set(-3.4+ox,5.05,0.17);g.add(dOff);
+      const d2=new THREE.Mesh(new THREE.CircleGeometry(0.15,10),mat);
+      d2.position.set(-3.4+ox,5.05,0.18);g.add(d2);
       return d2;
     };
-    const r=mk(-0.55,redOn),y2=mk(0,yelOn),gr2=mk(0.55,grnOn);
+    const r=mk(-0.4,redOn),y2=mk(0,yelOn),gr2=mk(0.4,grnOn);
     g.position.set(x,0,z);g.rotation.y=rotY;
     scene.add(g);
     signals.push({r,y:y2,g:gr2,axis});
@@ -5063,7 +5129,7 @@ void reflStreaks;
   const flameTex=tex((g,w,h)=>{const gr=g.createRadialGradient(w/2,h*0.62,2,w/2,h*0.55,w*0.48);
     gr.addColorStop(0,'rgba(255,240,190,1)');gr.addColorStop(.25,'rgba(255,170,60,.9)');gr.addColorStop(.6,'rgba(220,70,10,.35)');gr.addColorStop(1,'rgba(120,20,0,0)');
     g.fillStyle=gr;g.fillRect(0,0,w,h);},64,64);
-  const barrelG=new THREE.CylinderGeometry(0.45,0.42,1.1,12,1,true);
+  const barrelG=new THREE.CylinderGeometry(0.29,0.285,0.88,12,1,true);   // a 200-litre drum: 0.58 m across, 0.88 m tall (was 0.9 x 1.1)
   const barrelM=new THREE.MeshStandardMaterial({color:0x4a2a18,roughness:0.8,metalness:0.4,side:THREE.DoubleSide,emissive:0x2a0800});
   window.__fires=[];
   const corners=[];
@@ -5073,10 +5139,10 @@ void reflStreaks;
     corners.push([rx.p+(Math.random()<.5?-1:1)*(rx.w/2+SW*0.6),rz.p+(Math.random()<.5?-1:1)*(rz.w/2+SW*0.6)]);
   }));
   corners.filter(([x,z])=>!arterialAt(x,z,1)).sort(()=>Math.random()-0.5).slice(0,22).forEach(([x,z])=>{
-    const b=new THREE.Mesh(barrelG,barrelM);b.position.set(x,CURB_H+0.55,z);scene.add(b);
+    const b=new THREE.Mesh(barrelG,barrelM);b.position.set(x,CURB_H+0.44,z);scene.add(b);
     const f=new THREE.Sprite(new THREE.SpriteMaterial({map:flameTex,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
-    f.position.set(x,CURB_H+1.55,z);f.scale.set(1.6,2.2,1);scene.add(f);
-    const f2=f.clone();f2.material=f.material.clone();f2.scale.set(5,4,1);f2.material.opacity=0.35;f2.position.y+=0.3;scene.add(f2);
+    f.position.set(x,CURB_H+1.22,z);f.scale.set(1.15,1.65,1);scene.add(f);
+    const f2=f.clone();f2.material=f.material.clone();f2.scale.set(3.8,3,1);f2.material.opacity=0.35;f2.position.y+=0.25;scene.add(f2);
     groundPoolXf.push({x,z,s:6+Math.random()*2,st:1.1,c:[1.0,0.42,0.1]});
     window.__fires.push({f,f2,x,z,ph:Math.random()*9});
     (window.__lampPts||(window.__lampPts=[])).push({x,z,fire:true});
@@ -5093,7 +5159,7 @@ void reflStreaks;
       if(Math.abs(x)>620||z<-620||z>SEA_Z0-20)continue;if(Math.abs(x-riverCX(z))<RIVER_HW+10)continue;
       bank(x,z,useX,4+Math.floor(Math.random()*4));k++;}
     for(let k=0;k<9;k++){const z=-560+k*130+Math.random()*40;bank(riverCX(z),z,true,5);}            // river mist
-    window.__fires.forEach(F=>{for(let i=0;i<7;i++)PUFF.push([F.x,CURB_H+2,F.z,3,i/7,1]);});
+    window.__fires.forEach(F=>{for(let i=0;i<7;i++)PUFF.push([F.x,CURB_H+1.6,F.z,3,i/7,1]);});
     const geo=new THREE.PlaneGeometry(1,1),seed=new Float32Array(PUFF.length*2);
     const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,
       uniforms:{uT:{value:0},uCol:{value:new THREE.Color(0xa6adbd)},uLit:{value:new THREE.Color(0xffa060)}},
@@ -5133,16 +5199,17 @@ void reflStreaks;
     if(z>SEA_Z0-10||Math.abs(x-riverCX(z))<RIVER_HW+12||arterialAt(x,z,3))continue;
     if(onX?ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+6):ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+6))continue;
     const g=new THREE.Group();
-    const lower=new THREE.Mesh(new THREE.BoxGeometry(1.75,0.7,4.6),pcBlack);lower.position.y=0.55;g.add(lower);
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(1.74,0.32,4.62),pcBody);upper.position.y=1.06;g.add(upper);
-    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.55,0.55,2.3),pcGlass);cab.position.set(0,1.48,-0.2);g.add(cab);
-    const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,1.1),pcBody);door.position.set(1.15,0.95,-0.1);door.rotation.y=-0.9;g.add(door);
-    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.14,0.3),pcBlack);bar.position.set(0,1.82,-0.2);g.add(bar);
-    const lr=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),redM);lr.position.set(-0.32,1.86,-0.2);g.add(lr);
-    const lb=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.28),bluM);lb.position.set(0.32,1.86,-0.2);g.add(lb);
-    const sr=new THREE.Sprite(glowR.clone());sr.position.set(-0.4,1.9,-0.2);sr.scale.set(5,5,1);g.add(sr);
-    const sb=new THREE.Sprite(glowB.clone());sb.position.set(0.4,1.9,-0.2);sb.scale.set(5,5,1);g.add(sb);
-    [[-0.8,1.5],[0.8,1.5],[-0.8,-1.5],[0.8,-1.5]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.24,10),pcBlack);w.rotation.z=Math.PI/2;w.position.set(wx,0.34,wz);g.add(w);});
+    // a Crown patrol car: 4.69 x 1.69 x 1.44 m to the roof, the light bar on top (was 1.76 m roof, 1.94 m bar)
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(1.69,0.56,4.62),pcBlack);lower.position.y=0.5;g.add(lower);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(1.68,0.22,4.64),pcBody);upper.position.y=0.89;g.add(upper);
+    const cab=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.44,2.3),pcGlass);cab.position.set(0,1.22,-0.2);g.add(cab);
+    const door=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.78,1.1),pcBody);door.position.set(1.12,0.72,-0.1);door.rotation.y=-0.9;g.add(door);
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.12,0.3),pcBlack);bar.position.set(0,1.5,-0.2);g.add(bar);
+    const lr=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.14,0.28),redM);lr.position.set(-0.32,1.53,-0.2);g.add(lr);
+    const lb=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.14,0.28),bluM);lb.position.set(0.32,1.53,-0.2);g.add(lb);
+    const sr=new THREE.Sprite(glowR.clone());sr.position.set(-0.4,1.58,-0.2);sr.scale.set(5,5,1);g.add(sr);
+    const sb=new THREE.Sprite(glowB.clone());sb.position.set(0.4,1.58,-0.2);sb.scale.set(5,5,1);g.add(sb);
+    [[-0.76,1.4],[0.76,1.4],[-0.76,-1.4],[0.76,-1.4]].forEach(([wx,wz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,0.22,10),pcBlack);w.rotation.z=Math.PI/2;w.position.set(wx,0.32,wz);g.add(w);});
     g.position.set(x,0,z);g.rotation.y=(onX?Math.PI/2:0)+(Math.random()-.5)*0.9;scene.add(g);
     window.__beacons.push({sr,sb,lr,lb,ph:Math.random()*6});
     i++;
@@ -5231,8 +5298,8 @@ for(let i=0;i<44;i++){
   const sd=Math.random()<.5?-1:1;
   const off=r.w/2+SW+0.7;
   if(onX?ROADS_X.some(q=>Math.abs(a-q.p)<q.w/2+SW+2):ROADS_Z.some(q=>Math.abs(a-q.p)<q.w/2+SW+2))continue;   // not in a junction
-  const vm=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.2,1),vendMats[Math.floor(Math.random()*3)]);
-  if(onX)vm.position.set(a,1.1,r.p+sd*off);else vm.position.set(r.p+sd*off,1.1,a);
+  const vm=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.83,0.75),vendMats[Math.floor(Math.random()*3)]);   // a drinks machine: 1.0 x 1.83 x 0.75 m (was 1.3 x 2.2 x 1.0)
+  if(onX)vm.position.set(a,0.915,r.p+sd*off);else vm.position.set(r.p+sd*off,0.915,a);
   vm.rotation.y=onX?(sd>0?Math.PI:0):(sd>0?-Math.PI/2:Math.PI/2);
   scene.add(vm);
 }
@@ -5313,21 +5380,23 @@ const CAR_SPECS={
   sedan:{L:4.75,W:1.78,c:0.18,R:0.33,wf:1.45,wr:-1.4,hl:0.66,tl:0.76,mirror:0.98,
     body:[[2.38,0.5],[2.33,0.74],[1.9,0.84],[1.0,0.9],[-1.45,0.92],[-2.2,0.88],[-2.37,0.74],[-2.38,0.5]],
     cabin:[[1.0,0.9],[0.2,1.38],[-0.9,1.4],[-1.65,0.92]]},
-  kei:{L:3.4,W:1.48,c:0.17,R:0.28,wf:1.12,wr:-1.08,hl:0.68,tl:0.8,mirror:1.0,
-    body:[[1.7,0.48],[1.67,0.74],[1.35,0.84],[0.9,0.9],[-1.62,0.92],[-1.7,0.8],[-1.7,0.48]],
-    cabin:[[0.92,0.9],[0.42,1.6],[-1.55,1.63],[-1.63,0.92]]},
-  keitruck:{L:3.4,W:1.48,c:0.2,R:0.27,wf:1.05,wr:-1.0,hl:0.72,tl:0.6,mirror:1.05,bPillar:false,
-    body:[[1.7,0.55],[1.7,0.92],[0.62,0.92],[0.58,0.74],[-1.7,0.74],[-1.7,0.48]],
-    cabin:[[1.64,0.92],[1.48,1.74],[0.66,1.76],[0.62,0.92]],
-    extra:p=>{p.push(_box(1.42,0.28,0.05,0,0.88,1.68,CP.PAINT),_box(1.42,0.28,0.05,0,0.88,-0.56,CP.PAINT));
-      [-1,1].forEach(sd=>p.push(_box(0.05,0.28,2.26,sd*0.71,0.88,0.56,CP.PAINT)));}},
+  // kei class is a legal box: 1976-1990 rules cap it at 3.20 x 1.40 m (Alto / Mira ~1.40-1.47 m tall)
+  kei:{L:3.19,W:1.39,c:0.16,R:0.27,wf:1.05,wr:-1.01,hl:0.66,tl:0.78,mirror:0.94,
+    body:[[1.595,0.47],[1.565,0.72],[1.27,0.82],[0.84,0.87],[-1.52,0.89],[-1.595,0.78],[-1.595,0.47]],
+    cabin:[[0.86,0.87],[0.4,1.44],[-1.45,1.46],[-1.53,0.89]]},
+  keitruck:{L:3.19,W:1.39,c:0.2,R:0.26,wf:0.99,wr:-0.94,hl:0.72,tl:0.6,mirror:1.05,bPillar:false,   // Carry / Hijet: 3.19 x 1.39 x 1.8
+    body:[[1.595,0.55],[1.595,0.92],[0.58,0.92],[0.54,0.74],[-1.595,0.74],[-1.595,0.48]],
+    cabin:[[1.535,0.92],[1.39,1.74],[0.62,1.76],[0.58,0.92]],
+    extra:p=>{p.push(_box(1.33,0.28,0.05,0,0.88,1.57,CP.PAINT),_box(1.33,0.28,0.05,0,0.88,-0.52,CP.PAINT));
+      [-1,1].forEach(sd=>p.push(_box(0.05,0.28,2.1,sd*0.665,0.88,0.525,CP.PAINT)));}},
   minivan:{L:4.75,W:1.82,c:0.19,R:0.33,wf:1.5,wr:-1.42,hl:0.82,tl:0.95,mirror:1.08,
     body:[[2.38,0.6],[2.34,0.86],[1.95,0.98],[1.62,1.02],[-2.3,1.02],[-2.37,0.84],[-2.38,0.6]],
     cabin:[[1.62,1.02],[0.92,1.84],[-2.2,1.88],[-2.3,1.02]]},
-  boxtruck:{L:5.8,W:2.0,c:0.26,R:0.4,wf:1.95,wr:-1.35,hl:0.78,tl:0.8,mirror:1.5,bPillar:false,
-    body:[[2.9,0.62],[2.88,1.16],[1.45,1.16],[1.4,0.92],[-2.9,0.92],[-2.9,0.62]],
-    cabin:[[2.85,1.16],[2.72,2.12],[1.52,2.16],[1.45,1.16]],
-    extra:p=>{p.push(_box(2.1,2.15,4.25,0,2.0,0.75,CP.PAINT),_box(2.12,0.28,4.27,0,1.55,0.75,CP.TRIM));}},
+  // light delivery box truck (Dyna / Elf / Titan class, small-vehicle plates): 4.69 x 1.69, box top ~2.45 m
+  boxtruck:{L:4.69,W:1.69,c:0.24,R:0.34,wf:1.6,wr:-0.95,hl:0.74,tl:0.74,mirror:1.4,bPillar:false,
+    body:[[2.345,0.6],[2.325,1.08],[1.2,1.08],[1.15,0.86],[-2.345,0.86],[-2.345,0.6]],
+    cabin:[[2.3,1.08],[2.19,1.96],[1.25,1.98],[1.2,1.08]],
+    extra:p=>{p.push(_box(1.69,1.52,3.46,0,1.69,0.6,CP.PAINT),_box(1.71,0.22,3.48,0,1.0,0.6,CP.TRIM));}},
 };
 const CAR_GEOS={};for(const k in CAR_SPECS)CAR_GEOS[k]=buildCarModel(CAR_SPECS[k]);
 const carMat=new THREE.MeshStandardMaterial({color:0xffffff,metalness:0.45,roughness:0.32,envMapIntensity:1.1});
@@ -5429,6 +5498,10 @@ const pedBodyGeo=(()=>{
 })();
 const pedHeadGeo=new THREE.BufferGeometry();pedHeadGeo.setAttribute('position',new THREE.Float32BufferAttribute([],3));   // head is part of the body now
 const PED_HEAD_Y=1.63;
+// the figure is modelled 1.765 m to the crown; each person is scaled to a real 1989 Japanese adult
+// (men ~1.70 m, women ~1.57 m, MHLW national survey) so the crowd isn't a row of 1.77 m clones
+const PED_GEO_H=(pedBodyGeo.computeBoundingBox(),pedBodyGeo.boundingBox.max.y);
+function pedStature(){const g=(Math.random()+Math.random()+Math.random()-1.5)*0.7;return Math.random()<0.5?1.70+g*0.058:1.575+g*0.052;}
 const PED_TIME={value:0};
 const pedBodyMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.85,metalness:0.0});
 pedBodyMat.onBeforeCompile=sh=>{
@@ -5481,11 +5554,12 @@ const peds=[];
     if(!p)p={axis:'x',fixed:0,min:-540,max:540,wrap:true};
     p.pos=p.min+Math.random()*(p.max-p.min);
     p.dir=Math.random()<0.5?1:-1;
-    p.spd=1.0+Math.random()*1.1;
+    p.sc=pedStature()/PED_GEO_H;
+    p.spd=(1.15+Math.random()*0.45)*Math.sqrt(p.sc);   // 1.1-1.6 m/s: the shader's ~2 steps/s gait then plants ~0.7 m strides
     p.phase=Math.random()*10;
     peds.push(p);
     const wx=p.axis==='x'?p.pos:p.fixed, wz=p.axis==='x'?p.fixed:p.pos;
-    dummy.position.set(wx,0,wz);dummy.rotation.set(0,0,0);dummy.updateMatrix();
+    dummy.position.set(wx,0,wz);dummy.rotation.set(0,0,0);dummy.scale.setScalar(p.sc);dummy.updateMatrix();
     pedBodyMesh.setMatrixAt(i,dummy.matrix);
     dummy.position.y=PED_HEAD_Y;dummy.updateMatrix();
     pedHeadMesh.setMatrixAt(i,dummy.matrix);
@@ -5511,7 +5585,7 @@ const peds=[];
 const dummy=new THREE.Object3D();
 const HOUS=[],TANK=[],TLEG=[],ACU=[],MAST=[],MLED=[];
 buildings.forEach(b=>{
-  if(b.lz)return;                       // keep LZ roofs clear
+  if(b.lz||b.landmark)return;           // keep LZ roofs (and the tower's antenna) clear
   const bx=b.m.position.x,bz=b.m.position.z,by=b.h,bw=b.w,bd=b.d;
   const tall=by>24;
   // stair/elevator penthouse housing — the strongest silhouette break; taller on taller buildings
@@ -5604,7 +5678,7 @@ instAdd(new THREE.SphereGeometry(0.5,6,6),new THREE.MeshBasicMaterial({color:0xf
 // Street trees (zelkova / ginkgo): a canopy is a CLUSTER of lumpy blobs, not one sphere —
 // that silhouette is most of what reads as "tree" from a helicopter. Six merged canopy
 // variants are built once and shared, so each tree is still just trunk + canopy.
-const trunkG=new THREE.CylinderGeometry(.22,.38,4.4,6);
+const trunkG=new THREE.CylinderGeometry(.13,.22,4.4,6);   // 0.35-0.5 m trunks (were 0.76 m at full size)
 const trunkM=new THREE.MeshLambertMaterial({color:0x3a2f26});
 const LEAF_MATS=[0x2f4428,0x3a4a2a,0x2a3d2c,0x44532f].map(c=>new THREE.MeshLambertMaterial({color:c,flatShading:true}));
 const CANOPY_GEOS=Array.from({length:6},()=>{
@@ -5640,11 +5714,11 @@ ROADS_Z.filter(r=>r.major&&r.p!==HWY_Z&&r.p<SEA_Z0).forEach(r=>{
       if(Math.abs(x-riverCX(z))<RIVER_HW+14)return;
       if(arterialAt(x,z,1)||corridorHit(x,z,2))return;
       if(Math.random()<0.18)return;
-      plantTree(x,z,0.62);
+      plantTree(x,z,0.9);   // ginkgo / zelkova avenue trees stand 7-10 m (they were 4-6 m)
     });
   }
 });
-(window.__artTrees||[]).forEach(([x,z])=>{if(Math.random()<0.85&&!ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+2)&&!ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+2)&&polyDist(x,z,YAMANOTE,true)>8&&!YAMANOTE_ST.some(S=>Math.hypot(x-S.p[0],z-S.p[1])<34))plantTree(x,z,0.6);});
+(window.__artTrees||[]).forEach(([x,z])=>{if(Math.random()<0.85&&!ROADS_X.some(q=>Math.abs(x-q.p)<q.w/2+2)&&!ROADS_Z.some(q=>Math.abs(z-q.p)<q.w/2+2)&&polyDist(x,z,YAMANOTE,true)>8&&!YAMANOTE_ST.some(S=>Math.hypot(x-S.p[0],z-S.p[1])<34))plantTree(x,z,0.88);});
 
 // neon reflections smeared across the wet avenues
 for(let i=0;i<60;i++){
@@ -6466,7 +6540,7 @@ let humanoidAnimClips=null;    // THREE.AnimationClip[]  -> Idle, Run, TPose, Wa
 let zombieWalkClip=null;       // "Walk", slowed for zombies
 let survivorIdleClip=null;     // "Idle", for the survivor
 let humanoidNaturalHeight=1;   // Box3-measured height of the raw template, for scaling
-const HUMANOID_TARGET_HEIGHT=3.5; // world units — enlarged so figures read from flight altitude
+const HUMANOID_TARGET_HEIGHT=1.68; // metres: a real adult (was 3.5 — twice life size next to cars, doors and the street crowd)
 const HUMANOID_BASE_YAW=Math.PI; // model forward-axis correction vs travel-direction math (verified by render: at yaw=0 the model faces -Z i.e. backward, so +PI flips it to face the group's forward/travel direction)
 // Procedural arm-raise offsets (local-space quaternions applied on top of the bone's rest pose)
 // used for the survivor's "waving for help" and rescue celebration — axis/angle tuned by render.
@@ -6599,7 +6673,7 @@ function loadTex(uri,repX,repY){return new Promise(res=>{const t=new THREE.Textu
     // shared window-bump normal, so no per-building normal clones — that was the main perf cost). ---
     if(window.__WALL_DIFF){
       window.WALL_IMG=await loadImg(window.__WALL_DIFF);
-      const cPool=facadeGridPresets.map(p=>facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true}));
+      const cPool=facadeGridPresets.map(p=>{const t=facadeTex('#40465a',{cols:p.cols,rows:p.rows,concrete:true});t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;});   // the grid repeats at storey height
       (window.__bldgMats||[]).forEach(bm=>{
         if(!bm.facade||Math.random()>0.34)return; // facades only (glass/apartments/far city share this list), ~1/3 of them
         const idx=Math.max(0,facadeGridPresets.indexOf(bm.preset));
@@ -6693,7 +6767,7 @@ function spawnZombie(big){
     });
     const r=Math.random();
     kind=big?'brute':r<0.55?'shambler':r<0.85?'stalker':'runner';
-    const hs=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?2:(0.86+Math.random()*0.24));
+    const hs=(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)*(big?1.2:(0.92+Math.random()*0.14));   // 1.55-1.79 m; the brute is a 2 m giant, not 7 m
     const girth=big?1.25:(0.9+Math.random()*0.3);
     model.scale.set(hs*girth,hs,hs*(0.95+(girth-1)*0.7));
     model.rotation.y=HUMANOID_BASE_YAW;
@@ -6712,11 +6786,14 @@ function spawnZombie(big){
       mixer=new THREE.AnimationMixer(model);
       walkAction=mixer.clipAction(clip);
       walkAction.setLoop(THREE.LoopRepeat,Infinity);
-      walkAction.timeScale=kind==='runner'?0.75+Math.random()*0.2:kind==='stalker'?0.7+Math.random()*0.2:kind==='brute'?0.38:0.32+Math.random()*0.2;
       walkAction.time=Math.random()*clip.duration;
       walkAction.play();
     }
-    spd=kind==='runner'?11+Math.random()*3:kind==='stalker'?6+Math.random()*2:kind==='brute'?4:2.6+Math.random()*2;
+    // human speeds for human-sized bodies (they ran 11-14 m/s at 3.5 m tall): a lurching walk, a hard
+    // stride, a sprint. The clip rate follows the speed so the feet stay planted (~1.3 m/s walk, ~3.8 m/s
+    // run at timeScale 1 for a 1.7 m body).
+    spd=kind==='runner'?6+Math.random()*1.5:kind==='stalker'?2.4+Math.random()*0.6:kind==='brute'?1.9:1.3+Math.random()*0.7;
+    if(walkAction)walkAction.timeScale=kind==='runner'?spd/3.8/(hs/(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight)):(kind==='shambler'?0.8:1)*spd/1.3/(hs/(HUMANOID_TARGET_HEIGHT/humanoidNaturalHeight));
   }else{
     // fallback: old box-primitive zombie (used if the model hasn't finished loading yet)
     const b=new THREE.Mesh(zBodyG,zMat);b.position.y=1.5;b.castShadow=true;g.add(b);
@@ -7886,7 +7963,7 @@ function makeEnemyHeli(){
   [[0,0.95,6.95,0.12],[-1.85,-0.12,0.3,0.1],[1.85,-0.12,0.3,0.1],[0,-0.55,-3.5,0.11]].forEach(([x,y,z,r])=>{
     const l=new THREE.Mesh(new THREE.SphereGeometry(r,6,6),EN_LIGHT);l.position.set(x,y,z);g.add(l);
   });
-  g.scale.setScalar(1.5);
+  g.scale.setScalar(1.1);   // AH-1S Cobra class (the JSDF's gunship): 13.6 m fuselage, 13.4 m rotor (x1.5 made it 18 m / 19 m, bigger than the Apache)
   return {g,rotor,trotor};
 }
 function makeBossBoat(){
@@ -8489,7 +8566,7 @@ function inShopkeeper(kind,x,z,ry){
 }
 // a simple standing person (shopkeeper) — readable at interior scale
 // a proper figure (same proportioned body as the street crowd), coloured per part by vertex colour
-function inPerson(colTop,colBottom,x,z,ry){
+function inPerson(colTop,colBottom,x,z,ry,stature){
   const src=pedBodyGeo, pa=src.attributes.aPart, n=pa.count;
   const g2=new THREE.BufferGeometry();
   g2.setAttribute('position',src.attributes.position);g2.setAttribute('normal',src.attributes.normal);
@@ -8498,7 +8575,7 @@ function inPerson(colTop,colBottom,x,z,ry){
   for(let i=0;i<n;i++){const p2=pa.getX(i),c=p2<0.5?ct:p2<1.5?cb:p2<2.5?sk:p2<3.5?hr:sh;col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;}
   g2.setAttribute('color',new THREE.BufferAttribute(col,3));
   const m=new THREE.Mesh(g2,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.85}));
-  m.scale.setScalar(1.1);m.castShadow=true;
+  m.scale.setScalar((stature||1.68)/PED_GEO_H);m.castShadow=true;   // a real person's height (was x1.1 = 1.94 m)
   const g=new THREE.Group();g.add(m);g.position.set(x,0,z);g.rotation.y=ry||0;
   return g;
 }
@@ -9166,7 +9243,7 @@ function revealCrew(id){
   const ring=new THREE.Mesh(new THREE.RingGeometry(3.4,4.6,26),crewBeaconMat);ring.rotation.x=-Math.PI/2;ring.position.y=0.14;g.add(ring);
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,34,10,1,true),new THREE.MeshBasicMaterial({color:0x7dff6a,transparent:true,opacity:0.13,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
   beam.position.y=17;g.add(beam);
-  const fig=inPerson(0x2f5a3a,0x22252a,0,0,0);fig.scale.setScalar(1.15);g.add(fig);
+  const fig=inPerson(0x2f5a3a,0x22252a,0,0,0,1.76);g.add(fig);   // a US Army aviator, 1.76 m (was 2.23 m)
   // (no point light here: adding one mid-game changes the light count and recompiles every shader)
   c.marker=g;scene.add(g);
 }
@@ -10030,7 +10107,7 @@ function loop(now){
       if(hit||b.t<=0){
         if(b.type===0){
           // damage every zombie/enemy whose hull is within the tracer's travel segment (+splash)
-          zombies.forEach(z=>{if(z.hp<=0)return;const zc=z.m.position.clone().setY(z.m.position.y+(z.big?3.2:2.0));if(distToSeg(zc,prev,b.m.position)<b.r+(z.big?2.6:0.8)){z.hp-=b.dmg;blood(zc);}});
+          zombies.forEach(z=>{if(z.hp<=0)return;const zc=z.m.position.clone().setY(z.m.position.y+(z.big?1.2:1.0));if(distToSeg(zc,prev,b.m.position)<b.r+(z.big?1.1:0.75)){z.hp-=b.dmg;blood(zc);}});
           enemies.forEach(e=>{if(e.hp<=0)return;const ec=e.m.position.clone().setY(e.m.position.y+(e.kind==='boat'?6:1));if(distToSeg(ec,prev,b.m.position)<b.r+(e.kind==='boat'?10:2.6)){e.hp-=b.dmg;}});
         }else explode(b.m.position,b.r,b.dmg,b.type===3);
         scene.remove(b.m);bullets.splice(i,1);
@@ -10147,7 +10224,7 @@ function loop(now){
     }
     shake=Math.max(0,shake-2.5*dt);
     if(window.__fires)for(const F of window.__fires){F.ph+=dt*(9+Math.random()*6);
-      const k=0.8+0.2*Math.sin(F.ph)+Math.random()*0.12;F.f.scale.set(1.5*k,2.2*k,1);F.f.material.opacity=0.85*k;F.f2.material.opacity=0.28*k;}
+      const k=0.8+0.2*Math.sin(F.ph)+Math.random()*0.12;F.f.scale.set(1.1*k,1.65*k,1);F.f.material.opacity=0.85*k;F.f2.material.opacity=0.28*k;}
     if(window.__beacons){const tt=now*0.001;for(const B of window.__beacons){const on=Math.floor((tt+B.ph)*3.2)%2;
       B.sr.material.opacity=on?0.9:0.05;B.sb.material.opacity=on?0.05:0.9;B.lr.visible=!!on;B.lb.visible=!on;}}
     pulseSigns.forEach(s=>{
@@ -10224,7 +10301,7 @@ function loop(now){
       // kei cars and taxis, then sedans, minivans, kei trucks and the odd delivery truck
       const KIT=window.__carKit, kinds=['kei','kei','kei','taxi','taxi','sedan','sedan','minivan','minivan','keitruck','boxtruck'];
       const kindList=Object.keys(KIT.CAR_GEOS), geoCount={}, _mcc=new THREE.Color();
-      const MC=window.__movingCars, MC_N=200;
+      const MC=window.__movingCars, MC_N=200;   // speeds: 30-50 km/h in the streets, 40-60 on the avenues, 60-80 on the Shutoko (they ran up to 100 km/h)
       for(let i=0;i<MC_N;i++){
         const kind=kinds[Math.floor(Math.random()*kinds.length)];
         const onX=Math.random()<0.5, pl=pickLane(onX);
@@ -10232,7 +10309,7 @@ function loop(now){
         const color=kind==='taxi'?[0x14161a,0x1d3a2a,0xd8b23a,0x2a4a7a][Math.floor(Math.random()*4)]
                    :(kind==='boxtruck'||kind==='keitruck')?0xeceeef:mcCols[i%mcCols.length];
         geoCount[kind]=geoCount[kind]||0;
-        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:(kind==='boxtruck'?12:16)+Math.random()*12,yaw,kind,color,slot:geoCount[kind]++,taxi:kind==='taxi'});
+        MC.push({onX,lane:pl.lane,dir:pl.dir,pos:(Math.random()-.5)*900,spd:(kind==='boxtruck'?8:9.5)+Math.random()*5,yaw,kind,color,slot:geoCount[kind]++,taxi:kind==='taxi'});
       }
       const bodyMeshes={};
       kindList.forEach(k=>{if(!geoCount[k])return;const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,geoCount[k]);
@@ -10247,7 +10324,7 @@ function loop(now){
         const nCars=Math.round(A.len/26);
         for(let i=0;i<nCars;i++){const kind=kinds[Math.floor(Math.random()*kinds.length)];acnt[kind]=acnt[kind]||0;
           const dir=Math.random()<.5?1:-1;
-          AC.push({A,kind,slot:acnt[kind]++,s:Math.random()*A.len,dir,lane:(A.w>=20?(Math.random()<.5?3.2:6.6):3.4),spd:13+Math.random()*9,
+          AC.push({A,kind,slot:acnt[kind]++,s:Math.random()*A.len,dir,lane:A.w*(Math.random()<.5?0.0825:0.2475),spd:11+Math.random()*6,
             color:kind==='taxi'?0x14161a:(kind==='boxtruck'||kind==='keitruck')?0xeceeef:mcCols[Math.floor(Math.random()*mcCols.length)]});}});
       window.__artInst={};
       for(const k in acnt){const m=new THREE.InstancedMesh(KIT.CAR_GEOS[k],KIT.carMat,acnt[k]);m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.frustumCulled=false;scene.add(m);window.__artInst[k]=m;}
@@ -10278,7 +10355,7 @@ function loop(now){
     }
     updateRevealLights(); // snap the reveal-light pool to the nearest lamps/car headlights this frame
     for(let wi=0;wi<__oceanMats.length;wi++)__oceanMats[wi].uTime.value+=dt;
-    if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar(0.8+b*0.4);}}
+    if(window.__navyShip){const S=window.__navyShip;S.t+=dt;S.g.position.y=Math.sin(S.t*0.6)*0.35;S.g.rotation.z=Math.sin(S.t*0.5)*0.012;if(window.__shipRadar)window.__shipRadar.rotation.y+=dt*0.9;if(window.__shipBeacon){const b=0.55+0.45*Math.abs(Math.sin(S.t*2.2));window.__shipBeacon.material.opacity=b;window.__shipBeacon.scale.setScalar((0.8+b*0.4)/S.g.scale.x);}}
     if(window.__lighthouse){const H=window.__lighthouse;H.t+=dt;H.pivot.rotation.y+=dt*0.6;const pulse=0.8+0.2*Math.sin(H.t*3.0);H.lamp.material.emissiveIntensity=2.6*pulse;H.lampLight.intensity=3.0*pulse;if(window.__lhHalo)window.__lhHalo.material.opacity=0.4+0.35*pulse;}
     if(!window.__hwyCars){
       // expressway traffic from the same car kit (it was boxes): one instanced mesh per model
@@ -10288,7 +10365,7 @@ function loop(now){
       for(let i=0;i<34;i++){
         const kind=kinds[Math.floor(Math.random()*kinds.length)], lane=[-5.2,-1.9,1.9,5.2][Math.floor(Math.random()*4)];
         cnt[kind]=cnt[kind]||0;
-        HC.push({kind,slot:cnt[kind]++,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind==='boxtruck'?15:21)+Math.random()*8,dir:lane<0?1:-1,   // keep left
+        HC.push({kind,slot:cnt[kind]++,lane,pos:(Math.random()-.5)*CITY*1.9,spd:(kind==='boxtruck'?15:17)+Math.random()*6,dir:lane<0?1:-1,   // keep left
           col:kind==='taxi'?0x14161a:kind==='boxtruck'?0xeceeef:hcCols[Math.floor(Math.random()*hcCols.length)]});
       }
       window.__hwyInst={};
@@ -10328,9 +10405,9 @@ function loop(now){
         const wx=p.axis==='x'?p.pos:p.fixed, wz=p.axis==='x'?p.fixed:p.pos;
         const bob=Math.abs(Math.sin(p.phase))*0.025;
         const yawP=p.axis==='x'?(p.dir>0?Math.PI/2:-Math.PI/2):(p.dir>0?0:Math.PI);   // figure faces +Z
-        pdum.position.set(wx,bob,wz);pdum.rotation.set(0,yawP,0);pdum.updateMatrix();
+        pdum.position.set(wx,bob,wz);pdum.rotation.set(0,yawP,0);pdum.scale.setScalar(p.sc||1);pdum.updateMatrix();
         pedBodyMesh.setMatrixAt(i,pdum.matrix);
-        pdum.position.y=PED_HEAD_Y+bob;pdum.updateMatrix();
+        pdum.position.y=PED_HEAD_Y*(p.sc||1)+bob;pdum.updateMatrix();
         pedHeadMesh.setMatrixAt(i,pdum.matrix);
       }
       pedBodyMesh.instanceMatrix.needsUpdate=true;pedHeadMesh.instanceMatrix.needsUpdate=true;
