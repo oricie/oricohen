@@ -2230,8 +2230,8 @@ float pavH(vec2 q,vec2 fq,float typ,vec2 p,out vec3 col,out float rough){
   diffuseColor.rgb=col; pRough=r; pH=h; }`)
       .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=pRough;')
       .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-{ vec3 pv=-vViewPosition, dpx=dFdx(pv), dpy=dFdy(pv), r1=cross(dpy,normal), r2=cross(normal,dpx);
-  float det=dot(dpx,r1); vec3 gr=sign(det)*(dFdx(pH)*r1+dFdy(pH)*r2);
+{ vec3 pv=-vViewPosition, dpx=dFdx(pv), dpy=dFdy(pv), q1=cross(dpy,normal), q2=cross(normal,dpx);
+  float det=dot(dpx,q1); vec3 gr=sign(det)*(dFdx(pH)*q1+dFdy(pH)*q2);
   normal=normalize(abs(det)*normal-gr*1.5); }`);
     sh.fragmentShader=sh.fragmentShader.replace('float pRough=0.85;','float pRough=0.85;float pH=0.0;');
   };
