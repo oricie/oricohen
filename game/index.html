@@ -6220,7 +6220,7 @@ const mast=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,1,8),darkMat);mast.
 const rotor=new THREE.Group();
 // four separate blades from the hub, narrow chord, swept and tapered tips, slight droop — and
 // semi-transparent, because at 290 rpm the eye never sees a solid plank, it sees a blurred disc
-const bladeMat=new THREE.MeshStandardMaterial({color:0x22251f,metalness:0.1,roughness:0.6,transparent:true,opacity:0.42,depthWrite:false});
+const bladeMat=new THREE.MeshStandardMaterial({color:0x181a18,metalness:0.1,roughness:0.55,transparent:true,opacity:0.62,depthWrite:false});   // dark wide blades, as the camera sees them
 const bladeGeo=(()=>{const g=new THREE.BoxGeometry(6.9,0.05,0.5,12,1,1),pa=g.attributes.position;
   for(let i=0;i<pa.count;i++){let x=pa.getX(i)+3.45+0.35,z=pa.getZ(i);
     if(x>6.6){const t=(x-6.6)/0.65;z=z*(1-0.45*t)+0.18*t;}                 // swept, tapered tip
@@ -6264,8 +6264,8 @@ heli.position.set(0,45,120);scene.add(heli);
   // ---- AH-64A APACHE, 1989 US Army: lofted from real cross-sections instead of boxes ----
   // FS 34031 olive drab, matte; the lofts get UVs so the panel/rivet/scuff map wraps the skin.
   panelTex.wrapS=panelTex.wrapT=THREE.RepeatWrapping;
-  const gm=new THREE.MeshStandardMaterial({color:0x434d3a,map:panelTex,metalness:0.05,roughness:0.72,envMapIntensity:0.4});
-  const gm2=new THREE.MeshStandardMaterial({color:0x3d4335,map:panelTex,metalness:0.06,roughness:0.7,envMapIntensity:0.4});
+  const gm=new THREE.MeshStandardMaterial({color:0x30362b,map:panelTex,metalness:0.08,roughness:0.6,envMapIntensity:0.6});   // FS 34031: reads near-black olive in photos
+  const gm2=new THREE.MeshStandardMaterial({color:0x2a2f26,map:panelTex,metalness:0.08,roughness:0.6,envMapIntensity:0.6});
   const dk=new THREE.MeshStandardMaterial({color:0x1b1d1c,metalness:0.3,roughness:0.55,envMapIntensity:0.5});
   const soot=new THREE.MeshStandardMaterial({color:0x121211,metalness:0.1,roughness:0.9});
   const glz=new THREE.MeshPhysicalMaterial({color:0x1c2a2c,metalness:0.0,roughness:0.05,transparent:true,opacity:.62,envMapIntensity:1.6,clearcoat:1.0,side:THREE.DoubleSide,flatShading:true});   // flat-plate glazing: every pane catches its own light
@@ -6288,10 +6288,10 @@ heli.position.set(0,45,120);scene.add(heli);
   const S=(z,w,h,y,o)=>Object.assign({z,w,h,y},o||{});
   // fuselage: nose -> cockpits -> engine deck -> tail boom
   add(new THREE.Mesh(loft([S(-5.25,0.55,0.55,-0.1),S(-5.0,0.9,0.92,-0.05),S(-4.4,1.02,1.08,0.0),S(-3.5,1.08,1.26,0.02),S(-2.2,1.2,1.46,-0.04),
-    S(-0.6,1.34,1.68,0.0),S(1.0,1.42,1.72,0.06),S(2.5,1.24,1.46,0.18),S(3.5,0.86,1.02,0.25),S(6.0,0.6,0.78,0.05),S(9.0,0.46,0.62,-0.15),S(10.7,0.38,0.52,-0.24),S(11.0,0.2,0.3,-0.24)],3.2),gm));
+    S(-0.6,1.34,1.68,0.0),S(1.0,1.42,1.72,0.06),S(2.5,1.24,1.46,0.18),S(3.5,0.86,1.02,0.25),S(6.0,0.6,0.78,0.05),S(9.0,0.46,0.62,-0.15),S(10.7,0.38,0.52,-0.24),S(11.0,0.2,0.3,-0.24)],4.2),gm));
   // avionics bays ("cheeks") along the lower fuselage — the Apache's signature side bulges
-  [-1,1].forEach(sd=>{add(new THREE.Mesh(loft([S(-3.0,0.18,0.42,-0.3,{x:sd*0.55}),S(-2.6,0.5,0.66,-0.3,{x:sd*0.7}),S(0.4,0.56,0.7,-0.32,{x:sd*0.74}),
-    S(1.6,0.46,0.6,-0.28,{x:sd*0.7}),S(2.3,0.12,0.3,-0.2,{x:sd*0.6})],3.5,20),gm2));});
+  [-1,1].forEach(sd=>{add(new THREE.Mesh(loft([S(-3.7,0.2,0.5,-0.32,{x:sd*0.52}),S(-3.3,0.52,0.8,-0.34,{x:sd*0.7}),S(0.6,0.6,0.86,-0.36,{x:sd*0.76}),
+    S(1.7,0.5,0.72,-0.3,{x:sd*0.72}),S(2.4,0.14,0.32,-0.2,{x:sd*0.6})],5,20),gm2));});
   // canopy framing helper
   const bar=(x1,y1,z1,x2,y2,z2,t,mat)=>{const a=new THREE.Vector3(x1,y1,z1),b2=new THREE.Vector3(x2,y2,z2),d=b2.clone().sub(a);
     const m=new THREE.Mesh(new THREE.BoxGeometry(t,t,d.length()),mat||gm2);m.position.copy(a).add(b2).multiplyScalar(0.5);
@@ -6309,17 +6309,17 @@ heli.position.set(0,45,120);scene.add(heli);
     [-1,1].forEach(sd=>bar(sd*secs[1].w/2*0.93,secs[1].y-0.02,secs[1].z,sd*secs[secs.length-2].w/2*0.93,secs[secs.length-2].y-0.02,secs[secs.length-2].z,0.06));});   // sills
   add(new THREE.Mesh(new THREE.BoxGeometry(0.98,0.7,0.06),gm2)).position.set(0,1.05,-2.42);
   // nose: TADS turret (day/night sight) under the nose, PNVS ball on top
-  const tads=add(new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.86,16),gm2));tads.rotation.z=Math.PI/2;tads.position.set(0,-0.38,-5.15);
-  [-1,1].forEach(sd=>{const cap=add(new THREE.Mesh(new THREE.SphereGeometry(0.42,14,10,0,Math.PI*2,0,Math.PI/2),gm2));cap.rotation.z=-sd*Math.PI/2;cap.position.set(sd*0.43,-0.38,-5.15);});
+  const tads=add(new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.9,18),gm2));tads.rotation.z=Math.PI/2;tads.position.set(0,-0.38,-5.15);
+  [-1,1].forEach(sd=>{const cap=add(new THREE.Mesh(new THREE.SphereGeometry(0.5,16,10,0,Math.PI*2,0,Math.PI/2),gm2));cap.rotation.z=-sd*Math.PI/2;cap.position.set(sd*0.45,-0.38,-5.15);cap.scale.y=0.7;});
   const lens=add(new THREE.Mesh(new THREE.BoxGeometry(0.5,0.32,0.06),new THREE.MeshPhysicalMaterial({color:0x061418,roughness:0.05,metalness:0.2,clearcoat:1})));lens.position.set(0,-0.36,-5.58);
-  const pnvs=add(new THREE.Mesh(new THREE.SphereGeometry(0.22,12,10),gm2));pnvs.position.set(0,0.42,-4.95);
+  const pnvs=add(new THREE.Mesh(new THREE.SphereGeometry(0.27,14,10),gm2));pnvs.position.set(0,0.42,-4.95);
   // M230 30 mm chain gun in its chin turret
   const gt=add(new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),dk));gt.position.set(0,-0.88,-3.3);
   const gBarrel=add(new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.075,1.9,10),dk));gBarrel.rotation.x=Math.PI/2;gBarrel.position.set(0,-0.92,-4.25);
   const gShroud=add(new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.6,10),dk));gShroud.rotation.x=Math.PI/2;gShroud.position.set(0,-0.92,-3.7);
   // engines: nacelles high on the shoulders, intakes forward, Black Hole IR suppressors aft
   [-1,1].forEach(sd=>{
-    add(new THREE.Mesh(loft([S(-0.75,0.5,0.62,0.95,{x:sd*0.98}),S(-0.5,0.74,1.02,0.95,{x:sd*1.0}),S(1.6,0.76,1.06,0.98,{x:sd*1.02}),S(2.4,0.6,0.82,1.02,{x:sd*1.02}),S(2.7,0.44,0.56,1.06,{x:sd*1.0})],3,20),gm));   // T700 nacelles: taller than wide
+    add(new THREE.Mesh(loft([S(-0.75,0.5,0.62,0.95,{x:sd*0.98}),S(-0.5,0.74,1.02,0.95,{x:sd*1.0}),S(1.6,0.76,1.06,0.98,{x:sd*1.02}),S(2.4,0.6,0.82,1.02,{x:sd*1.02}),S(2.7,0.44,0.56,1.06,{x:sd*1.0})],4,20),gm));   // T700 nacelles: taller than wide, flat-sided
     const inl=add(new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.08,18),soot));inl.rotation.x=Math.PI/2;inl.position.set(sd*1.0,0.95,-0.74);
     const lip=add(new THREE.Mesh(new THREE.TorusGeometry(0.29,0.055,8,22),gm2));lip.position.set(sd*1.0,0.95,-0.79);
     const bul=add(new THREE.Mesh(new THREE.ConeGeometry(0.11,0.22,12),gm2));bul.rotation.x=-Math.PI/2;bul.position.set(sd*1.0,0.95,-0.84);
@@ -10915,9 +10915,11 @@ function loop(now){
     pickSpawn();heli.position.set(SPAWN_HIGH.x,SPAWN_HIGH.y+Math.sin(t*0.9)*0.35,SPAWN_HIGH.z);
     heli.rotation.set(Math.sin(t*0.7)*0.025,SPAWN.yaw+0.35,Math.sin(t*0.5)*0.03,'YXZ');
     rotor.rotation.y+=30*dt;tailRotor.rotation.x+=42*dt;
-    const ma=Math.PI*0.5+0.35+Math.sin(t*0.08)*0.55, mr=17;
+    // front-left three-quarter, relative to the aircraft's own heading (the spawn street sets it), close and
+    // a touch below — looking up at it, the way the Apache is always photographed
+    const ma=SPAWN.yaw+0.35-Math.PI*0.5-0.45+Math.sin(t*0.08)*0.35, mr=14;
     const ctr=heli.position.clone().add(new THREE.Vector3(0,0.6,1.2));
-    cam.position.set(ctr.x+Math.sin(ma)*mr,ctr.y+2.6+Math.sin(t*0.11)*1.2,ctr.z+Math.cos(ma)*mr);
+    cam.position.set(ctr.x+Math.sin(ma)*mr,ctr.y-1.4+Math.sin(t*0.11)*0.8,ctr.z+Math.cos(ma)*mr);
     cam.lookAt(ctr);
     if(innerWidth>720){ // shift the subject right: aim a little left of it
       const side=new THREE.Vector3().subVectors(ctr,cam.position).cross(new THREE.Vector3(0,1,0)).normalize();
