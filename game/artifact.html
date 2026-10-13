@@ -5251,13 +5251,13 @@ const hemi=new THREE.HemisphereLight(0xa9b3cc,0x7a6654,0.85);scene.add(hemi);   
 // a desaturated cool MOONLIGHT so structures/streets are legible in normal play; the neon mood now
 // comes from the pink rim, emissive signs and point lights (all unaffected by this change).
 const sun=new THREE.DirectionalLight(0xc4c8e6,0.64);
-sun.position.set(180,300,-220);sun.castShadow=true;
+sun.position.set(180,300,-220);sun.castShadow=true;const _sunLD=new THREE.Vector3();
 // sharp shadows where you actually look: a tight 340 m box that follows the helicopter at
 // 2048² is ~0.17 m per texel (was 520 m at 1024² = 0.5 m — the soft smeared bands on facades)
 sun.shadow.mapSize.set(2048,2048);
 sun.shadow.camera.left=-170;sun.shadow.camera.right=170;
 sun.shadow.camera.top=170;sun.shadow.camera.bottom=-170;
-sun.shadow.camera.far=1500;sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.6;   // low dusk sun: long throws
+sun.shadow.camera.far=1000;sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.6;   // low dusk sun: long throws
 scene.add(sun);
 const rim=new THREE.DirectionalLight(0xff5fa8,0.55);
 rim.position.set(-200,120,260);scene.add(rim);
@@ -5390,8 +5390,10 @@ function updateTOD(dt,now){
   groundHaze.forEach(gh=>gh.material.color.copy(scene.fog.color));
   if(window.__bldgMats)window.__bldgMats.forEach(b=>{if(b.mat.emissiveMap)b.mat.emissiveIntensity=s.win*(b.winGain||1);});
   if(typeof rain!=='undefined'){rain.visible=s.rain>0.02;rain.material.opacity=0.14*s.rain;}
-  const step=Math.round(s.clock/8);                     // PMREM rebuild every ~8 min of twilight
-  if(step!==TOD.env){TOD.env=step;buildEnv(s);}
+  // PMREM rebuild in coarse steps of the light (~20 renders each): keyed on t, and never more than
+  // once every 4 s — keyed on the running clock it fired almost every frame and cost ~2k draw calls
+  const step=Math.round(TOD.t*10), nowE=performance.now();
+  if(step!==TOD.env&&(!TOD.envT||nowE-TOD.envT>4000)){TOD.env=step;TOD.envT=nowE;buildEnv(s);}
 }
 
 // ---------- AUDIO ----------
@@ -15199,7 +15201,9 @@ function loop(now){
     // (live reflection probe removed: `Math.floor(now/200)%5===0` was true for a whole 200ms
     //  window every second, so ~12 consecutive frames re-rendered the entire city 6 extra times —
     //  a hitch every second. The airframe is matte now and reads the sky environment instead.)
-    sun.position.copy(heli.position).addScaledVector(TOD.lightDir,620);
+    // the key light never drops below 10 deg: at the true 1-5 deg sunset elevation the shadow camera lay
+    // almost flat and swept 1.5 km of city every shadow pass (~+900 draw calls) for shadows 20x a block long
+    {const ld=_sunLD.copy(TOD.lightDir);if(ld.y<0.174){ld.y=0.174;ld.normalize();}sun.position.copy(heli.position).addScaledVector(ld,620);}
     sun.target=heli;
     rim.position.copy(heli.position).add(new THREE.Vector3(-200,120,260));
     rim.target=heli;
