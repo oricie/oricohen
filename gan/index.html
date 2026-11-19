@@ -46,6 +46,12 @@
         <canvas id="stage" width="1280" height="720"></canvas>
         <div class="status" id="status" hidden></div>
         <div class="hint" id="hint" hidden></div>
+        <form class="zone-form" id="zoneForm" hidden>
+          <label for="zoneName">Zone name</label>
+          <input id="zoneName" placeholder="e.g. Entrance, Doll corner, Art table" autocomplete="off" />
+          <button type="submit" class="primary">Save</button>
+          <button type="button" id="zoneCancel">Cancel</button>
+        </form>
       </div>
       <div class="legend">
         <span class="chip"><i class="dot staff"></i>Staff</span>

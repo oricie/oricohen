@@ -5,6 +5,7 @@ const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
 
 const $ = s => document.querySelector(s);
+const IN_CLAUDE = typeof window.claude?.use === 'function';   // running as a Claude artifact: no camera, no print
 const canvas = $('#stage'), ctx = canvas.getContext('2d');
 const engine = new Engine();
 const state = { src: null, paused: false, speed: 10, privacy: 'full', heat: '', drawing: false, drag: null,
@@ -29,11 +30,23 @@ class SimSource {
 }
 
 let landmarkerP = null;
+// Use a local copy of the model next to the page when there is one (needed inside Claude), else the CDN.
+async function mpPaths() {
+  const abs = p => new URL(p, location.href).href;
+  try {
+    const r = await fetch('mp/pose_model.wasm', { method: 'HEAD' });
+    // scripts stay on the CDN (allowed everywhere); the large binaries come from next to the page
+    if (r.ok) return { bundle: `${MP}/vision_bundle.mjs`, wasm: `${MP}/wasm`, wasmBinary: abs('mp/vision_wasm_internal.wasm'), model: abs('mp/pose_model.wasm') };
+  } catch {}
+  return { bundle: `${MP}/vision_bundle.mjs`, wasm: `${MP}/wasm`, model: MODEL };
+}
 function getLandmarker() {
   if (!landmarkerP) landmarkerP = (async () => {
-    const { PoseLandmarker, FilesetResolver } = await import(`${MP}/vision_bundle.mjs`);
-    const fs = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
-    const opts = d => ({ baseOptions: { modelAssetPath: MODEL, delegate: d }, runningMode: 'VIDEO', numPoses: 12,
+    const base = await mpPaths();
+    const { PoseLandmarker, FilesetResolver } = await import(base.bundle);
+    const fs = await FilesetResolver.forVisionTasks(base.wasm);
+    if (base.wasmBinary) fs.wasmBinaryPath = base.wasmBinary;
+    const opts = d => ({ baseOptions: { modelAssetPath: base.model, delegate: d }, runningMode: 'VIDEO', numPoses: 12,
       minPoseDetectionConfidence: 0.35, minPosePresenceConfidence: 0.35, minTrackingConfidence: 0.35 });
     try { return await PoseLandmarker.createFromOptions(fs, opts('GPU')); }
     catch { return await PoseLandmarker.createFromOptions(fs, opts('CPU')); }
@@ -337,7 +350,14 @@ function openReport() {
 }
 
 // ---------------- export ----------------
-function download(name, text, type) {
+async function download(name, text, type) {
+  if (IN_CLAUDE) {
+    const dl = await window.claude.use('downloads').catch(() => null);
+    if (!dl) { flash('Downloads are not available in this view'); return; }
+    try { await dl.save({ filename: name, data: new Blob([text], { type }) }); }
+    catch (e) { if (e?.code !== 'declined') flash('The file could not be saved'); }
+    return;
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -412,13 +432,23 @@ canvas.addEventListener('pointerup', () => {
   const d = state.drag; state.drag = null; if (!d) return;
   const w = Math.abs(d.x1 - d.x0), h = Math.abs(d.y1 - d.y0);
   if (w > .02 && h > .02) {
+    state.pendingZone = { x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w, h };
     const hasEntrance = engine.zones.some(z => z.type === 'entrance');
-    const name = prompt('Zone name (e.g. Entrance, Doll corner, Art table):', hasEntrance ? '' : 'Entrance');
-    if (name) engine.zones.push({ id: 'z' + Date.now(), name, type: /entrance|entry|כניסה/i.test(name) ? 'entrance' : 'area', x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w, h });
-    renderZones();
+    $('#zoneName').value = hasEntrance ? '' : 'Entrance';
+    $('#zoneForm').hidden = false; $('#zoneName').focus(); $('#zoneName').select();
   }
   state.drawing = false; $('#zoneBtn').classList.remove('active'); $('#stageWrap').classList.remove('drawing'); setHint('');
 });
+
+$('#zoneForm').onsubmit = e => {
+  e.preventDefault();
+  const name = $('#zoneName').value.trim(), z = state.pendingZone;
+  if (name && z) engine.zones.push({ id: 'z' + Date.now(), name, type: /entrance|entry|כניסה/i.test(name) ? 'entrance' : 'area', ...z });
+  state.pendingZone = null; $('#zoneForm').hidden = true; renderZones();
+};
+$('#zoneCancel').onclick = () => { state.pendingZone = null; $('#zoneForm').hidden = true; };
+
+function flash(msg) { setHint(msg); setTimeout(() => setHint(''), 2500); }
 
 function renderZones() {
   $('#zones').innerHTML = engine.zones.map(z => `<li><span>${z.name}</span>
@@ -432,6 +462,7 @@ $('#zones').onclick = e => {
   renderZones();
 };
 
-window.__gan = { engine, state }; // for debugging from the console
+if (IN_CLAUDE) { $('[data-src=camera]').hidden = true; $('#printBtn').hidden = true; }
+window.__gan = { engine, state, getLandmarker }; // for debugging from the console
 useSource('sim');
 requestAnimationFrame(loop);
