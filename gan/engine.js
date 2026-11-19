@@ -67,7 +67,17 @@ export function extractFeatures(lm, A) {
   }
 
   // floor point: ankle midpoint, or estimated from the hips
-  const feet = ank.v > 0.45 ? { x: ank.x, y: ank.y } : { x: hip.x, y: hip.y + torso * 1.6 };
+  // When the ankles are hidden, estimate from the knees: legs pointing down = standing (shin ~ thigh),
+  // knees near hip height = sitting on the floor. Assuming "standing" for a seated child put her floor
+  // point a body-length too low.
+  let feet;
+  if (ank.v > 0.45) feet = { x: ank.x, y: ank.y };
+  else if (kn.v > 0.45) {
+    const thigh = kn.y - hip.y;
+    feet = { x: hip.x, y: thigh > 0.5 * torso ? kn.y + thigh * 0.95 : Math.max(kn.y, hip.y) + 0.1 * torso };
+  } else feet = { x: hip.x, y: hip.y + torso * 1.6 };
+  // Body center (between shoulders and hips) is what tracking follows: it is far steadier than feet.
+  const center = { x: (sh.x + hip.x) / 2, y: (sh.y + hip.y) / 2 };
 
   // facing direction (2D, rough): nose offset from shoulder center + whether the face is visible
   const yaw = shoulderW > 1e-3 ? clamp((nose.x - sh.x) / shoulderW, -1.5, 1.5) : 0;
@@ -84,7 +94,7 @@ export function extractFeatures(lm, A) {
   y1 = Math.max(y1, feet.y);
 
   return {
-    feet, sh, hip, nose, torso, childScore, frontal, low, posture, facing: { x: fx, y: fy },
+    feet, center, sh, hip, nose, torso, childScore, frontal, low, posture, facing: { x: fx, y: fy },
     wrists: [lw, rw].filter(w => w.v > 0.5), body: [nose, ls, rs, lh, rh, sh, hip].filter(p => p.v > 0.4),
     handsActive, bbox: { x0, y0, x1, y1 }, lm,
   };
@@ -92,7 +102,7 @@ export function extractFeatures(lm, A) {
 
 class Track {
   constructor(id, f, t) {
-    this.id = id; this.f = f; this.feet = { ...f.feet }; this.vel = { x: 0, y: 0 };
+    this.id = id; this.f = f; this.feet = { ...f.feet }; this.c = { ...f.center }; this.vel = { x: 0, y: 0 };
     this.torso = f.torso; this.score = f.frontal ? f.childScore : 0.95; this.n = 1;
     this.born = t; this.lastSeen = t; this.manualRole = null; this.role = ROLE.UNKNOWN;
     this.bornInEntrance = false; this.speed = 0;
@@ -134,10 +144,12 @@ export class Engine {
     const pairs = [];
     for (const tr of this.tracks) {
       const dt = t - tr.lastSeen;
-      const px = tr.feet.x + tr.vel.x * dt, py = tr.feet.y + tr.vel.y * dt;
+      // predict from the body center, never more than one torso ahead
+      const lead = Math.min(1, tr.torso / (Math.hypot(tr.vel.x, tr.vel.y) * dt || 1e-9));
+      const px = tr.c.x + tr.vel.x * dt * lead, py = tr.c.y + tr.vel.y * dt * lead;
       feats.forEach((f, j) => {
         const s = Math.max(tr.torso, f.torso);
-        const d = Math.hypot(f.feet.x - px, f.feet.y - py) / s;
+        const d = Math.hypot(f.center.x - px, f.center.y - py) / s;
         const size = Math.abs(Math.log(f.torso / tr.torso));
         if (d < 2.2 && size < 0.6) pairs.push({ tr, j, c: d + size * 2 });
       });
@@ -150,7 +162,9 @@ export class Engine {
       const f = feats[p.j], tr = p.tr, dt = Math.max(t - tr.lastSeen, 1e-3);
       const nx = tr.feet.x * 0.6 + f.feet.x * 0.4, ny = tr.feet.y * 0.6 + f.feet.y * 0.4;
       const step = Math.hypot(nx - tr.feet.x, ny - tr.feet.y);
-      tr.vel = { x: tr.vel.x * 0.7 + (nx - tr.feet.x) / dt * 0.3, y: tr.vel.y * 0.7 + (ny - tr.feet.y) / dt * 0.3 };
+      const cx = tr.c.x * 0.5 + f.center.x * 0.5, cy = tr.c.y * 0.5 + f.center.y * 0.5;
+      tr.vel = { x: tr.vel.x * 0.7 + (cx - tr.c.x) / dt * 0.3, y: tr.vel.y * 0.7 + (cy - tr.c.y) / dt * 0.3 };
+      tr.c = { x: cx, y: cy };
       tr.speed = Math.hypot(tr.vel.x, tr.vel.y) / tr.torso;
       tr.feet = { x: nx, y: ny }; tr.st.path += step / tr.torso;
       tr.torso = tr.torso * 0.85 + f.torso * 0.15;
