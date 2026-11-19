@@ -44,8 +44,14 @@ export function extractFeatures(lm, A) {
   const r3 = headW / Math.max(shoulderW, 1e-3);           // head width relative to shoulder width
   // Head width is only reliable when the person roughly faces the camera (wide shoulders in the image).
   // Calibration: a real toddler measured r2 0.35 / r3 0.49; adult references ~0.26-0.30 / ~0.36.
-  const frontal = shoulderW / torso > 0.6 && lear.v > 0.4 && rear.v > 0.4;
-  const childScore = frontal ? (r2 / 0.31 + r3 / 0.42) / 2 : r1 / 0.46;
+  // A head cut off by the frame edge gives made-up points, so it never counts as a measurement.
+  const inFrame = i => lm[i].x > 0.01 && lm[i].x < 0.99 && lm[i].y > 0.01 && lm[i].y < 0.99;
+  const headOk = [0, 7, 8].every(inFrame);
+  // "frontal" = shoulders square to the camera (from the front or the back) with both ears found
+  const frontal = headOk && shoulderW / torso > 0.6 && lear.v > 0.5 && rear.v > 0.5;
+  // Side views only have neck length, which barely separates adults from children (real toddler 0.48,
+  // adults ~0.45-0.5), so it is scaled to lean adult and frontal frames decide.
+  const childScore = frontal ? (r2 / 0.31 + r3 / 0.42) / 2 : headOk ? Math.min(r1 / 0.55, 0.97) : 0.9;
 
   // posture: crouching / sitting / kneeling = "at the child's level"
   let low = null, posture = 'unknown';
@@ -87,7 +93,7 @@ export function extractFeatures(lm, A) {
 class Track {
   constructor(id, f, t) {
     this.id = id; this.f = f; this.feet = { ...f.feet }; this.vel = { x: 0, y: 0 };
-    this.torso = f.torso; this.score = f.childScore; this.n = 1;
+    this.torso = f.torso; this.score = f.frontal ? f.childScore : 0.95; this.n = 1;
     this.born = t; this.lastSeen = t; this.manualRole = null; this.role = ROLE.UNKNOWN;
     this.bornInEntrance = false; this.speed = 0;
     this.st = { present: 0, moving: 0, low: 0, lowNear: 0, near: 0, facing: 0, contact: 0, hands: 0,
@@ -205,7 +211,12 @@ export class Engine {
     const dt = clamp(t - this.lastT, 0, 0.5); this.lastT = t; this.t = t - this.t0;
     const S = this.settings;
 
-    const feats = poses.filter(lm => lm && lm.length >= 33).map(lm => extractFeatures(lm, A));
+    // The model sometimes reports one person twice: keep one of any two near-identical skeletons.
+    const feats = [];
+    for (const f of poses.filter(lm => lm && lm.length >= 33).map(lm => extractFeatures(lm, A))) {
+      const dup = feats.find(g => dist(g.sh, f.sh) < 0.35 * Math.max(g.torso, f.torso) && dist(g.hip, f.hip) < 0.35 * Math.max(g.torso, f.torso));
+      if (!dup) feats.push(f);
+    }
     this.track(feats, t);
     const live = this.tracks.filter(tr => tr.lastSeen === t);
     for (const tr of live) {
