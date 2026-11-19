@@ -41,9 +41,11 @@ export function extractFeatures(lm, A) {
   const r1 = dist(nose, sh) / torso;                       // neck+head relative to torso
   const headW = dist(lear, rear);
   const r2 = headW / torso;                                // head width relative to torso
-  // head width is only reliable when the person roughly faces the camera (wide shoulders in the image)
+  const r3 = headW / Math.max(shoulderW, 1e-3);           // head width relative to shoulder width
+  // Head width is only reliable when the person roughly faces the camera (wide shoulders in the image).
+  // Calibration: a real toddler measured r2 0.35 / r3 0.49; adult references ~0.26-0.30 / ~0.36.
   const frontal = shoulderW / torso > 0.6 && lear.v > 0.4 && rear.v > 0.4;
-  const childScore = frontal ? (r1 / 0.46 + r2 / 0.375) / 2 : r1 / 0.46;
+  const childScore = frontal ? (r2 / 0.31 + r3 / 0.42) / 2 : r1 / 0.46;
 
   // posture: crouching / sitting / kneeling = "at the child's level"
   let low = null, posture = 'unknown';
@@ -76,7 +78,7 @@ export function extractFeatures(lm, A) {
   y1 = Math.max(y1, feet.y);
 
   return {
-    feet, sh, hip, nose, torso, childScore, low, posture, facing: { x: fx, y: fy },
+    feet, sh, hip, nose, torso, childScore, frontal, low, posture, facing: { x: fx, y: fy },
     wrists: [lw, rw].filter(w => w.v > 0.5), body: [nose, ls, rs, lh, rh, sh, hip].filter(p => p.v > 0.4),
     handsActive, bbox: { x0, y0, x1, y1 }, lm,
   };
@@ -146,7 +148,9 @@ export class Engine {
       tr.speed = Math.hypot(tr.vel.x, tr.vel.y) / tr.torso;
       tr.feet = { x: nx, y: ny }; tr.st.path += step / tr.torso;
       tr.torso = tr.torso * 0.85 + f.torso * 0.15;
-      tr.score = tr.score * 0.93 + f.childScore * 0.07;
+      // frontal frames carry the reliable head measurement, so they move the score much more
+      const w = f.frontal ? 0.12 : 0.015;
+      tr.score = tr.score * (1 - w) + f.childScore * w;
       tr.f = f; tr.n++; tr.lastSeen = t;
     }
     feats.forEach((f, j) => {
